@@ -7,6 +7,11 @@ def test_create_load_and_save_note() -> None:
     record = {
         "paper_id": "paper-123",
         "title": "A Test Paper",
+        "authors": "Ada Lovelace",
+        "year": "1843",
+        "journal": "Notes",
+        "doi": "10.0000/example",
+        "tags": "computing, history",
         "filename": "paper.pdf",
         "status": "unread",
     }
@@ -17,6 +22,11 @@ def test_create_load_and_save_note() -> None:
 
     text = load_note_text(record, notes_dir=notes_dir)
     assert "# A Test Paper" in text
+    assert "- Authors: Ada Lovelace" in text
+    assert "- Year: 1843" in text
+    assert "- Journal: Notes" in text
+    assert "- DOI: 10.0000/example" in text
+    assert "- Tags: computing, history" in text
     assert "## Key Claims" in text
 
     save_note_text(record, "updated note", notes_dir=notes_dir)

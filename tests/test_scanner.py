@@ -17,7 +17,13 @@ def test_scan_papers_returns_pdf_records() -> None:
     record = records[0]
     assert record["filename"] == "Example Paper.pdf"
     assert record["title"] == "Example Paper"
+    assert record["authors"] == ""
+    assert record["year"] == ""
+    assert record["journal"] == ""
+    assert record["doi"] == ""
+    assert record["tags"] == ""
     assert record["status"] == "unread"
+    assert record["reading_priority"] == "normal"
     assert record["paper_id"].startswith("example-paper-")
     assert record["note_path"].endswith(".md")
 

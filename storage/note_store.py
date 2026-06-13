@@ -14,9 +14,20 @@ def default_note_text(record: Mapping[str, str]) -> str:
     title = record.get("title") or record.get("filename") or "Untitled"
     filename = record.get("filename", "")
     status = record.get("status", "unread")
+    authors = record.get("authors", "")
+    year = record.get("year", "")
+    journal = record.get("journal", "")
+    doi = record.get("doi", "")
+    tags = record.get("tags", "")
     return f"""# {title}
 
 ## Bibliographic Info
+- Title: {title}
+- Authors: {authors}
+- Year: {year}
+- Journal: {journal}
+- DOI: {doi}
+- Tags: {tags}
 - Filename: {filename}
 - Status: {status}
 

@@ -14,7 +14,43 @@ INDEX_COLUMNS = [
     "filename",
     "filepath",
     "title",
+    "authors",
+    "year",
+    "journal",
+    "doi",
+    "tags",
     "status",
+    "reading_priority",
+    "note_path",
+    "added_at",
+    "updated_at",
+]
+
+DEFAULT_VALUES = {
+    "authors": "",
+    "year": "",
+    "journal": "",
+    "doi": "",
+    "tags": "",
+    "status": "unread",
+    "reading_priority": "normal",
+}
+
+EDITABLE_METADATA_COLUMNS = [
+    "title",
+    "authors",
+    "year",
+    "journal",
+    "doi",
+    "tags",
+    "status",
+    "reading_priority",
+]
+
+SYSTEM_COLUMNS = [
+    "paper_id",
+    "filename",
+    "filepath",
     "note_path",
     "added_at",
     "updated_at",
@@ -29,6 +65,33 @@ def empty_index() -> pd.DataFrame:
     return pd.DataFrame(columns=INDEX_COLUMNS)
 
 
+def _default_for_column(column: str, row: pd.Series) -> str:
+    if column == "title":
+        filename = row.get("filename", "")
+        return Path(filename).stem if filename else ""
+    if column == "note_path":
+        paper_id = row.get("paper_id", "")
+        return str((NOTES_DIR / f"{paper_id}.md").resolve()) if paper_id else ""
+    if column in ("added_at", "updated_at"):
+        return _now_iso()
+    return DEFAULT_VALUES.get(column, "")
+
+
+def migrate_index_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    migrated = df.copy().fillna("")
+    for column in INDEX_COLUMNS:
+        if column not in migrated.columns:
+            migrated[column] = ""
+
+    for index, row in migrated.iterrows():
+        for column in INDEX_COLUMNS:
+            if str(migrated.at[index, column]) == "":
+                migrated.at[index, column] = _default_for_column(column, row)
+
+    ordered = INDEX_COLUMNS + [column for column in migrated.columns if column not in INDEX_COLUMNS]
+    return migrated[ordered]
+
+
 def ensure_index(index_csv: Path = INDEX_CSV) -> None:
     ensure_workspace_dirs()
     index_csv = Path(index_csv)
@@ -40,20 +103,17 @@ def ensure_index(index_csv: Path = INDEX_CSV) -> None:
 def load_index(index_csv: Path = INDEX_CSV) -> pd.DataFrame:
     ensure_index(index_csv)
     df = pd.read_csv(index_csv, dtype=str).fillna("")
-    for column in INDEX_COLUMNS:
-        if column not in df.columns:
-            df[column] = ""
-    return df[INDEX_COLUMNS]
+    migrated = migrate_index_dataframe(df)
+    if list(df.columns) != list(migrated.columns) or df.shape != migrated.shape or not df.equals(migrated):
+        save_index(migrated, index_csv)
+    return migrated
 
 
 def save_index(df: pd.DataFrame, index_csv: Path = INDEX_CSV) -> None:
     index_csv = Path(index_csv)
     index_csv.parent.mkdir(parents=True, exist_ok=True)
-    output = df.copy()
-    for column in INDEX_COLUMNS:
-        if column not in output.columns:
-            output[column] = ""
-    output[INDEX_COLUMNS].to_csv(index_csv, index=False)
+    output = migrate_index_dataframe(df)
+    output.to_csv(index_csv, index=False)
 
 
 def update_index_from_scan(
@@ -69,26 +129,35 @@ def update_index_from_scan(
     for paper_id, record in scanned_by_id.items():
         if paper_id in existing_ids:
             row_mask = df["paper_id"] == paper_id
-            for column in ("filename", "filepath", "title", "note_path"):
+            for column in ("filename", "filepath", "note_path"):
                 df.loc[row_mask, column] = record[column]
-            if (df.loc[row_mask, "status"] == "missing").any():
-                df.loc[row_mask, "status"] = "unread"
+            if (df.loc[row_mask, "title"] == "").any():
+                df.loc[row_mask, "title"] = record["title"]
             df.loc[row_mask, "updated_at"] = _now_iso()
         else:
             df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
 
-    scanned_paths = {record["filepath"] for record in scanned}
-    missing_mask = (df["filepath"] != "") & ~df["filepath"].isin(scanned_paths)
-    df.loc[missing_mask, "status"] = "missing"
     save_index(df, index_csv)
     return df
 
 
 def update_paper_status(paper_id: str, status: str, index_csv: Path = INDEX_CSV) -> pd.DataFrame:
+    return update_paper_metadata(paper_id, {"status": status}, index_csv)
+
+
+def update_paper_metadata(
+    paper_id: str,
+    metadata: dict[str, str],
+    index_csv: Path = INDEX_CSV,
+) -> pd.DataFrame:
     df = load_index(index_csv)
     row_mask = df["paper_id"] == paper_id
-    if row_mask.any():
-        df.loc[row_mask, "status"] = status
-        df.loc[row_mask, "updated_at"] = _now_iso()
-        save_index(df, index_csv)
-    return df
+    if not row_mask.any():
+        return df
+
+    for column in EDITABLE_METADATA_COLUMNS:
+        if column in metadata:
+            df.loc[row_mask, column] = str(metadata[column]).strip()
+    df.loc[row_mask, "updated_at"] = _now_iso()
+    save_index(df, index_csv)
+    return load_index(index_csv)

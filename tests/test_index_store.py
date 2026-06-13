@@ -1,4 +1,6 @@
-from storage.index_store import load_index, update_index_from_scan
+import pandas as pd
+
+from storage.index_store import INDEX_COLUMNS, load_index, save_index, update_index_from_scan, update_paper_metadata
 from tests.helpers import make_workspace
 
 
@@ -18,3 +20,121 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     assert len(first) == 1
     assert len(second) == 1
     assert load_index(index_csv).iloc[0]["filename"] == "Paper.pdf"
+
+
+def test_v1_index_is_migrated_to_v2_columns() -> None:
+    workspace = make_workspace("migration")
+    index_csv = workspace / "data" / "paper_index.csv"
+    index_csv.parent.mkdir(parents=True)
+    pd.DataFrame(
+        [
+            {
+                "paper_id": "paper-1",
+                "filename": "Old Paper.pdf",
+                "filepath": "C:\\papers\\Old Paper.pdf",
+                "title": "",
+                "status": "",
+                "note_path": "",
+                "added_at": "",
+                "updated_at": "",
+            }
+        ]
+    ).to_csv(index_csv, index=False)
+
+    migrated = load_index(index_csv)
+
+    for column in INDEX_COLUMNS:
+        assert column in migrated.columns
+    row = migrated.iloc[0]
+    assert row["title"] == "Old Paper"
+    assert row["authors"] == ""
+    assert row["journal"] == ""
+    assert row["doi"] == ""
+    assert row["tags"] == ""
+    assert row["status"] == "unread"
+    assert row["reading_priority"] == "normal"
+    assert row["note_path"].endswith("paper-1.md")
+    assert row["added_at"]
+    assert row["updated_at"]
+
+
+def test_rescan_preserves_manual_metadata() -> None:
+    workspace = make_workspace("preserve")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    (papers_dir / "Manual.pdf").write_bytes(b"%PDF-1.4\n")
+
+    first = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    paper_id = first.iloc[0]["paper_id"]
+    update_paper_metadata(
+        paper_id,
+        {
+            "title": "Manual Title",
+            "authors": "Researcher A",
+            "journal": "Local Journal",
+            "doi": "10.1234/local",
+            "tags": "manual, important",
+            "reading_priority": "high",
+        },
+        index_csv=index_csv,
+    )
+
+    rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    row = rescanned.iloc[0]
+
+    assert row["title"] == "Manual Title"
+    assert row["authors"] == "Researcher A"
+    assert row["journal"] == "Local Journal"
+    assert row["doi"] == "10.1234/local"
+    assert row["tags"] == "manual, important"
+    assert row["reading_priority"] == "high"
+
+
+def test_update_paper_metadata_updates_only_target_row() -> None:
+    workspace = make_workspace("metadata-update")
+    index_csv = workspace / "data" / "paper_index.csv"
+    rows = pd.DataFrame(
+        [
+            {
+                "paper_id": "paper-1",
+                "filename": "One.pdf",
+                "filepath": "One.pdf",
+                "title": "One",
+                "authors": "",
+                "journal": "",
+                "doi": "",
+                "tags": "",
+                "reading_priority": "normal",
+            },
+            {
+                "paper_id": "paper-2",
+                "filename": "Two.pdf",
+                "filepath": "Two.pdf",
+                "title": "Two",
+                "authors": "",
+                "journal": "",
+                "doi": "",
+                "tags": "",
+                "reading_priority": "normal",
+            },
+        ]
+    )
+    save_index(rows, index_csv)
+
+    updated = update_paper_metadata(
+        "paper-2",
+        {"title": "Updated Two", "authors": "Author Two", "reading_priority": "high"},
+        index_csv=index_csv,
+    )
+
+    row_one = updated[updated["paper_id"] == "paper-1"].iloc[0]
+    row_two = updated[updated["paper_id"] == "paper-2"].iloc[0]
+    assert row_one["title"] == "One"
+    assert row_one["authors"] == ""
+    assert row_two["title"] == "Updated Two"
+    assert row_two["authors"] == "Author Two"
+    assert row_two["reading_priority"] == "high"
