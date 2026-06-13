@@ -2,7 +2,9 @@ import pandas as pd
 
 from storage.index_store import (
     INDEX_COLUMNS,
+    accept_extracted_doi,
     accept_crossref_metadata,
+    accept_suggested_tags,
     load_index,
     save_index,
     update_index_from_scan,
@@ -57,6 +59,8 @@ def test_v1_index_is_migrated_to_v3_columns() -> None:
     assert row["authors"] == ""
     assert row["journal"] == ""
     assert row["doi"] == ""
+    assert row["doi_source"] == ""
+    assert row["doi_extracted_at"] == ""
     assert row["tags"] == ""
     assert row["status"] == "unread"
     assert row["reading_priority"] == "normal"
@@ -202,5 +206,78 @@ def test_accept_crossref_metadata_preserves_workflow_fields() -> None:
     assert row["metadata_confidence"] == "high"
     assert row["metadata_checked_at"] == "2026-06-13T00:00:00+00:00"
     assert row["tags"] == "keep, tags"
+    assert row["status"] == "reading"
+    assert row["reading_priority"] == "high"
+
+
+def test_accept_extracted_doi_updates_doi_provenance_only() -> None:
+    workspace = make_workspace("doi-accept")
+    index_csv = workspace / "data" / "paper_index.csv"
+    save_index(
+        pd.DataFrame(
+            [
+                {
+                    "paper_id": "paper-1",
+                    "filename": "One.pdf",
+                    "filepath": "One.pdf",
+                    "title": "Keep Title",
+                    "authors": "Keep Author",
+                    "journal": "Keep Journal",
+                    "doi": "10.1000/manual",
+                    "tags": "keep",
+                    "status": "reading",
+                    "reading_priority": "high",
+                }
+            ]
+        ),
+        index_csv,
+    )
+
+    updated = accept_extracted_doi(
+        "paper-1",
+        "10.2000/extracted",
+        doi_extracted_at="2026-06-13T00:00:00+00:00",
+        index_csv=index_csv,
+    )
+
+    row = updated.iloc[0]
+    assert row["doi"] == "10.2000/extracted"
+    assert row["doi_source"] == "pdf_extraction"
+    assert row["doi_extracted_at"] == "2026-06-13T00:00:00+00:00"
+    assert row["title"] == "Keep Title"
+    assert row["authors"] == "Keep Author"
+    assert row["journal"] == "Keep Journal"
+    assert row["tags"] == "keep"
+    assert row["status"] == "reading"
+    assert row["reading_priority"] == "high"
+
+
+def test_accept_suggested_tags_updates_tags_only() -> None:
+    workspace = make_workspace("tag-accept")
+    index_csv = workspace / "data" / "paper_index.csv"
+    save_index(
+        pd.DataFrame(
+            [
+                {
+                    "paper_id": "paper-1",
+                    "filename": "One.pdf",
+                    "filepath": "One.pdf",
+                    "title": "Keep Title",
+                    "doi": "10.1000/manual",
+                    "tags": "existing",
+                    "status": "reading",
+                    "reading_priority": "high",
+                }
+            ]
+        ),
+        index_csv,
+    )
+
+    updated = accept_suggested_tags("paper-1", "existing, crispr", index_csv=index_csv)
+
+    row = updated.iloc[0]
+    assert row["tags"] == "existing, crispr"
+    assert row["doi"] == "10.1000/manual"
+    assert row["title"] == "Keep Title"
     assert row["status"] == "reading"
     assert row["reading_priority"] == "high"

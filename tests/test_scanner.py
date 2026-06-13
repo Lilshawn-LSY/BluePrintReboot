@@ -21,6 +21,8 @@ def test_scan_papers_returns_pdf_records() -> None:
     assert record["year"] == ""
     assert record["journal"] == ""
     assert record["doi"] == ""
+    assert record["doi_source"] == ""
+    assert record["doi_extracted_at"] == ""
     assert record["tags"] == ""
     assert record["status"] == "unread"
     assert record["reading_priority"] == "normal"

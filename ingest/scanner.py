@@ -46,6 +46,8 @@ def scan_papers(
                 "year": "",
                 "journal": "",
                 "doi": "",
+                "doi_source": "",
+                "doi_extracted_at": "",
                 "tags": "",
                 "status": "unread",
                 "reading_priority": "normal",

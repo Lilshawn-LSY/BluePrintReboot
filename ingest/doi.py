@@ -13,7 +13,9 @@ def normalize_doi(raw: str) -> str:
 
     value = re.sub(r"^doi\s*:\s*", "", value, flags=re.IGNORECASE).strip()
     value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value, flags=re.IGNORECASE).strip()
-    value = value.strip(" \t\r\n.>,)")
+    value = value.strip(" \t\r\n")
+    while value and value[-1] in ".,;:)>]}":
+        value = value[:-1]
     return value.lower()
 
 

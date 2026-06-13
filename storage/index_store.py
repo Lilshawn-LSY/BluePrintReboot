@@ -18,6 +18,8 @@ INDEX_COLUMNS = [
     "year",
     "journal",
     "doi",
+    "doi_source",
+    "doi_extracted_at",
     "tags",
     "status",
     "reading_priority",
@@ -34,6 +36,8 @@ DEFAULT_VALUES = {
     "year": "",
     "journal": "",
     "doi": "",
+    "doi_source": "",
+    "doi_extracted_at": "",
     "tags": "",
     "status": "unread",
     "reading_priority": "normal",
@@ -51,6 +55,12 @@ EDITABLE_METADATA_COLUMNS = [
     "tags",
     "status",
     "reading_priority",
+]
+
+DOI_ACCEPT_COLUMNS = [
+    "doi",
+    "doi_source",
+    "doi_extracted_at",
 ]
 
 CROSSREF_ACCEPT_COLUMNS = [
@@ -193,6 +203,42 @@ def accept_crossref_metadata(
     for column in CROSSREF_ACCEPT_COLUMNS:
         if column in metadata:
             df.loc[row_mask, column] = str(metadata[column]).strip()
+    df.loc[row_mask, "updated_at"] = _now_iso()
+    save_index(df, index_csv)
+    return load_index(index_csv)
+
+
+def accept_extracted_doi(
+    paper_id: str,
+    doi: str,
+    doi_source: str = "pdf_extraction",
+    doi_extracted_at: str | None = None,
+    index_csv: Path = INDEX_CSV,
+) -> pd.DataFrame:
+    df = load_index(index_csv)
+    row_mask = df["paper_id"] == paper_id
+    if not row_mask.any():
+        return df
+
+    df.loc[row_mask, "doi"] = str(doi).strip()
+    df.loc[row_mask, "doi_source"] = doi_source
+    df.loc[row_mask, "doi_extracted_at"] = doi_extracted_at or _now_iso()
+    df.loc[row_mask, "updated_at"] = _now_iso()
+    save_index(df, index_csv)
+    return load_index(index_csv)
+
+
+def accept_suggested_tags(
+    paper_id: str,
+    tags: str,
+    index_csv: Path = INDEX_CSV,
+) -> pd.DataFrame:
+    df = load_index(index_csv)
+    row_mask = df["paper_id"] == paper_id
+    if not row_mask.any():
+        return df
+
+    df.loc[row_mask, "tags"] = str(tags).strip()
     df.loc[row_mask, "updated_at"] = _now_iso()
     save_index(df, index_csv)
     return load_index(index_csv)

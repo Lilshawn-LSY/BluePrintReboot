@@ -6,6 +6,10 @@ def test_normalize_doi_common_formats() -> None:
     assert normalize_doi("DOI: 10.5555/Test-Case") == "10.5555/test-case"
     assert normalize_doi("https://doi.org/10.1038/S41586-020-2649-2") == "10.1038/s41586-020-2649-2"
     assert normalize_doi("http://dx.doi.org/10.1145/3368089.3409742") == "10.1145/3368089.3409742"
+    assert normalize_doi("http://doi.org/10.1038/s41589-023-01430-2") == "10.1038/s41589-023-01430-2"
+    assert normalize_doi("10.1038/s41589-023-01430-2.") == "10.1038/s41589-023-01430-2"
+    assert normalize_doi("10.1038/s41589-023-01430-2,") == "10.1038/s41589-023-01430-2"
+    assert normalize_doi("10.1038/s41589-023-01430-2)") == "10.1038/s41589-023-01430-2"
 
 
 def test_is_probable_doi() -> None:

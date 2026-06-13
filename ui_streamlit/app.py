@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+from pathlib import Path
 
 from ingest.crossref import (
     CrossrefLookupError,
@@ -8,10 +9,14 @@ from ingest.crossref import (
     parse_crossref_work,
     proxy_environment,
 )
+from ingest.doi_extractor import extract_doi_candidates_for_record_with_debug, extract_text_from_pdf
 from ingest.doi import is_probable_doi, normalize_doi
+from ingest.tag_suggester import merge_tags, suggest_tags_for_record
 from storage.index_store import (
     INDEX_COLUMNS,
+    accept_extracted_doi,
     accept_crossref_metadata,
+    accept_suggested_tags,
     load_index,
     update_index_from_scan,
     update_paper_metadata,
@@ -66,6 +71,7 @@ def dashboard_page() -> None:
     read_papers = int((df["status"] == "read").sum()) if not df.empty else 0
     high_priority_papers = int((df["reading_priority"] == "high").sum()) if not df.empty else 0
     papers_with_doi = int((df["doi"] != "").sum()) if not df.empty else 0
+    papers_with_tags = int((df["tags"] != "").sum()) if not df.empty else 0
     crossref_papers = int((df["metadata_source"] == "crossref").sum()) if not df.empty else 0
     notes_created = sum(1 for path in NOTES_DIR.glob("*.md")) if NOTES_DIR.exists() else 0
 
@@ -77,8 +83,9 @@ def dashboard_page() -> None:
     col5, col6, col7, col8 = st.columns(4)
     col5.metric("High priority", high_priority_papers)
     col6.metric("Papers with DOI", papers_with_doi)
-    col7.metric("Crossref metadata", crossref_papers)
+    col7.metric("Papers with tags", papers_with_tags)
     col8.metric("Notes created", notes_created)
+    st.metric("Crossref metadata", crossref_papers)
 
     _scan_button("dashboard_scan")
 
@@ -200,6 +207,8 @@ def paper_detail_page() -> None:
         st.success("Metadata saved.")
         st.rerun()
 
+    doi_extraction_section(record)
+    tag_suggestions_section(record)
     metadata_assist_section(record)
 
     if st.button("Create/Open Note"):
@@ -216,6 +225,106 @@ def paper_detail_page() -> None:
             save_note_text(record, edited)
             st.success("Note saved.")
         st.caption(f"Note path: {note_path}")
+
+
+def doi_extraction_section(record: dict[str, str]) -> None:
+    st.subheader("DOI Extraction")
+    candidates_key = f"doi_candidates_{record['paper_id']}"
+    debug_key = f"doi_extraction_debug_{record['paper_id']}"
+    pdf_path = Path(record.get("filepath", ""))
+
+    if st.button("Extract DOI from PDF"):
+        if not record.get("filepath") or not pdf_path.exists():
+            st.warning("PDF file is missing or the indexed filepath is empty.")
+            st.session_state[debug_key] = {
+                "candidates": [],
+                "pdf_path": str(pdf_path),
+                "pdf_exists": False,
+                "pages_attempted": 2,
+                "pages_read": 0,
+                "extracted_char_count": 0,
+                "errors": ["PDF file is missing or the indexed filepath is empty."],
+            }
+        else:
+            debug = extract_doi_candidates_for_record_with_debug(record)
+            candidates = debug["candidates"]
+            st.session_state[candidates_key] = candidates
+            st.session_state[debug_key] = debug
+            if candidates:
+                st.success("DOI candidates found. Review and accept one if it is correct.")
+                st.rerun()
+            else:
+                st.info("No DOI candidates found in the filename or first pages.")
+                _show_doi_extraction_diagnostics(debug)
+
+    candidates = st.session_state.get(candidates_key, [])
+    if not candidates:
+        debug = st.session_state.get(debug_key)
+        if debug:
+            _show_doi_extraction_diagnostics(debug)
+        return
+
+    selected_doi = st.radio(
+        "Extracted DOI candidates",
+        candidates,
+        key=f"doi_candidate_choice_{record['paper_id']}",
+    )
+    if st.button("Accept Extracted DOI"):
+        accept_extracted_doi(record["paper_id"], selected_doi)
+        st.session_state.pop(candidates_key, None)
+        st.success("Extracted DOI accepted.")
+        st.rerun()
+
+
+def _show_doi_extraction_diagnostics(debug: dict[str, object]) -> None:
+    with st.expander("DOI extraction diagnostics"):
+        st.write(f"PDF path: `{debug.get('pdf_path', '')}`")
+        st.write(f"PDF exists: `{debug.get('pdf_exists', False)}`")
+        st.write(f"Pages attempted: `{debug.get('pages_attempted', 0)}`")
+        st.write(f"Pages read: `{debug.get('pages_read', 0)}`")
+        st.write(f"Extracted character count: `{debug.get('extracted_char_count', 0)}`")
+        errors = debug.get("errors", [])
+        if errors:
+            st.write("Errors:")
+            for error in errors:
+                st.write(f"- {error}")
+        else:
+            st.write("Errors: none")
+
+
+def tag_suggestions_section(record: dict[str, str]) -> None:
+    st.subheader("Tag Suggestions")
+    suggestions_key = f"tag_suggestions_{record['paper_id']}"
+    pdf_path = Path(record.get("filepath", ""))
+
+    if st.button("Suggest Tags"):
+        extra_text = ""
+        if record.get("filepath") and pdf_path.exists():
+            extra_text = extract_text_from_pdf(pdf_path, max_pages=1)
+        suggestions = suggest_tags_for_record(record, extra_text=extra_text)
+        st.session_state[suggestions_key] = suggestions
+        if suggestions:
+            st.success("Tag suggestions generated. Select tags to apply.")
+            st.rerun()
+        else:
+            st.info("No new tag suggestions found.")
+
+    suggestions = st.session_state.get(suggestions_key, [])
+    if not suggestions:
+        return
+
+    selected_tags = st.multiselect(
+        "Suggested tags",
+        suggestions,
+        default=suggestions,
+        key=f"selected_tag_suggestions_{record['paper_id']}",
+    )
+    if st.button("Accept Selected Tags"):
+        merged = merge_tags(record.get("tags", ""), selected_tags)
+        accept_suggested_tags(record["paper_id"], merged)
+        st.session_state.pop(suggestions_key, None)
+        st.success("Selected tags accepted.")
+        st.rerun()
 
 
 def metadata_assist_section(record: dict[str, str]) -> None:
@@ -310,7 +419,11 @@ def settings_page() -> None:
         "Crossref assist is optional. No API key is required; internet is needed only when you click lookup. "
         "Metadata remains stored locally in data/paper_index.csv."
     )
-    st.write("Use v0.3 by entering a DOI in Paper Detail, saving metadata, looking up Crossref, reviewing the preview, and accepting it only if it looks right.")
+    st.write(
+        "DOI extraction and tag suggestion are local and offline-safe. Crossref lookup still requires internet, "
+        "but remains optional."
+    )
+    st.write("Use v0.4 by extracting a DOI or suggesting tags in Paper Detail, reviewing the preview, and accepting only the values you want.")
 
 
 def run() -> None:

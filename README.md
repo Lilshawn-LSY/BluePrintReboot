@@ -2,7 +2,7 @@
 
 BluePrintReboot is a local-first personal research paper library app.
 
-## v0.3 DOI and Crossref Metadata Assist
+## v0.4 DOI Extraction and Tag Suggestion Assist
 
 - Scans PDF files placed in `papers/`.
 - Creates and updates `data/paper_index.csv`.
@@ -15,10 +15,13 @@ BluePrintReboot is a local-first personal research paper library app.
 - Adds Library search and filters for status, reading priority, and tag text.
 - Adds optional Crossref lookup by DOI with preview before applying metadata.
 - Tracks metadata provenance with source, confidence, and checked timestamp.
+- Extracts probable DOI candidates from PDF filenames and first pages.
+- Suggests rule-based tags from metadata and limited PDF text.
 - Keeps all user data local.
 
 Metadata is stored locally in `data/paper_index.csv`. That file is ignored by git.
 Crossref lookup requires internet, but no API key. Fetched metadata is applied only after you review the preview and click `Accept Crossref Metadata`.
+DOI extraction and tag suggestion are local/offline-safe. Suggestions are not applied automatically.
 
 ## Layout
 
@@ -63,6 +66,25 @@ Library search matches title, filename, authors, journal, DOI, and tags. Filters
 5. Press `Accept Crossref Metadata` to apply title, authors, year, journal, DOI, source, confidence, and checked timestamp.
 
 Tags, status, reading priority, filename, filepath, notes, and added date are not changed by Crossref accept.
+
+## DOI Extraction
+
+1. Open `Paper Detail`.
+2. Press `Extract DOI from PDF`.
+3. Review extracted DOI candidates.
+4. Press `Accept Extracted DOI` for the candidate you trust.
+5. Optionally use Crossref lookup afterward.
+
+DOI extraction checks the PDF filename and the first pages of the PDF. It is local and offline-safe. If a PDF is unreadable, encrypted, or corrupt, the app should show a message or return no candidates instead of crashing.
+
+## Tag Suggestions
+
+1. Open `Paper Detail`.
+2. Press `Suggest Tags`.
+3. Select suggested tags.
+4. Press `Accept Selected Tags`.
+
+Tag suggestions are deterministic, rule-based, and local. Existing tags are preserved, and accepted tags are appended without duplicates.
 
 ## Crossref Troubleshooting
 
