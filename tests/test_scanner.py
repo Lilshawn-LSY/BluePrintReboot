@@ -24,6 +24,9 @@ def test_scan_papers_returns_pdf_records() -> None:
     assert record["tags"] == ""
     assert record["status"] == "unread"
     assert record["reading_priority"] == "normal"
+    assert record["metadata_source"] == ""
+    assert record["metadata_confidence"] == ""
+    assert record["metadata_checked_at"] == ""
     assert record["paper_id"].startswith("example-paper-")
     assert record["note_path"].endswith(".md")
 

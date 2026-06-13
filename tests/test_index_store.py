@@ -1,6 +1,13 @@
 import pandas as pd
 
-from storage.index_store import INDEX_COLUMNS, load_index, save_index, update_index_from_scan, update_paper_metadata
+from storage.index_store import (
+    INDEX_COLUMNS,
+    accept_crossref_metadata,
+    load_index,
+    save_index,
+    update_index_from_scan,
+    update_paper_metadata,
+)
 from tests.helpers import make_workspace
 
 
@@ -22,7 +29,7 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     assert load_index(index_csv).iloc[0]["filename"] == "Paper.pdf"
 
 
-def test_v1_index_is_migrated_to_v2_columns() -> None:
+def test_v1_index_is_migrated_to_v3_columns() -> None:
     workspace = make_workspace("migration")
     index_csv = workspace / "data" / "paper_index.csv"
     index_csv.parent.mkdir(parents=True)
@@ -53,6 +60,9 @@ def test_v1_index_is_migrated_to_v2_columns() -> None:
     assert row["tags"] == ""
     assert row["status"] == "unread"
     assert row["reading_priority"] == "normal"
+    assert row["metadata_source"] == ""
+    assert row["metadata_confidence"] == ""
+    assert row["metadata_checked_at"] == ""
     assert row["note_path"].endswith("paper-1.md")
     assert row["added_at"]
     assert row["updated_at"]
@@ -138,3 +148,59 @@ def test_update_paper_metadata_updates_only_target_row() -> None:
     assert row_two["title"] == "Updated Two"
     assert row_two["authors"] == "Author Two"
     assert row_two["reading_priority"] == "high"
+
+
+def test_accept_crossref_metadata_preserves_workflow_fields() -> None:
+    workspace = make_workspace("crossref-accept")
+    index_csv = workspace / "data" / "paper_index.csv"
+    save_index(
+        pd.DataFrame(
+            [
+                {
+                    "paper_id": "paper-1",
+                    "filename": "One.pdf",
+                    "filepath": "One.pdf",
+                    "title": "Manual Title",
+                    "authors": "Manual Author",
+                    "year": "",
+                    "journal": "",
+                    "doi": "10.1000/manual",
+                    "tags": "keep, tags",
+                    "status": "reading",
+                    "reading_priority": "high",
+                }
+            ]
+        ),
+        index_csv,
+    )
+
+    updated = accept_crossref_metadata(
+        "paper-1",
+        {
+            "title": "Crossref Title",
+            "authors": "Crossref Author",
+            "year": "2024",
+            "journal": "Crossref Journal",
+            "doi": "10.1000/crossref",
+            "metadata_source": "crossref",
+            "metadata_confidence": "high",
+            "metadata_checked_at": "2026-06-13T00:00:00+00:00",
+            "tags": "should not apply",
+            "status": "read",
+            "reading_priority": "low",
+        },
+        index_csv=index_csv,
+    )
+
+    row = updated.iloc[0]
+    assert row["title"] == "Crossref Title"
+    assert row["authors"] == "Crossref Author"
+    assert row["year"] == "2024"
+    assert row["journal"] == "Crossref Journal"
+    assert row["doi"] == "10.1000/crossref"
+    assert row["metadata_source"] == "crossref"
+    assert row["metadata_confidence"] == "high"
+    assert row["metadata_checked_at"] == "2026-06-13T00:00:00+00:00"
+    assert row["tags"] == "keep, tags"
+    assert row["status"] == "reading"
+    assert row["reading_priority"] == "high"
