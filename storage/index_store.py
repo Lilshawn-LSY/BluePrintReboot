@@ -21,6 +21,9 @@ INDEX_COLUMNS = [
     "tags",
     "status",
     "reading_priority",
+    "metadata_source",
+    "metadata_confidence",
+    "metadata_checked_at",
     "note_path",
     "added_at",
     "updated_at",
@@ -34,6 +37,9 @@ DEFAULT_VALUES = {
     "tags": "",
     "status": "unread",
     "reading_priority": "normal",
+    "metadata_source": "",
+    "metadata_confidence": "",
+    "metadata_checked_at": "",
 }
 
 EDITABLE_METADATA_COLUMNS = [
@@ -45,6 +51,17 @@ EDITABLE_METADATA_COLUMNS = [
     "tags",
     "status",
     "reading_priority",
+]
+
+CROSSREF_ACCEPT_COLUMNS = [
+    "title",
+    "authors",
+    "year",
+    "journal",
+    "doi",
+    "metadata_source",
+    "metadata_confidence",
+    "metadata_checked_at",
 ]
 
 SYSTEM_COLUMNS = [
@@ -156,6 +173,24 @@ def update_paper_metadata(
         return df
 
     for column in EDITABLE_METADATA_COLUMNS:
+        if column in metadata:
+            df.loc[row_mask, column] = str(metadata[column]).strip()
+    df.loc[row_mask, "updated_at"] = _now_iso()
+    save_index(df, index_csv)
+    return load_index(index_csv)
+
+
+def accept_crossref_metadata(
+    paper_id: str,
+    metadata: dict[str, str],
+    index_csv: Path = INDEX_CSV,
+) -> pd.DataFrame:
+    df = load_index(index_csv)
+    row_mask = df["paper_id"] == paper_id
+    if not row_mask.any():
+        return df
+
+    for column in CROSSREF_ACCEPT_COLUMNS:
         if column in metadata:
             df.loc[row_mask, column] = str(metadata[column]).strip()
     df.loc[row_mask, "updated_at"] = _now_iso()

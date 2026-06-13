@@ -1,7 +1,21 @@
 import pandas as pd
 import streamlit as st
 
-from storage.index_store import INDEX_COLUMNS, load_index, update_index_from_scan, update_paper_metadata
+from ingest.crossref import (
+    CrossrefLookupError,
+    check_crossref_connectivity,
+    fetch_crossref_by_doi,
+    parse_crossref_work,
+    proxy_environment,
+)
+from ingest.doi import is_probable_doi, normalize_doi
+from storage.index_store import (
+    INDEX_COLUMNS,
+    accept_crossref_metadata,
+    load_index,
+    update_index_from_scan,
+    update_paper_metadata,
+)
 from storage.note_store import create_note_if_missing, load_note_text, save_note_text
 from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
 
@@ -16,6 +30,7 @@ LIBRARY_COLUMNS = [
     "status",
     "reading_priority",
     "tags",
+    "metadata_source",
     "filename",
 ]
 
@@ -50,15 +65,20 @@ def dashboard_page() -> None:
     reading_papers = int((df["status"] == "reading").sum()) if not df.empty else 0
     read_papers = int((df["status"] == "read").sum()) if not df.empty else 0
     high_priority_papers = int((df["reading_priority"] == "high").sum()) if not df.empty else 0
+    papers_with_doi = int((df["doi"] != "").sum()) if not df.empty else 0
+    crossref_papers = int((df["metadata_source"] == "crossref").sum()) if not df.empty else 0
     notes_created = sum(1 for path in NOTES_DIR.glob("*.md")) if NOTES_DIR.exists() else 0
 
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total papers", total_papers)
     col2.metric("Unread papers", unread_papers)
     col3.metric("Reading papers", reading_papers)
     col4.metric("Read papers", read_papers)
+    col5, col6, col7, col8 = st.columns(4)
     col5.metric("High priority", high_priority_papers)
-    col6.metric("Notes created", notes_created)
+    col6.metric("Papers with DOI", papers_with_doi)
+    col7.metric("Crossref metadata", crossref_papers)
+    col8.metric("Notes created", notes_created)
 
     _scan_button("dashboard_scan")
 
@@ -83,7 +103,7 @@ def library_page() -> None:
     filtered = df.copy()
     if search:
         needle = search.lower()
-        search_columns = ["title", "filename", "authors", "journal", "doi", "tags"]
+        search_columns = ["title", "filename", "authors", "journal", "doi", "tags", "metadata_source"]
         search_mask = pd.Series(False, index=filtered.index)
         for column in search_columns:
             search_mask = search_mask | filtered[column].str.lower().str.contains(needle, na=False, regex=False)
@@ -180,6 +200,8 @@ def paper_detail_page() -> None:
         st.success("Metadata saved.")
         st.rerun()
 
+    metadata_assist_section(record)
+
     if st.button("Create/Open Note"):
         create_note_if_missing(record)
         st.session_state[f"note_open_{record['paper_id']}"] = True
@@ -194,6 +216,62 @@ def paper_detail_page() -> None:
             save_note_text(record, edited)
             st.success("Note saved.")
         st.caption(f"Note path: {note_path}")
+
+
+def metadata_assist_section(record: dict[str, str]) -> None:
+    st.subheader("Metadata Assist")
+    current_doi = record.get("doi", "")
+    st.write(f"Current DOI: `{current_doi or 'not set'}`")
+    preview_key = f"crossref_preview_{record['paper_id']}"
+
+    if st.button("Lookup Crossref by DOI"):
+        normalized = normalize_doi(current_doi)
+        if not normalized:
+            st.warning("Enter and save a DOI before looking up Crossref metadata.")
+        elif not is_probable_doi(normalized):
+            st.warning("The DOI does not look valid.")
+        else:
+            try:
+                message = fetch_crossref_by_doi(normalized)
+                st.session_state[preview_key] = parse_crossref_work(message)
+                st.success("Crossref metadata found. Review the preview before accepting it.")
+                st.rerun()
+            except CrossrefLookupError as exc:
+                st.warning(str(exc))
+            except Exception as exc:
+                st.warning(f"Crossref lookup failed: {exc}")
+
+    preview = st.session_state.get(preview_key)
+    if not preview:
+        return
+
+    st.write("Crossref preview")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "field": field,
+                    "value": preview.get(field, ""),
+                }
+                for field in (
+                    "title",
+                    "authors",
+                    "year",
+                    "journal",
+                    "doi",
+                    "metadata_source",
+                    "metadata_confidence",
+                )
+            ]
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+    if st.button("Accept Crossref Metadata"):
+        accept_crossref_metadata(record["paper_id"], preview)
+        st.session_state.pop(preview_key, None)
+        st.success("Crossref metadata accepted.")
+        st.rerun()
 
 
 def settings_page() -> None:
@@ -212,7 +290,27 @@ def settings_page() -> None:
     )
     st.write("Current index schema")
     st.code("\n".join(INDEX_COLUMNS))
-    st.write("Use v0.2 by placing PDFs in papers/, scanning, filtering in Library, opening Paper Detail, and saving manual metadata locally.")
+    st.subheader("Crossref Connectivity")
+    proxy_vars = proxy_environment()
+    if proxy_vars:
+        st.warning(
+            "Proxy environment variables are set: "
+            + ", ".join(f"{name}={value}" for name, value in proxy_vars.items())
+        )
+    if st.button("Test Crossref Connection"):
+        result = check_crossref_connectivity()
+        if result["ok"]:
+            st.success(f"{result['message']} HTTP status: {result['status_code']}")
+        else:
+            st.warning(
+                f"{result['message']} Likely causes include a restricted network, firewall/proxy, "
+                "temporary Crossref/API issue, or offline environment."
+            )
+    st.write(
+        "Crossref assist is optional. No API key is required; internet is needed only when you click lookup. "
+        "Metadata remains stored locally in data/paper_index.csv."
+    )
+    st.write("Use v0.3 by entering a DOI in Paper Detail, saving metadata, looking up Crossref, reviewing the preview, and accepting it only if it looks right.")
 
 
 def run() -> None:
