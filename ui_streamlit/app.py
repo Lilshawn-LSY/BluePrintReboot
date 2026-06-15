@@ -30,8 +30,8 @@ from storage.index_store import (
     update_index_from_scan,
     update_paper_metadata,
 )
-from storage.note_store import create_note_if_missing, load_note_text, save_note_text
 from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
+from ui_streamlit.reader_workspace import render_reader_workspace
 
 
 STATUS_OPTIONS = ["unread", "reading", "read"]
@@ -232,20 +232,7 @@ def paper_detail_page() -> None:
         },
     )
 
-    if st.button("Create/Open Note"):
-        create_note_if_missing(record)
-        st.session_state[f"note_open_{record['paper_id']}"] = True
-        st.rerun()
-
-    note_path = NOTES_DIR / f"{record['paper_id']}.md"
-    note_is_open = st.session_state.get(f"note_open_{record['paper_id']}", note_path.exists())
-    if note_is_open:
-        text = load_note_text(record)
-        edited = st.text_area("Note", value=text, height=520, key=f"note_text_{record['paper_id']}")
-        if st.button("Save Note"):
-            save_note_text(record, edited)
-            st.success("Note saved.")
-        st.caption(f"Note path: {note_path}")
+    render_reader_workspace(record)
 
 
 def metadata_assist_section(record: dict[str, str], form_values: dict | None = None) -> None:

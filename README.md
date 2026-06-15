@@ -20,6 +20,22 @@ All paper metadata is stored in `data/paper_index.csv`. That file is ignored by 
 
 Crossref lookup requires internet access but no API key. PDF scanning, DOI extraction, manual metadata editing, tag suggestion, and notes work locally.
 
+## v0.6 Reader Workspace
+
+Paper Detail includes a Reader Workspace for the selected paper. It keeps the workflow local-first and combines:
+
+- Toggleable toolbar.
+- Local PDF viewer.
+- Markdown note editor with unsaved draft preservation.
+- Save Note and Reload Note actions.
+- Insert Summary, Key Claim, Method, Evidence, Question, and Citation blocks.
+- Manual tag add with duplicate avoidance.
+- Existing rule-based tag suggestion action.
+- Reading status and reading priority controls.
+- Metadata summary with title, first author, year, journal, DOI, tags, status, and reading priority.
+
+Visual PDF highlighting, PDF coordinate annotations, and direct mouse selection capture from the PDF viewer are deferred to a later version.
+
 ## Optional MarkItDown Fallback
 
 The base app uses `pypdf`. To enable the MarkItDown fallback:
@@ -66,7 +82,7 @@ python -m pytest
 6. Review detected DOI, extraction source, save status, and Crossref lookup status.
 7. Review the Crossref preview and press `Accept Crossref Metadata` only if it is correct.
 8. Review suggested tags and press `Accept Suggested Tags` if useful.
-9. Edit manual fields or notes whenever needed.
+9. Use Reader Workspace to view the PDF, edit Markdown notes, insert structured note blocks, and update reading workflow fields.
 
 ## Metadata Assist
 
