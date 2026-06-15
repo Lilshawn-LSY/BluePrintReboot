@@ -40,7 +40,7 @@ Visual PDF highlighting, PDF coordinate annotations, and direct mouse selection 
 
 Paper Detail is now reader-first: the PDF viewer and Markdown note editor appear before detailed metadata controls. Full metadata editing, metadata assist, and technical paths are collapsed into secondary expanders.
 
-PDF rendering now prefers Streamlit's direct PDF display when available and falls back to a local HTML object/embed renderer. A PDF debug expander shows the path, existence status, file size, and rendering method. Visual PDF highlighting and coordinate annotations remain deferred.
+PDF rendering now prefers Streamlit's native PDF component from `streamlit[pdf]` and falls back to a local HTML object/embed renderer if native rendering is unavailable or fails. A PDF debug expander shows the path, existence status, file size, attempted render methods, final method, and native renderer errors. Visual PDF highlighting, coordinate annotation, and mouse selection capture remain deferred.
 
 ## Optional MarkItDown Fallback
 
@@ -71,6 +71,8 @@ markitdown[pdf]
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
+`requirements.txt` includes `streamlit[pdf]` so the native Streamlit PDF viewer is installed in reproducible local environments.
 
 ## Test
 

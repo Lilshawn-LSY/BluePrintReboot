@@ -1,8 +1,10 @@
 from ui_streamlit.reader_workspace import (
     add_manual_tag,
     citation_block,
+    initial_pdf_render_status,
     insert_note_block,
     load_note_draft,
+    mark_pdf_render_fallback,
     note_draft_key,
     pdf_embed_html,
     pdf_path_status,
@@ -106,3 +108,31 @@ def test_pdf_embed_html_returns_non_empty_object_for_valid_pdf() -> None:
     assert html
     assert "<object" in html
     assert "application/pdf" in html
+
+
+def test_initial_pdf_render_status_records_native_availability() -> None:
+    status = initial_pdf_render_status(native_available=True)
+
+    assert status["native_available"] is True
+    assert status["attempted_methods"] == ["st.pdf"]
+    assert status["final_method"] == ""
+    assert status["st_pdf_error"] == ""
+
+
+def test_mark_pdf_render_fallback_records_error_and_final_method() -> None:
+    status = mark_pdf_render_fallback(
+        initial_pdf_render_status(native_available=True),
+        RuntimeError("streamlit-pdf missing"),
+    )
+
+    assert status["attempted_methods"] == ["st.pdf", "html-object"]
+    assert status["final_method"] == "html-object"
+    assert status["st_pdf_error"] == "streamlit-pdf missing"
+
+
+def test_mark_pdf_render_fallback_without_native_starts_with_html_object() -> None:
+    status = mark_pdf_render_fallback(initial_pdf_render_status(native_available=False))
+
+    assert status["native_available"] is False
+    assert status["attempted_methods"] == ["html-object"]
+    assert status["final_method"] == "html-object"

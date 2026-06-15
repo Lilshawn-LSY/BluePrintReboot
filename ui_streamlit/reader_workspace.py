@@ -143,6 +143,29 @@ def pdf_rendering_method() -> str:
     return "st.pdf" if hasattr(st, "pdf") else "html-object"
 
 
+def initial_pdf_render_status(native_available: bool | None = None) -> dict[str, object]:
+    available = hasattr(st, "pdf") if native_available is None else native_available
+    attempted = ["st.pdf"] if available else []
+    return {
+        "native_available": available,
+        "attempted_methods": attempted,
+        "final_method": "",
+        "st_pdf_error": "",
+    }
+
+
+def mark_pdf_render_fallback(status: dict[str, object], error: Exception | str | None = None) -> dict[str, object]:
+    updated = dict(status)
+    attempted = list(updated.get("attempted_methods", []))
+    if "html-object" not in attempted:
+        attempted.append("html-object")
+    updated["attempted_methods"] = attempted
+    updated["final_method"] = "html-object"
+    if error:
+        updated["st_pdf_error"] = str(error)
+    return updated
+
+
 def render_reader_workspace(record: dict[str, str]) -> None:
     st.subheader("Reader Workspace")
     summary = build_metadata_summary(record)
@@ -263,19 +286,36 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
 def _render_pdf_viewer(record: dict[str, str]) -> None:
     st.write("PDF")
     status = pdf_path_status(record)
-    method = pdf_rendering_method()
-    with st.expander("PDF debug"):
-        st.write(f"PDF path: `{status['path']}`")
-        st.write(f"Exists: `{status['exists']}`")
-        st.write(f"File size MB: `{status['size_mb']}`")
-        st.write(f"Rendering method: `{method}`")
     if not status["exists"]:
+        render_status = mark_pdf_render_fallback(initial_pdf_render_status())
+        _render_pdf_debug(status, render_status)
         st.warning(str(status["message"]))
         return
-    if method == "st.pdf":
-        st.pdf(str(status["path"]), height=920)
+
+    render_status = initial_pdf_render_status()
+    if render_status["native_available"]:
+        try:
+            st.pdf(str(status["path"]), height=920)
+            render_status["final_method"] = "st.pdf"
+        except Exception as exc:
+            render_status = mark_pdf_render_fallback(render_status, exc)
+            components.html(pdf_embed_html(status["path"], height=920), height=940, scrolling=True)
     else:
+        render_status = mark_pdf_render_fallback(render_status)
         components.html(pdf_embed_html(status["path"], height=920), height=940, scrolling=True)
+    _render_pdf_debug(status, render_status)
+
+
+def _render_pdf_debug(path_status: dict[str, object], render_status: dict[str, object]) -> None:
+    with st.expander("PDF debug"):
+        st.write(f"PDF path: `{path_status['path']}`")
+        st.write(f"Exists: `{path_status['exists']}`")
+        st.write(f"File size MB: `{path_status['size_mb']}`")
+        st.write(f"Native PDF support available: `{render_status['native_available']}`")
+        st.write(f"Attempted render methods: `{', '.join(render_status['attempted_methods'])}`")
+        st.write(f"Final render method: `{render_status['final_method']}`")
+        if render_status.get("st_pdf_error"):
+            st.write(f"st.pdf error: `{render_status['st_pdf_error']}`")
 
 
 def _render_note_editor(record: dict[str, str]) -> None:
