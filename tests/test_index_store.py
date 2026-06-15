@@ -59,6 +59,9 @@ def test_update_index_from_scan_auto_detects_and_normalizes_doi(monkeypatch) -> 
     updated = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
 
     assert updated.iloc[0]["doi"] == "10.1111/pce.13021"
+    assert updated.iloc[0]["doi_source"] == "pypdf"
+    assert updated.iloc[0]["extraction_source"] == "pypdf"
+    assert updated.iloc[0]["extraction_checked_at"]
 
 
 def test_update_index_from_scan_does_not_overwrite_existing_doi(monkeypatch) -> None:
@@ -86,6 +89,7 @@ def test_update_index_from_scan_does_not_overwrite_existing_doi(monkeypatch) -> 
     rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
 
     assert rescanned.iloc[0]["doi"] == "10.2222/manual"
+    assert rescanned.iloc[0]["doi_source"] == "manual"
 
 
 def test_update_index_from_scan_survives_pdf_text_extraction_failure(monkeypatch) -> None:
@@ -125,6 +129,7 @@ def test_v1_index_is_migrated_to_v3_columns() -> None:
                 "note_path": "",
                 "added_at": "",
                 "updated_at": "",
+                "custom_extra": "keep me",
             }
         ]
     ).to_csv(index_csv, index=False)
@@ -138,15 +143,21 @@ def test_v1_index_is_migrated_to_v3_columns() -> None:
     assert row["authors"] == ""
     assert row["journal"] == ""
     assert row["doi"] == ""
+    assert row["abstract"] == ""
+    assert row["keywords"] == ""
     assert row["tags"] == ""
     assert row["status"] == "unread"
     assert row["reading_priority"] == "normal"
+    assert row["doi_source"] == ""
+    assert row["extraction_source"] == ""
+    assert row["extraction_checked_at"] == ""
     assert row["metadata_source"] == ""
     assert row["metadata_confidence"] == ""
     assert row["metadata_checked_at"] == ""
     assert row["note_path"].endswith("paper-1.md")
     assert row["added_at"]
     assert row["updated_at"]
+    assert row["custom_extra"] == "keep me"
 
 
 def test_rescan_preserves_manual_metadata() -> None:
@@ -181,6 +192,7 @@ def test_rescan_preserves_manual_metadata() -> None:
     assert row["authors"] == "Researcher A"
     assert row["journal"] == "Local Journal"
     assert row["doi"] == "10.1234/local"
+    assert row["doi_source"] == "manual"
     assert row["tags"] == "manual, important"
     assert row["reading_priority"] == "high"
 
@@ -328,6 +340,7 @@ def test_accept_crossref_metadata_preserves_workflow_fields() -> None:
     assert row["year"] == "2024"
     assert row["journal"] == "Crossref Journal"
     assert row["doi"] == "10.1000/crossref"
+    assert row["doi_source"] == "crossref"
     assert row["metadata_source"] == "crossref"
     assert row["metadata_confidence"] == "high"
     assert row["metadata_checked_at"] == "2026-06-13T00:00:00+00:00"

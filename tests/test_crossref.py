@@ -29,6 +29,8 @@ def test_parse_crossref_work_prefers_print_year_and_formats_authors() -> None:
             "issued": {"date-parts": [[1996, 1, 1]]},
             "container-title": ["Journal of Local Research"],
             "DOI": "10.1234/ABC",
+            "abstract": "<jats:p>Structured abstract text.</jats:p>",
+            "subject": ["Synthetic Biology", "Methods"],
         }
     )
 
@@ -37,6 +39,9 @@ def test_parse_crossref_work_prefers_print_year_and_formats_authors() -> None:
     assert parsed["year"] == "1998"
     assert parsed["journal"] == "Journal of Local Research"
     assert parsed["doi"] == "10.1234/abc"
+    assert parsed["abstract"] == "Structured abstract text."
+    assert parsed["keywords"] == "Synthetic Biology, Methods"
+    assert parsed["crossref_subjects"] == "Synthetic Biology, Methods"
     assert parsed["metadata_source"] == "crossref"
     assert parsed["metadata_confidence"] == "high"
     assert parsed["metadata_checked_at"]
@@ -74,7 +79,7 @@ def test_crossref_headers_include_configured_mailto(monkeypatch) -> None:
     headers = crossref_headers()
 
     assert headers["mailto"] == "researcher@example.edu"
-    assert headers["User-Agent"] == "BluePrintReboot/0.4.1 (mailto:researcher@example.edu)"
+    assert headers["User-Agent"] == "BluePrintReboot/0.5 (mailto:researcher@example.edu)"
 
 
 def test_crossref_headers_default_to_local_mailto(monkeypatch) -> None:
@@ -83,7 +88,7 @@ def test_crossref_headers_default_to_local_mailto(monkeypatch) -> None:
     headers = crossref_headers()
 
     assert headers["mailto"] == "pplee0300@snu.ac.kr"
-    assert headers["User-Agent"] == "BluePrintReboot/0.4.1 (mailto:pplee0300@snu.ac.kr)"
+    assert headers["User-Agent"] == "BluePrintReboot/0.5 (mailto:pplee0300@snu.ac.kr)"
 
 
 def test_fetch_crossref_by_doi_connection_refused_is_user_friendly(monkeypatch) -> None:

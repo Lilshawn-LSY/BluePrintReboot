@@ -10,8 +10,18 @@ from ingest.crossref import (
     parse_crossref_work,
     proxy_environment,
 )
+from ingest.document_text import get_text_extraction_backends
 from ingest.doi import is_probable_doi, normalize_doi
 from ingest.scanner import extract_doi_metadata_from_pdf
+from ingest.tag_suggester import (
+    DEFAULT_RULE_PATH,
+    audit_library_tags,
+    explain_tag_suggestions,
+    load_tag_rules,
+    merge_tags,
+    suggest_tags,
+    validate_tag_rules,
+)
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
@@ -30,6 +40,8 @@ LIBRARY_COLUMNS = [
     "authors",
     "year",
     "journal",
+    "abstract",
+    "keywords",
     "status",
     "reading_priority",
     "tags",
@@ -168,6 +180,8 @@ def paper_detail_page() -> None:
         year = col1.text_input("Year", value=record.get("year", ""))
         journal = col2.text_input("Journal", value=record.get("journal", ""))
         doi = st.text_input("DOI", value=record.get("doi", ""))
+        abstract = st.text_area("Abstract", value=record.get("abstract", ""), height=120)
+        keywords = st.text_input("Keywords", value=record.get("keywords", ""))
         tags = st.text_input("Tags", value=record.get("tags", ""))
 
         status_value = record.get("status", "unread")
@@ -195,6 +209,8 @@ def paper_detail_page() -> None:
                 "year": year,
                 "journal": journal,
                 "doi": doi,
+                "abstract": abstract,
+                "keywords": keywords,
                 "tags": tags,
                 "status": status,
                 "reading_priority": reading_priority,
@@ -227,34 +243,80 @@ def metadata_assist_section(record: dict[str, str]) -> None:
     st.write(f"Current DOI: `{current_doi or 'not set'}`")
     preview_key = f"crossref_preview_{record['paper_id']}"
     extraction_key = f"doi_extraction_{record['paper_id']}"
+    enrichment_key = f"metadata_enrichment_{record['paper_id']}"
 
-    if st.button("Extract DOI from PDF"):
-        result = extract_doi_metadata_from_pdf(Path(record["filepath"]))
-        detected_doi = result.doi
+    if st.button("Enrich Metadata", type="primary"):
         normalized_current_doi = normalize_doi(current_doi)
-        saved = False
-        message = ""
-        if detected_doi and not normalized_current_doi:
-            update_paper_metadata(record["paper_id"], {"doi": detected_doi})
-            saved = True
-            message = "Detected DOI was saved to this paper."
-        elif detected_doi and detected_doi == normalized_current_doi:
-            message = "Detected DOI already matches the saved DOI."
-        elif detected_doi:
-            message = "Detected DOI was not saved because this paper already has a DOI."
+        if normalized_current_doi:
+            detected_doi = ""
+            extraction_source = "none"
+            saved = False
+            message = "Existing DOI used; PDF extraction was not needed."
         else:
-            message = "No DOI detected. You can paste one manually."
+            result = extract_doi_metadata_from_pdf(Path(record["filepath"]))
+            detected_doi = result.doi
+            extraction_source = result.source
+            saved = False
+            message = ""
+            if detected_doi:
+                update_paper_metadata(
+                    record["paper_id"],
+                    {
+                        "doi": detected_doi,
+                        "doi_source": extraction_source,
+                        "extraction_source": extraction_source,
+                        "extraction_checked_at": _now_iso(),
+                    },
+                )
+                saved = True
+                message = "Detected DOI was saved to this paper."
+            else:
+                message = "No DOI detected. You can paste one manually."
+
+        if normalized_current_doi:
+            saved = False
+        elif detected_doi:
+            saved = True
+
+        if detected_doi and normalized_current_doi and detected_doi == normalized_current_doi:
+            message = "Detected DOI already matches the saved DOI."
+        elif detected_doi and normalized_current_doi:
+            message = "Detected DOI was not saved because this paper already has a DOI."
 
         st.session_state[extraction_key] = {
             "doi": detected_doi,
-            "source": result.source,
+            "source": extraction_source,
             "saved": saved,
             "message": message,
         }
-        if saved:
+
+        doi_for_lookup = detected_doi or normalized_current_doi
+        crossref_status = "not attempted"
+        if doi_for_lookup:
+            try:
+                crossref_message = fetch_crossref_by_doi(doi_for_lookup)
+                st.session_state[preview_key] = parse_crossref_work(crossref_message)
+                crossref_status = "metadata found; review the preview before accepting"
+            except CrossrefLookupError as exc:
+                crossref_status = f"failed: {exc}"
+            except Exception as exc:
+                crossref_status = f"failed: {exc}"
+        elif not detected_doi:
+            crossref_status = "not attempted; no DOI available"
+
+        st.session_state[enrichment_key] = {
+            "crossref_status": crossref_status,
+        }
+        if saved or crossref_status.startswith("metadata found"):
             st.rerun()
 
     extraction = st.session_state.get(extraction_key)
+    enrichment = st.session_state.get(enrichment_key, {})
+    crossref_status = enrichment.get("crossref_status", "")
+    if crossref_status.startswith("failed:"):
+        st.warning(f"Crossref lookup {crossref_status}")
+    elif crossref_status.startswith("metadata found"):
+        st.success("Crossref metadata found. Review the preview before accepting it.")
     if extraction:
         detected_doi = extraction.get("doi", "")
         if detected_doi:
@@ -265,11 +327,20 @@ def metadata_assist_section(record: dict[str, str]) -> None:
             st.write(f"Detected DOI: `{detected_doi}`")
             st.write(f"Extraction source: `{extraction.get('source', 'none')}`")
             st.write(f"Saved to index: `{'yes' if extraction.get('saved') else 'no'}`")
+            st.write(f"Crossref lookup status: `{enrichment.get('crossref_status', 'not attempted')}`")
 
             normalized_current_doi = normalize_doi(current_doi)
             if normalized_current_doi and detected_doi != normalized_current_doi:
                 if st.button("Replace saved DOI with detected DOI"):
-                    update_paper_metadata(record["paper_id"], {"doi": detected_doi})
+                    update_paper_metadata(
+                        record["paper_id"],
+                        {
+                            "doi": detected_doi,
+                            "doi_source": extraction.get("source", ""),
+                            "extraction_source": extraction.get("source", ""),
+                            "extraction_checked_at": _now_iso(),
+                        },
+                    )
                     st.session_state[extraction_key]["saved"] = True
                     st.session_state[extraction_key]["message"] = "Detected DOI was saved to this paper."
                     st.success("Saved detected DOI.")
@@ -287,25 +358,34 @@ def metadata_assist_section(record: dict[str, str]) -> None:
                     st.warning(f"Crossref lookup failed: {exc}")
         else:
             st.info(extraction["message"])
-
-    if st.button("Lookup Crossref by DOI"):
-        normalized = normalize_doi(current_doi)
-        if not normalized:
-            st.warning("Enter and save a DOI before looking up Crossref metadata.")
-        elif not is_probable_doi(normalized):
-            st.warning("The DOI does not look valid.")
-        else:
-            try:
-                message = fetch_crossref_by_doi(normalized)
-                st.session_state[preview_key] = parse_crossref_work(message)
-                st.success("Crossref metadata found. Review the preview before accepting it.")
-                st.rerun()
-            except CrossrefLookupError as exc:
-                st.warning(str(exc))
-            except Exception as exc:
-                st.warning(f"Crossref lookup failed: {exc}")
+            st.write("Detected DOI: `not found`")
+            st.write(f"DOI extraction source: `{extraction.get('source', 'none')}`")
+            st.write("Saved to index: `no`")
+            st.write(f"Crossref lookup status: `{enrichment.get('crossref_status', 'not attempted')}`")
 
     preview = st.session_state.get(preview_key)
+    suggestion_record = dict(record)
+    if preview and preview.get("crossref_subjects"):
+        suggestion_record["crossref_subjects"] = preview.get("crossref_subjects", "")
+    suggestions = suggest_tags(suggestion_record)
+    suggestion_details = explain_tag_suggestions(suggestion_record)
+    st.write("Suggested tags")
+    if suggestions:
+        for detail in suggestion_details:
+            fields = "/".join(detail.get("matched_fields", []))
+            st.caption(f"`{detail['tag']}` - matched {fields}")
+        if st.button("Accept Suggested Tags"):
+            merged_tags = merge_tags(record.get("tags", ""), suggestions)
+            update_paper_metadata(record["paper_id"], {"tags": merged_tags})
+            st.success("Suggested tags added.")
+            st.rerun()
+    else:
+        st.caption("No new tag suggestions.")
+
+    with st.expander("Advanced manual lookup"):
+        if st.button("Lookup Crossref by DOI"):
+            _lookup_crossref_by_current_doi(current_doi, preview_key)
+
     if not preview:
         return
 
@@ -322,6 +402,9 @@ def metadata_assist_section(record: dict[str, str]) -> None:
                     "authors",
                     "year",
                     "journal",
+                    "abstract",
+                    "keywords",
+                    "crossref_subjects",
                     "doi",
                     "metadata_source",
                     "metadata_confidence",
@@ -336,6 +419,30 @@ def metadata_assist_section(record: dict[str, str]) -> None:
         st.session_state.pop(preview_key, None)
         st.success("Crossref metadata accepted.")
         st.rerun()
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _lookup_crossref_by_current_doi(current_doi: str, preview_key: str) -> None:
+    normalized = normalize_doi(current_doi)
+    if not normalized:
+        st.warning("Enter and save a DOI before looking up Crossref metadata.")
+    elif not is_probable_doi(normalized):
+        st.warning("The DOI does not look valid.")
+    else:
+        try:
+            message = fetch_crossref_by_doi(normalized)
+            st.session_state[preview_key] = parse_crossref_work(message)
+            st.success("Crossref metadata found. Review the preview before accepting it.")
+            st.rerun()
+        except CrossrefLookupError as exc:
+            st.warning(str(exc))
+        except Exception as exc:
+            st.warning(f"Crossref lookup failed: {exc}")
 
 
 def settings_page() -> None:
@@ -354,6 +461,28 @@ def settings_page() -> None:
     )
     st.write("Current index schema")
     st.code("\n".join(INDEX_COLUMNS))
+    st.subheader("Extraction Backends")
+    backends = get_text_extraction_backends()
+    st.write(
+        "PDF text extraction backends: "
+        + ", ".join(f"{name}={'available' if available else 'unavailable'}" for name, available in backends.items())
+    )
+    st.subheader("Tag Rulebook")
+    rules = load_tag_rules()
+    validation_warnings = validate_tag_rules(rules)
+    tag_audit = audit_library_tags(_index().to_dict("records"), rules)
+    st.write(f"Rulebook path: `{DEFAULT_RULE_PATH}`")
+    st.write(f"Canonical tags: `{len(rules)}`")
+    if validation_warnings:
+        st.warning("Rulebook validation warnings:")
+        for warning in validation_warnings:
+            st.write(f"- {warning}")
+    else:
+        st.success("Rulebook validation passed.")
+    st.write("Unknown library tags")
+    st.write(", ".join(f"`{tag}`" for tag in tag_audit["unknown_tags"]) or "None")
+    st.write("Unused rulebook tags")
+    st.write(", ".join(f"`{tag}`" for tag in tag_audit["unused_rulebook_tags"]) or "None")
     st.subheader("Crossref Connectivity")
     proxy_vars = proxy_environment()
     if proxy_vars:

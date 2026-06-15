@@ -1,0 +1,72 @@
+{
+  "synthetic-biology": {
+    "category": "field",
+    "aliases": ["synthetic biology", "synthetic-biology"],
+    "weight": 10
+  },
+  "metabolic-engineering": {
+    "category": "field",
+    "aliases": ["metabolic engineering", "metabolic-engineering"],
+    "weight": 10
+  },
+  "protein-design": {
+    "category": "field",
+    "aliases": ["protein design", "protein-design"],
+    "weight": 9
+  },
+  "arabidopsis": {
+    "category": "organism",
+    "aliases": ["arabidopsis", "arabidopsis thaliana"],
+    "weight": 8
+  },
+  "root-development": {
+    "category": "biology",
+    "aliases": ["root", "root development", "root-development"],
+    "weight": 7
+  },
+  "root-apical-meristem": {
+    "category": "biology",
+    "aliases": ["root apical meristem", "ram", "root-apical-meristem"],
+    "weight": 8
+  },
+  "single-cell-rna-seq": {
+    "category": "assay",
+    "aliases": ["scrna", "scrna-seq", "single-cell", "single cell", "single cell rna-seq", "single-cell rna-seq", "single-cell-rna-seq"],
+    "weight": 9
+  },
+  "spatial-transcriptomics": {
+    "category": "assay",
+    "aliases": ["spatial transcriptomics", "spatial-transcriptomics"],
+    "weight": 9
+  },
+  "bioinformatics": {
+    "category": "method",
+    "aliases": ["bioinformatics"],
+    "weight": 7
+  },
+  "ai-biology": {
+    "category": "method",
+    "aliases": ["machine learning", "deep learning", "ai", "artificial intelligence", "ai biology", "ai-biology"],
+    "weight": 7
+  },
+  "review": {
+    "category": "paper-type",
+    "aliases": ["review"],
+    "weight": 5
+  },
+  "method": {
+    "category": "paper-type",
+    "aliases": ["method", "methods"],
+    "weight": 5
+  },
+  "protocol": {
+    "category": "paper-type",
+    "aliases": ["protocol", "protocols"],
+    "weight": 5
+  },
+  "pipeline": {
+    "category": "paper-type",
+    "aliases": ["pipeline", "pipelines"],
+    "weight": 5
+  }
+}

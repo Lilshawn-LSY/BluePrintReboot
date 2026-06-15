@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pypdf import PdfReader
+try:
+    from pypdf import PdfReader
+except ImportError:
+    PdfReader = None
 
 try:
     from markitdown import MarkItDown
@@ -10,7 +13,17 @@ except ImportError:
     MarkItDown = None
 
 
+def get_text_extraction_backends() -> dict[str, bool]:
+    return {
+        "pypdf": PdfReader is not None,
+        "markitdown": MarkItDown is not None,
+    }
+
+
 def extract_pdf_text_with_pypdf(pdf_path: Path, max_pages: int = 3) -> str:
+    if PdfReader is None:
+        return ""
+
     reader = PdfReader(str(pdf_path))
     text_parts: list[str] = []
     for page_number, page in enumerate(reader.pages):

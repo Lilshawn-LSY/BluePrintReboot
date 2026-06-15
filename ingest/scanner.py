@@ -67,7 +67,7 @@ def scan_papers(
     records: list[dict[str, str]] = []
     for pdf_path in sorted(papers_dir.rglob("*.pdf"), key=lambda path: path.as_posix().lower()):
         paper_id = make_paper_id(pdf_path, papers_dir)
-        doi = extract_doi_metadata_from_pdf(pdf_path).doi
+        extraction = extract_doi_metadata_from_pdf(pdf_path)
         records.append(
             {
                 "paper_id": paper_id,
@@ -77,10 +77,15 @@ def scan_papers(
                 "authors": "",
                 "year": "",
                 "journal": "",
-                "doi": doi,
+                "doi": extraction.doi,
+                "abstract": "",
+                "keywords": "",
                 "tags": "",
                 "status": "unread",
                 "reading_priority": "normal",
+                "doi_source": extraction.source if extraction.doi else "",
+                "extraction_source": extraction.source,
+                "extraction_checked_at": scanned_at,
                 "metadata_source": "",
                 "metadata_confidence": "",
                 "metadata_checked_at": "",

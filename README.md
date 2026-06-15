@@ -1,31 +1,45 @@
 # BluePrintReboot
 
-BluePrintReboot is a local-first personal research paper library app.
+BluePrintReboot is a local-first personal research paper library app built with Streamlit.
 
-## v0.3 DOI and Crossref Metadata Assist
+## v0.5 Metadata Enrichment Workflow
 
 - Scans PDF files placed in `papers/`.
-- Creates and updates `data/paper_index.csv`.
-- Shows indexed papers in a Streamlit Library page.
-- Opens a selected paper in Paper Detail.
-- Creates, opens, edits, and saves one Markdown note per paper in `notes/`.
-- Adds local manual metadata fields: title, authors, year, journal, DOI, tags, status, and reading priority.
-- Migrates existing v0.1 index CSV files by adding missing metadata columns.
-- Preserves manually edited metadata when PDFs are rescanned.
-- Adds Library search and filters for status, reading priority, and tag text.
-- Adds optional Crossref lookup by DOI with preview before applying metadata.
-- Tracks metadata provenance with source, confidence, and checked timestamp.
-- Keeps all user data local.
+- Creates and updates `data/paper_index.csv` while preserving user-edited metadata.
+- Stores metadata locally, including title, authors, year, journal, DOI, abstract, keywords, tags, status, reading priority, and extraction provenance.
+- Extracts DOI text with `pypdf` first.
+- Falls back to optional `MarkItDown` PDF conversion when available.
+- Provides one primary `Enrich Metadata` action in Paper Detail.
+- Saves a detected DOI only when the paper does not already have one.
+- Looks up Crossref metadata by DOI and shows a preview before applying it.
+- Keeps Crossref accept explicit; fetched metadata is not automatically applied.
+- Suggests tags with deterministic keyword rules and merges accepted suggestions without removing existing tags.
+- Shows extraction backend status in Settings.
 
-Metadata is stored locally in `data/paper_index.csv`. That file is ignored by git.
-Crossref lookup requires internet, but no API key. Fetched metadata is applied only after you review the preview and click `Accept Crossref Metadata`.
+All paper metadata is stored in `data/paper_index.csv`. That file is ignored by git. Notes are stored as Markdown files in `notes/`.
+
+Crossref lookup requires internet access but no API key. PDF scanning, DOI extraction, manual metadata editing, tag suggestion, and notes work locally.
+
+## Optional MarkItDown Fallback
+
+The base app uses `pypdf`. To enable the MarkItDown fallback:
+
+```powershell
+pip install -r requirements-optional.txt
+```
+
+The optional file currently installs:
+
+```text
+markitdown[pdf]
+```
 
 ## Layout
 
 - `app.py` - Streamlit entrypoint.
 - `ui_streamlit/` - Streamlit UI code.
+- `ingest/` - PDF scanning, DOI extraction, Crossref helpers, and tag suggestion.
 - `storage/` - Local CSV and note storage helpers.
-- `ingest/` - PDF scanning helpers.
 - `tests/` - Test suite.
 - `data/`, `papers/`, `notes/`, `exports/` - Local workspace directories.
 
@@ -46,26 +60,41 @@ python -m pytest
 
 1. Put PDF files into `papers/`.
 2. Run the app and press `Scan papers`.
-3. Open `Library` and use search or filters to narrow the table.
-4. Select a paper and open it in `Paper Detail`.
-5. Edit metadata in the `Metadata` section and press `Save Metadata`.
-6. Press `Create/Open Note`.
-7. Edit the Markdown note and press `Save Note`.
+3. Open `Library` and select a paper.
+4. Open it in `Paper Detail`.
+5. Press `Enrich Metadata`.
+6. Review detected DOI, extraction source, save status, and Crossref lookup status.
+7. Review the Crossref preview and press `Accept Crossref Metadata` only if it is correct.
+8. Review suggested tags and press `Accept Suggested Tags` if useful.
+9. Edit manual fields or notes whenever needed.
 
-Library search matches title, filename, authors, journal, DOI, and tags. Filters can limit results by status, reading priority, or tag text.
+## Metadata Assist
 
-## Crossref Assist
+`Enrich Metadata` uses the saved DOI if one exists. If no DOI is saved, it attempts PDF DOI extraction and saves the detected DOI only when the DOI field is empty. If a DOI is available, it tries Crossref lookup and stores the result in the preview table.
 
-1. Enter a DOI in the Paper Detail metadata form.
-2. Press `Save Metadata`.
-3. Press `Lookup Crossref by DOI`.
-4. Review the preview fields.
-5. Press `Accept Crossref Metadata` to apply title, authors, year, journal, DOI, source, confidence, and checked timestamp.
+Manual DOI correction remains available in the metadata form. Advanced manual Crossref lookup is still available from Paper Detail.
 
-Tags, status, reading priority, filename, filepath, notes, and added date are not changed by Crossref accept.
+## Tag Suggestions
+
+Tag suggestion uses the editable local rulebook at `config/tag_rules.json`. Each canonical tag has a category, aliases, and a weight. Suggestions can come from title, abstract, keywords, journal, filename, Crossref subjects, markdown text, and future OpenAlex or Semantic Scholar fields when those fields are present.
+
+Suggested tags are never applied automatically. Press `Accept Suggested Tags` to merge them into the paper's existing tags. Existing user tags are preserved and duplicates are skipped.
+
+## Tag Rule Maintenance
+
+`config/tag_rules.json` is editable. Settings validates the rulebook and reports issues such as missing fields, duplicate aliases, invalid weights, and non-normalized tag names.
+
+Settings also audits the current library tags. Unknown tags and unused rulebook tags are reported for review, but BluePrintReboot does not automatically change existing user tags.
+
+## Settings
+
+Settings shows:
+
+- Local workspace paths.
+- Current CSV index schema.
+- Extraction backend status for `pypdf` and `markitdown`.
+- Crossref connectivity test and proxy environment hints.
 
 ## Crossref Troubleshooting
 
-Crossref lookup requires internet access but no API key. Manual metadata editing, scanning, Library filters, and notes still work offline.
-
-If Windows shows an error like `WinError 10061`, the connection is being refused before the app can reach Crossref. Check firewall rules, proxy or VPN settings, corporate or school network restrictions, and whether the machine is offline. The Settings page includes `Test Crossref Connection` for a quick connectivity check.
+Crossref lookup is optional. If lookup fails because of SSL inspection, proxy, certificate, DNS, firewall, or timeout issues, local paper management still works. You can paste or edit DOI and metadata manually.

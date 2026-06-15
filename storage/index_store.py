@@ -19,9 +19,14 @@ INDEX_COLUMNS = [
     "year",
     "journal",
     "doi",
+    "abstract",
+    "keywords",
     "tags",
     "status",
     "reading_priority",
+    "doi_source",
+    "extraction_source",
+    "extraction_checked_at",
     "metadata_source",
     "metadata_confidence",
     "metadata_checked_at",
@@ -35,9 +40,14 @@ DEFAULT_VALUES = {
     "year": "",
     "journal": "",
     "doi": "",
+    "abstract": "",
+    "keywords": "",
     "tags": "",
     "status": "unread",
     "reading_priority": "normal",
+    "doi_source": "",
+    "extraction_source": "",
+    "extraction_checked_at": "",
     "metadata_source": "",
     "metadata_confidence": "",
     "metadata_checked_at": "",
@@ -49,9 +59,14 @@ EDITABLE_METADATA_COLUMNS = [
     "year",
     "journal",
     "doi",
+    "abstract",
+    "keywords",
     "tags",
     "status",
     "reading_priority",
+    "doi_source",
+    "extraction_source",
+    "extraction_checked_at",
 ]
 
 CROSSREF_ACCEPT_COLUMNS = [
@@ -60,6 +75,8 @@ CROSSREF_ACCEPT_COLUMNS = [
     "year",
     "journal",
     "doi",
+    "abstract",
+    "keywords",
     "metadata_source",
     "metadata_confidence",
     "metadata_checked_at",
@@ -154,6 +171,9 @@ def update_index_from_scan(
                 df.loc[row_mask, "title"] = record["title"]
             if record.get("doi") and (df.loc[row_mask, "doi"] == "").any():
                 df.loc[row_mask, "doi"] = normalize_doi(record["doi"])
+                df.loc[row_mask, "doi_source"] = record.get("doi_source", "")
+            df.loc[row_mask, "extraction_source"] = record.get("extraction_source", "")
+            df.loc[row_mask, "extraction_checked_at"] = record.get("extraction_checked_at", "")
             df.loc[row_mask, "updated_at"] = _now_iso()
         else:
             df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
@@ -181,6 +201,7 @@ def update_paper_metadata(
             value = str(metadata[column]).strip()
             if column == "doi":
                 value = normalize_doi(value)
+                df.loc[row_mask, "doi_source"] = str(metadata.get("doi_source", "manual" if value else "")).strip()
             df.loc[row_mask, column] = value
     df.loc[row_mask, "updated_at"] = _now_iso()
     save_index(df, index_csv)
@@ -202,6 +223,7 @@ def accept_crossref_metadata(
             value = str(metadata[column]).strip()
             if column == "doi":
                 value = normalize_doi(value)
+                df.loc[row_mask, "doi_source"] = str(metadata.get("doi_source", "crossref" if value else "")).strip()
             df.loc[row_mask, column] = value
     df.loc[row_mask, "updated_at"] = _now_iso()
     save_index(df, index_csv)

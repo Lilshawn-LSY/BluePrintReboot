@@ -28,7 +28,7 @@ def crossref_mailto() -> str:
 def crossref_headers() -> dict[str, str]:
     mailto = crossref_mailto()
     return {
-        "User-Agent": f"BluePrintReboot/0.4.1 (mailto:{mailto})",
+        "User-Agent": f"BluePrintReboot/0.5 (mailto:{mailto})",
         "mailto": mailto,
     }
 
@@ -155,6 +155,9 @@ def parse_crossref_work(message: dict[str, Any]) -> dict[str, str]:
         "year": _publication_year(message),
         "journal": _first_string(message.get("container-title")),
         "doi": normalize_doi(str(message.get("DOI", ""))),
+        "abstract": _clean_abstract(message.get("abstract")),
+        "keywords": _format_keywords(message.get("subject")),
+        "crossref_subjects": _format_keywords(message.get("subject")),
         "metadata_source": "crossref",
         "metadata_confidence": "high",
         "metadata_checked_at": utc_now_iso(),
@@ -169,6 +172,19 @@ def _first_string(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
     return ""
+
+
+def _clean_abstract(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.replace("<jats:p>", "").replace("</jats:p>", "").split())
+
+
+def _format_keywords(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    keywords = [str(item).strip() for item in value if str(item).strip()]
+    return ", ".join(keywords)
 
 
 def _http_error_message(status_code: int) -> str:
