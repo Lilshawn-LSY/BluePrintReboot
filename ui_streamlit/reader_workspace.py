@@ -15,6 +15,9 @@ from storage.note_store import load_note_text, save_note_text
 
 STATUS_OPTIONS = ["unread", "reading", "read"]
 READING_PRIORITY_OPTIONS = ["low", "normal", "high"]
+STABLE_HTML_RENDERER = "Stable HTML viewer"
+NATIVE_STREAMLIT_RENDERER = "Native Streamlit PDF viewer"
+PDF_RENDERER_OPTIONS = [STABLE_HTML_RENDERER, NATIVE_STREAMLIT_RENDERER]
 
 NOTE_BLOCKS = {
     "summary": "## Summary\n\n- \n",
@@ -139,18 +142,26 @@ def pdf_embed_html(pdf_path: Path, height: int = 900) -> str:
     )
 
 
-def pdf_rendering_method() -> str:
-    return "st.pdf" if hasattr(st, "pdf") else "html-object"
+def native_pdf_support_status() -> dict[str, object]:
+    try:
+        __import__("streamlit_pdf")
+    except Exception as exc:
+        return {"available": False, "error": str(exc)}
+    return {"available": True, "error": ""}
 
 
-def initial_pdf_render_status(native_available: bool | None = None) -> dict[str, object]:
-    available = hasattr(st, "pdf") if native_available is None else native_available
-    attempted = ["st.pdf"] if available else []
+def initial_pdf_render_status(
+    selected_renderer: str = STABLE_HTML_RENDERER,
+    native_status: dict[str, object] | None = None,
+) -> dict[str, object]:
+    support = native_status if native_status is not None else native_pdf_support_status()
     return {
-        "native_available": available,
-        "attempted_methods": attempted,
+        "selected_renderer": selected_renderer,
+        "native_available": bool(support.get("available", False)),
+        "native_availability_error": str(support.get("error", "")),
+        "attempted_methods": [],
         "final_method": "",
-        "st_pdf_error": "",
+        "native_render_error": "",
     }
 
 
@@ -162,7 +173,22 @@ def mark_pdf_render_fallback(status: dict[str, object], error: Exception | str |
     updated["attempted_methods"] = attempted
     updated["final_method"] = "html-object"
     if error:
-        updated["st_pdf_error"] = str(error)
+        updated["native_render_error"] = str(error)
+    return updated
+
+
+def mark_pdf_render_native_attempt(status: dict[str, object]) -> dict[str, object]:
+    updated = dict(status)
+    attempted = list(updated.get("attempted_methods", []))
+    if "st.pdf" not in attempted:
+        attempted.append("st.pdf")
+    updated["attempted_methods"] = attempted
+    return updated
+
+
+def mark_pdf_render_native_success(status: dict[str, object]) -> dict[str, object]:
+    updated = mark_pdf_render_native_attempt(status)
+    updated["final_method"] = "st.pdf"
     return updated
 
 
@@ -286,18 +312,26 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
 def _render_pdf_viewer(record: dict[str, str]) -> None:
     st.write("PDF")
     status = pdf_path_status(record)
+    selected_renderer = st.selectbox(
+        "PDF renderer",
+        PDF_RENDERER_OPTIONS,
+        index=0,
+        key=f"pdf_renderer_{record['paper_id']}",
+    )
     if not status["exists"]:
-        render_status = mark_pdf_render_fallback(initial_pdf_render_status())
+        render_status = initial_pdf_render_status(selected_renderer)
         _render_pdf_debug(status, render_status)
         st.warning(str(status["message"]))
         return
 
-    render_status = initial_pdf_render_status()
-    if render_status["native_available"]:
+    render_status = initial_pdf_render_status(selected_renderer)
+    if selected_renderer == NATIVE_STREAMLIT_RENDERER:
         try:
+            render_status = mark_pdf_render_native_attempt(render_status)
             st.pdf(str(status["path"]), height=920)
-            render_status["final_method"] = "st.pdf"
+            render_status = mark_pdf_render_native_success(render_status)
         except Exception as exc:
+            st.warning("Native PDF viewer failed. Falling back to stable HTML viewer.")
             render_status = mark_pdf_render_fallback(render_status, exc)
             components.html(pdf_embed_html(status["path"], height=920), height=940, scrolling=True)
     else:
@@ -311,11 +345,14 @@ def _render_pdf_debug(path_status: dict[str, object], render_status: dict[str, o
         st.write(f"PDF path: `{path_status['path']}`")
         st.write(f"Exists: `{path_status['exists']}`")
         st.write(f"File size MB: `{path_status['size_mb']}`")
+        st.write(f"Selected renderer: `{render_status['selected_renderer']}`")
         st.write(f"Native PDF support available: `{render_status['native_available']}`")
+        if render_status.get("native_availability_error"):
+            st.write(f"Native availability error: `{render_status['native_availability_error']}`")
         st.write(f"Attempted render methods: `{', '.join(render_status['attempted_methods'])}`")
         st.write(f"Final render method: `{render_status['final_method']}`")
-        if render_status.get("st_pdf_error"):
-            st.write(f"st.pdf error: `{render_status['st_pdf_error']}`")
+        if render_status.get("native_render_error"):
+            st.write(f"Native render error: `{render_status['native_render_error']}`")
 
 
 def _render_note_editor(record: dict[str, str]) -> None:

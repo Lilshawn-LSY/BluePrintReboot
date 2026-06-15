@@ -1,10 +1,14 @@
 from ui_streamlit.reader_workspace import (
+    NATIVE_STREAMLIT_RENDERER,
+    STABLE_HTML_RENDERER,
     add_manual_tag,
     citation_block,
     initial_pdf_render_status,
     insert_note_block,
     load_note_draft,
     mark_pdf_render_fallback,
+    mark_pdf_render_native_attempt,
+    native_pdf_support_status,
     note_draft_key,
     pdf_embed_html,
     pdf_path_status,
@@ -110,29 +114,64 @@ def test_pdf_embed_html_returns_non_empty_object_for_valid_pdf() -> None:
     assert "application/pdf" in html
 
 
-def test_initial_pdf_render_status_records_native_availability() -> None:
-    status = initial_pdf_render_status(native_available=True)
+def test_initial_pdf_render_status_defaults_to_stable_html_viewer() -> None:
+    status = initial_pdf_render_status(
+        native_status={"available": True, "error": ""},
+    )
 
+    assert status["selected_renderer"] == STABLE_HTML_RENDERER
     assert status["native_available"] is True
-    assert status["attempted_methods"] == ["st.pdf"]
+    assert status["attempted_methods"] == []
     assert status["final_method"] == ""
-    assert status["st_pdf_error"] == ""
+    assert status["native_render_error"] == ""
 
 
 def test_mark_pdf_render_fallback_records_error_and_final_method() -> None:
     status = mark_pdf_render_fallback(
-        initial_pdf_render_status(native_available=True),
+        mark_pdf_render_native_attempt(
+            initial_pdf_render_status(
+                selected_renderer=NATIVE_STREAMLIT_RENDERER,
+                native_status={"available": True, "error": ""},
+            )
+        ),
         RuntimeError("streamlit-pdf missing"),
     )
 
     assert status["attempted_methods"] == ["st.pdf", "html-object"]
     assert status["final_method"] == "html-object"
-    assert status["st_pdf_error"] == "streamlit-pdf missing"
+    assert status["native_render_error"] == "streamlit-pdf missing"
 
 
 def test_mark_pdf_render_fallback_without_native_starts_with_html_object() -> None:
-    status = mark_pdf_render_fallback(initial_pdf_render_status(native_available=False))
+    status = mark_pdf_render_fallback(
+        initial_pdf_render_status(native_status={"available": False, "error": "missing"})
+    )
 
     assert status["native_available"] is False
+    assert status["native_availability_error"] == "missing"
     assert status["attempted_methods"] == ["html-object"]
     assert status["final_method"] == "html-object"
+
+
+def test_native_pdf_support_status_handles_import_failure(monkeypatch) -> None:
+    real_import = __import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "streamlit_pdf":
+            raise ImportError("no streamlit_pdf")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", fake_import)
+
+    status = native_pdf_support_status()
+
+    assert status["available"] is False
+    assert "no streamlit_pdf" in status["error"]
+
+
+def test_native_renderer_is_not_attempted_by_default() -> None:
+    status = mark_pdf_render_fallback(initial_pdf_render_status(native_status={"available": True, "error": ""}))
+
+    assert status["selected_renderer"] == STABLE_HTML_RENDERER
+    assert status["attempted_methods"] == ["html-object"]
+    assert "st.pdf" not in status["attempted_methods"]
