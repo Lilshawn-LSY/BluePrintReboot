@@ -46,6 +46,19 @@ PDF rendering now defaults to the stable local HTML object/embed renderer. The n
 
 The Reader Workspace uses `Stable HTML viewer` by default for PDF display. `Native Streamlit PDF viewer` is opt-in from the PDF renderer selector because native component packaging can vary across local environments. `streamlit[pdf]` remains in `requirements.txt` for future native viewer support.
 
+## v0.7.0 Full Text Extraction Cache
+
+Reader Workspace includes user-triggered full text extraction for the selected PDF. Extracted text is cached locally under `data/extracted_text/` as:
+
+- `{paper_id}.txt` for extracted text.
+- `{paper_id}.json` for extraction metadata.
+
+Extraction prefers MarkItDown when available and falls back to pypdf. It never runs automatically on page load; use `Extract full text` or `Re-extract full text` in the PDF section. The workspace shows extraction status, source, character count, extraction time, diagnostics, and a bounded extracted text preview with an optional larger text area.
+
+`Extract full text` reuses an existing successful cache only when cached metadata reports `success` and a positive character count. Failed or empty extraction caches do not block a new normal extraction attempt. `Re-extract full text` always forces a fresh extraction.
+
+PDF viewer text selection is not required for v0.7.0 because app-level text extraction is handled separately. Visual PDF highlighting, coordinate annotations, mouse selection capture, graph visualization, Zotero integration, and relation schema remain deferred.
+
 ## Optional MarkItDown Fallback
 
 The base app uses `pypdf`. To enable the MarkItDown fallback:

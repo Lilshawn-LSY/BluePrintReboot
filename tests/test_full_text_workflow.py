@@ -1,0 +1,183 @@
+import pandas as pd
+
+from ingest.text_extractor import FullTextExtractionResult
+from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper
+from storage.extracted_text_store import (
+    extraction_cache_status,
+    extraction_metadata_path,
+    extracted_text_path,
+    load_extraction_metadata,
+)
+from storage.index_store import load_index, save_index
+from tests.helpers import make_workspace
+
+
+def make_index(workspace, record):
+    index_csv = workspace / "data" / "paper_index.csv"
+    save_index(pd.DataFrame([record]), index_csv)
+    return index_csv
+
+
+def test_successful_extraction_updates_cache_and_index(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-success")
+    cache_dir = workspace / "cache"
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(workspace / "paper.pdf"),
+        "title": "Paper",
+    }
+    (workspace / "paper.pdf").write_bytes(b"%PDF-1.4\n")
+    index_csv = make_index(workspace, record)
+    monkeypatch.setattr(
+        "services.full_text_workflow.extract_full_text_from_pdf",
+        lambda path: FullTextExtractionResult(
+            text="extracted text",
+            source="pypdf",
+            char_count=14,
+            errors=[],
+            status="success",
+            attempted_methods=["pypdf"],
+        ),
+    )
+
+    result = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+
+    assert result.skipped is False
+    assert extracted_text_path("paper-1", cache_dir).read_text(encoding="utf-8") == "extracted text"
+    metadata = load_extraction_metadata("paper-1", cache_dir)
+    assert metadata["pdf_size_bytes"] > 0
+    assert metadata["pdf_sha256"]
+    row = load_index(index_csv).iloc[0]
+    assert row["text_status"] == "success"
+    assert row["text_source"] == "pypdf"
+    assert row["text_char_count"] == "14"
+
+
+def test_failed_extraction_saves_metadata_but_is_not_reusable(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-failed")
+    cache_dir = workspace / "cache"
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(workspace / "missing.pdf"),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    monkeypatch.setattr(
+        "services.full_text_workflow.extract_full_text_from_pdf",
+        lambda path: FullTextExtractionResult(
+            text="",
+            source="none",
+            char_count=0,
+            errors=["no text"],
+            status="failed",
+            attempted_methods=[],
+        ),
+    )
+
+    result = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    status = extraction_cache_status("paper-1", cache_dir)
+
+    assert result.status == "failed"
+    assert extraction_metadata_path("paper-1", cache_dir).exists()
+    assert status["has_reusable_text_cache"] is False
+    assert load_index(index_csv).iloc[0]["text_status"] == "failed"
+
+
+def test_force_false_reuses_successful_cache(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-reuse")
+    cache_dir = workspace / "cache"
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(workspace / "paper.pdf"),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    calls = {"count": 0}
+
+    def fake_extract(path):
+        calls["count"] += 1
+        return FullTextExtractionResult(
+            text="cached text",
+            source="pypdf",
+            char_count=11,
+            errors=[],
+            status="success",
+            attempted_methods=["pypdf"],
+        )
+
+    monkeypatch.setattr("services.full_text_workflow.extract_full_text_from_pdf", fake_extract)
+
+    first = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    second = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+
+    assert first.skipped is False
+    assert second.skipped is True
+    assert calls["count"] == 1
+
+
+def test_force_true_bypasses_reusable_cache(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-force")
+    cache_dir = workspace / "cache"
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(workspace / "paper.pdf"),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    calls = {"count": 0}
+
+    def fake_extract(path):
+        calls["count"] += 1
+        return FullTextExtractionResult(
+            text=f"text {calls['count']}",
+            source="pypdf",
+            char_count=6,
+            errors=[],
+            status="success",
+            attempted_methods=["pypdf"],
+        )
+
+    monkeypatch.setattr("services.full_text_workflow.extract_full_text_from_pdf", fake_extract)
+
+    extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    extract_text_for_paper(record, force=True, cache_dir=cache_dir, index_csv=index_csv)
+
+    assert calls["count"] == 2
+
+
+def test_clear_text_cache_for_paper_removes_files_and_resets_index(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-clear")
+    cache_dir = workspace / "cache"
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(workspace / "paper.pdf"),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    monkeypatch.setattr(
+        "services.full_text_workflow.extract_full_text_from_pdf",
+        lambda path: FullTextExtractionResult(
+            text="text",
+            source="pypdf",
+            char_count=4,
+            errors=[],
+            status="success",
+            attempted_methods=["pypdf"],
+        ),
+    )
+    extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+
+    clear_text_cache_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+
+    assert not extracted_text_path("paper-1", cache_dir).exists()
+    assert not extraction_metadata_path("paper-1", cache_dir).exists()
+    row = load_index(index_csv).iloc[0]
+    assert row["text_status"] == ""
+    assert row["text_source"] == ""
+    assert row["text_char_count"] == ""
+    assert row["text_extracted_at"] == ""
