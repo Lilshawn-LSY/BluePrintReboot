@@ -82,9 +82,11 @@ def build_metadata_summary(record: dict[str, str]) -> dict[str, str]:
 def pdf_path_status(record: dict[str, str]) -> dict[str, object]:
     pdf_path = Path(str(record.get("filepath", "")))
     exists = bool(record.get("filepath")) and pdf_path.exists() and pdf_path.is_file()
+    size_mb = round(pdf_path.stat().st_size / (1024 * 1024), 6) if exists else 0.0
     return {
         "path": pdf_path,
         "exists": exists,
+        "size_mb": size_mb,
         "message": "" if exists else f"PDF file not found: {pdf_path}",
     }
 
@@ -125,12 +127,20 @@ def save_note_draft(
     return note_path
 
 
-def pdf_embed_html(pdf_path: Path, height: int = 760) -> str:
+def pdf_embed_html(pdf_path: Path, height: int = 900) -> str:
     data = base64.b64encode(pdf_path.read_bytes()).decode("ascii")
     return (
-        f'<iframe src="data:application/pdf;base64,{data}" '
-        f'width="100%" height="{height}" type="application/pdf"></iframe>'
+        '<object '
+        f'data="data:application/pdf;base64,{data}" '
+        f'type="application/pdf" width="100%" height="{height}">'
+        f'<embed src="data:application/pdf;base64,{data}" '
+        f'type="application/pdf" width="100%" height="{height}" />'
+        "</object>"
     )
+
+
+def pdf_rendering_method() -> str:
+    return "st.pdf" if hasattr(st, "pdf") else "html-object"
 
 
 def render_reader_workspace(record: dict[str, str]) -> None:
@@ -156,9 +166,9 @@ def render_reader_workspace(record: dict[str, str]) -> None:
         st.session_state[toolbar_key] = True
 
     if st.session_state[toolbar_key]:
-        toolbar_col, pdf_col, note_col = st.columns([1.1, 2.4, 2.0])
+        toolbar_col, pdf_col, note_col = st.columns([0.9, 2.8, 2.2])
     else:
-        toolbar_col, pdf_col, note_col = st.columns([0.28, 2.7, 2.0])
+        toolbar_col, pdf_col, note_col = st.columns([0.2, 3.1, 2.2])
 
     with toolbar_col:
         _render_toolbar(record, toolbar_key)
@@ -253,10 +263,19 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
 def _render_pdf_viewer(record: dict[str, str]) -> None:
     st.write("PDF")
     status = pdf_path_status(record)
+    method = pdf_rendering_method()
+    with st.expander("PDF debug"):
+        st.write(f"PDF path: `{status['path']}`")
+        st.write(f"Exists: `{status['exists']}`")
+        st.write(f"File size MB: `{status['size_mb']}`")
+        st.write(f"Rendering method: `{method}`")
     if not status["exists"]:
         st.warning(str(status["message"]))
         return
-    components.html(pdf_embed_html(status["path"]), height=780, scrolling=True)
+    if method == "st.pdf":
+        st.pdf(str(status["path"]), height=920)
+    else:
+        components.html(pdf_embed_html(status["path"], height=920), height=940, scrolling=True)
 
 
 def _render_note_editor(record: dict[str, str]) -> None:
@@ -265,7 +284,7 @@ def _render_note_editor(record: dict[str, str]) -> None:
     load_note_draft(record, st.session_state)
     st.text_area(
         "Note draft",
-        height=720,
+        height=860,
         key=key,
     )
     if st.button("Save Note", key=f"editor_save_note_{record['paper_id']}"):

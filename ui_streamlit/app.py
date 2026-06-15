@@ -169,70 +169,87 @@ def paper_detail_page() -> None:
         return
 
     st.subheader(record["title"])
-    st.write(f"Filename: `{record['filename']}`")
-    st.write(f"Filepath: `{record['filepath']}`")
-    st.write(f"Note path: `{record['note_path']}`")
-
-    st.subheader("Metadata")
-    with st.form(key=f"metadata_form_{record['paper_id']}"):
-        title = st.text_input("Title", value=record.get("title", ""))
-        authors = st.text_input("Authors", value=record.get("authors", ""))
-        col1, col2 = st.columns(2)
-        year = col1.text_input("Year", value=record.get("year", ""))
-        journal = col2.text_input("Journal", value=record.get("journal", ""))
-        doi = st.text_input("DOI", value=record.get("doi", ""))
-        abstract = st.text_area("Abstract", value=record.get("abstract", ""), height=120)
-        keywords = st.text_input("Keywords", value=record.get("keywords", ""))
-        tags = st.text_input("Tags", value=record.get("tags", ""))
-
-        status_value = record.get("status", "unread")
-        if status_value not in STATUS_OPTIONS:
-            status_value = "unread"
-        priority_value = record.get("reading_priority", "normal")
-        if priority_value not in READING_PRIORITY_OPTIONS:
-            priority_value = "normal"
-        col3, col4 = st.columns(2)
-        status = col3.selectbox("Status", STATUS_OPTIONS, index=STATUS_OPTIONS.index(status_value))
-        reading_priority = col4.selectbox(
-            "Reading priority",
-            READING_PRIORITY_OPTIONS,
-            index=READING_PRIORITY_OPTIONS.index(priority_value),
+    st.caption(
+        " | ".join(
+            [
+                f"{record.get('filename', '')}",
+                f"{record.get('journal', '') or 'journal unknown'}",
+                f"{record.get('year', '') or 'year unknown'}",
+                f"DOI: {record.get('doi', '') or 'not set'}",
+            ]
         )
-
-        save_metadata = st.form_submit_button("Save Metadata")
-
-    if save_metadata:
-        update_paper_metadata(
-            record["paper_id"],
-            {
-                "title": title,
-                "authors": authors,
-                "year": year,
-                "journal": journal,
-                "doi": doi,
-                "abstract": abstract,
-                "keywords": keywords,
-                "tags": tags,
-                "status": status,
-                "reading_priority": reading_priority,
-            },
-        )
-        st.success("Metadata saved.")
-        st.rerun()
-
-    metadata_assist_section(
-        record,
-        {
-            "title": title,
-            "abstract": abstract,
-            "keywords": keywords,
-            "journal": journal,
-            "filename": record.get("filename", ""),
-            "tags": tags,
-        },
     )
 
     render_reader_workspace(record)
+
+    title = record.get("title", "")
+    abstract = record.get("abstract", "")
+    keywords = record.get("keywords", "")
+    journal = record.get("journal", "")
+    tags = record.get("tags", "")
+
+    with st.expander("Edit metadata"):
+        with st.form(key=f"metadata_form_{record['paper_id']}"):
+            title = st.text_input("Title", value=record.get("title", ""))
+            authors = st.text_input("Authors", value=record.get("authors", ""))
+            col1, col2 = st.columns(2)
+            year = col1.text_input("Year", value=record.get("year", ""))
+            journal = col2.text_input("Journal", value=record.get("journal", ""))
+            doi = st.text_input("DOI", value=record.get("doi", ""))
+            abstract = st.text_area("Abstract", value=record.get("abstract", ""), height=120)
+            keywords = st.text_input("Keywords", value=record.get("keywords", ""))
+            tags = st.text_input("Tags", value=record.get("tags", ""))
+
+            status_value = record.get("status", "unread")
+            if status_value not in STATUS_OPTIONS:
+                status_value = "unread"
+            priority_value = record.get("reading_priority", "normal")
+            if priority_value not in READING_PRIORITY_OPTIONS:
+                priority_value = "normal"
+            col3, col4 = st.columns(2)
+            status = col3.selectbox("Status", STATUS_OPTIONS, index=STATUS_OPTIONS.index(status_value))
+            reading_priority = col4.selectbox(
+                "Reading priority",
+                READING_PRIORITY_OPTIONS,
+                index=READING_PRIORITY_OPTIONS.index(priority_value),
+            )
+
+            save_metadata = st.form_submit_button("Save Metadata")
+
+        if save_metadata:
+            update_paper_metadata(
+                record["paper_id"],
+                {
+                    "title": title,
+                    "authors": authors,
+                    "year": year,
+                    "journal": journal,
+                    "doi": doi,
+                    "abstract": abstract,
+                    "keywords": keywords,
+                    "tags": tags,
+                    "status": status,
+                    "reading_priority": reading_priority,
+                },
+            )
+            st.success("Metadata saved.")
+            st.rerun()
+
+    form_values = {
+        "title": title,
+        "abstract": abstract,
+        "keywords": keywords,
+        "journal": journal,
+        "filename": record.get("filename", ""),
+        "tags": tags,
+    }
+    with st.expander("Metadata assist"):
+        metadata_assist_section(record, form_values)
+
+    with st.expander("Debug paths"):
+        st.write(f"Filename: `{record['filename']}`")
+        st.write(f"Filepath: `{record['filepath']}`")
+        st.write(f"Note path: `{record['note_path']}`")
 
 
 def metadata_assist_section(record: dict[str, str], form_values: dict | None = None) -> None:

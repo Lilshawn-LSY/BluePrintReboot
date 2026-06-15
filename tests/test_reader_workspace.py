@@ -4,6 +4,7 @@ from ui_streamlit.reader_workspace import (
     insert_note_block,
     load_note_draft,
     note_draft_key,
+    pdf_embed_html,
     pdf_path_status,
     save_note_draft,
 )
@@ -79,4 +80,29 @@ def test_pdf_path_status_reports_missing_pdf() -> None:
     status = pdf_path_status({"filepath": "does-not-exist.pdf"})
 
     assert status["exists"] is False
+    assert status["size_mb"] == 0.0
     assert "PDF file not found" in status["message"]
+
+
+def test_pdf_path_status_includes_file_size_when_pdf_exists() -> None:
+    workspace = make_workspace("reader-pdf-status")
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\ncontent")
+
+    status = pdf_path_status({"filepath": str(pdf_path)})
+
+    assert status["exists"] is True
+    assert status["size_mb"] > 0
+    assert status["message"] == ""
+
+
+def test_pdf_embed_html_returns_non_empty_object_for_valid_pdf() -> None:
+    workspace = make_workspace("reader-pdf-embed")
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\ncontent")
+
+    html = pdf_embed_html(pdf_path)
+
+    assert html
+    assert "<object" in html
+    assert "application/pdf" in html

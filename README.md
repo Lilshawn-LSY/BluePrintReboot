@@ -36,6 +36,12 @@ Paper Detail includes a Reader Workspace for the selected paper. It keeps the wo
 
 Visual PDF highlighting, PDF coordinate annotations, and direct mouse selection capture from the PDF viewer are deferred to a later version.
 
+### v0.6.1 Reader Workspace Hotfix
+
+Paper Detail is now reader-first: the PDF viewer and Markdown note editor appear before detailed metadata controls. Full metadata editing, metadata assist, and technical paths are collapsed into secondary expanders.
+
+PDF rendering now prefers Streamlit's direct PDF display when available and falls back to a local HTML object/embed renderer. A PDF debug expander shows the path, existence status, file size, and rendering method. Visual PDF highlighting and coordinate annotations remain deferred.
+
 ## Optional MarkItDown Fallback
 
 The base app uses `pypdf`. To enable the MarkItDown fallback:
