@@ -111,17 +111,26 @@ def extraction_cache_status(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR)
     text_path = extracted_text_path(paper_id, cache_dir)
     metadata_path = extraction_metadata_path(paper_id, cache_dir)
     metadata = load_extraction_metadata(paper_id, cache_dir)
+    pdf_path = metadata.get("pdf_path", "")
+    current_fingerprint = pdf_fingerprint(pdf_path) if pdf_path else pdf_fingerprint("")
+    cached_pdf_sha256 = str(metadata.get("pdf_sha256", ""))
+    current_pdf_sha256 = str(current_fingerprint.get("pdf_sha256", ""))
+    is_stale = _metadata_fingerprint_differs(metadata, current_fingerprint)
     has_text_file = text_path.exists()
     has_reusable_text_cache = (
         has_text_file
         and metadata.get("status") == "success"
         and int(metadata.get("char_count") or 0) > 0
+        and not is_stale
     )
     return {
         "text_path": text_path,
         "metadata_path": metadata_path,
         "has_text_file": has_text_file,
         "has_reusable_text_cache": has_reusable_text_cache,
+        "is_stale": is_stale,
+        "pdf_sha256": current_pdf_sha256,
+        "cached_pdf_sha256": cached_pdf_sha256,
         "has_text": has_text_file,
         "has_metadata": metadata_path.exists(),
         "status": metadata.get("status", "not_extracted"),
@@ -133,11 +142,52 @@ def extraction_cache_status(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR)
     }
 
 
-def has_reusable_extracted_text_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> bool:
-    return bool(extraction_cache_status(paper_id, cache_dir)["has_reusable_text_cache"])
+def is_extraction_cache_stale(
+    paper_id: str,
+    pdf_path: str | Path,
+    cache_dir: Path = EXTRACTED_TEXT_DIR,
+) -> bool:
+    metadata = load_extraction_metadata(paper_id, cache_dir)
+    if not metadata or metadata.get("status") == "metadata_error":
+        return False
+    if not _metadata_indicates_reusable_cache(metadata, paper_id, cache_dir):
+        return False
+    return _metadata_fingerprint_differs(metadata, pdf_fingerprint(pdf_path))
+
+
+def has_reusable_extracted_text_cache(
+    paper_id: str,
+    cache_dir: Path = EXTRACTED_TEXT_DIR,
+    pdf_path: str | Path | None = None,
+) -> bool:
+    if pdf_path is None:
+        return bool(extraction_cache_status(paper_id, cache_dir)["has_reusable_text_cache"])
+    status = extraction_cache_status(paper_id, cache_dir)
+    return bool(status["has_reusable_text_cache"]) and not is_extraction_cache_stale(paper_id, pdf_path, cache_dir)
 
 
 def clear_extraction_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> None:
     for path in (extracted_text_path(paper_id, cache_dir), extraction_metadata_path(paper_id, cache_dir)):
         if path.exists():
             path.unlink()
+
+
+def _metadata_indicates_reusable_cache(metadata: dict[str, Any], paper_id: str, cache_dir: Path) -> bool:
+    return (
+        extracted_text_path(paper_id, cache_dir).exists()
+        and metadata.get("status") == "success"
+        and int(metadata.get("char_count") or 0) > 0
+    )
+
+
+def _metadata_fingerprint_differs(metadata: dict[str, Any], current_fingerprint: dict[str, Any]) -> bool:
+    if not metadata or metadata.get("status") == "metadata_error":
+        return False
+    cached_values = {
+        "pdf_size_bytes": metadata.get("pdf_size_bytes", 0),
+        "pdf_modified_at": metadata.get("pdf_modified_at", ""),
+        "pdf_sha256": metadata.get("pdf_sha256", ""),
+    }
+    if not any(cached_values.values()):
+        return False
+    return any(cached_values[key] != current_fingerprint.get(key) for key in cached_values)

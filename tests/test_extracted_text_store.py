@@ -6,6 +6,7 @@ from storage.extracted_text_store import (
     extraction_cache_status,
     extraction_metadata_path,
     has_reusable_extracted_text_cache,
+    is_extraction_cache_stale,
     load_cached_extracted_text,
     load_extraction_metadata,
     save_extracted_text,
@@ -120,3 +121,65 @@ def test_successful_non_empty_extraction_cache_is_reusable() -> None:
     )
 
     assert has_reusable_extracted_text_cache("paper-1", cache_dir) is True
+
+
+def test_same_pdf_fingerprint_reuses_cache() -> None:
+    cache_dir = make_workspace("text-cache-same-fingerprint")
+    pdf_path = cache_dir / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nsame")
+    result = FullTextExtractionResult(
+        text="usable text",
+        source="pypdf",
+        char_count=11,
+        errors=[],
+        status="success",
+        attempted_methods=["pypdf"],
+    )
+    save_extracted_text("paper-1", result.text, cache_dir)
+    save_extraction_metadata("paper-1", build_extraction_metadata("paper-1", str(pdf_path), result, cache_dir), cache_dir)
+
+    assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is False
+    assert has_reusable_extracted_text_cache("paper-1", cache_dir, pdf_path=pdf_path) is True
+
+
+def test_changed_pdf_fingerprint_does_not_reuse_cache() -> None:
+    cache_dir = make_workspace("text-cache-changed-fingerprint")
+    pdf_path = cache_dir / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nfirst")
+    result = FullTextExtractionResult(
+        text="usable text",
+        source="pypdf",
+        char_count=11,
+        errors=[],
+        status="success",
+        attempted_methods=["pypdf"],
+    )
+    save_extracted_text("paper-1", result.text, cache_dir)
+    save_extraction_metadata("paper-1", build_extraction_metadata("paper-1", str(pdf_path), result, cache_dir), cache_dir)
+    pdf_path.write_bytes(b"%PDF-1.4\nchanged")
+
+    status = extraction_cache_status("paper-1", cache_dir)
+
+    assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is True
+    assert has_reusable_extracted_text_cache("paper-1", cache_dir, pdf_path=pdf_path) is False
+    assert status["is_stale"] is True
+    assert status["pdf_sha256"] != status["cached_pdf_sha256"]
+
+
+def test_missing_pdf_stale_check_is_safe() -> None:
+    cache_dir = make_workspace("text-cache-missing-pdf")
+
+    assert is_extraction_cache_stale("paper-1", cache_dir / "missing.pdf", cache_dir) is False
+    assert has_reusable_extracted_text_cache("paper-1", cache_dir, pdf_path=cache_dir / "missing.pdf") is False
+
+
+def test_invalid_metadata_does_not_crash_stale_status() -> None:
+    cache_dir = make_workspace("text-cache-invalid-metadata")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    extraction_metadata_path("paper-1", cache_dir).write_text("{bad json", encoding="utf-8")
+
+    status = extraction_cache_status("paper-1", cache_dir)
+
+    assert status["status"] == "metadata_error"
+    assert status["is_stale"] is False
+    assert is_extraction_cache_stale("paper-1", cache_dir / "paper.pdf", cache_dir) is False

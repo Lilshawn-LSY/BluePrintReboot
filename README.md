@@ -57,6 +57,10 @@ Extraction prefers MarkItDown when available and falls back to pypdf. It never r
 
 `Extract full text` reuses an existing successful cache only when cached metadata reports `success` and a positive character count. Failed or empty extraction caches do not block a new normal extraction attempt. `Re-extract full text` always forces a fresh extraction.
 
+### v0.7.2 Stale Cache Detection
+
+Extraction metadata stores PDF size, modified timestamp, and SHA-256 fingerprint. A successful cache is reused only when the current PDF fingerprint matches the cached fingerprint. If the PDF changes, `Extract full text` refreshes the cache automatically; `Re-extract full text` still forces extraction.
+
 PDF viewer text selection is not required for v0.7.0 because app-level text extraction is handled separately. Visual PDF highlighting, coordinate annotations, mouse selection capture, graph visualization, Zotero integration, and relation schema remain deferred.
 
 ## Optional MarkItDown Fallback

@@ -149,6 +149,43 @@ def test_force_true_bypasses_reusable_cache(monkeypatch) -> None:
     assert calls["count"] == 2
 
 
+def test_changed_pdf_fingerprint_bypasses_reusable_cache(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-stale")
+    cache_dir = workspace / "cache"
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nfirst")
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(pdf_path),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    calls = {"count": 0}
+
+    def fake_extract(path):
+        calls["count"] += 1
+        text = f"text {calls['count']}"
+        return FullTextExtractionResult(
+            text=text,
+            source="pypdf",
+            char_count=len(text),
+            errors=[],
+            status="success",
+            attempted_methods=["pypdf"],
+        )
+
+    monkeypatch.setattr("services.full_text_workflow.extract_full_text_from_pdf", fake_extract)
+
+    first = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    pdf_path.write_bytes(b"%PDF-1.4\nchanged")
+    second = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+
+    assert first.skipped is False
+    assert second.skipped is False
+    assert calls["count"] == 2
+
+
 def test_clear_text_cache_for_paper_removes_files_and_resets_index(monkeypatch) -> None:
     workspace = make_workspace("full-text-service-clear")
     cache_dir = workspace / "cache"

@@ -394,6 +394,8 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
             ]
         )
     )
+    if cache_status["is_stale"]:
+        st.warning("Extracted text cache is stale because the PDF file changed. Extract full text will refresh it.")
 
     with st.expander("Extraction debug"):
         diagnostics = extraction_diagnostics(pdf_status["path"])
@@ -405,6 +407,8 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
         st.write(f"Attempted extraction methods: `{', '.join(cache_status['attempted_methods'])}`")
         st.write(f"Final source: `{cache_status['source'] or 'none'}`")
         st.write(f"Character count: `{cache_status['char_count']}`")
+        st.write(f"Current PDF SHA-256: `{cache_status['pdf_sha256']}`")
+        st.write(f"Cached PDF SHA-256: `{cache_status['cached_pdf_sha256']}`")
         if cache_status["errors"]:
             label = "Fallback warnings" if cache_status["status"] == "success" else "Errors"
             st.write(f"{label}:")

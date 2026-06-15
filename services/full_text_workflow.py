@@ -37,7 +37,8 @@ def extract_text_for_paper(
     index_csv: Path = INDEX_CSV,
 ) -> FullTextWorkflowResult:
     paper_id = record["paper_id"]
-    if not force and has_reusable_extracted_text_cache(paper_id, cache_dir):
+    pdf_path = str(record.get("filepath", ""))
+    if not force and has_reusable_extracted_text_cache(paper_id, cache_dir, pdf_path=pdf_path):
         status = extraction_cache_status(paper_id, cache_dir)
         return FullTextWorkflowResult(
             paper_id=paper_id,
