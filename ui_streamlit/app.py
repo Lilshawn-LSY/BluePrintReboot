@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
@@ -9,6 +11,7 @@ from ingest.crossref import (
     proxy_environment,
 )
 from ingest.doi import is_probable_doi, normalize_doi
+from ingest.scanner import extract_doi_metadata_from_pdf
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
@@ -223,6 +226,67 @@ def metadata_assist_section(record: dict[str, str]) -> None:
     current_doi = record.get("doi", "")
     st.write(f"Current DOI: `{current_doi or 'not set'}`")
     preview_key = f"crossref_preview_{record['paper_id']}"
+    extraction_key = f"doi_extraction_{record['paper_id']}"
+
+    if st.button("Extract DOI from PDF"):
+        result = extract_doi_metadata_from_pdf(Path(record["filepath"]))
+        detected_doi = result.doi
+        normalized_current_doi = normalize_doi(current_doi)
+        saved = False
+        message = ""
+        if detected_doi and not normalized_current_doi:
+            update_paper_metadata(record["paper_id"], {"doi": detected_doi})
+            saved = True
+            message = "Detected DOI was saved to this paper."
+        elif detected_doi and detected_doi == normalized_current_doi:
+            message = "Detected DOI already matches the saved DOI."
+        elif detected_doi:
+            message = "Detected DOI was not saved because this paper already has a DOI."
+        else:
+            message = "No DOI detected. You can paste one manually."
+
+        st.session_state[extraction_key] = {
+            "doi": detected_doi,
+            "source": result.source,
+            "saved": saved,
+            "message": message,
+        }
+        if saved:
+            st.rerun()
+
+    extraction = st.session_state.get(extraction_key)
+    if extraction:
+        detected_doi = extraction.get("doi", "")
+        if detected_doi:
+            if extraction.get("saved"):
+                st.success(extraction["message"])
+            else:
+                st.info(extraction["message"])
+            st.write(f"Detected DOI: `{detected_doi}`")
+            st.write(f"Extraction source: `{extraction.get('source', 'none')}`")
+            st.write(f"Saved to index: `{'yes' if extraction.get('saved') else 'no'}`")
+
+            normalized_current_doi = normalize_doi(current_doi)
+            if normalized_current_doi and detected_doi != normalized_current_doi:
+                if st.button("Replace saved DOI with detected DOI"):
+                    update_paper_metadata(record["paper_id"], {"doi": detected_doi})
+                    st.session_state[extraction_key]["saved"] = True
+                    st.session_state[extraction_key]["message"] = "Detected DOI was saved to this paper."
+                    st.success("Saved detected DOI.")
+                    st.rerun()
+
+            if st.button("Fetch Crossref metadata for detected DOI"):
+                try:
+                    message = fetch_crossref_by_doi(detected_doi)
+                    st.session_state[preview_key] = parse_crossref_work(message)
+                    st.success("Crossref metadata found. Review the preview before accepting it.")
+                    st.rerun()
+                except CrossrefLookupError as exc:
+                    st.warning(str(exc))
+                except Exception as exc:
+                    st.warning(f"Crossref lookup failed: {exc}")
+        else:
+            st.info(extraction["message"])
 
     if st.button("Lookup Crossref by DOI"):
         normalized = normalize_doi(current_doi)

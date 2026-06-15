@@ -152,6 +152,8 @@ def update_index_from_scan(
                 df.loc[row_mask, column] = record[column]
             if (df.loc[row_mask, "title"] == "").any():
                 df.loc[row_mask, "title"] = record["title"]
+            if record.get("doi") and (df.loc[row_mask, "doi"] == "").any():
+                df.loc[row_mask, "doi"] = normalize_doi(record["doi"])
             df.loc[row_mask, "updated_at"] = _now_iso()
         else:
             df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)

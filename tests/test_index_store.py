@@ -11,6 +11,19 @@ from storage.index_store import (
 from tests.helpers import make_workspace
 
 
+class FakePage:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+    def extract_text(self) -> str:
+        return self.text
+
+
+class FakePdfReader:
+    def __init__(self, text: str) -> None:
+        self.pages = [FakePage(text)]
+
+
 def test_update_index_from_scan_appends_without_duplicates() -> None:
     workspace = make_workspace("index")
     data_dir = workspace / "data"
@@ -27,6 +40,74 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     assert len(first) == 1
     assert len(second) == 1
     assert load_index(index_csv).iloc[0]["filename"] == "Paper.pdf"
+
+
+def test_update_index_from_scan_auto_detects_and_normalizes_doi(monkeypatch) -> None:
+    workspace = make_workspace("index-scan-doi")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    (papers_dir / "Detected.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(
+        "ingest.document_text.PdfReader",
+        lambda path: FakePdfReader("Article text doi: 10.1111/PCE.13021."),
+    )
+
+    updated = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert updated.iloc[0]["doi"] == "10.1111/pce.13021"
+
+
+def test_update_index_from_scan_does_not_overwrite_existing_doi(monkeypatch) -> None:
+    workspace = make_workspace("index-scan-no-overwrite")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    (papers_dir / "Manual.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(
+        "ingest.document_text.PdfReader",
+        lambda path: FakePdfReader("Article text DOI 10.1111/first."),
+    )
+
+    first = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    paper_id = first.iloc[0]["paper_id"]
+    update_paper_metadata(paper_id, {"doi": "10.2222/manual"}, index_csv=index_csv)
+    monkeypatch.setattr(
+        "ingest.document_text.PdfReader",
+        lambda path: FakePdfReader("Article text DOI 10.3333/replacement."),
+    )
+
+    rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert rescanned.iloc[0]["doi"] == "10.2222/manual"
+
+
+def test_update_index_from_scan_survives_pdf_text_extraction_failure(monkeypatch) -> None:
+    workspace = make_workspace("index-scan-doi-failure")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    (papers_dir / "Unreadable.pdf").write_bytes(b"%PDF-1.4\n")
+
+    def fail_reader(path):
+        raise ValueError("cannot read pdf text")
+
+    monkeypatch.setattr("ingest.document_text.PdfReader", fail_reader)
+    monkeypatch.setattr("ingest.document_text.MarkItDown", None)
+
+    updated = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert len(updated) == 1
+    assert updated.iloc[0]["doi"] == ""
 
 
 def test_v1_index_is_migrated_to_v3_columns() -> None:
