@@ -1,3 +1,5 @@
+import socket
+import ssl
 from urllib.error import HTTPError, URLError
 from unittest.mock import Mock
 
@@ -6,6 +8,7 @@ import pytest
 from ingest.crossref import (
     CrossrefLookupError,
     check_crossref_connectivity,
+    crossref_headers,
     crossref_work_url,
     fetch_crossref_by_doi,
     parse_crossref_work,
@@ -60,9 +63,27 @@ def test_parse_crossref_work_year_fallback_and_missing_author_fields() -> None:
 
 
 def test_crossref_work_url_encodes_doi() -> None:
-    assert crossref_work_url("10.1145/3368089.3409742") == (
+    assert crossref_work_url("doi: 10.1145/3368089.3409742") == (
         "https://api.crossref.org/works/10.1145%2F3368089.3409742"
     )
+
+
+def test_crossref_headers_include_configured_mailto(monkeypatch) -> None:
+    monkeypatch.setenv("CROSSREF_MAILTO", "researcher@example.edu")
+
+    headers = crossref_headers()
+
+    assert headers["mailto"] == "researcher@example.edu"
+    assert headers["User-Agent"] == "BluePrintReboot/0.4.1 (mailto:researcher@example.edu)"
+
+
+def test_crossref_headers_default_to_local_mailto(monkeypatch) -> None:
+    monkeypatch.delenv("CROSSREF_MAILTO", raising=False)
+
+    headers = crossref_headers()
+
+    assert headers["mailto"] == "pplee0300@snu.ac.kr"
+    assert headers["User-Agent"] == "BluePrintReboot/0.4.1 (mailto:pplee0300@snu.ac.kr)"
 
 
 def test_fetch_crossref_by_doi_connection_refused_is_user_friendly(monkeypatch) -> None:
@@ -77,6 +98,68 @@ def test_fetch_crossref_by_doi_connection_refused_is_user_friendly(monkeypatch) 
     message = str(exc_info.value)
     assert "Connection to Crossref was refused" in message
     assert "firewall" in message
+
+
+def test_fetch_crossref_by_doi_ssl_error_is_user_friendly(monkeypatch) -> None:
+    def fail_urlopen(*args, **kwargs):
+        raise ssl.SSLError("certificate verify failed")
+
+    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1145/3368089.3409742")
+
+    message = str(exc_info.value)
+    assert "SSL inspection" in message
+    assert "certificate settings" in message
+
+
+def test_fetch_crossref_by_doi_urlerror_ssl_reason_is_user_friendly(monkeypatch) -> None:
+    def fail_urlopen(*args, **kwargs):
+        raise URLError(ssl.SSLError("certificate verify failed"))
+
+    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1145/3368089.3409742")
+
+    assert "SSL inspection" in str(exc_info.value)
+
+
+def test_fetch_crossref_by_doi_timeout_is_user_friendly(monkeypatch) -> None:
+    def fail_urlopen(*args, **kwargs):
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1145/3368089.3409742")
+
+    assert "timed out" in str(exc_info.value)
+
+
+def test_fetch_crossref_by_doi_404_is_user_friendly(monkeypatch) -> None:
+    def fail_urlopen(*args, **kwargs):
+        raise HTTPError("https://api.crossref.org/works/x", 404, "Not Found", {}, None)
+
+    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1145/3368089.3409742")
+
+    assert str(exc_info.value) == "DOI not found in Crossref."
+
+
+def test_fetch_crossref_by_doi_other_http_status_is_user_friendly(monkeypatch) -> None:
+    def fail_urlopen(*args, **kwargs):
+        raise HTTPError("https://api.crossref.org/works/x", 503, "Service Unavailable", {}, None)
+
+    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1145/3368089.3409742")
+
+    assert str(exc_info.value) == "Crossref returned HTTP 503."
 
 
 def test_fetch_crossref_by_doi_429_is_user_friendly(monkeypatch) -> None:

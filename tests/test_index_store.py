@@ -150,6 +150,55 @@ def test_update_paper_metadata_updates_only_target_row() -> None:
     assert row_two["reading_priority"] == "high"
 
 
+def test_update_paper_metadata_normalizes_doi_before_saving() -> None:
+    workspace = make_workspace("metadata-doi-normalize")
+    index_csv = workspace / "data" / "paper_index.csv"
+    save_index(
+        pd.DataFrame(
+            [
+                {
+                    "paper_id": "paper-1",
+                    "filename": "One.pdf",
+                    "filepath": "One.pdf",
+                    "title": "One",
+                    "doi": "",
+                }
+            ]
+        ),
+        index_csv,
+    )
+
+    updated = update_paper_metadata(
+        "paper-1",
+        {"doi": "doi: 10.1111/PCE.13021"},
+        index_csv=index_csv,
+    )
+
+    assert updated.iloc[0]["doi"] == "10.1111/pce.13021"
+
+
+def test_save_index_normalizes_existing_doi_values() -> None:
+    workspace = make_workspace("save-doi-normalize")
+    index_csv = workspace / "data" / "paper_index.csv"
+
+    save_index(
+        pd.DataFrame(
+            [
+                {
+                    "paper_id": "paper-1",
+                    "filename": "One.pdf",
+                    "filepath": "One.pdf",
+                    "title": "One",
+                    "doi": "https://doi.org/10.1111/PCE.13021",
+                }
+            ]
+        ),
+        index_csv,
+    )
+
+    assert load_index(index_csv).iloc[0]["doi"] == "10.1111/pce.13021"
+
+
 def test_accept_crossref_metadata_preserves_workflow_fields() -> None:
     workspace = make_workspace("crossref-accept")
     index_csv = workspace / "data" / "paper_index.csv"
@@ -181,7 +230,7 @@ def test_accept_crossref_metadata_preserves_workflow_fields() -> None:
             "authors": "Crossref Author",
             "year": "2024",
             "journal": "Crossref Journal",
-            "doi": "10.1000/crossref",
+            "doi": "DOI 10.1000/Crossref",
             "metadata_source": "crossref",
             "metadata_confidence": "high",
             "metadata_checked_at": "2026-06-13T00:00:00+00:00",

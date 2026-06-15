@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from ingest.doi import normalize_doi
 from ingest.scanner import scan_papers
 from storage.paths import INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
 
@@ -105,6 +106,7 @@ def migrate_index_dataframe(df: pd.DataFrame) -> pd.DataFrame:
             if str(migrated.at[index, column]) == "":
                 migrated.at[index, column] = _default_for_column(column, row)
 
+    migrated["doi"] = migrated["doi"].apply(normalize_doi)
     ordered = INDEX_COLUMNS + [column for column in migrated.columns if column not in INDEX_COLUMNS]
     return migrated[ordered]
 
@@ -174,7 +176,10 @@ def update_paper_metadata(
 
     for column in EDITABLE_METADATA_COLUMNS:
         if column in metadata:
-            df.loc[row_mask, column] = str(metadata[column]).strip()
+            value = str(metadata[column]).strip()
+            if column == "doi":
+                value = normalize_doi(value)
+            df.loc[row_mask, column] = value
     df.loc[row_mask, "updated_at"] = _now_iso()
     save_index(df, index_csv)
     return load_index(index_csv)
@@ -192,7 +197,10 @@ def accept_crossref_metadata(
 
     for column in CROSSREF_ACCEPT_COLUMNS:
         if column in metadata:
-            df.loc[row_mask, column] = str(metadata[column]).strip()
+            value = str(metadata[column]).strip()
+            if column == "doi":
+                value = normalize_doi(value)
+            df.loc[row_mask, column] = value
     df.loc[row_mask, "updated_at"] = _now_iso()
     save_index(df, index_csv)
     return load_index(index_csv)

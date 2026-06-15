@@ -18,7 +18,19 @@ class CrossrefLookupError(Exception):
 
 
 CROSSREF_BASE_URL = "https://api.crossref.org"
-USER_AGENT = "BluePrintReboot/0.3.1 (mailto:local@example.invalid)"
+DEFAULT_CROSSREF_MAILTO = "pplee0300@snu.ac.kr"
+
+
+def crossref_mailto() -> str:
+    return os.environ.get("CROSSREF_MAILTO", DEFAULT_CROSSREF_MAILTO).strip() or DEFAULT_CROSSREF_MAILTO
+
+
+def crossref_headers() -> dict[str, str]:
+    mailto = crossref_mailto()
+    return {
+        "User-Agent": f"BluePrintReboot/0.4.1 (mailto:{mailto})",
+        "mailto": mailto,
+    }
 
 
 def utc_now_iso() -> str:
@@ -36,7 +48,7 @@ def fetch_crossref_by_doi(doi: str, timeout: float = 8.0) -> dict[str, Any]:
     if not is_probable_doi(normalized):
         raise CrossrefLookupError("The DOI does not look valid.")
 
-    request = Request(crossref_work_url(normalized), headers={"User-Agent": USER_AGENT})
+    request = Request(crossref_work_url(normalized), headers=crossref_headers())
     try:
         with urlopen(request, timeout=timeout) as response:
             status_code = getattr(response, "status", 200)
@@ -46,17 +58,15 @@ def fetch_crossref_by_doi(doi: str, timeout: float = 8.0) -> dict[str, Any]:
                 raise CrossrefLookupError(f"Crossref returned HTTP {status_code}.")
             payload = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
-        if exc.code == 404:
-            raise CrossrefLookupError("Crossref did not find metadata for this DOI.") from exc
         if exc.code == 429:
             raise CrossrefLookupError("Crossref rate limited this lookup. Try again later.") from exc
-        raise CrossrefLookupError(f"Crossref returned HTTP {exc.code}.") from exc
+        raise CrossrefLookupError(_http_error_message(exc.code)) from exc
     except URLError as exc:
         raise CrossrefLookupError(_network_error_message(exc.reason)) from exc
     except (TimeoutError, socket.timeout) as exc:
         raise CrossrefLookupError("Crossref lookup timed out.") from exc
     except ssl.SSLError as exc:
-        raise CrossrefLookupError(f"Could not securely connect to Crossref: {exc}") from exc
+        raise CrossrefLookupError(_network_error_message(exc)) from exc
     except OSError as exc:
         raise CrossrefLookupError(_network_error_message(exc)) from exc
     except json.JSONDecodeError as exc:
@@ -68,7 +78,7 @@ def fetch_crossref_by_doi(doi: str, timeout: float = 8.0) -> dict[str, Any]:
 
 
 def check_crossref_connectivity(timeout: float = 5.0) -> dict[str, Any]:
-    request = Request(f"{CROSSREF_BASE_URL}/works?rows=0", headers={"User-Agent": USER_AGENT})
+    request = Request(f"{CROSSREF_BASE_URL}/works?rows=0", headers=crossref_headers())
     try:
         with urlopen(request, timeout=timeout) as response:
             status_code = getattr(response, "status", 200)
@@ -111,7 +121,7 @@ def check_crossref_connectivity(timeout: float = 5.0) -> dict[str, Any]:
             "ok": False,
             "status_code": "",
             "error_type": "ssl",
-            "message": f"Could not securely connect to Crossref: {exc}",
+            "message": _network_error_message(exc),
         }
     except OSError as exc:
         return {
@@ -163,7 +173,7 @@ def _first_string(value: Any) -> str:
 
 def _http_error_message(status_code: int) -> str:
     if status_code == 404:
-        return "Crossref did not find metadata for this DOI."
+        return "DOI not found in Crossref."
     if status_code == 429:
         return "Crossref rate limited this request. Try again later."
     return f"Crossref returned HTTP {status_code}."
