@@ -5,6 +5,7 @@ from storage.extracted_text_store import (
     extracted_text_path,
     extraction_cache_status,
     extraction_metadata_path,
+    has_reusable_extracted_text_cache,
     load_cached_extracted_text,
     load_extraction_metadata,
     save_extracted_text,
@@ -76,3 +77,39 @@ def test_extraction_cache_status_and_clear() -> None:
     status = extraction_cache_status("paper-1", cache_dir)
     assert status["has_text"] is False
     assert status["has_metadata"] is False
+
+
+def test_failed_empty_extraction_cache_is_not_reusable() -> None:
+    cache_dir = make_workspace("text-cache-failed-empty")
+    save_extracted_text("paper-1", "", cache_dir)
+    save_extraction_metadata(
+        "paper-1",
+        {
+            "paper_id": "paper-1",
+            "status": "empty",
+            "source": "none",
+            "char_count": 0,
+            "errors": ["No readable text extracted."],
+        },
+        cache_dir,
+    )
+
+    assert has_reusable_extracted_text_cache("paper-1", cache_dir) is False
+
+
+def test_successful_non_empty_extraction_cache_is_reusable() -> None:
+    cache_dir = make_workspace("text-cache-reusable")
+    save_extracted_text("paper-1", "usable text", cache_dir)
+    save_extraction_metadata(
+        "paper-1",
+        {
+            "paper_id": "paper-1",
+            "status": "success",
+            "source": "pypdf",
+            "char_count": 11,
+            "errors": [],
+        },
+        cache_dir,
+    )
+
+    assert has_reusable_extracted_text_cache("paper-1", cache_dir) is True

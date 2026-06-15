@@ -55,6 +55,8 @@ Reader Workspace includes user-triggered full text extraction for the selected P
 
 Extraction prefers MarkItDown when available and falls back to pypdf. It never runs automatically on page load; use `Extract full text` or `Re-extract full text` in the PDF section. The workspace shows extraction status, source, character count, extraction time, diagnostics, and a bounded extracted text preview with an optional larger text area.
 
+`Extract full text` reuses an existing successful cache only when cached metadata reports `success` and a positive character count. Failed or empty extraction caches do not block a new normal extraction attempt. `Re-extract full text` always forces a fresh extraction.
+
 PDF viewer text selection is not required for v0.7.0 because app-level text extraction is handled separately. Visual PDF highlighting, coordinate annotations, mouse selection capture, graph visualization, Zotero integration, and relation schema remain deferred.
 
 ## Optional MarkItDown Fallback

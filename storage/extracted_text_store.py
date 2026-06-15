@@ -98,6 +98,15 @@ def extraction_cache_status(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR)
     }
 
 
+def has_reusable_extracted_text_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> bool:
+    status = extraction_cache_status(paper_id, cache_dir)
+    return (
+        bool(status["has_text"])
+        and status["status"] == "success"
+        and int(status.get("char_count") or 0) > 0
+    )
+
+
 def clear_extraction_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> None:
     for path in (extracted_text_path(paper_id, cache_dir), extraction_metadata_path(paper_id, cache_dir)):
         if path.exists():

@@ -13,6 +13,7 @@ from ingest.text_extractor import extract_full_text_from_pdf, extraction_diagnos
 from storage.extracted_text_store import (
     build_extraction_metadata,
     clear_extraction_cache,
+    has_reusable_extracted_text_cache,
     extraction_cache_status,
     load_cached_extracted_text,
     save_extracted_text,
@@ -418,6 +419,8 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
         st.write(f"Final source: `{cache_status['source'] or 'none'}`")
         st.write(f"Character count: `{cache_status['char_count']}`")
         if cache_status["errors"]:
+            label = "Fallback warnings" if cache_status["status"] == "success" else "Errors"
+            st.write(f"{label}:")
             for error in cache_status["errors"]:
                 st.write(f"- {error}")
         else:
@@ -439,7 +442,7 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
 
 def _run_full_text_extraction(record: dict[str, str], force: bool = False) -> None:
     paper_id = record["paper_id"]
-    if not force and extraction_cache_status(paper_id)["has_text"]:
+    if not force and has_reusable_extracted_text_cache(paper_id):
         return
     result = extract_full_text_from_pdf(Path(str(record.get("filepath", ""))))
     save_extracted_text(paper_id, result.text)
