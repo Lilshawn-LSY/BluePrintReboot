@@ -30,6 +30,10 @@ INDEX_COLUMNS = [
     "metadata_source",
     "metadata_confidence",
     "metadata_checked_at",
+    "text_status",
+    "text_source",
+    "text_char_count",
+    "text_extracted_at",
     "note_path",
     "added_at",
     "updated_at",
@@ -51,6 +55,10 @@ DEFAULT_VALUES = {
     "metadata_source": "",
     "metadata_confidence": "",
     "metadata_checked_at": "",
+    "text_status": "",
+    "text_source": "",
+    "text_char_count": "",
+    "text_extracted_at": "",
 }
 
 EDITABLE_METADATA_COLUMNS = [
@@ -67,6 +75,10 @@ EDITABLE_METADATA_COLUMNS = [
     "doi_source",
     "extraction_source",
     "extraction_checked_at",
+    "text_status",
+    "text_source",
+    "text_char_count",
+    "text_extracted_at",
 ]
 
 CROSSREF_ACCEPT_COLUMNS = [

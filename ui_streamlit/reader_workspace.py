@@ -9,6 +9,15 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from ingest.tag_suggester import merge_tags, normalize_tag, suggest_tags
+from ingest.text_extractor import extract_full_text_from_pdf, extraction_diagnostics
+from storage.extracted_text_store import (
+    build_extraction_metadata,
+    clear_extraction_cache,
+    extraction_cache_status,
+    load_cached_extracted_text,
+    save_extracted_text,
+    save_extraction_metadata,
+)
 from storage.index_store import update_paper_metadata
 from storage.note_store import load_note_text, save_note_text
 
@@ -322,6 +331,7 @@ def _render_pdf_viewer(record: dict[str, str]) -> None:
         render_status = initial_pdf_render_status(selected_renderer)
         _render_pdf_debug(status, render_status)
         st.warning(str(status["message"]))
+        _render_extracted_text_panel(record, status)
         return
 
     render_status = initial_pdf_render_status(selected_renderer)
@@ -338,6 +348,7 @@ def _render_pdf_viewer(record: dict[str, str]) -> None:
         render_status = mark_pdf_render_fallback(render_status)
         components.html(pdf_embed_html(status["path"], height=920), height=940, scrolling=True)
     _render_pdf_debug(status, render_status)
+    _render_extracted_text_panel(record, status)
 
 
 def _render_pdf_debug(path_status: dict[str, object], render_status: dict[str, object]) -> None:
@@ -353,6 +364,96 @@ def _render_pdf_debug(path_status: dict[str, object], render_status: dict[str, o
         st.write(f"Final render method: `{render_status['final_method']}`")
         if render_status.get("native_render_error"):
             st.write(f"Native render error: `{render_status['native_render_error']}`")
+
+
+def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, object]) -> None:
+    paper_id = record["paper_id"]
+    cache_status = extraction_cache_status(paper_id)
+    show_key = f"show_extracted_text_{paper_id}"
+
+    col1, col2, col3, col4 = st.columns(4)
+    if col1.button("Extract full text", key=f"extract_text_{paper_id}"):
+        _run_full_text_extraction(record, force=False)
+        st.session_state[show_key] = True
+        st.rerun()
+    if col2.button("Re-extract full text", key=f"reextract_text_{paper_id}"):
+        _run_full_text_extraction(record, force=True)
+        st.session_state[show_key] = True
+        st.rerun()
+    if col3.button("Show extracted text", key=f"show_text_{paper_id}"):
+        st.session_state[show_key] = not st.session_state.get(show_key, False)
+    if col4.button("Clear text cache", key=f"clear_text_{paper_id}"):
+        clear_extraction_cache(paper_id)
+        update_paper_metadata(
+            paper_id,
+            {
+                "text_status": "",
+                "text_source": "",
+                "text_char_count": "",
+                "text_extracted_at": "",
+            },
+        )
+        st.session_state[show_key] = False
+        st.rerun()
+
+    st.caption(
+        " | ".join(
+            [
+                f"text status: {cache_status['status']}",
+                f"source: {cache_status['source'] or 'none'}",
+                f"chars: {cache_status['char_count']}",
+                f"extracted: {cache_status['extracted_at'] or 'never'}",
+            ]
+        )
+    )
+
+    with st.expander("Extraction debug"):
+        diagnostics = extraction_diagnostics(pdf_status["path"])
+        st.write(f"PDF path: `{diagnostics['pdf_path']}`")
+        st.write(f"PDF exists: `{diagnostics['pdf_exists']}`")
+        st.write(f"PDF size MB: `{diagnostics['pdf_size_mb']}`")
+        st.write(f"MarkItDown availability: `{diagnostics['markitdown']}`")
+        st.write(f"pypdf availability: `{diagnostics['pypdf']}`")
+        st.write(f"Attempted extraction methods: `{', '.join(cache_status['attempted_methods'])}`")
+        st.write(f"Final source: `{cache_status['source'] or 'none'}`")
+        st.write(f"Character count: `{cache_status['char_count']}`")
+        if cache_status["errors"]:
+            for error in cache_status["errors"]:
+                st.write(f"- {error}")
+        else:
+            st.write("Errors: `none`")
+
+    if st.session_state.get(show_key, False):
+        text = load_cached_extracted_text(paper_id)
+        with st.expander("Extracted Text Preview", expanded=True):
+            if text:
+                preview = text[:5000]
+                st.text_area("Cached extracted text", value=preview, height=320)
+                if len(text) > len(preview):
+                    st.caption(f"Showing first {len(preview)} of {len(text)} characters.")
+                with st.expander("View more extracted text"):
+                    st.text_area("Full cached extracted text", value=text, height=600)
+            else:
+                st.info("No extracted text cache found. Click Extract full text.")
+
+
+def _run_full_text_extraction(record: dict[str, str], force: bool = False) -> None:
+    paper_id = record["paper_id"]
+    if not force and extraction_cache_status(paper_id)["has_text"]:
+        return
+    result = extract_full_text_from_pdf(Path(str(record.get("filepath", ""))))
+    save_extracted_text(paper_id, result.text)
+    metadata = build_extraction_metadata(paper_id, str(record.get("filepath", "")), result)
+    save_extraction_metadata(paper_id, metadata)
+    update_paper_metadata(
+        paper_id,
+        {
+            "text_status": result.status,
+            "text_source": result.source,
+            "text_char_count": str(result.char_count),
+            "text_extracted_at": metadata["extracted_at"],
+        },
+    )
 
 
 def _render_note_editor(record: dict[str, str]) -> None:
