@@ -1,5 +1,6 @@
 from ingest.tag_suggester import (
     audit_library_tags,
+    build_tag_suggestion_record,
     explain_tag_suggestions,
     load_tag_rules,
     merge_tags,
@@ -21,6 +22,66 @@ def test_load_tag_rules_from_config() -> None:
 
 def test_valid_rulebook_has_no_validation_warnings() -> None:
     assert validate_tag_rules(load_tag_rules()) == []
+
+
+def test_build_tag_suggestion_record_overlays_form_values() -> None:
+    record = {
+        "title": "Saved Title",
+        "abstract": "Saved abstract",
+        "keywords": "",
+        "journal": "Saved Journal",
+        "filename": "saved.pdf",
+        "tags": "saved-tag",
+    }
+    form_values = {
+        "title": "Unsaved Title",
+        "abstract": "Unsaved abstract",
+        "keywords": "scRNA-seq",
+        "journal": "Unsaved Journal",
+        "filename": "form.pdf",
+        "tags": "form-tag",
+    }
+
+    built = build_tag_suggestion_record(record, form_values=form_values)
+
+    assert built["title"] == "Unsaved Title"
+    assert built["abstract"] == "Unsaved abstract"
+    assert built["keywords"] == "scRNA-seq"
+    assert built["journal"] == "Unsaved Journal"
+    assert built["filename"] == "form.pdf"
+    assert built["tags"] == "form-tag"
+
+
+def test_build_tag_suggestion_record_uses_crossref_preview_fields() -> None:
+    built = build_tag_suggestion_record(
+        {"title": "Saved", "abstract": "Saved abstract", "keywords": "", "journal": ""},
+        form_values={"title": "Form title", "abstract": "Form abstract"},
+        crossref_preview={
+            "title": "Preview title",
+            "abstract": "Preview abstract with metabolic engineering",
+            "keywords": "single-cell RNA sequencing",
+            "journal": "Preview Journal",
+            "crossref_subjects": "Spatial Transcriptomics",
+        },
+    )
+
+    assert built["title"] == "Preview title"
+    assert built["abstract"] == "Preview abstract with metabolic engineering"
+    assert built["keywords"] == "single-cell RNA sequencing"
+    assert built["journal"] == "Preview Journal"
+    assert built["crossref_subjects"] == "Spatial Transcriptomics"
+
+
+def test_build_tag_suggestion_record_empty_preview_fields_do_not_erase_values() -> None:
+    built = build_tag_suggestion_record(
+        {"title": "Saved title", "abstract": "Saved abstract", "tags": "saved-tag"},
+        form_values={"title": "Form title", "abstract": "Form abstract", "tags": "form-tag"},
+        crossref_preview={"title": "", "abstract": "   ", "keywords": ""},
+    )
+
+    assert built["title"] == "Form title"
+    assert built["abstract"] == "Form abstract"
+    assert built["tags"] == "form-tag"
 
 
 def test_validate_tag_rules_reports_duplicate_aliases() -> None:
@@ -110,6 +171,39 @@ def test_suggest_tags_avoids_existing_tags_and_supports_future_fields() -> None:
     assert "protocol" in suggestions
 
 
+def test_suggest_tags_matches_scrna_seq_spelling() -> None:
+    suggestions = suggest_tags({"keywords": "scRNA-seq analysis of root apical meristem"})
+
+    assert "single-cell-rna-seq" in suggestions
+
+
+def test_suggest_tags_uses_crossref_preview_abstract_and_keywords_before_accept() -> None:
+    suggestion_record = build_tag_suggestion_record(
+        {"title": "Saved paper", "tags": ""},
+        crossref_preview={
+            "abstract": "This study uses single-cell RNA sequencing and artificial intelligence.",
+            "keywords": "spatial transcriptomics",
+            "journal": "Plant Methods",
+        },
+    )
+
+    suggestions = suggest_tags(suggestion_record)
+
+    assert "single-cell-rna-seq" in suggestions
+    assert "ai-biology" in suggestions
+    assert "spatial-transcriptomics" in suggestions
+
+
+def test_existing_tags_suppress_duplicate_suggestions_from_form_and_preview() -> None:
+    suggestion_record = build_tag_suggestion_record(
+        {"title": "", "tags": "single-cell-rna-seq"},
+        form_values={"keywords": "scRNA-seq"},
+        crossref_preview={"abstract": "single-cell RNA sequencing"},
+    )
+
+    assert "single-cell-rna-seq" not in suggest_tags(suggestion_record)
+
+
 def test_source_aware_scoring_is_deterministic() -> None:
     rules = {
         "alpha-tag": {"category": "test", "aliases": ["shared"], "weight": 2},
@@ -150,7 +244,7 @@ def test_crossref_subjects_can_generate_suggestions() -> None:
 
 
 def test_absent_future_fields_do_not_break_behavior() -> None:
-    assert suggest_tags({"title": "Arabidopsis root protocol"})[:3] == [
+    assert suggest_tags({"title": "Arabidopsis root development protocol"})[:3] == [
         "arabidopsis",
         "root-development",
         "protocol",

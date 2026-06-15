@@ -80,6 +80,10 @@ Tag suggestion uses the editable local rulebook at `config/tag_rules.json`. Each
 
 Suggested tags are never applied automatically. Press `Accept Suggested Tags` to merge them into the paper's existing tags. Existing user tags are preserved and duplicates are skipped.
 
+### v0.5.3 Tag Suggestion Hotfix
+
+Tag suggestions now use unsaved metadata form input and Crossref preview metadata before those values are saved or accepted. The Suggested Tags area includes a compact `Tag suggestion input` expander for debugging which fields are being used. The rulebook aliases include more common scientific spellings such as `scRNA-seq`, single-cell RNA sequencing, and machine-learning/deep-learning variants.
+
 ## Tag Rule Maintenance
 
 `config/tag_rules.json` is editable. Settings validates the rulebook and reports issues such as missing fields, duplicate aliases, invalid weights, and non-normalized tag names.

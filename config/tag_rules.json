@@ -21,7 +21,7 @@
   },
   "root-development": {
     "category": "biology",
-    "aliases": ["root", "root development", "root-development"],
+    "aliases": ["root development", "root growth", "root system", "root meristem", "root-development"],
     "weight": 7
   },
   "root-apical-meristem": {
@@ -31,7 +31,7 @@
   },
   "single-cell-rna-seq": {
     "category": "assay",
-    "aliases": ["scrna", "scrna-seq", "single-cell", "single cell", "single cell rna-seq", "single-cell rna-seq", "single-cell-rna-seq"],
+    "aliases": ["scrna", "scrna-seq", "scRNA-seq", "sc RNA-seq", "single-cell", "single cell", "single cell rna-seq", "single-cell rna-seq", "single-cell-rna-seq", "single-cell RNA sequencing", "single cell RNA sequencing", "single-cell transcriptomics", "single cell transcriptomics"],
     "weight": 9
   },
   "spatial-transcriptomics": {
@@ -46,7 +46,7 @@
   },
   "ai-biology": {
     "category": "method",
-    "aliases": ["machine learning", "deep learning", "ai", "artificial intelligence", "ai biology", "ai-biology"],
+    "aliases": ["machine learning", "machine-learning", "deep learning", "deep-learning", "AI", "ai", "artificial intelligence", "ai biology", "ai-biology"],
     "weight": 7
   },
   "review": {

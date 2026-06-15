@@ -16,6 +16,7 @@ from ingest.scanner import extract_doi_metadata_from_pdf
 from ingest.tag_suggester import (
     DEFAULT_RULE_PATH,
     audit_library_tags,
+    build_tag_suggestion_record,
     explain_tag_suggestions,
     load_tag_rules,
     merge_tags,
@@ -219,7 +220,17 @@ def paper_detail_page() -> None:
         st.success("Metadata saved.")
         st.rerun()
 
-    metadata_assist_section(record)
+    metadata_assist_section(
+        record,
+        {
+            "title": title,
+            "abstract": abstract,
+            "keywords": keywords,
+            "journal": journal,
+            "filename": record.get("filename", ""),
+            "tags": tags,
+        },
+    )
 
     if st.button("Create/Open Note"):
         create_note_if_missing(record)
@@ -237,7 +248,7 @@ def paper_detail_page() -> None:
         st.caption(f"Note path: {note_path}")
 
 
-def metadata_assist_section(record: dict[str, str]) -> None:
+def metadata_assist_section(record: dict[str, str], form_values: dict | None = None) -> None:
     st.subheader("Metadata Assist")
     current_doi = record.get("doi", "")
     st.write(f"Current DOI: `{current_doi or 'not set'}`")
@@ -364,12 +375,18 @@ def metadata_assist_section(record: dict[str, str]) -> None:
             st.write(f"Crossref lookup status: `{enrichment.get('crossref_status', 'not attempted')}`")
 
     preview = st.session_state.get(preview_key)
-    suggestion_record = dict(record)
-    if preview and preview.get("crossref_subjects"):
-        suggestion_record["crossref_subjects"] = preview.get("crossref_subjects", "")
+    suggestion_record = build_tag_suggestion_record(record, form_values=form_values, crossref_preview=preview)
     suggestions = suggest_tags(suggestion_record)
     suggestion_details = explain_tag_suggestions(suggestion_record)
     st.write("Suggested tags")
+    with st.expander("Tag suggestion input"):
+        st.write(f"Title: `{suggestion_record.get('title', '')}`")
+        st.write(f"Abstract length: `{len(str(suggestion_record.get('abstract', '') or ''))}`")
+        st.write(f"Keywords: `{suggestion_record.get('keywords', '')}`")
+        st.write(f"Journal: `{suggestion_record.get('journal', '')}`")
+        st.write(f"Filename: `{suggestion_record.get('filename', '')}`")
+        st.write(f"Crossref subjects: `{suggestion_record.get('crossref_subjects', '')}`")
+        st.write(f"Existing tags: `{suggestion_record.get('tags', '')}`")
     if suggestions:
         for detail in suggestion_details:
             fields = "/".join(detail.get("matched_fields", []))

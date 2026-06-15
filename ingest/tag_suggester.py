@@ -22,6 +22,9 @@ SOURCE_WEIGHTS = {
 
 SOURCE_FIELDS = tuple(SOURCE_WEIGHTS.keys())
 
+FORM_SUGGESTION_FIELDS = ("title", "abstract", "keywords", "journal", "filename", "tags")
+CROSSREF_PREVIEW_SUGGESTION_FIELDS = ("title", "abstract", "keywords", "journal", "crossref_subjects")
+
 
 def load_tag_rules(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
     rule_path = Path(path) if path is not None else DEFAULT_RULE_PATH
@@ -42,6 +45,25 @@ def load_tag_rules(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
             "weight": int(raw_rule.get("weight", 1) or 1),
         }
     return rules
+
+
+def build_tag_suggestion_record(
+    saved_record: dict,
+    form_values: dict | None = None,
+    crossref_preview: dict | None = None,
+) -> dict:
+    suggestion_record = dict(saved_record or {})
+    if form_values:
+        for field in FORM_SUGGESTION_FIELDS:
+            value = form_values.get(field)
+            if _has_value(value):
+                suggestion_record[field] = value
+    if crossref_preview:
+        for field in CROSSREF_PREVIEW_SUGGESTION_FIELDS:
+            value = crossref_preview.get(field)
+            if _has_value(value):
+                suggestion_record[field] = value
+    return suggestion_record
 
 
 def validate_tag_rules(rules: dict) -> list[str]:
@@ -192,6 +214,16 @@ def _record_field_text(value: Any) -> str:
     if isinstance(value, dict):
         return " ".join(str(item) for item in value.values())
     return str(value or "")
+
+
+def _has_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
 
 
 def _matches_any_alias(text: str, aliases: list[str]) -> bool:
