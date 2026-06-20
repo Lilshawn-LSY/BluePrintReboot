@@ -9,6 +9,7 @@ from storage.note_block_store import (
     get_note_block,
     list_note_blocks,
     note_blocks_path,
+    render_note_block_as_markdown,
     update_note_block,
 )
 from tests.helpers import make_workspace
@@ -82,12 +83,31 @@ def test_update_modifies_fields_preserves_created_at_and_unknown_fields(monkeypa
     updated = update_note_block(
         "paper-1",
         block["id"],
-        {"text": "Updated", "page": "7", "future_field": {"kind": "preserved"}},
+        {
+            "id": "replacement-id",
+            "paper_id": "paper-2",
+            "created_at": "replacement-created-at",
+            "block_type": "evidence",
+            "title": "Updated title",
+            "text": "Updated text",
+            "page": "7",
+            "figure": "3B",
+            "quote": "Updated quote",
+            "tags": " results, validation, results ",
+            "future_field": {"kind": "preserved"},
+        },
         base_dir=base_dir,
     )
 
-    assert updated["text"] == "Updated"
+    assert updated["id"] == block["id"]
+    assert updated["paper_id"] == block["paper_id"]
+    assert updated["block_type"] == "evidence"
+    assert updated["title"] == "Updated title"
+    assert updated["text"] == "Updated text"
     assert updated["page"] == "7"
+    assert updated["figure"] == "3B"
+    assert updated["quote"] == "Updated quote"
+    assert updated["tags"] == ["results", "validation"]
     assert updated["created_at"] == block["created_at"]
     assert updated["updated_at"] != block["updated_at"]
     assert updated["future_field"] == {"kind": "preserved"}
@@ -99,6 +119,24 @@ def test_update_missing_block_raises_key_error() -> None:
 
     with pytest.raises(KeyError):
         update_note_block("paper-1", "missing", {"text": "No block"}, base_dir=base_dir)
+
+    assert list_note_blocks("paper-1", base_dir) == []
+    assert not note_blocks_path("paper-1", base_dir).exists()
+
+
+def test_update_rejects_invalid_block_type_without_changing_block() -> None:
+    base_dir = make_workspace("note-block-update-invalid-type")
+    block = create_note_block("paper-1", "claim", text="Original", base_dir=base_dir)
+
+    with pytest.raises(ValueError, match="block_type"):
+        update_note_block(
+            "paper-1",
+            block["id"],
+            {"block_type": "citation", "text": "Should not be saved"},
+            base_dir=base_dir,
+        )
+
+    assert get_note_block("paper-1", block["id"], base_dir) == block
 
 
 def test_invalid_block_type_is_rejected() -> None:
@@ -150,3 +188,45 @@ def test_different_papers_use_different_files() -> None:
     assert note_blocks_path("paper-1", base_dir) != note_blocks_path("paper-2", base_dir)
     assert list_note_blocks("paper-1", base_dir) == [first]
     assert list_note_blocks("paper-2", base_dir) == [second]
+
+
+def test_render_note_block_as_markdown_returns_stable_readable_snippet() -> None:
+    snippet = render_note_block_as_markdown(
+        {
+            "block_type": "evidence",
+            "title": "Ck induces growth of RAM length",
+            "text": "Root apical meristem length increased after treatment.",
+            "page": "3",
+            "figure": "1a",
+            "quote": "RAM length increased significantly.",
+            "tags": ["Cytokinin", " RAM ", "Cytokinin"],
+        }
+    )
+
+    assert snippet == (
+        "### Evidence: Ck induces growth of RAM length\n\n"
+        "* Page: 3\n"
+        "* Figure: 1a\n"
+        "* Tags: Cytokinin, RAM\n\n"
+        "> RAM length increased significantly.\n\n"
+        "Root apical meristem length increased after treatment.\n"
+    )
+
+
+def test_render_note_block_as_markdown_omits_empty_metadata() -> None:
+    snippet = render_note_block_as_markdown(
+        {
+            "block_type": "idea",
+            "title": "",
+            "text": "Test this in a larger cohort.",
+            "page": "",
+            "figure": "",
+            "quote": "",
+            "tags": [],
+        }
+    )
+
+    assert snippet == "### Idea\n\nTest this in a larger cohort.\n"
+    assert "* Page:" not in snippet
+    assert "* Figure:" not in snippet
+    assert "* Tags:" not in snippet

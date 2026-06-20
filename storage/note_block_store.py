@@ -154,6 +154,35 @@ def normalize_note_block_tags(tags: object | None) -> list[str]:
     return normalized
 
 
+def render_note_block_as_markdown(block: Mapping[str, Any]) -> str:
+    block_type = _validated_block_type(block.get("block_type"))
+    title = _required_string(block.get("title", ""), "title").strip()
+    text = _required_string(block.get("text", ""), "text").strip()
+    page = _required_string(block.get("page", ""), "page").strip()
+    figure = _required_string(block.get("figure", ""), "figure").strip()
+    quote = _required_string(block.get("quote", ""), "quote").strip()
+    tags = normalize_note_block_tags(block.get("tags"))
+
+    type_label = block_type.replace("_", " ").title()
+    heading = f"### {type_label}: {title}" if title else f"### {type_label}"
+    details = []
+    if page:
+        details.append(f"* Page: {page}")
+    if figure:
+        details.append(f"* Figure: {figure}")
+    if tags:
+        details.append(f"* Tags: {', '.join(tags)}")
+
+    sections = [heading]
+    if details:
+        sections.append("\n".join(details))
+    if quote:
+        sections.append("\n".join(f"> {line}" for line in quote.splitlines()))
+    if text:
+        sections.append(text)
+    return "\n\n".join(sections) + "\n"
+
+
 def _normalize_block(paper_id: str, block: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(block, Mapping):
         raise ValueError("Each note block must be an object.")

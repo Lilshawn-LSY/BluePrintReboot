@@ -21,6 +21,8 @@ from storage.note_block_store import (
     create_note_block,
     delete_note_block,
     list_note_blocks,
+    render_note_block_as_markdown,
+    update_note_block,
 )
 from storage.note_store import load_note_text, save_note_text
 
@@ -112,6 +114,51 @@ def note_draft_key(record: dict[str, str]) -> str:
 
 def note_saved_at_key(record: dict[str, str]) -> str:
     return f"reader_note_saved_at_{record['paper_id']}"
+
+
+def structured_note_edit_key(record: dict[str, str]) -> str:
+    return f"structured_note_edit_id_{record['paper_id']}"
+
+
+def pending_note_block_append_key(record: dict[str, str]) -> str:
+    return f"pending_note_block_append_{record['paper_id']}"
+
+
+def pending_note_reload_key(record: dict[str, str]) -> str:
+    return f"pending_note_reload_{record['paper_id']}"
+
+
+def append_markdown_snapshot(markdown: str, snippet: str) -> str:
+    existing = str(markdown or "").rstrip()
+    snapshot = str(snippet or "").strip()
+    if not snapshot:
+        return str(markdown or "")
+    if not existing:
+        return f"{snapshot}\n"
+    return f"{existing}\n\n{snapshot}\n"
+
+
+def apply_pending_note_actions(
+    record: dict[str, str],
+    session_state: MutableMapping,
+    notes_dir: Path | None = None,
+) -> str:
+    key = note_draft_key(record)
+    draft = load_note_draft(record, session_state, notes_dir=notes_dir)
+
+    if session_state.pop(pending_note_reload_key(record), False):
+        if notes_dir is None:
+            draft = load_note_text(record)
+        else:
+            draft = load_note_text(record, notes_dir=notes_dir)
+        session_state[key] = draft
+
+    pending_snapshot = str(session_state.pop(pending_note_block_append_key(record), "") or "")
+    if pending_snapshot:
+        draft = append_markdown_snapshot(draft, pending_snapshot)
+        session_state[key] = draft
+
+    return str(session_state[key])
 
 
 def load_note_draft(
@@ -256,8 +303,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
         st.success("Note saved.")
 
     if st.button("Reload Note", key=f"toolbar_reload_note_{record['paper_id']}"):
-        st.session_state[note_draft_key(record)] = load_note_text(record)
-        st.info("Note reloaded from disk.")
+        st.session_state[pending_note_reload_key(record)] = True
         st.rerun()
 
     for label, block_type in (
@@ -467,7 +513,7 @@ def _run_full_text_extraction(record: dict[str, str], force: bool = False) -> No
 def _render_note_editor(record: dict[str, str]) -> None:
     st.write("Markdown Note")
     key = note_draft_key(record)
-    load_note_draft(record, st.session_state)
+    apply_pending_note_actions(record, st.session_state)
     st.text_area(
         "Note draft",
         height=860,
@@ -477,7 +523,7 @@ def _render_note_editor(record: dict[str, str]) -> None:
         save_note_draft(record, st.session_state)
         st.success("Note saved.")
     if st.button("Reload Note", key=f"editor_reload_note_{record['paper_id']}"):
-        st.session_state[key] = load_note_text(record)
+        st.session_state[pending_note_reload_key(record)] = True
         st.rerun()
     saved_at = st.session_state.get(note_saved_at_key(record), "")
     if saved_at:
@@ -486,54 +532,174 @@ def _render_note_editor(record: dict[str, str]) -> None:
 
 def _render_structured_note_blocks(record: dict[str, str]) -> None:
     paper_id = record["paper_id"]
-    with st.expander("Structured Note Blocks"):
+    edit_key = structured_note_edit_key(record)
+    with st.container(border=True):
+        st.write("Structured Note Blocks")
         blocks = list_note_blocks(paper_id)
+        type_counts = {
+            block_type: sum(block["block_type"] == block_type for block in blocks)
+            for block_type in ALLOWED_BLOCK_TYPES
+        }
+        st.caption(f"Total blocks: {len(blocks)}")
+        st.caption(
+            "By type: "
+            + " | ".join(f"{block_type}: {type_counts[block_type]}" for block_type in ALLOWED_BLOCK_TYPES)
+        )
+        selected_type = st.selectbox(
+            "Filter by block type",
+            ("all",) + ALLOWED_BLOCK_TYPES,
+            key=f"structured_note_filter_{paper_id}",
+        )
+        st.caption(
+            "Markdown notes remain freeform. Appending a block creates a one-way snapshot in the current draft; "
+            "later block edits are not synchronized."
+        )
+
         if not blocks:
             st.info("No structured note blocks yet.")
         else:
-            for block in blocks:
-                heading = block["title"] or block["block_type"].replace("_", " ").title()
-                st.markdown(f"**{heading}** - `{block['block_type']}`")
-                if block["text"]:
-                    st.write(block["text"])
-                if block["quote"]:
-                    st.caption(f"Quote: {block['quote']}")
-                details = [
-                    value
-                    for value in (
-                        f"Page: {block['page']}" if block["page"] else "",
-                        f"Figure: {block['figure']}" if block["figure"] else "",
-                        f"Tags: {', '.join(block['tags'])}" if block["tags"] else "",
-                    )
-                    if value
-                ]
-                if details:
-                    st.caption(" | ".join(details))
-                if st.button("Delete block", key=f"delete_note_block_{paper_id}_{block['id']}"):
-                    delete_note_block(paper_id, block["id"])
-                    st.rerun()
-                st.divider()
+            active_edit_id = str(st.session_state.get(edit_key, ""))
+            filtered_blocks = [
+                block
+                for block in blocks
+                if selected_type == "all"
+                or block["block_type"] == selected_type
+                or str(block["id"]) == active_edit_id
+            ]
+            if not filtered_blocks:
+                st.info(f"No {selected_type} blocks.")
+            for block in filtered_blocks:
+                _render_structured_note_block_card(record, block, edit_key)
 
-        with st.form(key=f"create_note_block_{paper_id}"):
-            st.write("Add structured block")
-            block_type = st.selectbox("Block type", ALLOWED_BLOCK_TYPES)
-            title = st.text_input("Block title")
-            text = st.text_area("Block text", height=140)
-            page_col, figure_col = st.columns(2)
-            page = page_col.text_input("Page")
-            figure = figure_col.text_input("Figure")
-            tags = st.text_input("Tags (comma-separated)")
-            submitted = st.form_submit_button("Add block")
+        if not st.session_state.get(edit_key):
+            _render_create_note_block_form(paper_id)
 
-        if submitted:
-            create_note_block(
-                paper_id=paper_id,
-                block_type=block_type,
-                title=title,
-                text=text,
-                page=page,
-                figure=figure,
-                tags=tags,
+
+def _render_structured_note_block_card(
+    record: dict[str, str],
+    block: dict[str, object],
+    edit_key: str,
+) -> None:
+    paper_id = record["paper_id"]
+    block_id = str(block["id"])
+    with st.container(border=True):
+        heading = str(block["title"] or str(block["block_type"]).replace("_", " ").title())
+        st.markdown(f"**{heading}** - `{block['block_type']}`")
+        details = [
+            value
+            for value in (
+                f"Page: {block['page']}" if block["page"] else "",
+                f"Figure: {block['figure']}" if block["figure"] else "",
+                f"Tags: {', '.join(block['tags'])}" if block["tags"] else "",
+                f"Updated: {block['updated_at']}",
             )
-            st.success("Structured note block added.")
+            if value
+        ]
+        st.caption(" | ".join(details))
+
+        text = str(block["text"] or "")
+        if text:
+            preview = _note_block_preview(text)
+            st.write(preview)
+            if preview != text.strip():
+                with st.expander("View full text"):
+                    st.write(text)
+        if block["quote"]:
+            st.caption(f"Quote: {block['quote']}")
+
+        edit_col, append_col, delete_col = st.columns(3)
+        if edit_col.button("Edit", key=f"edit_note_block_{paper_id}_{block_id}"):
+            st.session_state[edit_key] = block_id
             st.rerun()
+        if append_col.button("Append to Markdown", key=f"append_note_block_{paper_id}_{block_id}"):
+            st.session_state[pending_note_block_append_key(record)] = render_note_block_as_markdown(block)
+            st.rerun()
+        if delete_col.button("Delete block", key=f"delete_note_block_{paper_id}_{block_id}"):
+            delete_note_block(paper_id, block_id)
+            if st.session_state.get(edit_key) == block_id:
+                st.session_state.pop(edit_key, None)
+            st.rerun()
+
+        if st.session_state.get(edit_key) == block_id:
+            _render_edit_note_block_form(paper_id, block, edit_key)
+
+
+def _render_edit_note_block_form(
+    paper_id: str,
+    block: dict[str, object],
+    edit_key: str,
+) -> None:
+    block_id = str(block["id"])
+    block_type = str(block["block_type"])
+    with st.form(key=f"edit_note_block_form_{paper_id}_{block_id}"):
+        st.write("Edit structured block")
+        edited_type = st.selectbox(
+            "Block type",
+            ALLOWED_BLOCK_TYPES,
+            index=ALLOWED_BLOCK_TYPES.index(block_type),
+            key=f"edit_block_type_{block_id}",
+        )
+        edited_title = st.text_input("Block title", value=str(block["title"]))
+        edited_text = st.text_area("Block text", value=str(block["text"]), height=180)
+        page_col, figure_col = st.columns(2)
+        edited_page = page_col.text_input("Page", value=str(block["page"]))
+        edited_figure = figure_col.text_input("Figure", value=str(block["figure"]))
+        edited_quote = st.text_area("Quote", value=str(block["quote"]), height=100)
+        edited_tags = st.text_input("Tags (comma-separated)", value=", ".join(block["tags"]))
+        save_changes = st.form_submit_button("Save changes")
+        cancel_edit = st.form_submit_button("Cancel")
+
+    if cancel_edit:
+        st.session_state.pop(edit_key, None)
+        st.rerun()
+    if save_changes:
+        update_note_block(
+            paper_id,
+            block_id,
+            {
+                "block_type": edited_type,
+                "title": edited_title,
+                "text": edited_text,
+                "page": edited_page,
+                "figure": edited_figure,
+                "quote": edited_quote,
+                "tags": edited_tags,
+            },
+        )
+        st.session_state.pop(edit_key, None)
+        st.rerun()
+
+
+def _render_create_note_block_form(paper_id: str) -> None:
+    with st.form(key=f"create_note_block_{paper_id}"):
+        st.write("Add structured block")
+        block_type = st.selectbox("Block type", ALLOWED_BLOCK_TYPES)
+        title = st.text_input("Block title")
+        text = st.text_area("Block text", height=140)
+        page_col, figure_col = st.columns(2)
+        page = page_col.text_input("Page")
+        figure = figure_col.text_input("Figure")
+        quote = st.text_area("Quote", height=100)
+        tags = st.text_input("Tags (comma-separated)")
+        submitted = st.form_submit_button("Add block")
+
+    if submitted:
+        create_note_block(
+            paper_id=paper_id,
+            block_type=block_type,
+            title=title,
+            text=text,
+            page=page,
+            figure=figure,
+            quote=quote,
+            tags=tags,
+        )
+        st.success("Structured note block added.")
+        st.rerun()
+
+
+def _note_block_preview(text: str, max_length: int = 280) -> str:
+    compact = " ".join(str(text or "").split())
+    if len(compact) <= max_length:
+        return compact
+    return compact[: max_length - 3].rstrip() + "..."

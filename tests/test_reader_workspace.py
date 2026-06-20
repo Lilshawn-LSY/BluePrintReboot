@@ -2,6 +2,8 @@ from ui_streamlit.reader_workspace import (
     NATIVE_STREAMLIT_RENDERER,
     STABLE_HTML_RENDERER,
     add_manual_tag,
+    apply_pending_note_actions,
+    append_markdown_snapshot,
     citation_block,
     initial_pdf_render_status,
     insert_note_block,
@@ -10,10 +12,13 @@ from ui_streamlit.reader_workspace import (
     mark_pdf_render_native_attempt,
     native_pdf_support_status,
     note_draft_key,
+    pending_note_block_append_key,
+    pending_note_reload_key,
     pdf_embed_html,
     pdf_path_status,
     save_note_draft,
 )
+from storage.note_store import save_note_text
 from tests.helpers import make_workspace
 
 
@@ -64,6 +69,47 @@ def test_insert_note_block_appends_without_erasing_existing_text() -> None:
     assert updated.startswith("Existing note")
     assert "## Key Claim" in updated
     assert "- Claim:" in updated
+
+
+def test_append_markdown_snapshot_preserves_existing_draft() -> None:
+    updated = append_markdown_snapshot("Existing freeform note\n", "### Evidence: Result\n\nBlock text\n")
+
+    assert updated == "Existing freeform note\n\n### Evidence: Result\n\nBlock text\n"
+
+
+def test_apply_pending_note_append_updates_draft_and_clears_pending_key() -> None:
+    notes_dir = make_workspace("reader-pending-append")
+    record = {"paper_id": "paper-1", "title": "Reader Paper"}
+    pending_key = pending_note_block_append_key(record)
+    session_state = {
+        note_draft_key(record): "Existing draft",
+        pending_key: "### Evidence: Result\n\nBlock text\n",
+    }
+
+    draft = apply_pending_note_actions(record, session_state, notes_dir=notes_dir)
+
+    assert draft == "Existing draft\n\n### Evidence: Result\n\nBlock text\n"
+    assert session_state[note_draft_key(record)] == draft
+    assert pending_key not in session_state
+
+
+def test_apply_pending_reload_happens_before_pending_append() -> None:
+    notes_dir = make_workspace("reader-pending-reload")
+    record = {"paper_id": "paper-1", "title": "Reader Paper"}
+    save_note_text(record, "Saved note", notes_dir=notes_dir)
+    reload_key = pending_note_reload_key(record)
+    append_key = pending_note_block_append_key(record)
+    session_state = {
+        note_draft_key(record): "Unsaved draft",
+        reload_key: True,
+        append_key: "### Claim: Snapshot\n",
+    }
+
+    draft = apply_pending_note_actions(record, session_state, notes_dir=notes_dir)
+
+    assert draft == "Saved note\n\n### Claim: Snapshot\n"
+    assert reload_key not in session_state
+    assert append_key not in session_state
 
 
 def test_citation_block_uses_available_metadata() -> None:

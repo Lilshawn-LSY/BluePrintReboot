@@ -18,7 +18,8 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 - Explicit Crossref preview and acceptance instead of automatic metadata replacement.
 - Deterministic tag suggestions using `config/tag_rules.json`.
 - Reader Workspace with a local PDF viewer, Markdown notes, note templates, tags, reading status, and priority controls.
-- JSON-backed structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
+- Editable, filterable JSON-backed structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
+- Optional one-way structured-block snapshots appended to the freeform Markdown draft without automatic synchronization.
 - Stable HTML PDF rendering by default, with an optional native Streamlit PDF viewer and automatic fallback.
 - User-triggered full-text extraction with MarkItDown when available and `pypdf` fallback.
 - Full-text cache status, diagnostics, preview, forced re-extraction, and cache clearing.
@@ -79,7 +80,7 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 2. Start the app and select **Scan papers**.
 3. Open **Library**, choose a paper, and open **Paper Detail**.
 4. Use the Reader Workspace to view the PDF and continue editing its existing Markdown note.
-5. Add structured note blocks when a summary, claim, method, evidence item, question, idea, or limitation should be stored as a separate record.
+5. Add or edit structured note blocks when a summary, claim, method, evidence item, question, idea, or limitation should be stored as a separate record. Optionally append a rendered snapshot to the Markdown draft; later block edits do not update that snapshot.
 6. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
 7. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
 8. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
@@ -93,6 +94,12 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.8.2
+
+- Adds structured note block editing while preserving block identity and creation timestamps.
+- Adds block counts, type filtering, readable previews, and display metadata in Reader Workspace.
+- Adds optional one-way structured-block-to-Markdown snippet rendering; Markdown remains freeform and is not auto-synced.
 
 ### v0.8.0
 
