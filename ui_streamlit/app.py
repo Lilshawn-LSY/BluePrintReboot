@@ -14,10 +14,12 @@ from ingest.document_text import get_text_extraction_backends
 from ingest.doi import is_probable_doi, normalize_doi
 from ingest.scanner import extract_doi_metadata_from_pdf
 from ingest.tag_suggester import (
+    DEFAULT_CANONICAL_TAG_PATH,
     DEFAULT_RULE_PATH,
-    audit_library_tags,
+    audit_canonical_tags,
     build_tag_suggestion_record,
     explain_tag_suggestions,
+    load_canonical_tags,
     load_tag_rules,
     merge_tags,
     suggest_tags,
@@ -33,6 +35,7 @@ from storage.index_store import (
 from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
 from ui_streamlit.project_workspace import render_paper_project_links, render_project_workspace
 from ui_streamlit.reader_workspace import render_reader_workspace
+from ui_streamlit.tag_manager import render_tag_manager_page
 
 
 STATUS_OPTIONS = ["unread", "reading", "read"]
@@ -494,20 +497,28 @@ def settings_page() -> None:
     )
     st.subheader("Tag Rulebook")
     rules = load_tag_rules()
+    canonical_registry = load_canonical_tags()
     validation_warnings = validate_tag_rules(rules)
-    tag_audit = audit_library_tags(_index().to_dict("records"), rules)
+    tag_audit = audit_canonical_tags(_index().to_dict("records"), canonical_registry)
     st.write(f"Rulebook path: `{DEFAULT_RULE_PATH}`")
-    st.write(f"Canonical tags: `{len(rules)}`")
+    st.write(f"Suggestion rules: `{len(rules)}`")
+    st.write(f"Canonical registry: `{DEFAULT_CANONICAL_TAG_PATH}`")
+    st.write(f"Canonical tags: `{len(canonical_registry)}`")
     if validation_warnings:
         st.warning("Rulebook validation warnings:")
         for warning in validation_warnings:
             st.write(f"- {warning}")
     else:
         st.success("Rulebook validation passed.")
-    st.write("Unknown library tags")
-    st.write(", ".join(f"`{tag}`" for tag in tag_audit["unknown_tags"]) or "None")
-    st.write("Unused rulebook tags")
-    st.write(", ".join(f"`{tag}`" for tag in tag_audit["unused_rulebook_tags"]) or "None")
+    st.write(f"Unknown library tags: `{len(tag_audit['unknown_tags'])}`")
+    st.write(f"Unused canonical tags: `{len(tag_audit['unused_canonical_tags'])}`")
+    st.write("Canonical alias collisions")
+    if tag_audit["alias_collisions"]:
+        for alias, owners in tag_audit["alias_collisions"].items():
+            st.warning(f"`{alias}` maps to multiple tags: {', '.join(owners)}")
+    else:
+        st.write("None")
+    st.caption("Use Tag Manager to review, merge, or register library tags.")
     st.subheader("Crossref Connectivity")
     proxy_vars = proxy_environment()
     if proxy_vars:
@@ -540,6 +551,7 @@ def run() -> None:
         "Library": library_page,
         "Paper Detail": paper_detail_page,
         "Project Workspace": render_project_workspace,
+        "Tag Manager": render_tag_manager_page,
         "Settings": settings_page,
     }
     page_names = list(pages.keys())
