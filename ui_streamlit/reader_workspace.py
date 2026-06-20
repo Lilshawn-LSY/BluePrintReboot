@@ -25,7 +25,7 @@ from storage.note_block_store import (
     update_note_block,
 )
 from storage.note_store import load_note_text, save_note_text
-from ui_streamlit.project_workspace import render_note_block_project_links
+from ui_streamlit.project_workspace import render_note_block_project_links, render_paper_project_link_summary
 
 
 STATUS_OPTIONS = ["unread", "reading", "read"]
@@ -269,6 +269,7 @@ def render_reader_workspace(record: dict[str, str]) -> None:
             ]
         )
     )
+    render_paper_project_link_summary(record)
 
     toolbar_key = f"reader_toolbar_open_{record['paper_id']}"
     if toolbar_key not in st.session_state:

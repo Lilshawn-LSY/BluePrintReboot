@@ -9,6 +9,7 @@ from storage.project_link_store import (
     list_links_for_target,
     list_project_links,
     project_links_path,
+    update_project_link,
 )
 from tests.helpers import make_workspace
 
@@ -100,6 +101,75 @@ def test_duplicate_project_link_returns_existing_link() -> None:
 
     assert duplicate == first
     assert list_project_links(base_dir) == [first]
+
+
+def test_update_project_link_edits_metadata_and_preserves_target_fields() -> None:
+    base_dir = make_workspace("project-links-update")
+    link = create_project_link(
+        "project-1",
+        "note_block",
+        "block-1",
+        paper_id="paper-1",
+        link_type="related",
+        note="Original note",
+        base_dir=base_dir,
+    )
+
+    updated = update_project_link(
+        link["id"],
+        {
+            "id": "replacement",
+            "project_id": "project-2",
+            "target_type": "paper",
+            "target_id": "paper-2",
+            "paper_id": "paper-2",
+            "created_at": "replacement",
+            "link_type": "supports_project",
+            "note": "Updated note",
+        },
+        base_dir=base_dir,
+    )
+
+    for field in ("id", "project_id", "target_type", "target_id", "paper_id", "created_at"):
+        assert updated[field] == link[field]
+    assert updated["link_type"] == "supports_project"
+    assert updated["note"] == "Updated note"
+
+
+def test_update_project_link_rejects_invalid_type_without_changing_link() -> None:
+    base_dir = make_workspace("project-links-update-invalid")
+    link = create_project_link("project-1", "paper", "paper-1", base_dir=base_dir)
+
+    with pytest.raises(ValueError, match="link_type"):
+        update_project_link(link["id"], {"link_type": "invalid"}, base_dir=base_dir)
+
+    assert list_project_links(base_dir) == [link]
+
+
+def test_update_missing_project_link_does_not_create_link() -> None:
+    base_dir = make_workspace("project-links-update-missing")
+
+    with pytest.raises(KeyError):
+        update_project_link("missing", {"note": "No link"}, base_dir=base_dir)
+
+    assert list_project_links(base_dir) == []
+
+
+def test_update_project_link_keeps_duplicate_prevention() -> None:
+    base_dir = make_workspace("project-links-update-duplicate")
+    related = create_project_link("project-1", "paper", "paper-1", base_dir=base_dir)
+    background = create_project_link(
+        "project-1",
+        "paper",
+        "paper-1",
+        link_type="background",
+        base_dir=base_dir,
+    )
+
+    with pytest.raises(ValueError, match="Duplicate"):
+        update_project_link(background["id"], {"link_type": "related"}, base_dir=base_dir)
+
+    assert list_project_links(base_dir) == [related, background]
 
 
 def test_project_link_filters_preserve_stored_order() -> None:

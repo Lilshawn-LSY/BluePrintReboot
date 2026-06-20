@@ -97,6 +97,12 @@ Failed or empty initial extraction results are recorded for diagnostics but are 
 
 ## Version Notes
 
+### v0.9.1
+
+- Adds project-link editing for relationship type and link notes.
+- Adds linked paper/note-block counts and note-block type filtering in Project Workspace.
+- Shows existing project links in Reader Workspace and adds simple linked-paper navigation.
+
 ### v0.9.0
 
 - Adds local JSON-backed project storage and a minimal Project Workspace.

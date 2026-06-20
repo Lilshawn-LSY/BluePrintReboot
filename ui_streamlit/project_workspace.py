@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, MutableMapping
 
 import streamlit as st
 
 from storage.index_store import load_index
-from storage.note_block_store import get_note_block
+from storage.note_block_store import ALLOWED_BLOCK_TYPES, get_note_block
 from storage.project_link_store import (
     ALLOWED_LINK_TYPES,
     create_project_link,
@@ -13,6 +13,8 @@ from storage.project_link_store import (
     delete_project_link,
     list_links_for_project,
     list_links_for_target,
+    list_project_links,
+    update_project_link,
 )
 from storage.project_store import (
     ALLOWED_PROJECT_PRIORITIES,
@@ -26,6 +28,7 @@ from storage.project_store import (
 
 PROJECT_SELECTION_KEY = "project_workspace_selected_id"
 PENDING_PROJECT_SELECTION_CLEAR_KEY = "pending_project_workspace_selection_clear"
+PROJECT_LINK_EDIT_KEY = "project_workspace_edit_link_id"
 
 
 def render_project_workspace() -> None:
@@ -34,12 +37,16 @@ def render_project_workspace() -> None:
     if st.session_state.pop(PENDING_PROJECT_SELECTION_CLEAR_KEY, False):
         st.session_state.pop(PROJECT_SELECTION_KEY, None)
     projects = list_projects()
+    all_links = list_project_links()
     _render_create_project_form()
     if not projects:
         st.info("No projects yet. Create one to begin linking research material.")
         return
 
-    labels = {project["id"]: _project_label(project) for project in projects}
+    labels = {
+        project["id"]: _project_label(project, project_link_counts(project["id"], all_links))
+        for project in projects
+    }
     selected_id = st.selectbox(
         "Select project",
         list(labels),
@@ -93,6 +100,20 @@ def render_paper_project_links(record: dict[str, str]) -> None:
             note=note,
         )
         st.rerun()
+
+
+def render_paper_project_link_summary(record: dict[str, str]) -> None:
+    paper_id = str(record["paper_id"])
+    links = list_links_for_target("paper", paper_id)
+    if not links:
+        return
+    project_by_id = {project["id"]: project for project in list_projects()}
+    labels = [
+        f"{project_by_id.get(link['project_id'], {}).get('name', link['project_id'])} "
+        f"({_display_choice(link['link_type'])})"
+        for link in links
+    ]
+    st.caption("Paper project links: " + ", ".join(labels))
 
 
 def render_note_block_project_links(record: dict[str, str], block: dict[str, Any]) -> None:
@@ -170,6 +191,14 @@ def _render_create_project_form() -> None:
 
 
 def _render_project_detail(project: dict[str, Any]) -> None:
+    links = list_links_for_project(project["id"])
+    paper_links = [link for link in links if link["target_type"] == "paper"]
+    block_links = [link for link in links if link["target_type"] == "note_block"]
+    linked_blocks = [
+        (link, get_note_block(link["paper_id"], link["target_id"]) if link["paper_id"] else None)
+        for link in block_links
+    ]
+
     st.subheader(project["name"])
     st.caption(
         f"Status: {_display_choice(project['status'])} | "
@@ -179,6 +208,19 @@ def _render_project_detail(project: dict[str, Any]) -> None:
         st.write(project["description"])
     if project["tags"]:
         st.caption("Tags: " + ", ".join(project["tags"]))
+
+    paper_count_col, block_count_col = st.columns(2)
+    paper_count_col.metric("Linked papers", len(paper_links))
+    block_count_col.metric("Linked note blocks", len(block_links))
+    block_type_counts = {
+        block_type: sum(bool(block and block["block_type"] == block_type) for _, block in linked_blocks)
+        for block_type in ALLOWED_BLOCK_TYPES
+    }
+    populated_type_counts = [
+        f"{block_type}: {count}" for block_type, count in block_type_counts.items() if count
+    ]
+    if populated_type_counts:
+        st.caption("Note block types: " + " | ".join(populated_type_counts))
 
     with st.expander("Edit project"):
         with st.form(key=f"edit_project_{project['id']}"):
@@ -219,9 +261,6 @@ def _render_project_detail(project: dict[str, Any]) -> None:
         st.session_state[PENDING_PROJECT_SELECTION_CLEAR_KEY] = True
         st.rerun()
 
-    links = list_links_for_project(project["id"])
-    paper_links = [link for link in links if link["target_type"] == "paper"]
-    block_links = [link for link in links if link["target_type"] == "note_block"]
     paper_by_id = _paper_lookup()
 
     st.write("Linked Papers")
@@ -233,8 +272,24 @@ def _render_project_detail(project: dict[str, Any]) -> None:
     st.write("Linked Structured Note Blocks")
     if not block_links:
         st.info("No structured note blocks linked to this project.")
-    for link in block_links:
-        _render_linked_note_block(link, paper_by_id)
+    else:
+        selected_block_type = st.selectbox(
+            "Filter linked note blocks",
+            ("all",) + ALLOWED_BLOCK_TYPES,
+            key=f"project_block_filter_{project['id']}",
+        )
+        active_edit_id = str(st.session_state.get(PROJECT_LINK_EDIT_KEY, ""))
+        filtered_blocks = [
+            (link, block)
+            for link, block in linked_blocks
+            if selected_block_type == "all"
+            or (block and block["block_type"] == selected_block_type)
+            or link["id"] == active_edit_id
+        ]
+        if not filtered_blocks:
+            st.info(f"No linked {selected_block_type} blocks.")
+        for link, block in filtered_blocks:
+            _render_linked_note_block(link, paper_by_id, block)
 
 
 def _render_linked_paper(link: dict[str, Any], paper_by_id: dict[str, dict[str, str]]) -> None:
@@ -246,13 +301,27 @@ def _render_linked_paper(link: dict[str, Any], paper_by_id: dict[str, dict[str, 
         st.caption(" | ".join(value for value in (filename, _display_choice(link["link_type"])) if value))
         if link["note"]:
             st.write(link["note"])
-        if st.button("Unlink paper", key=f"project_workspace_unlink_{link['id']}"):
-            delete_project_link(link["id"])
+        open_col, edit_col, unlink_col = st.columns(3)
+        if open_col.button("Open paper", key=f"project_workspace_open_{link['id']}"):
+            open_paper_in_reader(link["target_id"], st.session_state)
             st.rerun()
+        if edit_col.button("Edit link", key=f"project_workspace_edit_{link['id']}"):
+            st.session_state[PROJECT_LINK_EDIT_KEY] = link["id"]
+            st.rerun()
+        if unlink_col.button("Unlink paper", key=f"project_workspace_unlink_{link['id']}"):
+            delete_project_link(link["id"])
+            if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
+                st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
+            st.rerun()
+        if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
+            _render_link_edit_form(link)
 
 
-def _render_linked_note_block(link: dict[str, Any], paper_by_id: dict[str, dict[str, str]]) -> None:
-    block = get_note_block(link["paper_id"], link["target_id"]) if link["paper_id"] else None
+def _render_linked_note_block(
+    link: dict[str, Any],
+    paper_by_id: dict[str, dict[str, str]],
+    block: dict[str, Any] | None,
+) -> None:
     paper = paper_by_id.get(link["paper_id"], {})
     paper_title = paper.get("title") or paper.get("filename") or link["paper_id"] or "paper unknown"
     with st.container(border=True):
@@ -278,8 +347,43 @@ def _render_linked_note_block(link: dict[str, Any], paper_by_id: dict[str, dict[
             st.caption(f"Paper: {paper_title} | Link: {_display_choice(link['link_type'])}")
         if link["note"]:
             st.write(link["note"])
-        if st.button("Unlink note block", key=f"project_workspace_unlink_{link['id']}"):
+        open_col, edit_col, unlink_col = st.columns(3)
+        if link["paper_id"] and open_col.button("Open paper", key=f"project_workspace_open_{link['id']}"):
+            open_paper_in_reader(link["paper_id"], st.session_state)
+            st.rerun()
+        if edit_col.button("Edit link", key=f"project_workspace_edit_{link['id']}"):
+            st.session_state[PROJECT_LINK_EDIT_KEY] = link["id"]
+            st.rerun()
+        if unlink_col.button("Unlink note block", key=f"project_workspace_unlink_{link['id']}"):
             delete_project_link(link["id"])
+            if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
+                st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
+            st.rerun()
+        if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
+            _render_link_edit_form(link)
+
+
+def _render_link_edit_form(link: dict[str, Any]) -> None:
+    with st.form(key=f"edit_project_link_{link['id']}"):
+        link_type = st.selectbox(
+            "Link type",
+            ALLOWED_LINK_TYPES,
+            index=ALLOWED_LINK_TYPES.index(link["link_type"]),
+        )
+        note = st.text_area("Link note", value=link["note"], height=100)
+        save_changes = st.form_submit_button("Save link")
+        cancel_edit = st.form_submit_button("Cancel")
+
+    if cancel_edit:
+        st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
+        st.rerun()
+    if save_changes:
+        try:
+            update_project_link(link["id"], {"link_type": link_type, "note": note})
+        except ValueError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
             st.rerun()
 
 
@@ -290,8 +394,24 @@ def _paper_lookup() -> dict[str, dict[str, str]]:
     }
 
 
-def _project_label(project: dict[str, Any]) -> str:
-    return f"{project['name']} ({_display_choice(project['status'])})"
+def project_link_counts(project_id: str, links: list[dict[str, Any]]) -> dict[str, int]:
+    project_links = [link for link in links if link["project_id"] == project_id]
+    return {
+        "paper": sum(link["target_type"] == "paper" for link in project_links),
+        "note_block": sum(link["target_type"] == "note_block" for link in project_links),
+    }
+
+
+def open_paper_in_reader(paper_id: str, session_state: MutableMapping) -> None:
+    session_state["active_paper_id"] = paper_id
+    session_state["current_page"] = "Paper Detail"
+
+
+def _project_label(project: dict[str, Any], counts: dict[str, int]) -> str:
+    return (
+        f"{project['name']} ({_display_choice(project['status'])}) - "
+        f"{counts['paper']} papers, {counts['note_block']} blocks"
+    )
 
 
 def _display_choice(value: str) -> str:

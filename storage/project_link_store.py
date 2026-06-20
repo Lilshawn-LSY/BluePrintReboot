@@ -88,6 +88,32 @@ def create_project_link(
     return candidate
 
 
+def update_project_link(
+    link_id: str,
+    updates: Mapping[str, Any],
+    base_dir: Path = PROJECTS_DIR,
+) -> dict[str, Any]:
+    links = list_project_links(base_dir)
+    for index, link in enumerate(links):
+        if link["id"] != link_id:
+            continue
+        updated = {**link, **dict(updates)}
+        for protected_field in (
+            "id",
+            "project_id",
+            "target_type",
+            "target_id",
+            "paper_id",
+            "created_at",
+        ):
+            updated[protected_field] = link[protected_field]
+        normalized = _normalize_project_link(updated)
+        links[index] = normalized
+        save_project_links(links, base_dir)
+        return normalized
+    raise KeyError(f"Project link not found: {link_id}")
+
+
 def delete_project_link(link_id: str, base_dir: Path = PROJECTS_DIR) -> bool:
     links = list_project_links(base_dir)
     remaining = [link for link in links if link["id"] != link_id]
