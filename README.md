@@ -2,9 +2,9 @@
 
 ## Overview
 
-BluePrintReboot is a local-first personal research paper library built with Streamlit. It scans local PDFs, maintains a CSV paper index, supports metadata enrichment and reading notes, and caches extracted full text beside the local library data.
+BluePrintReboot is a local-first personal research paper library built with Streamlit. It scans local PDFs, maintains a CSV paper index, supports Markdown and structured reading notes, and caches extracted full text beside the local library data.
 
-Paper metadata is stored in `data/paper_index.csv`, notes are stored as Markdown files in `notes/`, and extracted text is stored under `data/extracted_text/`. These user-generated files are ignored by git.
+Paper metadata is stored in `data/paper_index.csv`, Markdown notes are stored in `notes/`, structured note blocks are stored in `data/note_blocks/`, and extracted text is stored under `data/extracted_text/`. These user-generated files are ignored by git.
 
 PDF management, DOI extraction, manual metadata editing, tag suggestions, notes, and full-text extraction work locally. Crossref lookup is optional and requires internet access, but no API key.
 
@@ -18,13 +18,14 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 - Explicit Crossref preview and acceptance instead of automatic metadata replacement.
 - Deterministic tag suggestions using `config/tag_rules.json`.
 - Reader Workspace with a local PDF viewer, Markdown notes, note templates, tags, reading status, and priority controls.
+- JSON-backed structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
 - Stable HTML PDF rendering by default, with an optional native Streamlit PDF viewer and automatic fallback.
 - User-triggered full-text extraction with MarkItDown when available and `pypdf` fallback.
 - Full-text cache status, diagnostics, preview, forced re-extraction, and cache clearing.
 - SHA-256 stale-cache detection with automatic refresh when a changed PDF can be extracted successfully.
 - Cache-safe recovery that preserves previous usable text when re-extraction fails.
 
-Visual PDF highlighting, coordinate annotations, mouse-selection capture, graph visualization, Zotero integration, and relation schemas are not yet implemented.
+Visual PDF highlighting, coordinate annotations, mouse-selection capture, project linking, graph visualization, Zotero integration, and relation schemas are not yet implemented.
 
 ## Quick Start
 
@@ -64,10 +65,10 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 - `ui_streamlit/` - App pages and Reader Workspace UI.
 - `ingest/` - PDF scanning, DOI handling, Crossref helpers, tag suggestions, and text extraction.
 - `services/` - Full-text extraction workflow orchestration.
-- `storage/` - CSV index, notes, extracted-text cache, and workspace path helpers.
+- `storage/` - CSV index, Markdown notes, structured note blocks, extracted-text cache, and workspace path helpers.
 - `config/tag_rules.json` - Editable deterministic tag rulebook.
 - `tests/` - Automated test suite.
-- `data/` - Local index and extracted-text cache.
+- `data/` - Local index, structured note blocks, and extracted-text cache.
 - `papers/` - Local PDF library.
 - `notes/` - Markdown reading notes.
 - `exports/` - Local export destination.
@@ -77,11 +78,12 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 1. Put PDF files in `papers/`.
 2. Start the app and select **Scan papers**.
 3. Open **Library**, choose a paper, and open **Paper Detail**.
-4. Use the Reader Workspace to view the PDF, edit its Markdown note, manage tags, and update reading status or priority.
-5. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
-6. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
-7. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
-8. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
+4. Use the Reader Workspace to view the PDF and continue editing its existing Markdown note.
+5. Add structured note blocks when a summary, claim, method, evidence item, question, idea, or limitation should be stored as a separate record.
+6. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
+7. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
+8. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
+9. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
 
 Extracted text cache files are:
 
@@ -91,6 +93,12 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.8.0
+
+- Introduces a validated structured note block schema and JSON-backed storage under `data/note_blocks/`.
+- Adds a minimal Reader Workspace interface for viewing, creating, and deleting structured blocks.
+- Keeps the existing Markdown note files and editor intact.
 
 ### v0.7.5
 
@@ -117,7 +125,7 @@ Failed or empty initial extraction results are recorded for diagnostics but are 
 
 ### v0.6
 
-- Added the reader-first workspace with PDF viewing, Markdown notes, structured note blocks, tags, reading status, and priority controls.
+- Added the reader-first workspace with PDF viewing, Markdown notes, structured Markdown templates, tags, reading status, and priority controls.
 
 ### v0.5
 

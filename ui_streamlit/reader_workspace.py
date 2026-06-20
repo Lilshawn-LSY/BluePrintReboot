@@ -16,6 +16,12 @@ from storage.extracted_text_store import (
     load_cached_extracted_text,
 )
 from storage.index_store import update_paper_metadata
+from storage.note_block_store import (
+    ALLOWED_BLOCK_TYPES,
+    create_note_block,
+    delete_note_block,
+    list_note_blocks,
+)
 from storage.note_store import load_note_text, save_note_text
 
 
@@ -231,6 +237,7 @@ def render_reader_workspace(record: dict[str, str]) -> None:
         _render_pdf_viewer(record)
     with note_col:
         _render_note_editor(record)
+        _render_structured_note_blocks(record)
 
 
 def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
@@ -475,3 +482,58 @@ def _render_note_editor(record: dict[str, str]) -> None:
     saved_at = st.session_state.get(note_saved_at_key(record), "")
     if saved_at:
         st.caption(f"Last saved: {saved_at}")
+
+
+def _render_structured_note_blocks(record: dict[str, str]) -> None:
+    paper_id = record["paper_id"]
+    with st.expander("Structured Note Blocks"):
+        blocks = list_note_blocks(paper_id)
+        if not blocks:
+            st.info("No structured note blocks yet.")
+        else:
+            for block in blocks:
+                heading = block["title"] or block["block_type"].replace("_", " ").title()
+                st.markdown(f"**{heading}** - `{block['block_type']}`")
+                if block["text"]:
+                    st.write(block["text"])
+                if block["quote"]:
+                    st.caption(f"Quote: {block['quote']}")
+                details = [
+                    value
+                    for value in (
+                        f"Page: {block['page']}" if block["page"] else "",
+                        f"Figure: {block['figure']}" if block["figure"] else "",
+                        f"Tags: {', '.join(block['tags'])}" if block["tags"] else "",
+                    )
+                    if value
+                ]
+                if details:
+                    st.caption(" | ".join(details))
+                if st.button("Delete block", key=f"delete_note_block_{paper_id}_{block['id']}"):
+                    delete_note_block(paper_id, block["id"])
+                    st.rerun()
+                st.divider()
+
+        with st.form(key=f"create_note_block_{paper_id}"):
+            st.write("Add structured block")
+            block_type = st.selectbox("Block type", ALLOWED_BLOCK_TYPES)
+            title = st.text_input("Block title")
+            text = st.text_area("Block text", height=140)
+            page_col, figure_col = st.columns(2)
+            page = page_col.text_input("Page")
+            figure = figure_col.text_input("Figure")
+            tags = st.text_input("Tags (comma-separated)")
+            submitted = st.form_submit_button("Add block")
+
+        if submitted:
+            create_note_block(
+                paper_id=paper_id,
+                block_type=block_type,
+                title=title,
+                text=text,
+                page=page,
+                figure=figure,
+                tags=tags,
+            )
+            st.success("Structured note block added.")
+            st.rerun()
