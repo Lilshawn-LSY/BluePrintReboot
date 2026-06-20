@@ -16,6 +16,8 @@ from ui_streamlit.reader_workspace import (
     pending_note_reload_key,
     pdf_embed_html,
     pdf_path_status,
+    preview_reader_tag_suggestions,
+    reader_tag_suggestion_preview_key,
     save_note_draft,
 )
 from storage.note_store import save_note_text
@@ -61,6 +63,20 @@ def test_add_manual_tag_normalizes_and_avoids_duplicates() -> None:
     )
     assert add_manual_tag("existing-tag", " New   Tag ") == "existing-tag, new-tag"
     assert add_manual_tag("existing-tag", "   ") == "existing-tag"
+
+
+def test_reader_tag_suggestions_are_previewed_without_mutating_record() -> None:
+    record = {
+        "paper_id": "paper-1",
+        "title": "Arabidopsis root development protocol",
+        "tags": "existing-tag",
+    }
+
+    suggestions = preview_reader_tag_suggestions(record)
+
+    assert suggestions[:3] == ["arabidopsis", "root-development", "protocol"]
+    assert record["tags"] == "existing-tag"
+    assert reader_tag_suggestion_preview_key(record) == "reader_tag_suggestion_preview_paper-1"
 
 
 def test_insert_note_block_appends_without_erasing_existing_text() -> None:

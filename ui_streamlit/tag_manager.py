@@ -110,6 +110,7 @@ def _render_tag_actions(selected: dict, records: list[dict], registry: dict) -> 
                 target,
                 registry,
             )
+            st.write("**Preview**")
             st.write(f"Affected papers: **{preview['affected_records']}**")
             for change in preview["changes"][:5]:
                 st.code(f"Before: {change['before']}\nAfter:  {change['after']}")
@@ -118,7 +119,7 @@ def _render_tag_actions(selected: dict, records: list[dict], registry: dict) -> 
                 key=f"tag_manager_merge_confirm_{selected['normalized_tag']}_{target}",
             )
             if st.button(
-                "Apply tag merge",
+                "Apply",
                 disabled=not confirmed or not preview["affected_records"],
                 key=f"tag_manager_merge_apply_{selected['normalized_tag']}_{target}",
             ):
@@ -140,7 +141,7 @@ def _render_tag_actions(selected: dict, records: list[dict], registry: dict) -> 
             )
             st.caption("This updates the canonical registry only. Library tags are not rewritten.")
             if st.button(
-                "Register alias",
+                "Save alias",
                 key=f"tag_manager_alias_apply_{selected['normalized_tag']}",
             ):
                 try:
@@ -164,7 +165,7 @@ def _render_tag_actions(selected: dict, records: list[dict], registry: dict) -> 
         )
         st.caption("The selected library tag will be included as an alias. Existing papers are unchanged.")
         if st.button(
-            "Create canonical tag",
+            "Create",
             key=f"tag_manager_create_apply_{selected['normalized_tag']}",
         ):
             try:
