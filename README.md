@@ -17,6 +17,8 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 - DOI detection with `pypdf` and an optional MarkItDown fallback.
 - Explicit Crossref preview and acceptance instead of automatic metadata replacement.
 - Deterministic tag suggestions using `config/tag_rules.json`.
+- Dedicated Tag Manager for reviewing canonical, alias-resolved, unknown, short, and ambiguous library tags.
+- Canonical tag governance with explicit merge previews and registry actions; existing tags change only after a confirmed apply.
 - Reader Workspace with a local PDF viewer, Markdown notes, note templates, tags, reading status, and priority controls.
 - Editable, filterable JSON-backed structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
 - Optional one-way structured-block snapshots appended to the freeform Markdown draft without automatic synchronization.
@@ -66,9 +68,11 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 - `app.py` - Streamlit entry point.
 - `ui_streamlit/` - App pages and Reader Workspace UI.
 - `ingest/` - PDF scanning, DOI handling, Crossref helpers, tag suggestions, and text extraction.
-- `services/` - Full-text extraction workflow orchestration.
+- `services/` - Full-text extraction and tag-governance workflow orchestration.
 - `storage/` - CSV index, Markdown notes, structured note blocks, projects, links, extracted-text cache, and path helpers.
 - `config/tag_rules.json` - Editable deterministic tag rulebook.
+- `config/canonical_tags.json` - Canonical tag labels, categories, aliases, and status.
+- `.github/workflows/tests.yml` - GitHub Actions test workflow.
 - `tests/` - Automated test suite.
 - `data/` - Local index, structured note blocks, projects, links, and extracted-text cache.
 - `papers/` - Local PDF library.
@@ -85,8 +89,9 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 6. Create projects in **Project Workspace**, then link relevant papers and structured note blocks with a relationship type and optional note.
 7. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
 8. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
-9. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
-10. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
+9. Open **Tag Manager** to review used tags, register aliases, create canonical tags, or preview and explicitly apply a merge. Alias registration changes only the registry; it does not rewrite the library.
+10. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
+11. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
 
 Extracted text cache files are:
 
@@ -96,6 +101,13 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.9.2
+
+- Adds GitHub Actions CI that runs `python -m pytest` with Python 3.12 on pushes to `main` and pull requests.
+- Adds a canonical tag registry plus alias, collision, unknown-tag, and unused-tag audit helpers.
+- Adds a dedicated Tag Manager for used-tag status, filtering, details, alias registration, and canonical tag creation.
+- Adds preview and confirmed apply workflows for tag merges; unrelated tags are preserved and existing user tags are never rewritten automatically.
 
 ### v0.9.1
 
@@ -170,4 +182,4 @@ If a cache is marked stale, select **Extract full text** or **Re-extract full te
 
 ### Tag rules
 
-Settings validates `config/tag_rules.json` and reports malformed rules, duplicate aliases, unknown library tags, and unused canonical tags. The app does not automatically rewrite existing user tags.
+Settings validates `config/tag_rules.json` and summarizes registry health. Tag Manager treats canonical tags as approved library terms, aliases as alternate terms that resolve without rewriting papers, and unknown tags as terms not yet registered. A merge shows its affected papers and before/after values first, then updates `paper_index.csv` only after explicit confirmation.

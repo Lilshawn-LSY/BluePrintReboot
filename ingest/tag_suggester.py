@@ -7,6 +7,7 @@ from typing import Any
 
 
 DEFAULT_RULE_PATH = Path(__file__).resolve().parents[1] / "config" / "tag_rules.json"
+DEFAULT_CANONICAL_TAG_PATH = Path(__file__).resolve().parents[1] / "config" / "canonical_tags.json"
 
 SOURCE_WEIGHTS = {
     "keywords": 6,
@@ -45,6 +46,205 @@ def load_tag_rules(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
             "weight": int(raw_rule.get("weight", 1) or 1),
         }
     return rules
+
+
+def load_canonical_tags(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
+    registry_path = Path(path) if path is not None else DEFAULT_CANONICAL_TAG_PATH
+    with registry_path.open("r", encoding="utf-8") as file:
+        raw_registry = json.load(file)
+
+    if not isinstance(raw_registry, dict):
+        raise ValueError("Canonical tag registry must be a JSON object.")
+
+    registry: dict[str, dict[str, Any]] = {}
+    for raw_tag, raw_entry in raw_registry.items():
+        tag = normalize_tag(raw_tag)
+        if not tag or not isinstance(raw_entry, dict):
+            continue
+        aliases = raw_entry.get("aliases", [])
+        if not isinstance(aliases, list):
+            aliases = []
+        registry[tag] = {
+            **raw_entry,
+            "label": str(raw_entry.get("label", tag)).strip() or tag,
+            "category": str(raw_entry.get("category", "")).strip(),
+            "aliases": [str(alias).strip() for alias in aliases if str(alias).strip()],
+            "status": str(raw_entry.get("status", "active")).strip() or "active",
+        }
+    return registry
+
+
+def build_tag_alias_index(registry: dict) -> dict[str, dict]:
+    owners_by_alias: dict[str, set[str]] = {}
+    for raw_tag, raw_entry in registry.items():
+        tag = normalize_tag(raw_tag)
+        if not tag or not isinstance(raw_entry, dict):
+            continue
+        aliases = raw_entry.get("aliases", [])
+        if not isinstance(aliases, list):
+            aliases = []
+        alias_values = [tag, raw_entry.get("label", ""), *aliases]
+        for raw_alias in alias_values:
+            alias = normalize_tag(raw_alias)
+            if alias:
+                owners_by_alias.setdefault(alias, set()).add(tag)
+
+    collisions = {
+        alias: sorted(owners)
+        for alias, owners in owners_by_alias.items()
+        if len(owners) > 1
+    }
+    alias_to_canonical = {
+        alias: next(iter(owners))
+        for alias, owners in owners_by_alias.items()
+        if len(owners) == 1
+    }
+    return {
+        "alias_to_canonical": alias_to_canonical,
+        "collisions": collisions,
+    }
+
+
+def resolve_canonical_tag(raw_tag: str, registry: dict) -> str | None:
+    tag = normalize_tag(raw_tag)
+    if not tag:
+        return None
+    if tag in registry:
+        return tag
+    return build_tag_alias_index(registry)["alias_to_canonical"].get(tag)
+
+
+def canonicalize_tags(raw_tags: str | list[str] | tuple[str, ...], registry: dict) -> list[str]:
+    values = re.split(r"[,;]", raw_tags) if isinstance(raw_tags, str) else raw_tags
+    canonical_tags: list[str] = []
+    seen: set[str] = set()
+    for raw_tag in values:
+        normalized = normalize_tag(raw_tag)
+        tag = resolve_canonical_tag(raw_tag, registry) or normalized
+        if tag and tag not in seen:
+            canonical_tags.append(tag)
+            seen.add(tag)
+    return canonical_tags
+
+
+def audit_canonical_tags(records: list[dict], registry: dict) -> dict:
+    registry_tags = {normalize_tag(tag) for tag in registry if normalize_tag(tag)}
+    seen_canonical_tags: set[str] = set()
+    unknown_tags: set[str] = set()
+    duplicate_normalized_tags: set[str] = set()
+
+    for record in records:
+        identities_in_record: set[str] = set()
+        for raw_tag in _raw_tag_values(record.get("tags", "")):
+            normalized = normalize_tag(raw_tag)
+            if not normalized:
+                continue
+            canonical = resolve_canonical_tag(raw_tag, registry)
+            identity = canonical or normalized
+            if identity in identities_in_record:
+                duplicate_normalized_tags.add(identity)
+            identities_in_record.add(identity)
+            if canonical:
+                seen_canonical_tags.add(canonical)
+            else:
+                unknown_tags.add(normalized)
+
+    alias_index = build_tag_alias_index(registry)
+    return {
+        "known_tags": sorted(seen_canonical_tags),
+        "unknown_tags": sorted(unknown_tags),
+        "unused_canonical_tags": sorted(registry_tags - seen_canonical_tags),
+        "duplicate_normalized_tags": sorted(duplicate_normalized_tags),
+        "alias_collisions": alias_index["collisions"],
+    }
+
+
+def preview_tag_merge(
+    records: list[dict],
+    source_tag: str,
+    target_tag: str,
+    registry: dict,
+    exact_source: bool = False,
+) -> dict:
+    merged_records = apply_tag_merge_to_records(
+        records,
+        source_tag,
+        target_tag,
+        registry,
+        exact_source=exact_source,
+    )
+    changes = []
+    for index, (before, after) in enumerate(zip(records, merged_records)):
+        if str(before.get("tags", "")) != str(after.get("tags", "")):
+            changes.append(
+                {
+                    "record_index": index,
+                    "paper_id": str(before.get("paper_id", "")),
+                    "before": str(before.get("tags", "")),
+                    "after": str(after.get("tags", "")),
+                }
+            )
+    return {
+        "source_tag": resolve_canonical_tag(source_tag, registry) or normalize_tag(source_tag),
+        "target_tag": _require_canonical_target(target_tag, registry),
+        "affected_records": len(changes),
+        "changes": changes,
+        "records": merged_records,
+    }
+
+
+def apply_tag_merge_to_records(
+    records: list[dict],
+    source_tag: str,
+    target_tag: str,
+    registry: dict,
+    exact_source: bool = False,
+) -> list[dict]:
+    source_normalized = normalize_tag(source_tag)
+    source_canonical = resolve_canonical_tag(source_tag, registry)
+    target_canonical = _require_canonical_target(target_tag, registry)
+    if not source_normalized:
+        raise ValueError("Source tag must not be empty.")
+
+    merged_records: list[dict] = []
+    for record in records:
+        raw_tags = _raw_tag_values(record.get("tags", ""))
+        has_source = any(
+            _matches_merge_source(
+                raw_tag,
+                source_normalized,
+                source_canonical,
+                registry,
+                exact_source,
+            )
+            for raw_tag in raw_tags
+        )
+        if not has_source:
+            merged_records.append(dict(record))
+            continue
+
+        merged_tags: list[str] = []
+        seen_identities: set[str] = set()
+        for raw_tag in raw_tags:
+            normalized = normalize_tag(raw_tag)
+            resolved = resolve_canonical_tag(raw_tag, registry)
+            matches_source = _matches_merge_source(
+                raw_tag,
+                source_normalized,
+                source_canonical,
+                registry,
+                exact_source,
+            )
+            output_tag = target_canonical if matches_source else str(raw_tag).strip()
+            output_identity = resolve_canonical_tag(output_tag, registry) or normalize_tag(output_tag)
+            if output_identity and output_identity not in seen_identities:
+                merged_tags.append(output_tag)
+                seen_identities.add(output_identity)
+
+        merged_record = dict(record)
+        merged_record["tags"] = ", ".join(merged_tags)
+        merged_records.append(merged_record)
+    return merged_records
 
 
 def build_tag_suggestion_record(
@@ -214,6 +414,36 @@ def _record_field_text(value: Any) -> str:
     if isinstance(value, dict):
         return " ".join(str(item) for item in value.values())
     return str(value or "")
+
+
+def _raw_tag_values(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [raw.strip() for raw in re.split(r"[,;]", str(value or "")) if raw.strip()]
+
+
+def _require_canonical_target(target_tag: str, registry: dict) -> str:
+    target = resolve_canonical_tag(target_tag, registry)
+    if target:
+        return target
+    normalized = normalize_tag(target_tag)
+    collisions = build_tag_alias_index(registry)["collisions"]
+    if normalized in collisions:
+        owners = ", ".join(collisions[normalized])
+        raise ValueError(f"Target tag '{target_tag}' is ambiguous: {owners}.")
+    raise ValueError(f"Target tag '{target_tag}' is not in the canonical tag registry.")
+
+
+def _matches_merge_source(
+    raw_tag: str,
+    source_normalized: str,
+    source_canonical: str | None,
+    registry: dict,
+    exact_source: bool,
+) -> bool:
+    if exact_source or not source_canonical:
+        return normalize_tag(raw_tag) == source_normalized
+    return resolve_canonical_tag(raw_tag, registry) == source_canonical
 
 
 def _has_value(value: Any) -> bool:

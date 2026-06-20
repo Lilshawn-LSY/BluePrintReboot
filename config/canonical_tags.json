@@ -1,0 +1,164 @@
+{
+  "synthetic-biology": {
+    "label": "Synthetic Biology",
+    "category": "field",
+    "aliases": [
+      "synthetic biology",
+      "synthetic-biology"
+    ],
+    "status": "active"
+  },
+  "metabolic-engineering": {
+    "label": "Metabolic Engineering",
+    "category": "field",
+    "aliases": [
+      "metabolic engineering",
+      "metabolic-engineering"
+    ],
+    "status": "active"
+  },
+  "protein-design": {
+    "label": "Protein Design",
+    "category": "field",
+    "aliases": [
+      "protein design",
+      "protein-design"
+    ],
+    "status": "active"
+  },
+  "arabidopsis": {
+    "label": "Arabidopsis",
+    "category": "organism",
+    "aliases": [
+      "arabidopsis",
+      "arabidopsis thaliana"
+    ],
+    "status": "active"
+  },
+  "root-development": {
+    "label": "Root Development",
+    "category": "biology",
+    "aliases": [
+      "root development",
+      "root growth",
+      "root system",
+      "root meristem",
+      "root-development"
+    ],
+    "status": "active"
+  },
+  "root-apical-meristem": {
+    "label": "Root Apical Meristem",
+    "category": "biology",
+    "aliases": [
+      "root apical meristem",
+      "ram",
+      "root-apical-meristem"
+    ],
+    "status": "active"
+  },
+  "single-cell-rna-seq": {
+    "label": "Single-cell RNA-seq",
+    "category": "assay",
+    "aliases": [
+      "scrna",
+      "scrna-seq",
+      "scRNA-seq",
+      "sc RNA-seq",
+      "single-cell",
+      "single cell",
+      "single cell rna-seq",
+      "single-cell rna-seq",
+      "single-cell-rna-seq",
+      "single-cell RNA sequencing",
+      "single cell RNA sequencing",
+      "single-cell transcriptomics",
+      "single cell transcriptomics"
+    ],
+    "status": "active"
+  },
+  "spatial-transcriptomics": {
+    "label": "Spatial Transcriptomics",
+    "category": "assay",
+    "aliases": [
+      "spatial transcriptomics",
+      "spatial-transcriptomics"
+    ],
+    "status": "active"
+  },
+  "bioinformatics": {
+    "label": "Bioinformatics",
+    "category": "method",
+    "aliases": [
+      "bioinformatics"
+    ],
+    "status": "active"
+  },
+  "ai-biology": {
+    "label": "AI Biology",
+    "category": "method",
+    "aliases": [
+      "machine learning",
+      "machine-learning",
+      "deep learning",
+      "deep-learning",
+      "AI",
+      "ai",
+      "artificial intelligence",
+      "ai biology",
+      "ai-biology"
+    ],
+    "status": "active"
+  },
+  "review": {
+    "label": "Review",
+    "category": "paper-type",
+    "aliases": [
+      "review"
+    ],
+    "status": "active"
+  },
+  "method": {
+    "label": "Method",
+    "category": "paper-type",
+    "aliases": [
+      "method",
+      "methods"
+    ],
+    "status": "active"
+  },
+  "protocol": {
+    "label": "Protocol",
+    "category": "paper-type",
+    "aliases": [
+      "protocol",
+      "protocols"
+    ],
+    "status": "active"
+  },
+  "pipeline": {
+    "label": "Pipeline",
+    "category": "paper-type",
+    "aliases": [
+      "pipeline",
+      "pipelines"
+    ],
+    "status": "active"
+  },
+  "lateral-root": {
+    "label": "Lateral Root",
+    "category": "organism",
+    "aliases": [
+      "lr"
+    ],
+    "status": "active"
+  },
+  "physics": {
+    "label": "Physics",
+    "category": "field",
+    "aliases": [
+      "physics"
+    ],
+    "status": "active"
+  }
+}
