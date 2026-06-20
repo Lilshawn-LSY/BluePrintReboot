@@ -21,29 +21,12 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 - Stable HTML PDF rendering by default, with an optional native Streamlit PDF viewer and automatic fallback.
 - User-triggered full-text extraction with MarkItDown when available and `pypdf` fallback.
 - Full-text cache status, diagnostics, preview, forced re-extraction, and cache clearing.
-- SHA-256 stale-cache detection: a successful cache is refreshed when the current PDF differs from the PDF that produced it.
+- SHA-256 stale-cache detection with automatic refresh when a changed PDF can be extracted successfully.
+- Cache-safe recovery that preserves previous usable text when re-extraction fails.
 
 Visual PDF highlighting, coordinate annotations, mouse-selection capture, graph visualization, Zotero integration, and relation schemas are not yet implemented.
 
-## Workflow
-
-1. Put PDF files in `papers/`.
-2. Start the app and select **Scan papers**.
-3. Open **Library**, choose a paper, and open **Paper Detail**.
-4. Use the Reader Workspace to view the PDF, edit its Markdown note, manage tags, and update reading status or priority.
-5. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
-6. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
-7. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot automatically extracts fresh text and overwrites the stale cache.
-8. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
-
-Extracted text cache files are:
-
-- `data/extracted_text/{paper_id}.txt` for text.
-- `data/extracted_text/{paper_id}.json` for extraction metadata and the source PDF fingerprint.
-
-Failed or empty extraction results are recorded for diagnostics but are not reusable. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
-
-## Local Setup
+## Quick Start
 
 Install the base dependencies:
 
@@ -65,7 +48,7 @@ python -m pytest
 
 `requirements.txt` includes `streamlit[pdf]`. The Reader Workspace still defaults to the stable HTML viewer because native component support can vary by environment.
 
-## Optional MarkItDown
+### Optional MarkItDown
 
 The base app includes `pypdf`. Install the optional MarkItDown PDF support with:
 
@@ -75,7 +58,7 @@ pip install -r requirements-optional.txt
 
 The optional requirements file installs `markitdown[pdf]`. Full-text extraction prefers MarkItDown when available and falls back to `pypdf`. DOI detection tries `pypdf` first and then MarkItDown.
 
-## Project Layout
+### Project Layout
 
 - `app.py` - Streamlit entry point.
 - `ui_streamlit/` - App pages and Reader Workspace UI.
@@ -89,14 +72,40 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 - `notes/` - Markdown reading notes.
 - `exports/` - Local export destination.
 
+## Workflow
+
+1. Put PDF files in `papers/`.
+2. Start the app and select **Scan papers**.
+3. Open **Library**, choose a paper, and open **Paper Detail**.
+4. Use the Reader Workspace to view the PDF, edit its Markdown note, manage tags, and update reading status or priority.
+5. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
+6. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
+7. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
+8. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
+
+Extracted text cache files are:
+
+- `data/extracted_text/{paper_id}.txt` for text.
+- `data/extracted_text/{paper_id}.json` for extraction metadata and the source PDF fingerprint.
+
+Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
+
 ## Version Notes
 
-### v0.7.2
+### v0.7.5
 
-- Detects stale full-text caches by comparing the cached source PDF SHA-256 with the current PDF SHA-256.
-- Reuses a successful non-empty cache only when it is not known to be stale.
-- Automatically re-extracts and overwrites stale text when **Extract full text** is selected.
-- Shows stale status and current/cached hashes in the Reader Workspace extraction diagnostics.
+- Stabilizes cache safety by preserving previous usable text when stale-cache recovery fails.
+- Makes the cache-status return schema consistent with and without a PDF path.
+- Clarifies reusable, stale, missing, and failed-recovery states in Reader Workspace.
+
+### v0.7.4
+
+- Implemented stale-cache recovery using SHA-256 mismatch detection and automatic re-extraction for changed PDFs.
+- Added Reader Workspace stale warnings and cache recovery tests.
+
+### v0.7.1-v0.7.3
+
+- Internal full-text extraction and cache workflow refactor steps.
 
 ### v0.7.0
 
@@ -114,7 +123,7 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 
 - Added metadata enrichment, DOI extraction, explicit Crossref acceptance, deterministic tag suggestions, and extraction backend status.
 
-## Troubleshooting
+## Troubleshooting / Limitations
 
 ### Crossref lookup
 
@@ -128,7 +137,7 @@ Use the default **Stable HTML viewer** if the native Streamlit PDF component is 
 
 Open **Extraction debug** to inspect backend availability, attempted extraction methods, errors, character count, stale status, and current/cached PDF hashes. Scanned or image-only PDFs may produce no readable text without OCR, which is not currently included.
 
-If a cache is marked stale, select **Extract full text** or **Re-extract full text**. If either the current or cached PDF hash is unavailable, BluePrintReboot does not mark the cache stale because there is no reliable mismatch to compare.
+If a cache is marked stale, select **Extract full text** or **Re-extract full text**. If recovery fails, the previous extracted text is preserved and remains marked stale. If either the current or cached PDF hash is unavailable, BluePrintReboot does not mark the cache stale because there is no reliable mismatch to compare.
 
 ### Tag rules
 

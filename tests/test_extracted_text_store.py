@@ -15,6 +15,24 @@ from storage.extracted_text_store import (
 from tests.helpers import make_workspace
 
 
+CACHE_STATUS_CORE_KEYS = {
+    "has_text_file",
+    "has_metadata_file",
+    "has_reusable_text_cache",
+    "is_stale",
+    "pdf_sha256",
+    "cached_pdf_sha256",
+    "status",
+    "char_count",
+    "error",
+    "source",
+}
+
+
+def assert_stable_cache_status_schema(status: dict) -> None:
+    assert CACHE_STATUS_CORE_KEYS <= set(status)
+
+
 def test_extracted_text_and_metadata_paths_are_paper_id_based() -> None:
     cache_dir = make_workspace("text-cache-paths")
 
@@ -72,8 +90,14 @@ def test_extraction_cache_status_and_clear() -> None:
     )
 
     status = extraction_cache_status("paper-1", cache_dir)
+    assert_stable_cache_status_schema(status)
     assert status["has_text_file"] is True
+    assert status["has_metadata_file"] is True
     assert status["has_reusable_text_cache"] is True
+    assert status["is_stale"] is False
+    assert status["pdf_sha256"] == ""
+    assert status["cached_pdf_sha256"] == ""
+    assert status["error"] == ""
     assert status["has_text"] is True
     assert status["has_metadata"] is True
     assert status["status"] == "success"
@@ -81,7 +105,9 @@ def test_extraction_cache_status_and_clear() -> None:
 
     clear_extraction_cache("paper-1", cache_dir)
     status = extraction_cache_status("paper-1", cache_dir)
+    assert_stable_cache_status_schema(status)
     assert status["has_text_file"] is False
+    assert status["has_metadata_file"] is False
     assert status["has_reusable_text_cache"] is False
     assert status["has_text"] is False
     assert status["has_metadata"] is False
@@ -122,6 +148,12 @@ def test_successful_non_empty_extraction_cache_is_reusable() -> None:
         cache_dir,
     )
 
+    status = extraction_cache_status("paper-1", cache_dir, pdf_path=pdf_path)
+
+    assert_stable_cache_status_schema(status)
+    assert status["is_stale"] is False
+    assert status["pdf_sha256"]
+    assert status["cached_pdf_sha256"] == ""
     assert has_reusable_extracted_text_cache("paper-1", cache_dir) is True
     assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is False
 
@@ -146,8 +178,12 @@ def test_same_pdf_hash_is_not_stale() -> None:
         cache_dir,
     )
 
+    status_without_pdf = extraction_cache_status("paper-1", cache_dir)
     status = extraction_cache_status("paper-1", cache_dir, pdf_path=pdf_path)
 
+    assert_stable_cache_status_schema(status_without_pdf)
+    assert_stable_cache_status_schema(status)
+    assert set(status_without_pdf) == set(status)
     assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is False
     assert status["is_stale"] is False
     assert status["pdf_sha256"] == status["cached_pdf_sha256"]
@@ -176,6 +212,7 @@ def test_changed_pdf_hash_is_stale() -> None:
 
     status = extraction_cache_status("paper-1", cache_dir, pdf_path=pdf_path)
 
+    assert_stable_cache_status_schema(status)
     assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is True
     assert status["is_stale"] is True
     assert status["pdf_sha256"] != status["cached_pdf_sha256"]

@@ -391,16 +391,28 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
                 f"source: {cache_status['source'] or 'none'}",
                 f"chars: {cache_status['char_count']}",
                 f"extracted: {cache_status['extracted_at'] or 'never'}",
-                f"stale: {'yes' if cache_status['is_stale'] else 'no'}",
             ]
         )
     )
 
-    if cache_status["is_stale"]:
+    if cache_status["recovery_failed"] and cache_status["previous_cache_preserved"]:
+        message = "Re-extraction failed, so the previous extracted text was preserved."
+        if cache_status["is_stale"]:
+            message += " The PDF changed, so the preserved cache may still be stale."
+        st.warning(message)
+    elif cache_status["is_stale"]:
         st.warning(
-            "This full-text cache belongs to an older or different PDF. "
-            "Click Extract full text or Re-extract full text to refresh it."
+            "The PDF changed since full text was last extracted, so the cache may be stale. "
+            "Click Extract full text to refresh it."
         )
+    elif cache_status["has_reusable_text_cache"]:
+        st.success("The full-text cache is reusable for this PDF.")
+    elif not cache_status["has_text_file"] and not cache_status["has_metadata_file"]:
+        st.info("No full-text cache yet. Click Extract full text to create one.")
+    elif cache_status["error"]:
+        st.warning(f"No reusable full-text cache is available. Last extraction error: {cache_status['error']}")
+    else:
+        st.info("No reusable full-text cache is available. Click Extract full text to try again.")
 
     with st.expander("Extraction debug"):
         diagnostics = extraction_diagnostics(pdf_status["path"])
@@ -413,6 +425,10 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
         st.write(f"Final source: `{cache_status['source'] or 'none'}`")
         st.write(f"Character count: `{cache_status['char_count']}`")
         st.write(f"Cache stale: `{cache_status['is_stale']}`")
+        st.write(f"Previous cache preserved: `{cache_status['previous_cache_preserved']}`")
+        st.write(f"Recovery failed: `{cache_status['recovery_failed']}`")
+        if cache_status["recovery_attempted_at"]:
+            st.write(f"Recovery attempted: `{cache_status['recovery_attempted_at']}`")
         st.write(f"Current PDF SHA-256: `{cache_status['pdf_sha256'] or 'unavailable'}`")
         st.write(f"Cached PDF SHA-256: `{cache_status['cached_pdf_sha256'] or 'unavailable'}`")
         if cache_status["errors"]:

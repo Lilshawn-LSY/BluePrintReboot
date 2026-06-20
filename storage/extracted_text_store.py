@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -42,6 +42,29 @@ def build_extraction_metadata(
         "errors": result.errors,
         "attempted_methods": result.attempted_methods,
     }
+
+
+def build_preserved_cache_failure_metadata(
+    metadata: dict[str, Any],
+    pdf_path: str | Path,
+    result: FullTextExtractionResult,
+) -> dict[str, Any]:
+    preserved_metadata = dict(metadata)
+    preserved_metadata.update(
+        {
+            "previous_cache_preserved": True,
+            "recovery_failed": True,
+            "recovery_status": result.status,
+            "recovery_source": result.source,
+            "recovery_char_count": result.char_count,
+            "recovery_attempted_at": utc_now_iso(),
+            "recovery_attempted_methods": result.attempted_methods,
+            "recovery_errors": result.errors,
+            "recovery_error": _extraction_result_error(result),
+            "recovery_pdf_sha256": pdf_fingerprint(pdf_path)["pdf_sha256"],
+        }
+    )
+    return preserved_metadata
 
 
 def pdf_fingerprint(pdf_path: str | Path) -> dict[str, Any]:
@@ -116,40 +139,59 @@ def extraction_cache_status(
     metadata_path = extraction_metadata_path(paper_id, cache_dir)
     metadata = load_extraction_metadata(paper_id, cache_dir)
     has_text_file = text_path.exists()
+    has_metadata_file = metadata_path.exists()
+    char_count = _safe_int(metadata.get("char_count"))
     has_reusable_text_cache = (
         has_text_file
         and metadata.get("status") == "success"
-        and int(metadata.get("char_count") or 0) > 0
+        and char_count > 0
     )
-    status = {
+
+    cached_pdf_sha256 = str(metadata.get("pdf_sha256") or "")
+    current_pdf_sha256 = ""
+    is_stale = False
+    if pdf_path is not None:
+        current_pdf_sha256 = str(pdf_fingerprint(pdf_path)["pdf_sha256"])
+        is_stale = _hashes_show_stale(
+            has_reusable_text_cache,
+            current_pdf_sha256,
+            cached_pdf_sha256,
+        )
+
+    recovery_failed = bool(metadata.get("recovery_failed", False))
+    errors = metadata.get("recovery_errors" if recovery_failed else "errors", [])
+    if not isinstance(errors, list):
+        errors = [str(errors)] if errors else []
+    error = str(metadata.get("recovery_error") or metadata.get("error") or "")
+    if not error and errors:
+        error = str(errors[0])
+
+    return {
         "text_path": text_path,
         "metadata_path": metadata_path,
         "has_text_file": has_text_file,
+        "has_metadata_file": has_metadata_file,
         "has_reusable_text_cache": has_reusable_text_cache,
-        "has_text": has_text_file,
-        "has_metadata": metadata_path.exists(),
+        "is_stale": is_stale,
+        "pdf_sha256": current_pdf_sha256,
+        "cached_pdf_sha256": cached_pdf_sha256,
         "status": metadata.get("status", "not_extracted"),
+        "char_count": char_count,
+        "error": error,
         "source": metadata.get("source", ""),
-        "char_count": metadata.get("char_count", 0),
+        "has_text": has_text_file,
+        "has_metadata": has_metadata_file,
         "extracted_at": metadata.get("extracted_at", ""),
-        "errors": metadata.get("errors", []),
-        "attempted_methods": metadata.get("attempted_methods", []),
+        "errors": errors,
+        "attempted_methods": metadata.get(
+            "recovery_attempted_methods" if recovery_failed else "attempted_methods",
+            [],
+        ),
+        "previous_cache_preserved": bool(metadata.get("previous_cache_preserved", False)),
+        "recovery_failed": recovery_failed,
+        "recovery_status": metadata.get("recovery_status", ""),
+        "recovery_attempted_at": metadata.get("recovery_attempted_at", ""),
     }
-    if pdf_path is not None:
-        current_pdf_sha256 = str(pdf_fingerprint(pdf_path)["pdf_sha256"])
-        cached_pdf_sha256 = str(metadata.get("pdf_sha256") or "")
-        status.update(
-            {
-                "is_stale": _hashes_show_stale(
-                    has_reusable_text_cache,
-                    current_pdf_sha256,
-                    cached_pdf_sha256,
-                ),
-                "pdf_sha256": current_pdf_sha256,
-                "cached_pdf_sha256": cached_pdf_sha256,
-            }
-        )
-    return status
 
 
 def is_extraction_cache_stale(
@@ -176,6 +218,21 @@ def _hashes_show_stale(
         and cached_pdf_sha256
         and current_pdf_sha256 != cached_pdf_sha256
     )
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _extraction_result_error(result: FullTextExtractionResult) -> str:
+    if result.errors:
+        return "; ".join(str(error) for error in result.errors)
+    if not result.text.strip():
+        return "No readable text was extracted."
+    return "Full-text extraction failed."
 
 
 def has_reusable_extracted_text_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> bool:

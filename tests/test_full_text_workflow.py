@@ -156,6 +156,66 @@ def test_force_false_reextracts_stale_cache(monkeypatch) -> None:
     assert extracted_text_path("paper-1", cache_dir).read_text(encoding="utf-8") == "text 2"
 
 
+def test_failed_stale_reextraction_preserves_previous_good_cache(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-stale-failure")
+    cache_dir = workspace / "cache"
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"original PDF")
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(pdf_path),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    calls = {"count": 0}
+
+    def fake_extract(path):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return FullTextExtractionResult(
+                text="previous good text",
+                source="pypdf",
+                char_count=18,
+                errors=[],
+                status="success",
+                attempted_methods=["pypdf"],
+            )
+        return FullTextExtractionResult(
+            text="",
+            source="none",
+            char_count=0,
+            errors=["replacement extraction failed"],
+            status="failed",
+            attempted_methods=["pypdf"],
+        )
+
+    monkeypatch.setattr("services.full_text_workflow.extract_full_text_from_pdf", fake_extract)
+
+    extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    original_metadata = load_extraction_metadata("paper-1", cache_dir)
+    pdf_path.write_bytes(b"replacement PDF")
+    result = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    status = extraction_cache_status("paper-1", cache_dir, pdf_path=pdf_path)
+    preserved_metadata = load_extraction_metadata("paper-1", cache_dir)
+
+    assert calls["count"] == 2
+    assert extracted_text_path("paper-1", cache_dir).read_text(encoding="utf-8") == "previous good text"
+    assert result.status == "failed"
+    assert result.previous_cache_preserved is True
+    assert result.recovery_failed is True
+    assert result.error == "replacement extraction failed"
+    assert status["has_reusable_text_cache"] is True
+    assert status["is_stale"] is True
+    assert status["previous_cache_preserved"] is True
+    assert status["recovery_failed"] is True
+    assert status["error"] == "replacement extraction failed"
+    assert preserved_metadata["status"] == "success"
+    assert preserved_metadata["pdf_sha256"] == original_metadata["pdf_sha256"]
+    assert preserved_metadata["recovery_pdf_sha256"] == status["pdf_sha256"]
+    assert load_index(index_csv).iloc[0]["text_status"] == "recovery_failed"
+
+
 def test_force_true_bypasses_reusable_cache(monkeypatch) -> None:
     workspace = make_workspace("full-text-service-force")
     cache_dir = workspace / "cache"
