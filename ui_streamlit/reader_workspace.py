@@ -26,6 +26,12 @@ from storage.note_block_store import (
 )
 from storage.note_store import load_note_text, save_note_text
 from ui_streamlit.project_workspace import render_note_block_project_links, render_paper_project_link_summary
+from ui_streamlit.ui_helpers import (
+    clear_session_keys,
+    confirmation_key,
+    confirmation_pending,
+    request_confirmation,
+)
 
 
 STATUS_OPTIONS = ["unread", "reading", "read"]
@@ -127,6 +133,14 @@ def pending_note_block_append_key(record: dict[str, str]) -> str:
 
 def pending_note_reload_key(record: dict[str, str]) -> str:
     return f"pending_note_reload_{record['paper_id']}"
+
+
+def reader_tag_suggestion_preview_key(record: dict[str, str]) -> str:
+    return f"reader_tag_suggestion_preview_{record['paper_id']}"
+
+
+def preview_reader_tag_suggestions(record: dict[str, str]) -> list[str]:
+    return suggest_tags(dict(record))
 
 
 def append_markdown_snapshot(markdown: str, snippet: str) -> str:
@@ -300,21 +314,13 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
         st.session_state[toolbar_key] = False
         st.rerun()
 
-    if st.button("Save Note", key=f"toolbar_save_note_{record['paper_id']}"):
-        save_note_draft(record, st.session_state)
-        st.success("Note saved.")
-
-    if st.button("Reload Note", key=f"toolbar_reload_note_{record['paper_id']}"):
-        st.session_state[pending_note_reload_key(record)] = True
-        st.rerun()
-
     for label, block_type in (
-        ("Insert Summary block", "summary"),
-        ("Insert Key Claim block", "key_claim"),
-        ("Insert Method block", "method"),
-        ("Insert Evidence block", "evidence"),
-        ("Insert Question block", "question"),
-        ("Insert Citation block", "citation"),
+        ("Insert Summary", "summary"),
+        ("Insert Key Claim", "key_claim"),
+        ("Insert Method", "method"),
+        ("Insert Evidence", "evidence"),
+        ("Insert Question", "question"),
+        ("Insert Citation", "citation"),
     ):
         if st.button(label, key=f"{block_type}_{record['paper_id']}"):
             key = note_draft_key(record)
@@ -323,7 +329,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
             st.rerun()
 
     manual_tag = st.text_input("Manual tag", key=f"manual_tag_{record['paper_id']}")
-    if st.button("Add manual tag", key=f"add_manual_tag_{record['paper_id']}"):
+    if st.button("Apply tag", key=f"add_manual_tag_{record['paper_id']}"):
         updated_tags = add_manual_tag(str(record.get("tags", "")), manual_tag)
         if updated_tags != str(record.get("tags", "")):
             update_payload = {"tags": updated_tags}
@@ -333,15 +339,27 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
         else:
             st.info("No tag added.")
 
-    if st.button("Run tag suggestions", key=f"reader_suggest_tags_{record['paper_id']}"):
-        suggestions = suggest_tags(record)
+    suggestion_key = reader_tag_suggestion_preview_key(record)
+    if st.button("Preview tags", key=f"reader_suggest_tags_{record['paper_id']}"):
+        st.session_state[suggestion_key] = preview_reader_tag_suggestions(record)
+        st.rerun()
+    if suggestion_key in st.session_state:
+        suggestions = list(st.session_state.get(suggestion_key, []))
         if suggestions:
-            updated_tags = merge_tags(str(record.get("tags", "")), suggestions)
-            update_paper_metadata(record["paper_id"], {"tags": updated_tags})
-            st.success("Suggested tags added.")
-            st.rerun()
+            st.caption("Suggested: " + ", ".join(f"`{tag}`" for tag in suggestions))
+            apply_col, cancel_col = st.columns(2)
+            if apply_col.button("Apply", key=f"reader_apply_tags_{record['paper_id']}"):
+                updated_tags = merge_tags(str(record.get("tags", "")), suggestions)
+                update_paper_metadata(record["paper_id"], {"tags": updated_tags})
+                clear_session_keys(st.session_state, suggestion_key)
+                st.success("Suggested tags applied.")
+                st.rerun()
+            if cancel_col.button("Cancel", key=f"reader_cancel_tags_{record['paper_id']}"):
+                clear_session_keys(st.session_state, suggestion_key)
+                st.rerun()
         else:
             st.info("No new suggested tags.")
+            clear_session_keys(st.session_state, suggestion_key)
 
     current_status = record.get("status", "unread")
     if current_status not in STATUS_OPTIONS:
@@ -434,9 +452,21 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
         st.rerun()
     if col3.button("Show extracted text", key=f"show_text_{paper_id}"):
         st.session_state[show_key] = not st.session_state.get(show_key, False)
-    if col4.button("Clear text cache", key=f"clear_text_{paper_id}"):
+    cache_delete_key = confirmation_key("delete_text_cache", paper_id)
+    if col4.button("Delete cache", key=f"clear_text_{paper_id}"):
+        request_confirmation(st.session_state, cache_delete_key)
+    cache_decision = _render_reader_confirmation(
+        "Delete the extracted-text cache for this paper?",
+        "Delete",
+        cache_delete_key,
+    )
+    if cache_decision == "confirm":
         clear_text_cache_for_paper(record)
         st.session_state[show_key] = False
+        clear_session_keys(st.session_state, cache_delete_key)
+        st.rerun()
+    if cache_decision == "cancel":
+        clear_session_keys(st.session_state, cache_delete_key)
         st.rerun()
 
     st.caption(
@@ -521,10 +551,10 @@ def _render_note_editor(record: dict[str, str]) -> None:
         height=860,
         key=key,
     )
-    if st.button("Save Note", key=f"editor_save_note_{record['paper_id']}"):
+    if st.button("Save", key=f"editor_save_note_{record['paper_id']}"):
         save_note_draft(record, st.session_state)
         st.success("Note saved.")
-    if st.button("Reload Note", key=f"editor_reload_note_{record['paper_id']}"):
+    if st.button("Reload", key=f"editor_reload_note_{record['paper_id']}"):
         st.session_state[pending_note_reload_key(record)] = True
         st.rerun()
     saved_at = st.session_state.get(note_saved_at_key(record), "")
@@ -616,10 +646,22 @@ def _render_structured_note_block_card(
         if append_col.button("Append to Markdown", key=f"append_note_block_{paper_id}_{block_id}"):
             st.session_state[pending_note_block_append_key(record)] = render_note_block_as_markdown(block)
             st.rerun()
-        if delete_col.button("Delete block", key=f"delete_note_block_{paper_id}_{block_id}"):
+        block_delete_key = confirmation_key("delete_note_block", block_id)
+        if delete_col.button("Delete", key=f"delete_note_block_{paper_id}_{block_id}"):
+            request_confirmation(st.session_state, block_delete_key)
+        delete_decision = _render_reader_confirmation(
+            "Delete this structured note block? This cannot be undone.",
+            "Delete",
+            block_delete_key,
+        )
+        if delete_decision == "confirm":
             delete_note_block(paper_id, block_id)
+            clear_session_keys(st.session_state, block_delete_key)
             if st.session_state.get(edit_key) == block_id:
-                st.session_state.pop(edit_key, None)
+                clear_session_keys(st.session_state, edit_key)
+            st.rerun()
+        if delete_decision == "cancel":
+            clear_session_keys(st.session_state, block_delete_key)
             st.rerun()
 
         if st.session_state.get(edit_key) == block_id:
@@ -650,7 +692,7 @@ def _render_edit_note_block_form(
         edited_figure = figure_col.text_input("Figure", value=str(block["figure"]))
         edited_quote = st.text_area("Quote", value=str(block["quote"]), height=100)
         edited_tags = st.text_input("Tags (comma-separated)", value=", ".join(block["tags"]))
-        save_changes = st.form_submit_button("Save changes")
+        save_changes = st.form_submit_button("Save")
         cancel_edit = st.form_submit_button("Cancel")
 
     if cancel_edit:
@@ -676,7 +718,7 @@ def _render_edit_note_block_form(
 
 def _render_create_note_block_form(paper_id: str) -> None:
     with st.form(key=f"create_note_block_{paper_id}"):
-        st.write("Add structured block")
+        st.write("Create structured block")
         block_type = st.selectbox("Block type", ALLOWED_BLOCK_TYPES)
         title = st.text_input("Block title")
         text = st.text_area("Block text", height=140)
@@ -685,7 +727,7 @@ def _render_create_note_block_form(paper_id: str) -> None:
         figure = figure_col.text_input("Figure")
         quote = st.text_area("Quote", height=100)
         tags = st.text_input("Tags (comma-separated)")
-        submitted = st.form_submit_button("Add block")
+        submitted = st.form_submit_button("Create")
 
     if submitted:
         create_note_block(
@@ -707,3 +749,15 @@ def _note_block_preview(text: str, max_length: int = 280) -> str:
     if len(compact) <= max_length:
         return compact
     return compact[: max_length - 3].rstrip() + "..."
+
+
+def _render_reader_confirmation(message: str, action_label: str, key: str) -> str:
+    if not confirmation_pending(st.session_state, key):
+        return ""
+    st.warning(message)
+    confirm_col, cancel_col = st.columns(2)
+    if confirm_col.button(action_label, key=f"{key}_confirm", type="primary"):
+        return "confirm"
+    if cancel_col.button("Cancel", key=f"{key}_cancel"):
+        return "cancel"
+    return ""

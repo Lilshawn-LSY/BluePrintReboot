@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Callable
 
 import pandas as pd
 import streamlit as st
@@ -158,7 +159,7 @@ def library_page() -> None:
         hide_index=True,
     )
 
-    if st.button("Open selected paper in Paper Detail"):
+    if st.button("Open"):
         st.session_state["active_paper_id"] = selected
         st.session_state["current_page"] = "Paper Detail"
         st.rerun()
@@ -221,7 +222,7 @@ def paper_detail_page() -> None:
                 index=READING_PRIORITY_OPTIONS.index(priority_value),
             )
 
-            save_metadata = st.form_submit_button("Save Metadata")
+            save_metadata = st.form_submit_button("Save")
 
         if save_metadata:
             update_paper_metadata(
@@ -353,7 +354,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
             normalized_current_doi = normalize_doi(current_doi)
             if normalized_current_doi and detected_doi != normalized_current_doi:
-                if st.button("Replace saved DOI with detected DOI"):
+                if st.button("Apply detected DOI"):
                     update_paper_metadata(
                         record["paper_id"],
                         {
@@ -402,7 +403,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         for detail in suggestion_details:
             fields = "/".join(detail.get("matched_fields", []))
             st.caption(f"`{detail['tag']}` - matched {fields}")
-        if st.button("Accept Suggested Tags"):
+        if st.button("Apply suggested tags"):
             merged_tags = merge_tags(record.get("tags", ""), suggestions)
             update_paper_metadata(record["paper_id"], {"tags": merged_tags})
             st.success("Suggested tags added.")
@@ -442,7 +443,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         use_container_width=True,
         hide_index=True,
     )
-    if st.button("Accept Crossref Metadata"):
+    if st.button("Apply Crossref metadata"):
         accept_crossref_metadata(record["paper_id"], preview)
         st.session_state.pop(preview_key, None)
         st.success("Crossref metadata accepted.")
@@ -546,14 +547,7 @@ def run() -> None:
     ensure_workspace_dirs()
     st.set_page_config(page_title="BluePrintReboot", layout="wide")
 
-    pages = {
-        "Dashboard": dashboard_page,
-        "Library": library_page,
-        "Paper Detail": paper_detail_page,
-        "Project Workspace": render_project_workspace,
-        "Tag Manager": render_tag_manager_page,
-        "Settings": settings_page,
-    }
+    pages = navigation_pages()
     page_names = list(pages.keys())
     if "current_page" not in st.session_state:
         st.session_state["current_page"] = "Dashboard"
@@ -573,3 +567,14 @@ def run() -> None:
         st.rerun()
 
     pages[st.session_state["current_page"]]()
+
+
+def navigation_pages() -> dict[str, Callable[[], None]]:
+    return {
+        "Dashboard": dashboard_page,
+        "Library": library_page,
+        "Paper Detail": paper_detail_page,
+        "Project Workspace": render_project_workspace,
+        "Tag Manager": render_tag_manager_page,
+        "Settings": settings_page,
+    }

@@ -24,6 +24,12 @@ from storage.project_store import (
     list_projects,
     update_project,
 )
+from ui_streamlit.ui_helpers import (
+    clear_session_keys,
+    confirmation_key,
+    confirmation_pending,
+    request_confirmation,
+)
 
 
 PROJECT_SELECTION_KEY = "project_workspace_selected_id"
@@ -71,9 +77,7 @@ def render_paper_project_links(record: dict[str, str]) -> None:
             st.write(f"{project_name} - {_display_choice(link['link_type'])}")
             if link["note"]:
                 st.caption(link["note"])
-            if st.button("Unlink", key=f"unlink_paper_project_{link['id']}"):
-                delete_project_link(link["id"])
-                st.rerun()
+            _render_unlink_action(link)
     else:
         st.caption("This paper is not linked to a project.")
 
@@ -89,7 +93,7 @@ def render_paper_project_links(record: dict[str, str]) -> None:
         )
         link_type = st.selectbox("Link type", ALLOWED_LINK_TYPES)
         note = st.text_input("Link note")
-        submitted = st.form_submit_button("Link paper")
+        submitted = st.form_submit_button("Link")
     if submitted:
         create_project_link(
             project_id=project_id,
@@ -132,12 +136,8 @@ def render_note_block_project_links(record: dict[str, str], block: dict[str, Any
         st.caption("Linked projects: " + ", ".join(linked_labels))
         for link in links:
             project_name = project_by_id.get(link["project_id"], {}).get("name", link["project_id"])
-            if st.button(
-                f"Unlink from {project_name}",
-                key=f"unlink_note_block_project_{block_id}_{link['id']}",
-            ):
-                delete_project_link(link["id"])
-                st.rerun()
+            st.caption(f"Project: {project_name}")
+            _render_unlink_action(link)
 
     if not projects:
         return
@@ -155,7 +155,7 @@ def render_note_block_project_links(record: dict[str, str], block: dict[str, Any
             key=f"note_block_link_type_{block_id}",
         )
         note = st.text_input("Link note", key=f"note_block_link_note_{block_id}")
-        if st.button("Create project link", key=f"create_note_block_project_link_{block_id}"):
+        if st.button("Link", key=f"create_note_block_project_link_{block_id}"):
             create_project_link(
                 project_id=project_id,
                 target_type="note_block",
@@ -179,7 +179,7 @@ def _render_create_project_form() -> None:
                 index=ALLOWED_PROJECT_PRIORITIES.index("normal"),
             )
             tags = st.text_input("Tags (comma-separated)")
-            submitted = st.form_submit_button("Create project")
+            submitted = st.form_submit_button("Create")
     if submitted:
         try:
             project = create_project(name, description, status, priority, tags)
@@ -237,7 +237,10 @@ def _render_project_detail(project: dict[str, Any]) -> None:
                 index=ALLOWED_PROJECT_PRIORITIES.index(project["priority"]),
             )
             tags = st.text_input("Tags (comma-separated)", value=", ".join(project["tags"]))
-            submitted = st.form_submit_button("Save project")
+            submitted = st.form_submit_button("Save")
+            cancel_edit = st.form_submit_button("Cancel")
+        if cancel_edit:
+            st.rerun()
         if submitted:
             try:
                 update_project(
@@ -255,10 +258,22 @@ def _render_project_detail(project: dict[str, Any]) -> None:
             else:
                 st.rerun()
 
-    if st.button("Delete project and its links", key=f"delete_project_{project['id']}"):
+    delete_key = project_delete_confirmation_key(project["id"])
+    if st.button("Delete", key=f"delete_project_{project['id']}"):
+        request_confirmation(st.session_state, delete_key)
+    delete_decision = _render_confirmation(
+        "Delete this project and all of its links? This cannot be undone.",
+        "Delete",
+        delete_key,
+    )
+    if delete_decision == "confirm":
         delete_links_for_project(project["id"])
         delete_project(project["id"])
+        clear_session_keys(st.session_state, delete_key, PROJECT_LINK_EDIT_KEY)
         st.session_state[PENDING_PROJECT_SELECTION_CLEAR_KEY] = True
+        st.rerun()
+    if delete_decision == "cancel":
+        clear_session_keys(st.session_state, delete_key)
         st.rerun()
 
     paper_by_id = _paper_lookup()
@@ -302,17 +317,15 @@ def _render_linked_paper(link: dict[str, Any], paper_by_id: dict[str, dict[str, 
         if link["note"]:
             st.write(link["note"])
         open_col, edit_col, unlink_col = st.columns(3)
-        if open_col.button("Open paper", key=f"project_workspace_open_{link['id']}"):
+        if open_col.button("Open", key=f"project_workspace_open_{link['id']}"):
             open_paper_in_reader(link["target_id"], st.session_state)
             st.rerun()
         if edit_col.button("Edit link", key=f"project_workspace_edit_{link['id']}"):
             st.session_state[PROJECT_LINK_EDIT_KEY] = link["id"]
             st.rerun()
-        if unlink_col.button("Unlink paper", key=f"project_workspace_unlink_{link['id']}"):
-            delete_project_link(link["id"])
-            if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
-                st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
-            st.rerun()
+        if unlink_col.button("Unlink", key=f"project_workspace_unlink_{link['id']}"):
+            request_confirmation(st.session_state, project_link_unlink_confirmation_key(link["id"]))
+        _handle_link_unlink_confirmation(link)
         if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
             _render_link_edit_form(link)
 
@@ -348,17 +361,15 @@ def _render_linked_note_block(
         if link["note"]:
             st.write(link["note"])
         open_col, edit_col, unlink_col = st.columns(3)
-        if link["paper_id"] and open_col.button("Open paper", key=f"project_workspace_open_{link['id']}"):
+        if link["paper_id"] and open_col.button("Open", key=f"project_workspace_open_{link['id']}"):
             open_paper_in_reader(link["paper_id"], st.session_state)
             st.rerun()
         if edit_col.button("Edit link", key=f"project_workspace_edit_{link['id']}"):
             st.session_state[PROJECT_LINK_EDIT_KEY] = link["id"]
             st.rerun()
-        if unlink_col.button("Unlink note block", key=f"project_workspace_unlink_{link['id']}"):
-            delete_project_link(link["id"])
-            if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
-                st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
-            st.rerun()
+        if unlink_col.button("Unlink", key=f"project_workspace_unlink_{link['id']}"):
+            request_confirmation(st.session_state, project_link_unlink_confirmation_key(link["id"]))
+        _handle_link_unlink_confirmation(link)
         if st.session_state.get(PROJECT_LINK_EDIT_KEY) == link["id"]:
             _render_link_edit_form(link)
 
@@ -371,11 +382,11 @@ def _render_link_edit_form(link: dict[str, Any]) -> None:
             index=ALLOWED_LINK_TYPES.index(link["link_type"]),
         )
         note = st.text_area("Link note", value=link["note"], height=100)
-        save_changes = st.form_submit_button("Save link")
+        save_changes = st.form_submit_button("Save")
         cancel_edit = st.form_submit_button("Cancel")
 
     if cancel_edit:
-        st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
+        clear_session_keys(st.session_state, PROJECT_LINK_EDIT_KEY)
         st.rerun()
     if save_changes:
         try:
@@ -383,8 +394,60 @@ def _render_link_edit_form(link: dict[str, Any]) -> None:
         except ValueError as exc:
             st.error(str(exc))
         else:
-            st.session_state.pop(PROJECT_LINK_EDIT_KEY, None)
+            clear_session_keys(st.session_state, PROJECT_LINK_EDIT_KEY)
             st.rerun()
+
+
+def project_delete_confirmation_key(project_id: str) -> str:
+    return confirmation_key("delete_project", project_id)
+
+
+def project_link_unlink_confirmation_key(link_id: str) -> str:
+    return confirmation_key("unlink_project_link", link_id)
+
+
+def clear_project_link_action_state(session_state: MutableMapping, link_id: str) -> None:
+    if str(session_state.get(PROJECT_LINK_EDIT_KEY, "")) == str(link_id):
+        clear_session_keys(session_state, PROJECT_LINK_EDIT_KEY)
+    clear_session_keys(session_state, project_link_unlink_confirmation_key(link_id))
+
+
+def _render_unlink_action(link: dict[str, Any]) -> None:
+    key = project_link_unlink_confirmation_key(link["id"])
+    if st.button("Unlink", key=f"unlink_project_link_{link['id']}"):
+        request_confirmation(st.session_state, key)
+    decision = _render_confirmation("Unlink this item from the project?", "Unlink", key)
+    if decision == "confirm":
+        delete_project_link(link["id"])
+        clear_project_link_action_state(st.session_state, link["id"])
+        st.rerun()
+    if decision == "cancel":
+        clear_session_keys(st.session_state, key)
+        st.rerun()
+
+
+def _handle_link_unlink_confirmation(link: dict[str, Any]) -> None:
+    key = project_link_unlink_confirmation_key(link["id"])
+    decision = _render_confirmation("Unlink this item from the project?", "Unlink", key)
+    if decision == "confirm":
+        delete_project_link(link["id"])
+        clear_project_link_action_state(st.session_state, link["id"])
+        st.rerun()
+    if decision == "cancel":
+        clear_session_keys(st.session_state, key)
+        st.rerun()
+
+
+def _render_confirmation(message: str, action_label: str, key: str) -> str:
+    if not confirmation_pending(st.session_state, key):
+        return ""
+    st.warning(message)
+    confirm_col, cancel_col = st.columns(2)
+    if confirm_col.button(action_label, key=f"{key}_confirm", type="primary"):
+        return "confirm"
+    if cancel_col.button("Cancel", key=f"{key}_cancel"):
+        return "cancel"
+    return ""
 
 
 def _paper_lookup() -> dict[str, dict[str, str]]:

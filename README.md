@@ -91,7 +91,7 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 8. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
 9. Open **Tag Manager** to review used tags, register aliases, create canonical tags, or preview and explicitly apply a merge. Alias registration changes only the registry; it does not rewrite the library.
 10. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
-11. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
+11. Use **Re-extract full text** to force extraction or **Delete cache** to remove cached text and metadata after confirmation.
 
 Extracted text cache files are:
 
@@ -101,6 +101,13 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.9.3
+
+- Cleans up navigation and action labels without redesigning the Streamlit interface.
+- Adds confirmation steps for project deletion, unlinking, structured-note deletion, and extracted-cache deletion.
+- Changes Reader Workspace tag suggestions to an explicit preview/apply flow and removes duplicate note actions from the toolbar.
+- Aligns linked paper and note-block actions around Open, Edit link, and Unlink while keeping the existing GitHub Actions pytest workflow in place.
 
 ### v0.9.2
 
