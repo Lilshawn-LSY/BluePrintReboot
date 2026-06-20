@@ -31,6 +31,7 @@ from storage.index_store import (
     update_paper_metadata,
 )
 from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
+from ui_streamlit.project_workspace import render_paper_project_links, render_project_workspace
 from ui_streamlit.reader_workspace import render_reader_workspace
 
 
@@ -181,6 +182,9 @@ def paper_detail_page() -> None:
     )
 
     render_reader_workspace(record)
+
+    with st.expander("Project Links"):
+        render_paper_project_links(record)
 
     title = record.get("title", "")
     abstract = record.get("abstract", "")
@@ -535,6 +539,7 @@ def run() -> None:
         "Dashboard": dashboard_page,
         "Library": library_page,
         "Paper Detail": paper_detail_page,
+        "Project Workspace": render_project_workspace,
         "Settings": settings_page,
     }
     page_names = list(pages.keys())

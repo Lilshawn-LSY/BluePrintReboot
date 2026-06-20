@@ -2,7 +2,7 @@
 
 ## Overview
 
-BluePrintReboot is a local-first personal research paper library built with Streamlit. It scans local PDFs, maintains a CSV paper index, supports Markdown and structured reading notes, and caches extracted full text beside the local library data.
+BluePrintReboot is a local-first personal research paper library built with Streamlit. It scans local PDFs, maintains a CSV paper index, supports Markdown and structured reading notes, links research material to projects, and caches extracted full text beside the local library data.
 
 Paper metadata is stored in `data/paper_index.csv`, Markdown notes are stored in `notes/`, structured note blocks are stored in `data/note_blocks/`, and extracted text is stored under `data/extracted_text/`. These user-generated files are ignored by git.
 
@@ -20,13 +20,14 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 - Reader Workspace with a local PDF viewer, Markdown notes, note templates, tags, reading status, and priority controls.
 - Editable, filterable JSON-backed structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
 - Optional one-way structured-block snapshots appended to the freeform Markdown draft without automatic synchronization.
+- Minimal research projects that collect links to papers and structured note blocks.
 - Stable HTML PDF rendering by default, with an optional native Streamlit PDF viewer and automatic fallback.
 - User-triggered full-text extraction with MarkItDown when available and `pypdf` fallback.
 - Full-text cache status, diagnostics, preview, forced re-extraction, and cache clearing.
 - SHA-256 stale-cache detection with automatic refresh when a changed PDF can be extracted successfully.
 - Cache-safe recovery that preserves previous usable text when re-extraction fails.
 
-Visual PDF highlighting, coordinate annotations, mouse-selection capture, project linking, graph visualization, Zotero integration, and relation schemas are not yet implemented.
+Visual PDF highlighting, coordinate annotations, mouse-selection capture, graph visualization, Zotero integration, and relation graphs are not yet implemented.
 
 ## Quick Start
 
@@ -66,10 +67,10 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 - `ui_streamlit/` - App pages and Reader Workspace UI.
 - `ingest/` - PDF scanning, DOI handling, Crossref helpers, tag suggestions, and text extraction.
 - `services/` - Full-text extraction workflow orchestration.
-- `storage/` - CSV index, Markdown notes, structured note blocks, extracted-text cache, and workspace path helpers.
+- `storage/` - CSV index, Markdown notes, structured note blocks, projects, links, extracted-text cache, and path helpers.
 - `config/tag_rules.json` - Editable deterministic tag rulebook.
 - `tests/` - Automated test suite.
-- `data/` - Local index, structured note blocks, and extracted-text cache.
+- `data/` - Local index, structured note blocks, projects, links, and extracted-text cache.
 - `papers/` - Local PDF library.
 - `notes/` - Markdown reading notes.
 - `exports/` - Local export destination.
@@ -81,10 +82,11 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 3. Open **Library**, choose a paper, and open **Paper Detail**.
 4. Use the Reader Workspace to view the PDF and continue editing its existing Markdown note.
 5. Add or edit structured note blocks when a summary, claim, method, evidence item, question, idea, or limitation should be stored as a separate record. Optionally append a rendered snapshot to the Markdown draft; later block edits do not update that snapshot.
-6. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
-7. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
-8. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
-9. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
+6. Create projects in **Project Workspace**, then link relevant papers and structured note blocks with a relationship type and optional note.
+7. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
+8. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
+9. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
+10. Use **Re-extract full text** to force extraction or **Clear text cache** to remove the cached text and metadata.
 
 Extracted text cache files are:
 
@@ -94,6 +96,12 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.9.0
+
+- Adds local JSON-backed project storage and a minimal Project Workspace.
+- Adds paper-to-project and structured-note-block-to-project links.
+- Shows linked papers and note blocks with paper context and supports unlinking.
 
 ### v0.8.2
 

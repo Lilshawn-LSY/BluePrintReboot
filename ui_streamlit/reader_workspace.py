@@ -25,6 +25,7 @@ from storage.note_block_store import (
     update_note_block,
 )
 from storage.note_store import load_note_text, save_note_text
+from ui_streamlit.project_workspace import render_note_block_project_links
 
 
 STATUS_OPTIONS = ["unread", "reading", "read"]
@@ -622,6 +623,8 @@ def _render_structured_note_block_card(
 
         if st.session_state.get(edit_key) == block_id:
             _render_edit_note_block_form(paper_id, block, edit_key)
+
+        render_note_block_project_links(record, block)
 
 
 def _render_edit_note_block_form(
