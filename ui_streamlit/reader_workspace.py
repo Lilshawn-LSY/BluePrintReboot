@@ -365,7 +365,7 @@ def _render_pdf_debug(path_status: dict[str, object], render_status: dict[str, o
 
 def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, object]) -> None:
     paper_id = record["paper_id"]
-    cache_status = extraction_cache_status(paper_id)
+    cache_status = extraction_cache_status(paper_id, pdf_path=pdf_status["path"])
     show_key = f"show_extracted_text_{paper_id}"
 
     col1, col2, col3, col4 = st.columns(4)
@@ -391,9 +391,16 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
                 f"source: {cache_status['source'] or 'none'}",
                 f"chars: {cache_status['char_count']}",
                 f"extracted: {cache_status['extracted_at'] or 'never'}",
+                f"stale: {'yes' if cache_status['is_stale'] else 'no'}",
             ]
         )
     )
+
+    if cache_status["is_stale"]:
+        st.warning(
+            "This full-text cache belongs to an older or different PDF. "
+            "Click Extract full text or Re-extract full text to refresh it."
+        )
 
     with st.expander("Extraction debug"):
         diagnostics = extraction_diagnostics(pdf_status["path"])
@@ -405,6 +412,9 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
         st.write(f"Attempted extraction methods: `{', '.join(cache_status['attempted_methods'])}`")
         st.write(f"Final source: `{cache_status['source'] or 'none'}`")
         st.write(f"Character count: `{cache_status['char_count']}`")
+        st.write(f"Cache stale: `{cache_status['is_stale']}`")
+        st.write(f"Current PDF SHA-256: `{cache_status['pdf_sha256'] or 'unavailable'}`")
+        st.write(f"Cached PDF SHA-256: `{cache_status['cached_pdf_sha256'] or 'unavailable'}`")
         if cache_status["errors"]:
             label = "Fallback warnings" if cache_status["status"] == "success" else "Errors"
             st.write(f"{label}:")

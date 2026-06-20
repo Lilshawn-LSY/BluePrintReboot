@@ -9,7 +9,6 @@ from storage.extracted_text_store import (
     build_extraction_metadata,
     clear_extraction_cache,
     extraction_cache_status,
-    has_reusable_extracted_text_cache,
     save_extracted_text,
     save_extraction_metadata,
 )
@@ -37,21 +36,23 @@ def extract_text_for_paper(
     index_csv: Path = INDEX_CSV,
 ) -> FullTextWorkflowResult:
     paper_id = record["paper_id"]
-    if not force and has_reusable_extracted_text_cache(paper_id, cache_dir):
-        status = extraction_cache_status(paper_id, cache_dir)
-        return FullTextWorkflowResult(
-            paper_id=paper_id,
-            skipped=True,
-            status=str(status["status"]),
-            source=str(status["source"]),
-            char_count=int(status["char_count"] or 0),
-            extracted_at=str(status["extracted_at"]),
-            errors=list(status["errors"]),
-            attempted_methods=list(status["attempted_methods"]),
-            metadata={},
-        )
+    pdf_path = Path(str(record.get("filepath", "")))
+    if not force:
+        status = extraction_cache_status(paper_id, cache_dir, pdf_path=pdf_path)
+        if status["has_reusable_text_cache"] and not status["is_stale"]:
+            return FullTextWorkflowResult(
+                paper_id=paper_id,
+                skipped=True,
+                status=str(status["status"]),
+                source=str(status["source"]),
+                char_count=int(status["char_count"] or 0),
+                extracted_at=str(status["extracted_at"]),
+                errors=list(status["errors"]),
+                attempted_methods=list(status["attempted_methods"]),
+                metadata={},
+            )
 
-    result = extract_full_text_from_pdf(Path(str(record.get("filepath", ""))))
+    result = extract_full_text_from_pdf(pdf_path)
     save_extracted_text(paper_id, result.text, cache_dir)
     metadata = build_extraction_metadata(paper_id, str(record.get("filepath", "")), result, cache_dir)
     save_extraction_metadata(paper_id, metadata, cache_dir)

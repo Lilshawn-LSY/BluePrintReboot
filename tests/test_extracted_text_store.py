@@ -6,6 +6,7 @@ from storage.extracted_text_store import (
     extraction_cache_status,
     extraction_metadata_path,
     has_reusable_extracted_text_cache,
+    is_extraction_cache_stale,
     load_cached_extracted_text,
     load_extraction_metadata,
     save_extracted_text,
@@ -106,6 +107,8 @@ def test_failed_empty_extraction_cache_is_not_reusable() -> None:
 
 def test_successful_non_empty_extraction_cache_is_reusable() -> None:
     cache_dir = make_workspace("text-cache-reusable")
+    pdf_path = cache_dir / "paper.pdf"
+    pdf_path.write_bytes(b"current PDF")
     save_extracted_text("paper-1", "usable text", cache_dir)
     save_extraction_metadata(
         "paper-1",
@@ -120,3 +123,59 @@ def test_successful_non_empty_extraction_cache_is_reusable() -> None:
     )
 
     assert has_reusable_extracted_text_cache("paper-1", cache_dir) is True
+    assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is False
+
+
+def test_same_pdf_hash_is_not_stale() -> None:
+    workspace = make_workspace("text-cache-same-pdf")
+    cache_dir = workspace / "cache"
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"same PDF")
+    result = FullTextExtractionResult(
+        text="usable text",
+        source="pypdf",
+        char_count=11,
+        errors=[],
+        status="success",
+        attempted_methods=["pypdf"],
+    )
+    save_extracted_text("paper-1", result.text, cache_dir)
+    save_extraction_metadata(
+        "paper-1",
+        build_extraction_metadata("paper-1", str(pdf_path), result, cache_dir),
+        cache_dir,
+    )
+
+    status = extraction_cache_status("paper-1", cache_dir, pdf_path=pdf_path)
+
+    assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is False
+    assert status["is_stale"] is False
+    assert status["pdf_sha256"] == status["cached_pdf_sha256"]
+
+
+def test_changed_pdf_hash_is_stale() -> None:
+    workspace = make_workspace("text-cache-changed-pdf")
+    cache_dir = workspace / "cache"
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"original PDF")
+    result = FullTextExtractionResult(
+        text="usable text",
+        source="pypdf",
+        char_count=11,
+        errors=[],
+        status="success",
+        attempted_methods=["pypdf"],
+    )
+    save_extracted_text("paper-1", result.text, cache_dir)
+    save_extraction_metadata(
+        "paper-1",
+        build_extraction_metadata("paper-1", str(pdf_path), result, cache_dir),
+        cache_dir,
+    )
+    pdf_path.write_bytes(b"replacement PDF")
+
+    status = extraction_cache_status("paper-1", cache_dir, pdf_path=pdf_path)
+
+    assert is_extraction_cache_stale("paper-1", pdf_path, cache_dir) is True
+    assert status["is_stale"] is True
+    assert status["pdf_sha256"] != status["cached_pdf_sha256"]

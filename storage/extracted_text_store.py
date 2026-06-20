@@ -107,7 +107,11 @@ def load_extraction_metadata(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR
         }
 
 
-def extraction_cache_status(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> dict[str, Any]:
+def extraction_cache_status(
+    paper_id: str,
+    cache_dir: Path = EXTRACTED_TEXT_DIR,
+    pdf_path: str | Path | None = None,
+) -> dict[str, Any]:
     text_path = extracted_text_path(paper_id, cache_dir)
     metadata_path = extraction_metadata_path(paper_id, cache_dir)
     metadata = load_extraction_metadata(paper_id, cache_dir)
@@ -117,7 +121,7 @@ def extraction_cache_status(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR)
         and metadata.get("status") == "success"
         and int(metadata.get("char_count") or 0) > 0
     )
-    return {
+    status = {
         "text_path": text_path,
         "metadata_path": metadata_path,
         "has_text_file": has_text_file,
@@ -131,6 +135,47 @@ def extraction_cache_status(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR)
         "errors": metadata.get("errors", []),
         "attempted_methods": metadata.get("attempted_methods", []),
     }
+    if pdf_path is not None:
+        current_pdf_sha256 = str(pdf_fingerprint(pdf_path)["pdf_sha256"])
+        cached_pdf_sha256 = str(metadata.get("pdf_sha256") or "")
+        status.update(
+            {
+                "is_stale": _hashes_show_stale(
+                    has_reusable_text_cache,
+                    current_pdf_sha256,
+                    cached_pdf_sha256,
+                ),
+                "pdf_sha256": current_pdf_sha256,
+                "cached_pdf_sha256": cached_pdf_sha256,
+            }
+        )
+    return status
+
+
+def is_extraction_cache_stale(
+    paper_id: str,
+    pdf_path: str | Path,
+    cache_dir: Path = EXTRACTED_TEXT_DIR,
+) -> bool:
+    if not has_reusable_extracted_text_cache(paper_id, cache_dir):
+        return False
+
+    current_pdf_sha256 = str(pdf_fingerprint(pdf_path)["pdf_sha256"])
+    cached_pdf_sha256 = str(load_extraction_metadata(paper_id, cache_dir).get("pdf_sha256") or "")
+    return _hashes_show_stale(True, current_pdf_sha256, cached_pdf_sha256)
+
+
+def _hashes_show_stale(
+    has_reusable_text_cache: bool,
+    current_pdf_sha256: str,
+    cached_pdf_sha256: str,
+) -> bool:
+    return bool(
+        has_reusable_text_cache
+        and current_pdf_sha256
+        and cached_pdf_sha256
+        and current_pdf_sha256 != cached_pdf_sha256
+    )
 
 
 def has_reusable_extracted_text_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> bool:
