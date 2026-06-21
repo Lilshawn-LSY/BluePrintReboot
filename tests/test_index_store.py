@@ -347,3 +347,54 @@ def test_accept_crossref_metadata_preserves_workflow_fields() -> None:
     assert row["tags"] == "keep, tags"
     assert row["status"] == "reading"
     assert row["reading_priority"] == "high"
+
+
+def test_accept_crossref_metadata_does_not_erase_existing_values_with_blanks() -> None:
+    workspace = make_workspace("crossref-accept-non-empty-overlay")
+    index_csv = workspace / "data" / "paper_index.csv"
+    save_index(
+        pd.DataFrame(
+            [
+                {
+                    "paper_id": "paper-1",
+                    "filename": "One.pdf",
+                    "filepath": "One.pdf",
+                    "title": "Manual Title",
+                    "authors": "Manual Author",
+                    "year": "2024",
+                    "journal": "Manual Journal",
+                    "abstract": "Manual abstract",
+                    "keywords": "manual, keywords",
+                    "doi": "10.1000/manual",
+                }
+            ]
+        ),
+        index_csv,
+    )
+
+    updated = accept_crossref_metadata(
+        "paper-1",
+        {
+            "title": "Crossref Title",
+            "authors": "",
+            "year": "",
+            "journal": "",
+            "abstract": "",
+            "keywords": "",
+            "doi": "",
+            "metadata_source": "crossref",
+            "metadata_confidence": "partial",
+        },
+        index_csv=index_csv,
+    )
+
+    row = updated.iloc[0]
+    assert row["title"] == "Crossref Title"
+    assert row["authors"] == "Manual Author"
+    assert row["year"] == "2024"
+    assert row["journal"] == "Manual Journal"
+    assert row["abstract"] == "Manual abstract"
+    assert row["keywords"] == "manual, keywords"
+    assert row["doi"] == "10.1000/manual"
+    assert row["metadata_source"] == "crossref"
+    assert row["metadata_confidence"] == "partial"

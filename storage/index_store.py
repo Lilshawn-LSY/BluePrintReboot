@@ -269,6 +269,8 @@ def accept_crossref_metadata(
     for column in CROSSREF_ACCEPT_COLUMNS:
         if column in metadata:
             value = str(metadata[column]).strip()
+            if not value:
+                continue
             if column == "doi":
                 value = normalize_doi(value)
                 df.loc[row_mask, "doi_source"] = str(metadata.get("doi_source", "crossref" if value else "")).strip()

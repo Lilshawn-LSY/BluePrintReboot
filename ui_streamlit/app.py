@@ -7,8 +7,8 @@ import streamlit as st
 from ingest.crossref import (
     CrossrefLookupError,
     check_crossref_connectivity,
-    fetch_crossref_by_doi,
-    parse_crossref_work,
+    crossref_dependency_versions,
+    lookup_crossref_metadata,
     proxy_environment,
 )
 from ingest.document_text import get_text_extraction_backends
@@ -322,13 +322,12 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         crossref_status = "not attempted"
         if doi_for_lookup:
             try:
-                crossref_message = fetch_crossref_by_doi(doi_for_lookup)
-                st.session_state[preview_key] = parse_crossref_work(crossref_message)
+                st.session_state[preview_key] = lookup_crossref_metadata(doi_for_lookup)
                 crossref_status = "metadata found; review the preview before accepting"
             except CrossrefLookupError as exc:
                 crossref_status = f"failed: {exc}"
-            except Exception as exc:
-                crossref_status = f"failed: {exc}"
+            except Exception:
+                crossref_status = "failed: Crossref returned an unexpected response."
         elif not detected_doi:
             crossref_status = "not attempted; no DOI available"
 
@@ -376,14 +375,13 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
             if st.button("Fetch Crossref metadata for detected DOI"):
                 try:
-                    message = fetch_crossref_by_doi(detected_doi)
-                    st.session_state[preview_key] = parse_crossref_work(message)
+                    st.session_state[preview_key] = lookup_crossref_metadata(detected_doi)
                     st.success("Crossref metadata found. Review the preview before accepting it.")
                     st.rerun()
                 except CrossrefLookupError as exc:
                     st.warning(str(exc))
-                except Exception as exc:
-                    st.warning(f"Crossref lookup failed: {exc}")
+                except Exception:
+                    st.warning("Crossref returned an unexpected response.")
         else:
             st.info(extraction["message"])
             st.write("Detected DOI: `not found`")
@@ -424,6 +422,9 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         return
 
     st.write("Crossref preview")
+    st.write("Metadata source: Crossref")
+    if preview.get("metadata_warning"):
+        st.warning(preview["metadata_warning"])
     st.dataframe(
         pd.DataFrame(
             [
@@ -469,14 +470,13 @@ def _lookup_crossref_by_current_doi(current_doi: str, preview_key: str) -> None:
         st.warning("The DOI does not look valid.")
     else:
         try:
-            message = fetch_crossref_by_doi(normalized)
-            st.session_state[preview_key] = parse_crossref_work(message)
+            st.session_state[preview_key] = lookup_crossref_metadata(normalized)
             st.success("Crossref metadata found. Review the preview before accepting it.")
             st.rerun()
         except CrossrefLookupError as exc:
             st.warning(str(exc))
-        except Exception as exc:
-            st.warning(f"Crossref lookup failed: {exc}")
+        except Exception:
+            st.warning("Crossref returned an unexpected response.")
 
 
 def settings_page() -> None:
@@ -527,6 +527,11 @@ def settings_page() -> None:
     st.caption("Use Tag Manager to review, merge, or register library tags.")
     _render_paper_file_hygiene()
     st.subheader("Crossref Connectivity")
+    dependency_versions = crossref_dependency_versions()
+    st.caption(
+        "Crossref dependencies: "
+        + ", ".join(f"{name} {version}" for name, version in dependency_versions.items())
+    )
     proxy_vars = proxy_environment()
     if proxy_vars:
         st.warning(
@@ -538,15 +543,15 @@ def settings_page() -> None:
         if result["ok"]:
             st.success(f"{result['message']} HTTP status: {result['status_code']}")
         else:
-            st.warning(
-                f"{result['message']} Likely causes include a restricted network, firewall/proxy, "
-                "temporary Crossref/API issue, or offline environment."
-            )
+            st.warning(result["message"])
     st.write(
         "Crossref assist is optional. No API key is required; internet is needed only when you click lookup. "
         "Metadata remains stored locally in data/paper_index.csv."
     )
-    st.write("Use v0.3 by entering a DOI in Paper Detail, saving metadata, looking up Crossref, reviewing the preview, and accepting it only if it looks right.")
+    st.write(
+        "Enter a DOI in Paper Detail, save it, request a Crossref preview, and apply only useful metadata. "
+        "Fill any missing title, year, or author fields manually before using Paper File Hygiene."
+    )
 
 
 def _render_paper_file_hygiene() -> None:

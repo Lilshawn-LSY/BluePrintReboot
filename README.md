@@ -16,7 +16,7 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 - Local CSV metadata index that preserves user-edited fields across rescans.
 - Search and filtering by metadata, reading status, priority, and tags.
 - DOI detection with `pypdf` and an optional MarkItDown fallback.
-- Explicit Crossref preview and acceptance instead of automatic metadata replacement.
+- Reliable, polite Crossref preview and acceptance with classified network, timeout, SSL, HTTP, and response errors.
 - Deterministic tag suggestions using `config/tag_rules.json`.
 - Dedicated Tag Manager for reviewing canonical, alias-resolved, unknown, short, and ambiguous library tags.
 - Canonical tag governance with explicit merge previews and registry actions; existing tags change only after a confirmed apply.
@@ -64,6 +64,22 @@ pip install -r requirements-optional.txt
 
 The optional requirements file installs `markitdown[pdf]`. Full-text extraction prefers MarkItDown when available and falls back to `pypdf`. DOI detection tries `pypdf` first and then MarkItDown.
 
+### Crossref Contact Identity
+
+Crossref metadata enrichment uses polite access with a resolved contact email in both the `mailto` query parameter and the BluePrintReboot User-Agent. Contact email resolution order is:
+
+1. `CROSSREF_MAILTO`
+2. `BLUEPRINT_CONTACT_EMAIL`
+3. the built-in local default
+
+For example, in PowerShell:
+
+```powershell
+$env:CROSSREF_MAILTO = "researcher@example.edu"
+```
+
+The base requirements include `requests`, `urllib3`, and `certifi`; they are required for Crossref metadata enrichment.
+
 ### Project Layout
 
 - `app.py` - Streamlit entry point.
@@ -109,6 +125,14 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.9.5
+
+- Hardens Crossref Metadata Reliability with one shared request path for DOI lookups and the Settings connectivity diagnostic.
+- Centralizes contact email resolution and sends polite `mailto` and `BluePrintReboot/0.9.5` User-Agent identity on Crossref requests.
+- Distinguishes timeout, network, SSL/certificate, DOI-not-found, HTTP, malformed-response, and incomplete-metadata outcomes.
+- Applies only useful non-empty Crossref fields, so an incomplete response cannot erase existing user metadata.
+- Keeps enrichment best-effort: manual metadata editing remains supported, and `paper_id` remains stable.
 
 ### v0.9.4
 
@@ -190,7 +214,15 @@ Failed or empty initial extraction results are recorded for diagnostics but are 
 
 ### Crossref lookup
 
-Crossref is optional. SSL inspection, proxy settings, certificate errors, DNS failures, firewalls, rate limits, or timeouts can prevent lookup while local paper management continues to work. DOI and metadata fields can always be edited manually. Settings includes a Crossref connectivity check and sanitized proxy hints.
+Crossref enrichment is best-effort. SSL inspection, proxy settings, certificate errors, DNS failures, firewalls, rate limits, or timeouts can prevent lookup while local paper management continues to work. DOI and metadata fields can always be edited manually. Settings includes a Crossref connectivity check, dependency versions, and sanitized proxy hints; it uses the same request path as real DOI enrichment.
+
+If an SSL/certificate error occurs, update the networking dependencies and check whether the network performs TLS inspection:
+
+```powershell
+python -m pip install --upgrade requests urllib3 certifi
+```
+
+When Crossref returns incomplete title, year, or author data, fill the missing fields manually before using Paper File Hygiene. Crossref acceptance never replaces an existing value with an empty field.
 
 ### PDF rendering
 
