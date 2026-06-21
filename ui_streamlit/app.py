@@ -26,6 +26,11 @@ from ingest.tag_suggester import (
     suggest_tags,
     validate_tag_rules,
 )
+from services.paper_file_hygiene import (
+    PaperFileHygieneError,
+    apply_paper_file_rename,
+    build_rename_plan,
+)
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
@@ -520,6 +525,7 @@ def settings_page() -> None:
     else:
         st.write("None")
     st.caption("Use Tag Manager to review, merge, or register library tags.")
+    _render_paper_file_hygiene()
     st.subheader("Crossref Connectivity")
     proxy_vars = proxy_environment()
     if proxy_vars:
@@ -541,6 +547,76 @@ def settings_page() -> None:
         "Metadata remains stored locally in data/paper_index.csv."
     )
     st.write("Use v0.3 by entering a DOI in Paper Detail, saving metadata, looking up Crossref, reviewing the preview, and accepting it only if it looks right.")
+
+
+def _render_paper_file_hygiene() -> None:
+    st.subheader("Paper File Hygiene")
+    st.write(
+        "Preview a human-readable PDF filename, then confirm one rename at a time. "
+        "Scanning never renames files, and paper IDs remain unchanged."
+    )
+    success_message = st.session_state.pop("paper_file_hygiene_success", "")
+    if success_message:
+        st.success(success_message)
+
+    dataframe = _index()
+    if dataframe.empty:
+        st.info("No indexed papers are available for filename review.")
+        return
+
+    labels = {
+        str(row.paper_id): f"{row.title or row.filename or 'Untitled'} ({row.filename})"
+        for row in dataframe.itertuples(index=False)
+    }
+    selected_paper_id = st.selectbox(
+        "Paper",
+        options=list(labels),
+        format_func=lambda paper_id: labels.get(paper_id, paper_id),
+        key="paper_file_hygiene_selected_id",
+    )
+    confirmation_key = f"paper_file_hygiene_confirm_{selected_paper_id}"
+    if st.button("Preview", key="paper_file_hygiene_preview_button"):
+        record = dataframe[dataframe["paper_id"] == selected_paper_id].iloc[0].to_dict()
+        st.session_state["paper_file_hygiene_preview"] = build_rename_plan(record)
+        st.session_state[confirmation_key] = False
+
+    plan = st.session_state.get("paper_file_hygiene_preview")
+    if not plan or plan.get("paper_id") != selected_paper_id:
+        return
+
+    col1, col2, col3 = st.columns([2, 2, 1])
+    col1.write(f"Current filename: `{plan['current_filename']}`")
+    col2.write(f"Recommended filename: `{plan['recommended_filename']}`")
+    col3.write(f"Status: `{plan['status']}`")
+    for warning in plan["warnings"]:
+        st.warning(warning)
+    if plan["status"] == "insufficient_metadata":
+        st.info("Fill metadata first, then preview the filename again.")
+
+    st.write("Planned paths")
+    st.code(f"Current: {plan['current_path']}\nTarget:  {plan['target_path']}")
+    confirmation = st.checkbox(
+        "I understand this will rename the PDF file and update paper_index.csv.",
+        key=confirmation_key,
+        disabled=not bool(plan["can_apply"]),
+    )
+    if st.button(
+        "Apply rename",
+        key="paper_file_hygiene_apply_button",
+        disabled=not confirmation or not bool(plan["can_apply"]),
+    ):
+        try:
+            result = apply_paper_file_rename(selected_paper_id)
+        except PaperFileHygieneError as exc:
+            st.error(str(exc))
+            if exc.plan:
+                st.session_state["paper_file_hygiene_preview"] = exc.plan
+        else:
+            st.session_state.pop("paper_file_hygiene_preview", None)
+            st.session_state["paper_file_hygiene_success"] = (
+                f"Renamed PDF to {result['recommended_filename']} without changing paper_id."
+            )
+            st.rerun()
 
 
 def run() -> None:

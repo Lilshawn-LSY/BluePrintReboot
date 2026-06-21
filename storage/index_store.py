@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -169,7 +171,23 @@ def save_index(df: pd.DataFrame, index_csv: Path = INDEX_CSV) -> None:
     index_csv = Path(index_csv)
     index_csv.parent.mkdir(parents=True, exist_ok=True)
     output = migrate_index_dataframe(df)
-    output.to_csv(index_csv, index=False)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=index_csv.parent,
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            output.to_csv(temporary, index=False)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, index_csv)
+    finally:
+        if temporary_path and temporary_path.exists():
+            temporary_path.unlink()
 
 
 def update_index_from_scan(
@@ -179,6 +197,16 @@ def update_index_from_scan(
 ) -> pd.DataFrame:
     df = load_index(index_csv)
     scanned = scan_papers(papers_dir=papers_dir, notes_dir=notes_dir)
+    existing_by_path = {
+        os.path.normcase(os.path.abspath(str(row.filepath))): row
+        for row in df.itertuples(index=False)
+        if str(row.filepath).strip()
+    }
+    for record in scanned:
+        existing = existing_by_path.get(os.path.normcase(os.path.abspath(record["filepath"])))
+        if existing is not None:
+            record["paper_id"] = existing.paper_id
+            record["note_path"] = existing.note_path
     scanned_by_id = {record["paper_id"]: record for record in scanned}
     existing_ids = set(df["paper_id"].tolist())
 
