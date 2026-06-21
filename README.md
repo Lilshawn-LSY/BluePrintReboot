@@ -13,6 +13,7 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 - Dashboard counts for papers, reading status, priority, DOI coverage, Crossref metadata, and notes.
 - Recursive PDF scanning from `papers/` with stable paper IDs.
 - Explicit Drive Inbox Import from a configurable Google Drive for desktop folder into the canonical `papers/` library.
+- Timestamped light/full backup snapshots and a read-only Library Health Check in Settings.
 - Preview-and-confirm Paper File Hygiene for human-readable PDF filenames without changing paper IDs.
 - Local CSV metadata index that preserves user-edited fields across rescans.
 - Search and filtering by metadata, reading status, priority, and tags.
@@ -93,6 +94,17 @@ Another machine might use a path such as `C:\Users\<user>\Google Drive\My Drive\
 
 The inbox is not a second managed library. Inbox PDFs are import candidates only, and `papers/` remains the sole canonical managed PDF directory. Import is explicit and preview/confirm based. It copies one selected PDF without moving, deleting, renaming, or overwriting the source, then runs the existing scanner/index workflow against `papers/`.
 
+### Backup Snapshots
+
+GitHub stores the BluePrintReboot code, not the ignored local research library. Important local data includes `data/paper_index.csv`, project and project-link files, `notes/`, structured note blocks under `data/note_blocks/`, user-editable tag configuration, and the managed PDFs under `papers/`.
+
+**Settings > Backup Snapshot** creates a timestamped ZIP under `exports/`:
+
+- **Light snapshot** (default): index, projects, links, notes, note blocks, tag configuration, and relevant local settings. PDFs are excluded.
+- **Full snapshot**: everything in a light snapshot plus managed PDFs from `papers/`.
+
+Every snapshot includes `manifest.json` with the UTC timestamp, application version, snapshot type, included files, SHA-256 checksums, and record/file counts. Generated snapshots do not include Git data, virtual environments, Python caches, pytest caches, or previous exports.
+
 ### Project Layout
 
 - `app.py` - Streamlit entry point.
@@ -125,6 +137,7 @@ The inbox is not a second managed library. Inbox PDFs are import candidates only
 11. Use **Re-extract full text** to force extraction or **Delete cache** to remove cached text and metadata after confirmation.
 12. Open **Settings > Paper File Hygiene** to preview and confirm a single PDF rename. Scanning never renames PDFs automatically.
 13. Optionally open **Settings > Drive Inbox Import** to scan a Drive-synced local folder, preview one candidate, and explicitly copy it into `papers/`. The source remains untouched and the existing scanner updates the library index.
+14. Use **Settings > Backup Snapshot** before moving machines or making major local changes, and run **Library Health Check** to review missing, duplicate, orphaned, incomplete, or stale records.
 
 Paper File Hygiene recommends filenames using:
 
@@ -140,6 +153,13 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.9.7
+
+- Adds timestamped light and full Backup Snapshots under `exports/`, each with a checksummed `manifest.json`.
+- Keeps light snapshots compact by excluding PDFs; full snapshots explicitly include the canonical `papers/` library.
+- Adds a read-only Library Health Check for missing and unindexed PDFs, duplicate filenames and DOI values, incomplete metadata, orphan notes/note blocks/project links, noncanonical paths, and stale extracted-text caches.
+- Does not implement destructive restore; manual restore remains explicit and should be performed while the app is stopped.
 
 ### v0.9.6
 
@@ -260,3 +280,11 @@ If a cache is marked stale, select **Extract full text** or **Re-extract full te
 ### Tag rules
 
 Settings validates `config/tag_rules.json` and summarizes registry health. Tag Manager treats canonical tags as approved library terms, aliases as alternate terms that resolve without rewriting papers, and unknown tags as terms not yet registered. A merge shows its affected papers and before/after values first, then updates `paper_index.csv` only after explicit confirmation.
+
+### Moving to a new PC
+
+1. On the old machine, run Library Health Check and create a full snapshot. If only a light snapshot is practical, copy `papers/` separately.
+2. Install or clone the BluePrintReboot code on the new machine and install its requirements.
+3. Keep the app stopped while manually extracting the snapshot into the project root so paths such as `data/`, `notes/`, `config/`, and `papers/` retain their structure.
+4. Start the app, run **Scan papers**, then run **Library Health Check** again.
+5. Keep the original snapshot until the index, PDFs, notes, projects, and links have been verified.
