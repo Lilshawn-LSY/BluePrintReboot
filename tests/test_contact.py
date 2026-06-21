@@ -27,7 +27,7 @@ def test_contact_email_uses_central_default(monkeypatch) -> None:
 def test_user_agent_uses_resolved_contact_email(monkeypatch) -> None:
     monkeypatch.setenv("CROSSREF_MAILTO", "polite@example.edu")
 
-    assert build_blueprint_user_agent() == "BluePrintReboot/0.9.5 (mailto:polite@example.edu)"
+    assert build_blueprint_user_agent() == "BluePrintReboot/0.9.6 (mailto:polite@example.edu)"
 
 
 def test_default_email_literal_is_centralized() -> None:

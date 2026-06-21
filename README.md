@@ -12,6 +12,7 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 
 - Dashboard counts for papers, reading status, priority, DOI coverage, Crossref metadata, and notes.
 - Recursive PDF scanning from `papers/` with stable paper IDs.
+- Explicit Drive Inbox Import from a configurable Google Drive for desktop folder into the canonical `papers/` library.
 - Preview-and-confirm Paper File Hygiene for human-readable PDF filenames without changing paper IDs.
 - Local CSV metadata index that preserves user-edited fields across rescans.
 - Search and filtering by metadata, reading status, priority, and tags.
@@ -80,15 +81,28 @@ $env:CROSSREF_MAILTO = "researcher@example.edu"
 
 The base requirements include `requests`, `urllib3`, and `certifi`; they are required for Crossref metadata enrichment.
 
+### Drive Inbox
+
+Set `BLUEPRINT_INBOX_DIR` to a Google Drive for desktop synced folder, or enter the local path in **Settings > Drive Inbox Import**. For example:
+
+```powershell
+$env:BLUEPRINT_INBOX_DIR = "G:\My Drive\BluePrint\paper"
+```
+
+Another machine might use a path such as `C:\Users\<user>\Google Drive\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used; BluePrintReboot treats the folder as an ordinary local inbox.
+
+The inbox is not a second managed library. Inbox PDFs are import candidates only, and `papers/` remains the sole canonical managed PDF directory. Import is explicit and preview/confirm based. It copies one selected PDF without moving, deleting, renaming, or overwriting the source, then runs the existing scanner/index workflow against `papers/`.
+
 ### Project Layout
 
 - `app.py` - Streamlit entry point.
 - `ui_streamlit/` - App pages and Reader Workspace UI.
 - `ingest/` - PDF scanning, DOI handling, Crossref helpers, tag suggestions, and text extraction.
-- `services/` - Full-text extraction and tag-governance workflow orchestration.
+- `services/` - Full-text extraction, Drive inbox import, filename hygiene, and tag-governance workflows.
 - `storage/` - CSV index, Markdown notes, structured note blocks, projects, links, extracted-text cache, and path helpers.
 - `config/tag_rules.json` - Editable deterministic tag rulebook.
 - `config/canonical_tags.json` - Canonical tag labels, categories, aliases, and status.
+- `config/inbox.py` - Configurable local inbox path resolution.
 - `.github/workflows/tests.yml` - GitHub Actions test workflow.
 - `tests/` - Automated test suite.
 - `data/` - Local index, structured note blocks, projects, links, and extracted-text cache.
@@ -110,6 +124,7 @@ The base requirements include `requests`, `urllib3`, and `certifi`; they are req
 10. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
 11. Use **Re-extract full text** to force extraction or **Delete cache** to remove cached text and metadata after confirmation.
 12. Open **Settings > Paper File Hygiene** to preview and confirm a single PDF rename. Scanning never renames PDFs automatically.
+13. Optionally open **Settings > Drive Inbox Import** to scan a Drive-synced local folder, preview one candidate, and explicitly copy it into `papers/`. The source remains untouched and the existing scanner updates the library index.
 
 Paper File Hygiene recommends filenames using:
 
@@ -125,6 +140,14 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.9.6
+
+- Adds Drive Inbox Import for a configurable Google Drive for desktop local folder; no Drive API or OAuth is required.
+- Treats inbox PDFs as import candidates only. `papers/` remains the sole canonical managed PDF location, and inbox paths are never persisted as managed filepaths.
+- Adds explicit scan, select, preview, confirm, and copy-only import for one PDF at a time.
+- Detects missing, unreadable or online-only sources, duplicate content, filename collisions, invalid inbox paths, and inbox paths inside `papers/`.
+- Reuses the existing scanner/index workflow after copying, preserving existing `paper_id` values and all paper-ID-backed notes, links, and caches.
 
 ### v0.9.5
 
