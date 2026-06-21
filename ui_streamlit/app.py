@@ -1,9 +1,11 @@
+import platform
 from pathlib import Path
 from typing import Callable
 
 import pandas as pd
 import streamlit as st
 
+from config.contact import APP_VERSION
 from config.inbox import get_inbox_path
 from ingest.crossref import (
     CrossrefLookupError,
@@ -122,7 +124,7 @@ def dashboard_page() -> None:
         st.info("No papers indexed yet. Add PDF files to papers/ and scan.")
     else:
         recent = df.sort_values("added_at", ascending=False).head(5)
-        st.dataframe(recent[["title", "filename", "status", "added_at"]], use_container_width=True, hide_index=True)
+        st.dataframe(recent[["title", "filename", "status", "added_at"]], width="stretch", hide_index=True)
 
 
 def library_page() -> None:
@@ -169,7 +171,7 @@ def library_page() -> None:
 
     st.dataframe(
         filtered[LIBRARY_COLUMNS],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -455,7 +457,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
                 )
             ]
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     if st.button("Apply Crossref metadata"):
@@ -490,28 +492,64 @@ def _lookup_crossref_by_current_doi(current_doi: str, preview_key: str) -> None:
 
 def settings_page() -> None:
     st.title("Settings")
-    st.write("Resolved local workspace paths")
-    st.code(
-        "\n".join(
-            [
-                f"data: {DATA_DIR}",
-                f"papers: {PAPERS_DIR}",
-                f"notes: {NOTES_DIR}",
-                f"exports: {EXPORTS_DIR}",
-                f"index csv: {INDEX_CSV}",
-            ]
+    st.caption("System status, library maintenance, external-service diagnostics, and local backups.")
+    render_system_settings()
+    st.divider()
+    render_library_maintenance_settings()
+    st.divider()
+    render_external_services_settings()
+    st.divider()
+    render_backup_settings()
+
+
+def render_system_settings() -> None:
+    st.header("System")
+    st.caption("Runtime details and resolved local workspace paths.")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("App version", APP_VERSION)
+    col2.metric("Python", platform.python_version())
+    col3.metric("Streamlit", st.__version__)
+
+    with st.expander("Workspace paths", expanded=True):
+        st.code(
+            "\n".join(
+                [
+                    f"data: {DATA_DIR}",
+                    f"papers: {PAPERS_DIR}",
+                    f"notes: {NOTES_DIR}",
+                    f"exports: {EXPORTS_DIR}",
+                    f"index csv: {INDEX_CSV}",
+                ]
+            )
         )
-    )
-    st.write("Current index schema")
-    st.code("\n".join(INDEX_COLUMNS))
-    _render_backup_and_health()
-    st.subheader("Extraction Backends")
+
     backends = get_text_extraction_backends()
-    st.write(
-        "PDF text extraction backends: "
-        + ", ".join(f"{name}={'available' if available else 'unavailable'}" for name, available in backends.items())
-    )
-    st.subheader("Tag Rulebook")
+    with st.expander("Runtime and storage details"):
+        st.write(
+            "PDF text extraction: "
+            + ", ".join(
+                f"{name}={'available' if available else 'unavailable'}"
+                for name, available in backends.items()
+            )
+        )
+        st.write(f"Pandas: `{pd.__version__}`")
+        st.write("Paper index columns")
+        st.code("\n".join(INDEX_COLUMNS))
+
+
+def render_library_maintenance_settings() -> None:
+    st.header("Library Maintenance")
+    st.caption("Read-only health diagnostics first, followed by explicit maintenance actions.")
+    _render_library_health_check()
+    _render_tag_rules_settings()
+    st.subheader("Maintenance Actions")
+    st.caption("These workflows require preview or confirmation before changing library files.")
+    _render_pdf_inbox()
+    _render_paper_file_hygiene()
+
+
+def _render_tag_rules_settings() -> None:
+    st.subheader("Tag Rules")
     rules = load_tag_rules()
     canonical_registry = load_canonical_tags()
     validation_warnings = validate_tag_rules(rules)
@@ -535,9 +573,12 @@ def settings_page() -> None:
     else:
         st.write("None")
     st.caption("Use Tag Manager to review, merge, or register library tags.")
-    _render_pdf_inbox()
-    _render_paper_file_hygiene()
-    st.subheader("Crossref Connectivity")
+
+
+def render_external_services_settings() -> None:
+    st.header("External Services")
+    st.caption("Optional network diagnostics. Local library workflows remain available while offline.")
+    st.subheader("Crossref Diagnostics")
     dependency_versions = crossref_dependency_versions()
     st.caption(
         "Crossref dependencies: "
@@ -549,23 +590,21 @@ def settings_page() -> None:
             "Proxy environment variables are set: "
             + ", ".join(f"{name}={value}" for name, value in proxy_vars.items())
         )
-    if st.button("Test Crossref Connection"):
+    if st.button("Test Crossref connection", key="test_crossref_connection"):
         result = check_crossref_connectivity()
         if result["ok"]:
             st.success(f"{result['message']} HTTP status: {result['status_code']}")
         else:
             st.warning(result["message"])
     st.write(
-        "Crossref assist is optional. No API key is required; internet is needed only when you click lookup. "
-        "Metadata remains stored locally in data/paper_index.csv."
-    )
-    st.write(
-        "Enter a DOI in Paper Detail, save it, request a Crossref preview, and apply only useful metadata. "
-        "Fill any missing title, year, or author fields manually before using Paper File Hygiene."
+        "Crossref requires internet access but no API key. Metadata is previewed before acceptance and remains "
+        "stored locally in data/paper_index.csv. Fill incomplete fields manually before using Paper Hygiene."
     )
 
 
-def _render_backup_and_health() -> None:
+def render_backup_settings() -> None:
+    st.header("Backup")
+    st.caption("Create additive local snapshots. Restore remains a documented manual workflow.")
     st.subheader("Backup Snapshot")
     st.write(
         "Create a timestamped ZIP under exports/. Light snapshots contain library metadata and notes; "
@@ -573,7 +612,7 @@ def _render_backup_and_health() -> None:
     )
     snapshot_mode = st.radio(
         "Snapshot type",
-        options=("Light — metadata and notes", "Full — metadata, notes, and PDFs"),
+        options=("Light - metadata and notes", "Full - metadata, notes, and PDFs"),
         horizontal=True,
         key="backup_snapshot_type",
     )
@@ -601,11 +640,13 @@ def _render_backup_and_health() -> None:
         manifest = snapshot_result["manifest"]
         st.success(f"Snapshot created: {snapshot_result['snapshot_path']}")
         st.caption(
-            f"{manifest['snapshot_type'].title()} snapshot · "
-            f"{manifest['counts']['included_files']} files · {manifest['counts']['pdfs']} PDFs"
+            f"{manifest['snapshot_type'].title()} snapshot | "
+            f"{manifest['counts']['included_files']} files | {manifest['counts']['pdfs']} PDFs"
         )
-    st.caption("Restore is manual in v0.9.7; creating a snapshot never changes library data.")
+    st.caption("Restore is manual in v0.9.8; creating a snapshot never changes library data.")
 
+
+def _render_library_health_check() -> None:
     st.subheader("Library Health Check")
     st.write(
         "Run read-only checks for missing or unindexed PDFs, duplicate identities, incomplete metadata, "
@@ -697,11 +738,11 @@ def _render_pdf_inbox() -> None:
         return
     st.dataframe(
         pd.DataFrame(candidates)[["filename", "size_bytes", "modified_time", "status", "message"]],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
     labels = {
-        candidate["source_path"]: f"{candidate['filename']} — {candidate['status']}"
+        candidate["source_path"]: f"{candidate['filename']} - {candidate['status']}"
         for candidate in candidates
     }
     selected_source = st.selectbox(
@@ -747,7 +788,7 @@ def _render_pdf_inbox() -> None:
 
 
 def _render_paper_file_hygiene() -> None:
-    st.subheader("Paper File Hygiene")
+    st.subheader("Paper Hygiene")
     st.write(
         "Preview a human-readable PDF filename, then confirm one rename at a time. "
         "Scanning never renames files, and paper IDs remain unchanged."

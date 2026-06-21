@@ -1,38 +1,19 @@
 # BluePrintReboot
 
-## Overview
+## What is BluePrintReboot?
 
-BluePrintReboot is a local-first personal research paper library built with Streamlit. It scans local PDFs, maintains a CSV paper index, supports Markdown and structured reading notes, links research material to projects, and caches extracted full text beside the local library data.
+BluePrintReboot is a local-first research paper library built with Streamlit. It keeps PDFs, metadata, reading notes, structured note blocks, project links, tags, and extracted text on the local machine.
 
-Paper metadata is stored in `data/paper_index.csv`, Markdown notes are stored in `notes/`, structured note blocks are stored in `data/note_blocks/`, and extracted text is stored under `data/extracted_text/`. These user-generated files are ignored by git.
+The canonical managed PDF directory is `papers/`. Paper identity is the stable `paper_id` stored in `data/paper_index.csv`; notes, note blocks, project links, and extracted-text caches remain attached to that identity even when a PDF filename changes.
 
-PDF management, DOI extraction, manual metadata editing, tag suggestions, notes, and full-text extraction work locally. Crossref lookup is optional and requires internet access, but no API key.
+## Current Status
 
-## Current Features
+Version **0.9.8** is the final Streamlit UX cleanup before v1.0. The app remains intentionally local-first and single-user:
 
-- Dashboard counts for papers, reading status, priority, DOI coverage, Crossref metadata, and notes.
-- Recursive PDF scanning from `papers/` with stable paper IDs.
-- Explicit Drive Inbox Import from a configurable Google Drive for desktop folder into the canonical `papers/` library.
-- Timestamped light/full backup snapshots and a read-only Library Health Check in Settings.
-- Preview-and-confirm Paper File Hygiene for human-readable PDF filenames without changing paper IDs.
-- Local CSV metadata index that preserves user-edited fields across rescans.
-- Search and filtering by metadata, reading status, priority, and tags.
-- DOI detection with `pypdf` and an optional MarkItDown fallback.
-- Reliable, polite Crossref preview and acceptance with classified network, timeout, SSL, HTTP, and response errors.
-- Deterministic tag suggestions using `config/tag_rules.json`.
-- Dedicated Tag Manager for reviewing canonical, alias-resolved, unknown, short, and ambiguous library tags.
-- Canonical tag governance with explicit merge previews and registry actions; existing tags change only after a confirmed apply.
-- Reader Workspace with a local PDF viewer, Markdown notes, note templates, tags, reading status, and priority controls.
-- Editable, filterable JSON-backed structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
-- Optional one-way structured-block snapshots appended to the freeform Markdown draft without automatic synchronization.
-- Minimal research projects that collect links to papers and structured note blocks.
-- Stable HTML PDF rendering by default, with an optional native Streamlit PDF viewer and automatic fallback.
-- User-triggered full-text extraction with MarkItDown when available and `pypdf` fallback.
-- Full-text cache status, diagnostics, preview, forced re-extraction, and cache clearing.
-- SHA-256 stale-cache detection with automatic refresh when a changed PDF can be extracted successfully.
-- Cache-safe recovery that preserves previous usable text when re-extraction fails.
-
-Visual PDF highlighting, coordinate annotations, mouse-selection capture, graph visualization, Zotero integration, and relation graphs are not yet implemented.
+- Runtime library data is ignored by Git.
+- GitHub stores the application code, not the personal paper library.
+- Crossref is optional; core reading and organization workflows work offline.
+- Maintenance actions use preview and confirmation where files or records can change.
 
 ## Quick Start
 
@@ -42,249 +23,174 @@ Install the base dependencies:
 pip install -r requirements.txt
 ```
 
-Run the app:
+Start the app:
 
 ```powershell
 streamlit run app.py
 ```
 
-Run the test suite:
+Add PDFs directly to `papers/`, then select **Scan papers** in the app. Open **Library** to choose a paper and continue in **Paper Detail**.
 
-```powershell
-python -m pytest
-```
-
-`requirements.txt` includes `streamlit[pdf]`. The Reader Workspace still defaults to the stable HTML viewer because native component support can vary by environment.
-
-### Optional MarkItDown
-
-The base app includes `pypdf`. Install the optional MarkItDown PDF support with:
+For optional MarkItDown PDF support:
 
 ```powershell
 pip install -r requirements-optional.txt
 ```
 
-The optional requirements file installs `markitdown[pdf]`. Full-text extraction prefers MarkItDown when available and falls back to `pypdf`. DOI detection tries `pypdf` first and then MarkItDown.
+## Core Features
 
-### Crossref Contact Identity
+### Library and Reader
 
-Crossref metadata enrichment uses polite access with a resolved contact email in both the `mailto` query parameter and the BluePrintReboot User-Agent. Contact email resolution order is:
+- Recursive PDF scanning from the canonical `papers/` directory.
+- Stable paper identities and a local CSV metadata index.
+- Search and filtering by metadata, status, priority, and tags.
+- Reader Workspace with PDF viewing, Markdown notes, status, priority, and tags.
+- Structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
+- Full-text extraction with MarkItDown when available and `pypdf` fallback.
+- SHA-256 cache freshness checks and safe stale-cache recovery.
+
+### Metadata and Organization
+
+- DOI extraction from PDFs.
+- Crossref metadata preview and explicit acceptance with classified diagnostics.
+- Manual metadata editing remains available when enrichment is incomplete or offline.
+- Deterministic tag suggestions and canonical tag governance.
+- Research projects linking papers and structured note blocks.
+- Paper Hygiene recommendations using `{year}_{first_author}_{short_title}.pdf` without changing `paper_id`.
+
+### Library Maintenance
+
+Settings is organized into four sections:
+
+- **System** — app/runtime information, workspace paths, extraction backends, and index details.
+- **Library Maintenance** — Library Health Check, Tag Rules, Drive Inbox Import, and Paper Hygiene.
+- **External Services** — Crossref Diagnostics, dependency versions, and proxy/network status.
+- **Backup** — light/full Backup Snapshot controls and manifest summaries.
+
+Library Health Check reports missing or unindexed PDFs, duplicate filenames and DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches.
+
+### Drive Inbox Import
+
+`BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used.
+
+Inbox PDFs are candidates only. An explicit preview/confirm workflow copies one selected PDF into `papers/`, leaves the source untouched, and then uses the existing scanner/index workflow. Inbox paths are never persisted as managed paper paths.
+
+### Backup and Moving Computers
+
+Backup Snapshot creates timestamped ZIP files under `exports/`:
+
+- **Light** — index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
+- **Full** — everything in a light snapshot plus managed PDFs from `papers/`.
+
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore is manual in v0.9.8.
+
+Recommended move workflow:
+
+1. Run Library Health Check on the old computer.
+2. Create a full snapshot, or create a light snapshot and copy `papers/` separately.
+3. Install BluePrintReboot on the new computer.
+4. With the app stopped, extract the snapshot into the project root while preserving directory structure.
+5. Start the app, scan papers, and run Library Health Check again.
+
+### Crossref Configuration
+
+Crossref polite-access contact resolution uses:
 
 1. `CROSSREF_MAILTO`
 2. `BLUEPRINT_CONTACT_EMAIL`
 3. the built-in local default
 
-For example, in PowerShell:
+Example:
 
 ```powershell
 $env:CROSSREF_MAILTO = "researcher@example.edu"
 ```
 
-The base requirements include `requests`, `urllib3`, and `certifi`; they are required for Crossref metadata enrichment.
+Crossref enrichment requires the base dependencies `requests`, `urllib3`, and `certifi`.
 
-### Drive Inbox
+## Project Structure
 
-Set `BLUEPRINT_INBOX_DIR` to a Google Drive for desktop synced folder, or enter the local path in **Settings > Drive Inbox Import**. For example:
+- `app.py` — Streamlit entry point.
+- `ui_streamlit/` — application pages and workspace UI.
+- `ingest/` — scanning, DOI, Crossref, tagging, and text-extraction helpers.
+- `services/` — inbox import, filename hygiene, backup, health checks, and workflow orchestration.
+- `storage/` — index, notes, note blocks, projects, links, and extracted-text caches.
+- `config/` — contact/inbox helpers and user-editable tag configuration.
+- `tests/` — automated test suite.
+- `papers/` — canonical managed PDF library; ignored by Git.
+- `data/` — local metadata and caches; ignored by Git.
+- `notes/` — Markdown reading notes; ignored by Git.
+- `exports/` — snapshots and exports; ignored by Git.
+
+## Development Commands
+
+Run the complete test suite:
 
 ```powershell
-$env:BLUEPRINT_INBOX_DIR = "G:\My Drive\BluePrint\paper"
+python -m pytest
 ```
 
-Another machine might use a path such as `C:\Users\<user>\Google Drive\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used; BluePrintReboot treats the folder as an ordinary local inbox.
+Run a focused test file:
 
-The inbox is not a second managed library. Inbox PDFs are import candidates only, and `papers/` remains the sole canonical managed PDF directory. Import is explicit and preview/confirm based. It copies one selected PDF without moving, deleting, renaming, or overwriting the source, then runs the existing scanner/index workflow against `papers/`.
+```powershell
+python -m pytest tests/test_library_health.py -q
+```
 
-### Backup Snapshots
+The GitHub Actions workflow runs the full pytest suite on pushes to `main` and pull requests.
 
-GitHub stores the BluePrintReboot code, not the ignored local research library. Important local data includes `data/paper_index.csv`, project and project-link files, `notes/`, structured note blocks under `data/note_blocks/`, user-editable tag configuration, and the managed PDFs under `papers/`.
+## Version History
 
-**Settings > Backup Snapshot** creates a timestamped ZIP under `exports/`:
+### v0.9.8
 
-- **Light snapshot** (default): index, projects, links, notes, note blocks, tag configuration, and relevant local settings. PDFs are excluded.
-- **Full snapshot**: everything in a light snapshot plus managed PDFs from `papers/`.
-
-Every snapshot includes `manifest.json` with the UTC timestamp, application version, snapshot type, included files, SHA-256 checksums, and record/file counts. Generated snapshots do not include Git data, virtual environments, Python caches, pytest caches, or previous exports.
-
-### Project Layout
-
-- `app.py` - Streamlit entry point.
-- `ui_streamlit/` - App pages and Reader Workspace UI.
-- `ingest/` - PDF scanning, DOI handling, Crossref helpers, tag suggestions, and text extraction.
-- `services/` - Full-text extraction, Drive inbox import, filename hygiene, and tag-governance workflows.
-- `storage/` - CSV index, Markdown notes, structured note blocks, projects, links, extracted-text cache, and path helpers.
-- `config/tag_rules.json` - Editable deterministic tag rulebook.
-- `config/canonical_tags.json` - Canonical tag labels, categories, aliases, and status.
-- `config/inbox.py` - Configurable local inbox path resolution.
-- `.github/workflows/tests.yml` - GitHub Actions test workflow.
-- `tests/` - Automated test suite.
-- `data/` - Local index, structured note blocks, projects, links, and extracted-text cache.
-- `papers/` - Local PDF library.
-- `notes/` - Markdown reading notes.
-- `exports/` - Local export destination.
-
-## Workflow
-
-1. Put PDF files in `papers/`.
-2. Start the app and select **Scan papers**.
-3. Open **Library**, choose a paper, and open **Paper Detail**.
-4. Use the Reader Workspace to view the PDF and continue editing its existing Markdown note.
-5. Add or edit structured note blocks when a summary, claim, method, evidence item, question, idea, or limitation should be stored as a separate record. Optionally append a rendered snapshot to the Markdown draft; later block edits do not update that snapshot.
-6. Create projects in **Project Workspace**, then link relevant papers and structured note blocks with a relationship type and optional note.
-7. Select **Enrich Metadata** to detect a DOI and request a Crossref preview. Crossref metadata is applied only after **Accept Crossref Metadata** is selected.
-8. Review suggested tags and accept them when useful. Existing tags are preserved and duplicates are skipped.
-9. Open **Tag Manager** to review used tags, register aliases, create canonical tags, or preview and explicitly apply a merge. Alias registration changes only the registry; it does not rewrite the library.
-10. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
-11. Use **Re-extract full text** to force extraction or **Delete cache** to remove cached text and metadata after confirmation.
-12. Open **Settings > Paper File Hygiene** to preview and confirm a single PDF rename. Scanning never renames PDFs automatically.
-13. Optionally open **Settings > Drive Inbox Import** to scan a Drive-synced local folder, preview one candidate, and explicitly copy it into `papers/`. The source remains untouched and the existing scanner updates the library index.
-14. Use **Settings > Backup Snapshot** before moving machines or making major local changes, and run **Library Health Check** to review missing, duplicate, orphaned, incomplete, or stale records.
-
-Paper File Hygiene recommends filenames using:
-
-`{year}_{first_author}_{short_title}.pdf`
-
-For example, `2014_LeCun_Deep_Learning.pdf`. Filename hygiene works best after the paper's metadata is filled in. Missing metadata is shown before confirmation, and a rename is blocked when both year and author are missing rather than recommending an `UnknownYear_UnknownAuthor` filename. Placeholder generation remains available as a defensive internal fallback, not as the preferred rename path. Collisions block the rename, and existing files are never overwritten. A rename updates only the PDF's `filename` and `filepath` index fields. The stable `paper_id` is preserved, so Markdown notes, structured note blocks, project links, and extracted text caches remain attached to the same paper identity.
-
-Extracted text cache files are:
-
-- `data/extracted_text/{paper_id}.txt` for text.
-- `data/extracted_text/{paper_id}.json` for extraction metadata and the source PDF fingerprint.
-
-Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
-
-## Version Notes
+- Reorganizes Settings into System, Library Maintenance, External Services, and Backup.
+- Standardizes maintenance and diagnostic labels without changing service behavior.
+- Restructures README startup, feature, development, and limitation guidance.
+- Adds an unpublished v1.0 release-note draft under `docs/release_notes/`.
 
 ### v0.9.7
 
-- Adds timestamped light and full Backup Snapshots under `exports/`, each with a checksummed `manifest.json`.
-- Keeps light snapshots compact by excluding PDFs; full snapshots explicitly include the canonical `papers/` library.
-- Adds a read-only Library Health Check for missing and unindexed PDFs, duplicate filenames and DOI values, incomplete metadata, orphan notes/note blocks/project links, noncanonical paths, and stale extracted-text caches.
-- Does not implement destructive restore; manual restore remains explicit and should be performed while the app is stopped.
+- Added light/full Backup Snapshots with checksummed manifests.
+- Added the read-only Library Health Check.
 
 ### v0.9.6
 
-- Adds Drive Inbox Import for a configurable Google Drive for desktop local folder; no Drive API or OAuth is required.
-- Treats inbox PDFs as import candidates only. `papers/` remains the sole canonical managed PDF location, and inbox paths are never persisted as managed filepaths.
-- Adds explicit scan, select, preview, confirm, and copy-only import for one PDF at a time.
-- Detects missing, unreadable or online-only sources, duplicate content, filename collisions, invalid inbox paths, and inbox paths inside `papers/`.
-- Reuses the existing scanner/index workflow after copying, preserving existing `paper_id` values and all paper-ID-backed notes, links, and caches.
+- Added copy-only Drive Inbox Import while keeping `papers/` canonical.
 
 ### v0.9.5
 
-- Hardens Crossref Metadata Reliability with one shared request path for DOI lookups and the Settings connectivity diagnostic.
-- Centralizes contact email resolution and sends polite `mailto` and `BluePrintReboot/0.9.5` User-Agent identity on Crossref requests.
-- Distinguishes timeout, network, SSL/certificate, DOI-not-found, HTTP, malformed-response, and incomplete-metadata outcomes.
-- Applies only useful non-empty Crossref fields, so an incomplete response cannot erase existing user metadata.
-- Keeps enrichment best-effort: manual metadata editing remains supported, and `paper_id` remains stable.
+- Hardened Crossref requests, diagnostics, contact identity, and non-empty metadata overlays.
 
 ### v0.9.4
 
-- Adds Paper File Hygiene recommendations using `{year}_{first_author}_{short_title}.pdf`.
-- Adds a preview and explicit confirmation workflow for one PDF rename at a time, with missing-metadata, missing-source, and collision warnings.
-- Keeps scans rename-free and prevents filename hygiene from overwriting an existing file.
-- Preserves `paper_id`; notes, structured note blocks, project links, and extracted text caches remain linked by that stable identity.
+- Added preview/confirm Paper Hygiene with stable paper identity.
 
-### v0.9.3
+### v0.9.0-v0.9.3
 
-- Cleans up navigation and action labels without redesigning the Streamlit interface.
-- Adds confirmation steps for project deletion, unlinking, structured-note deletion, and extracted-cache deletion.
-- Changes Reader Workspace tag suggestions to an explicit preview/apply flow and removes duplicate note actions from the toolbar.
-- Aligns linked paper and note-block actions around Open, Edit link, and Unlink while keeping the existing GitHub Actions pytest workflow in place.
+- Added projects, project links, tag governance, and workflow safety cleanup.
 
-### v0.9.2
+### v0.8.x
 
-- Adds GitHub Actions CI that runs `python -m pytest` with Python 3.12 on pushes to `main` and pull requests.
-- Adds a canonical tag registry plus alias, collision, unknown-tag, and unused-tag audit helpers.
-- Adds a dedicated Tag Manager for used-tag status, filtering, details, alias registration, and canonical tag creation.
-- Adds preview and confirmed apply workflows for tag merges; unrelated tags are preserved and existing user tags are never rewritten automatically.
+- Added structured note blocks and editing while preserving Markdown notes.
 
-### v0.9.1
+### v0.7.x
 
-- Adds project-link editing for relationship type and link notes.
-- Adds linked paper/note-block counts and note-block type filtering in Project Workspace.
-- Shows existing project links in Reader Workspace and adds simple linked-paper navigation.
+- Added full-text extraction, cache diagnostics, and stale-cache recovery.
 
-### v0.9.0
+### v0.5-v0.6
 
-- Adds local JSON-backed project storage and a minimal Project Workspace.
-- Adds paper-to-project and structured-note-block-to-project links.
-- Shows linked papers and note blocks with paper context and supports unlinking.
+- Added metadata enrichment, tag suggestions, and the Reader Workspace.
 
-### v0.8.2
+## Known Limitations
 
-- Adds structured note block editing while preserving block identity and creation timestamps.
-- Adds block counts, type filtering, readable previews, and display metadata in Reader Workspace.
-- Adds optional one-way structured-block-to-Markdown snippet rendering; Markdown remains freeform and is not auto-synced.
+- Visual PDF highlighting, coordinate annotations, OCR, graph visualization, Zotero integration, and relation graphs are not implemented.
+- Google Drive support is local-folder based only; there is no Drive API or OAuth integration.
+- Backup restore is manual and should be performed while the app is stopped.
+- Crossref depends on internet, TLS certificates, proxy settings, and provider availability.
+- Image-only or scanned PDFs may yield no extracted text because OCR is not included.
+- Native Streamlit PDF rendering can vary by environment; the stable HTML viewer remains the default.
 
-### v0.8.0
-
-- Introduces a validated structured note block schema and JSON-backed storage under `data/note_blocks/`.
-- Adds a minimal Reader Workspace interface for viewing, creating, and deleting structured blocks.
-- Keeps the existing Markdown note files and editor intact.
-
-### v0.7.5
-
-- Stabilizes cache safety by preserving previous usable text when stale-cache recovery fails.
-- Makes the cache-status return schema consistent with and without a PDF path.
-- Clarifies reusable, stale, missing, and failed-recovery states in Reader Workspace.
-
-### v0.7.4
-
-- Implemented stale-cache recovery using SHA-256 mismatch detection and automatic re-extraction for changed PDFs.
-- Added Reader Workspace stale warnings and cache recovery tests.
-
-### v0.7.1-v0.7.3
-
-- Internal full-text extraction and cache workflow refactor steps.
-
-### v0.7.0
-
-- Added user-triggered full-text extraction, local text and metadata caches, diagnostics, previews, forced re-extraction, and cache clearing.
-
-### v0.6.3
-
-- Made the stable HTML PDF viewer the default and kept the native Streamlit viewer as an opt-in renderer with fallback.
-
-### v0.6
-
-- Added the reader-first workspace with PDF viewing, Markdown notes, structured Markdown templates, tags, reading status, and priority controls.
-
-### v0.5
-
-- Added metadata enrichment, DOI extraction, explicit Crossref acceptance, deterministic tag suggestions, and extraction backend status.
-
-## Troubleshooting / Limitations
-
-### Crossref lookup
-
-Crossref enrichment is best-effort. SSL inspection, proxy settings, certificate errors, DNS failures, firewalls, rate limits, or timeouts can prevent lookup while local paper management continues to work. DOI and metadata fields can always be edited manually. Settings includes a Crossref connectivity check, dependency versions, and sanitized proxy hints; it uses the same request path as real DOI enrichment.
-
-If an SSL/certificate error occurs, update the networking dependencies and check whether the network performs TLS inspection:
+If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:
 
 ```powershell
 python -m pip install --upgrade requests urllib3 certifi
 ```
-
-When Crossref returns incomplete title, year, or author data, fill the missing fields manually before using Paper File Hygiene. Crossref acceptance never replaces an existing value with an empty field.
-
-### PDF rendering
-
-Use the default **Stable HTML viewer** if the native Streamlit PDF component is unavailable. The PDF debug panel reports the resolved path, file existence, size, selected renderer, attempted methods, final method, and native renderer errors.
-
-### Full-text extraction
-
-Open **Extraction debug** to inspect backend availability, attempted extraction methods, errors, character count, stale status, and current/cached PDF hashes. Scanned or image-only PDFs may produce no readable text without OCR, which is not currently included.
-
-If a cache is marked stale, select **Extract full text** or **Re-extract full text**. If recovery fails, the previous extracted text is preserved and remains marked stale. If either the current or cached PDF hash is unavailable, BluePrintReboot does not mark the cache stale because there is no reliable mismatch to compare.
-
-### Tag rules
-
-Settings validates `config/tag_rules.json` and summarizes registry health. Tag Manager treats canonical tags as approved library terms, aliases as alternate terms that resolve without rewriting papers, and unknown tags as terms not yet registered. A merge shows its affected papers and before/after values first, then updates `paper_index.csv` only after explicit confirmation.
-
-### Moving to a new PC
-
-1. On the old machine, run Library Health Check and create a full snapshot. If only a light snapshot is practical, copy `papers/` separately.
-2. Install or clone the BluePrintReboot code on the new machine and install its requirements.
-3. Keep the app stopped while manually extracting the snapshot into the project root so paths such as `data/`, `notes/`, `config/`, and `papers/` retain their structure.
-4. Start the app, run **Scan papers**, then run **Library Health Check** again.
-5. Keep the original snapshot until the index, PDFs, notes, projects, and links have been verified.

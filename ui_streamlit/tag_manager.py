@@ -57,7 +57,7 @@ def render_tag_manager_page() -> None:
                 for item in filtered
             ]
         ),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
