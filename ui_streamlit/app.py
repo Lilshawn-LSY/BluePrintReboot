@@ -4,6 +4,7 @@ from typing import Callable
 import pandas as pd
 import streamlit as st
 
+from config.inbox import get_inbox_path
 from ingest.crossref import (
     CrossrefLookupError,
     check_crossref_connectivity,
@@ -30,6 +31,12 @@ from services.paper_file_hygiene import (
     PaperFileHygieneError,
     apply_paper_file_rename,
     build_rename_plan,
+)
+from services.pdf_inbox import (
+    PDFInboxError,
+    build_inbox_import_plan,
+    import_pdf_from_inbox,
+    scan_pdf_inbox,
 )
 from storage.index_store import (
     INDEX_COLUMNS,
@@ -525,6 +532,7 @@ def settings_page() -> None:
     else:
         st.write("None")
     st.caption("Use Tag Manager to review, merge, or register library tags.")
+    _render_pdf_inbox()
     _render_paper_file_hygiene()
     st.subheader("Crossref Connectivity")
     dependency_versions = crossref_dependency_versions()
@@ -552,6 +560,98 @@ def settings_page() -> None:
         "Enter a DOI in Paper Detail, save it, request a Crossref preview, and apply only useful metadata. "
         "Fill any missing title, year, or author fields manually before using Paper File Hygiene."
     )
+
+
+def _render_pdf_inbox() -> None:
+    st.subheader("Drive Inbox Import")
+    st.write(
+        "Treat a Google Drive for desktop folder as an import inbox. PDFs become managed papers only "
+        "after they are copied into papers/ and processed by the existing library scanner."
+    )
+    success = st.session_state.pop("pdf_inbox_success", None)
+    if success:
+        st.success(success["message"])
+        st.info(
+            "The library index is updated. Next, open the paper from Library, enrich its metadata, "
+            "and use Paper File Hygiene when the metadata is ready."
+        )
+
+    configured_path = get_inbox_path()
+    inbox_value = st.text_input(
+        "Inbox folder",
+        value=str(configured_path or ""),
+        key="pdf_inbox_path",
+        help="BLUEPRINT_INBOX_DIR takes precedence when it is set.",
+    )
+    inbox_path = get_inbox_path(inbox_value)
+    st.caption(f"Resolved inbox: {inbox_path or 'not configured'}")
+
+    if st.button("Scan inbox", key="pdf_inbox_scan"):
+        st.session_state["pdf_inbox_scan_result"] = scan_pdf_inbox(inbox_path)
+        st.session_state.pop("pdf_inbox_preview", None)
+        st.session_state["pdf_inbox_confirm"] = False
+
+    scan_result = st.session_state.get("pdf_inbox_scan_result")
+    if not scan_result:
+        return
+    if scan_result["status"] != "ok":
+        st.warning(scan_result["message"])
+        return
+
+    candidates = scan_result["candidates"]
+    st.write(scan_result["message"])
+    if not candidates:
+        st.info("No PDF files were found in the configured inbox folder.")
+        return
+    st.dataframe(
+        pd.DataFrame(candidates)[["filename", "size_bytes", "modified_time", "status", "message"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    labels = {
+        candidate["source_path"]: f"{candidate['filename']} — {candidate['status']}"
+        for candidate in candidates
+    }
+    selected_source = st.selectbox(
+        "Inbox PDF",
+        options=list(labels),
+        format_func=lambda path: labels.get(path, path),
+        key="pdf_inbox_selected_source",
+    )
+    if st.button("Preview import", key="pdf_inbox_preview_button"):
+        st.session_state["pdf_inbox_preview"] = build_inbox_import_plan(
+            selected_source,
+            inbox_path,
+        )
+        st.session_state["pdf_inbox_confirm"] = False
+
+    preview = st.session_state.get("pdf_inbox_preview")
+    if not preview or preview.get("source_path") != selected_source:
+        return
+    st.write(f"Status: `{preview['status']}`")
+    st.write(preview["message"])
+    st.code(f"Source: {preview['source_path']}\nTarget: {preview['target_path']}")
+    confirmation = st.checkbox(
+        "I understand this copies the selected PDF into papers/ and leaves the inbox source untouched.",
+        key="pdf_inbox_confirm",
+        disabled=not bool(preview["can_import"]),
+    )
+    if st.button(
+        "Import selected PDF",
+        key="pdf_inbox_import_button",
+        disabled=not confirmation or not bool(preview["can_import"]),
+    ):
+        try:
+            result = import_pdf_from_inbox(selected_source, inbox_path)
+        except PDFInboxError as exc:
+            st.error(str(exc))
+            if exc.plan:
+                st.session_state["pdf_inbox_preview"] = exc.plan
+        else:
+            st.session_state.pop("pdf_inbox_scan_result", None)
+            st.session_state.pop("pdf_inbox_preview", None)
+            st.session_state["pdf_inbox_success"] = result
+            st.rerun()
 
 
 def _render_paper_file_hygiene() -> None:
