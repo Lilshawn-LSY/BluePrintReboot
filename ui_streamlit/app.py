@@ -32,6 +32,8 @@ from services.paper_file_hygiene import (
     apply_paper_file_rename,
     build_rename_plan,
 )
+from services.backup_snapshot import create_backup_snapshot
+from services.library_health import run_library_health_check
 from services.pdf_inbox import (
     PDFInboxError,
     build_inbox_import_plan,
@@ -502,6 +504,7 @@ def settings_page() -> None:
     )
     st.write("Current index schema")
     st.code("\n".join(INDEX_COLUMNS))
+    _render_backup_and_health()
     st.subheader("Extraction Backends")
     backends = get_text_extraction_backends()
     st.write(
@@ -560,6 +563,95 @@ def settings_page() -> None:
         "Enter a DOI in Paper Detail, save it, request a Crossref preview, and apply only useful metadata. "
         "Fill any missing title, year, or author fields manually before using Paper File Hygiene."
     )
+
+
+def _render_backup_and_health() -> None:
+    st.subheader("Backup Snapshot")
+    st.write(
+        "Create a timestamped ZIP under exports/. Light snapshots contain library metadata and notes; "
+        "full snapshots also contain every managed PDF under papers/."
+    )
+    snapshot_mode = st.radio(
+        "Snapshot type",
+        options=("Light — metadata and notes", "Full — metadata, notes, and PDFs"),
+        horizontal=True,
+        key="backup_snapshot_type",
+    )
+    include_pdfs = snapshot_mode.startswith("Full")
+    full_confirmation = True
+    if include_pdfs:
+        st.warning("Full snapshots can be large because they include the entire papers/ directory.")
+        full_confirmation = st.checkbox(
+            "I understand this full snapshot includes all managed PDFs.",
+            key="backup_snapshot_full_confirm",
+        )
+    if st.button(
+        "Create backup snapshot",
+        key="create_backup_snapshot",
+        disabled=include_pdfs and not full_confirmation,
+    ):
+        try:
+            with st.spinner("Creating backup snapshot..."):
+                st.session_state["backup_snapshot_result"] = create_backup_snapshot(include_pdfs=include_pdfs)
+        except Exception:
+            st.error("The backup snapshot could not be created. Check file access and available disk space.")
+
+    snapshot_result = st.session_state.get("backup_snapshot_result")
+    if snapshot_result:
+        manifest = snapshot_result["manifest"]
+        st.success(f"Snapshot created: {snapshot_result['snapshot_path']}")
+        st.caption(
+            f"{manifest['snapshot_type'].title()} snapshot · "
+            f"{manifest['counts']['included_files']} files · {manifest['counts']['pdfs']} PDFs"
+        )
+    st.caption("Restore is manual in v0.9.7; creating a snapshot never changes library data.")
+
+    st.subheader("Library Health Check")
+    st.write(
+        "Run read-only checks for missing or unindexed PDFs, duplicate identities, incomplete metadata, "
+        "orphaned records, and stale extracted text."
+    )
+    if st.button("Run library health check", key="run_library_health_check"):
+        try:
+            with st.spinner("Checking library health..."):
+                st.session_state["library_health_report"] = run_library_health_check()
+        except Exception:
+            st.error("The library health check could not finish. Check access to local library files.")
+
+    report = st.session_state.get("library_health_report")
+    if not report:
+        return
+    summary = report["summary"]
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Index rows", summary["index_rows"])
+    col2.metric("Managed PDFs", summary["managed_pdfs"])
+    col3.metric("Issues", summary["issue_count"])
+    if report["healthy"]:
+        st.success("No library health issues were detected.")
+        return
+    st.warning("Library health issues were detected. Review the sections below before moving or restoring data.")
+    sections = (
+        ("Missing indexed PDFs", "missing_pdfs"),
+        ("Unindexed PDFs", "unindexed_pdfs"),
+        ("Duplicate filenames", "duplicate_filenames"),
+        ("Duplicate DOI values", "duplicate_dois"),
+        ("Missing metadata", "missing_metadata"),
+        ("Orphan notes", "orphan_notes"),
+        ("Orphan note blocks", "orphan_note_blocks"),
+        ("Orphan project links", "orphan_project_links"),
+        ("Stale extracted text", "stale_extracted_text"),
+        ("Noncanonical PDF paths", "noncanonical_filepaths"),
+        ("Diagnostic errors", "errors"),
+    )
+    for title, key in sections:
+        items = report[key]
+        if not items:
+            continue
+        with st.expander(f"{title} ({len(items)})"):
+            if isinstance(items[0], dict):
+                st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
+            else:
+                st.dataframe(pd.DataFrame({"path_or_message": items}), width="stretch", hide_index=True)
 
 
 def _render_pdf_inbox() -> None:
