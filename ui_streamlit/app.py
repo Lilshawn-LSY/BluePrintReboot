@@ -643,7 +643,7 @@ def render_backup_settings() -> None:
             f"{manifest['snapshot_type'].title()} snapshot | "
             f"{manifest['counts']['included_files']} files | {manifest['counts']['pdfs']} PDFs"
         )
-    st.caption("Restore is manual in v0.9.8; creating a snapshot never changes library data.")
+    st.caption(f"Restore is manual in v{APP_VERSION}; creating a snapshot never changes library data.")
 
 
 def _render_library_health_check() -> None:
