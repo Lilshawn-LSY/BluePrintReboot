@@ -1,35 +1,53 @@
 from __future__ import annotations
 
-import json
 import os
-import socket
-import ssl
+import re
 from datetime import datetime, timezone
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote
-from urllib.request import Request, urlopen
+from urllib.parse import quote, urlencode
 
+import certifi
+import requests
+import urllib3
+
+from config.contact import build_blueprint_user_agent, get_contact_email
 from ingest.doi import is_probable_doi, normalize_doi
 
 
-class CrossrefLookupError(Exception):
-    pass
-
-
 CROSSREF_BASE_URL = "https://api.crossref.org"
-DEFAULT_CROSSREF_MAILTO = "pplee0300@snu.ac.kr"
+DEFAULT_CROSSREF_TIMEOUT = 8.0
+REQUIRED_METADATA_FIELDS = ("title", "year", "authors")
+
+
+class CrossrefLookupError(Exception):
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_type: str = "unexpected",
+        status_code: int | str = "",
+    ) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+        self.status_code = status_code
 
 
 def crossref_mailto() -> str:
-    return os.environ.get("CROSSREF_MAILTO", DEFAULT_CROSSREF_MAILTO).strip() or DEFAULT_CROSSREF_MAILTO
+    return get_contact_email()
 
 
 def crossref_headers() -> dict[str, str]:
-    mailto = crossref_mailto()
     return {
-        "User-Agent": f"BluePrintReboot/0.5 (mailto:{mailto})",
-        "mailto": mailto,
+        "Accept": "application/json",
+        "User-Agent": build_blueprint_user_agent(),
+    }
+
+
+def crossref_dependency_versions() -> dict[str, str]:
+    return {
+        "requests": requests.__version__,
+        "urllib3": urllib3.__version__,
+        "certifi": certifi.__version__,
     }
 
 
@@ -37,106 +55,128 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
+def _crossref_url(path: str, **query: object) -> str:
+    parameters = {key: str(value) for key, value in query.items()}
+    parameters["mailto"] = get_contact_email()
+    return f"{CROSSREF_BASE_URL}/{path.lstrip('/')}?{urlencode(parameters, safe='@')}"
+
+
 def crossref_work_url(doi: str) -> str:
-    return f"{CROSSREF_BASE_URL}/works/{quote(normalize_doi(doi), safe='')}"
+    normalized = normalize_doi(doi)
+    return _crossref_url(f"works/{quote(normalized, safe='')}")
 
 
-def fetch_crossref_by_doi(doi: str, timeout: float = 8.0) -> dict[str, Any]:
+def crossref_connectivity_url() -> str:
+    return _crossref_url("works", rows=0)
+
+
+def _request_crossref_json(url: str, timeout: float) -> dict[str, Any]:
+    try:
+        response = requests.get(url, headers=crossref_headers(), timeout=timeout)
+    except requests.exceptions.Timeout as exc:
+        raise CrossrefLookupError(
+            "Crossref lookup timed out. Try again later.",
+            error_type="timeout",
+        ) from exc
+    except requests.exceptions.SSLError as exc:
+        raise CrossrefLookupError(
+            "Crossref SSL/certificate check failed. Update certifi or check network inspection.",
+            error_type="ssl",
+        ) from exc
+    except requests.exceptions.ConnectionError as exc:
+        raise CrossrefLookupError(
+            "Crossref network connection failed. Check your connection, proxy, or firewall.",
+            error_type="network",
+        ) from exc
+    except requests.exceptions.RequestException as exc:
+        raise CrossrefLookupError(
+            "Crossref request failed unexpectedly. Try again later.",
+            error_type="request",
+        ) from exc
+
+    if response.status_code != 200:
+        raise CrossrefLookupError(
+            _http_error_message(response.status_code),
+            error_type="not_found" if response.status_code == 404 else "http",
+            status_code=response.status_code,
+        )
+
+    try:
+        payload = response.json()
+    except (requests.exceptions.JSONDecodeError, ValueError) as exc:
+        raise CrossrefLookupError(
+            "Crossref returned an unexpected response.",
+            error_type="malformed_json",
+            status_code=response.status_code,
+        ) from exc
+    if not isinstance(payload, dict):
+        raise CrossrefLookupError(
+            "Crossref returned an unexpected response.",
+            error_type="malformed_response",
+            status_code=response.status_code,
+        )
+    return payload
+
+
+def fetch_crossref_by_doi(doi: str, timeout: float = DEFAULT_CROSSREF_TIMEOUT) -> dict[str, Any]:
     normalized = normalize_doi(doi)
     if not normalized:
-        raise CrossrefLookupError("Enter a DOI before looking up Crossref metadata.")
+        raise CrossrefLookupError(
+            "Enter a DOI before looking up Crossref metadata.",
+            error_type="invalid_doi",
+        )
     if not is_probable_doi(normalized):
-        raise CrossrefLookupError("The DOI does not look valid.")
+        raise CrossrefLookupError("The DOI does not look valid.", error_type="invalid_doi")
 
-    request = Request(crossref_work_url(normalized), headers=crossref_headers())
-    try:
-        with urlopen(request, timeout=timeout) as response:
-            status_code = getattr(response, "status", 200)
-            if status_code == 429:
-                raise CrossrefLookupError("Crossref rate limited this lookup. Try again later.")
-            if status_code >= 400:
-                raise CrossrefLookupError(f"Crossref returned HTTP {status_code}.")
-            payload = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        if exc.code == 429:
-            raise CrossrefLookupError("Crossref rate limited this lookup. Try again later.") from exc
-        raise CrossrefLookupError(_http_error_message(exc.code)) from exc
-    except URLError as exc:
-        raise CrossrefLookupError(_network_error_message(exc.reason)) from exc
-    except (TimeoutError, socket.timeout) as exc:
-        raise CrossrefLookupError("Crossref lookup timed out.") from exc
-    except ssl.SSLError as exc:
-        raise CrossrefLookupError(_network_error_message(exc)) from exc
-    except OSError as exc:
-        raise CrossrefLookupError(_network_error_message(exc)) from exc
-    except json.JSONDecodeError as exc:
-        raise CrossrefLookupError("Crossref returned invalid JSON.") from exc
+    payload = _request_crossref_json(crossref_work_url(normalized), timeout)
+    message = payload.get("message")
+    if not isinstance(message, dict):
+        raise CrossrefLookupError(
+            "Crossref returned an unexpected response.",
+            error_type="malformed_response",
+        )
+    return message
 
-    if not isinstance(payload, dict) or not isinstance(payload.get("message"), dict):
-        raise CrossrefLookupError("Crossref response did not include work metadata.")
-    return payload["message"]
+
+def lookup_crossref_metadata(
+    doi: str,
+    timeout: float = DEFAULT_CROSSREF_TIMEOUT,
+) -> dict[str, str]:
+    parsed = parse_crossref_work(fetch_crossref_by_doi(doi, timeout=timeout))
+    missing = [field for field in REQUIRED_METADATA_FIELDS if not parsed[field]]
+    if len(missing) == len(REQUIRED_METADATA_FIELDS):
+        raise CrossrefLookupError(
+            "Crossref lookup succeeded, but title/year/author metadata was incomplete. "
+            "Fill missing fields manually before using Paper File Hygiene.",
+            error_type="missing_metadata",
+        )
+    if missing:
+        labels = ", ".join("author" if field == "authors" else field for field in missing)
+        parsed["metadata_warning"] = (
+            f"Crossref metadata is missing: {labels}. Fill missing fields manually before using Paper File Hygiene."
+        )
+        parsed["metadata_confidence"] = "partial"
+    else:
+        parsed["metadata_warning"] = ""
+    return parsed
 
 
 def check_crossref_connectivity(timeout: float = 5.0) -> dict[str, Any]:
-    request = Request(f"{CROSSREF_BASE_URL}/works?rows=0", headers=crossref_headers())
     try:
-        with urlopen(request, timeout=timeout) as response:
-            status_code = getattr(response, "status", 200)
-            if 200 <= status_code < 400:
-                return {
-                    "ok": True,
-                    "status_code": status_code,
-                    "error_type": "",
-                    "message": "Crossref is reachable.",
-                }
-            return {
-                "ok": False,
-                "status_code": status_code,
-                "error_type": "http",
-                "message": f"Crossref returned HTTP {status_code}.",
-            }
-    except HTTPError as exc:
+        _request_crossref_json(crossref_connectivity_url(), timeout)
+    except CrossrefLookupError as exc:
         return {
             "ok": False,
-            "status_code": exc.code,
-            "error_type": "http",
-            "message": _http_error_message(exc.code),
+            "status_code": exc.status_code,
+            "error_type": exc.error_type,
+            "message": str(exc),
         }
-    except URLError as exc:
-        return {
-            "ok": False,
-            "status_code": "",
-            "error_type": _network_error_type(exc.reason),
-            "message": _network_error_message(exc.reason),
-        }
-    except (TimeoutError, socket.timeout) as exc:
-        return {
-            "ok": False,
-            "status_code": "",
-            "error_type": "timeout",
-            "message": "Crossref connection timed out.",
-        }
-    except ssl.SSLError as exc:
-        return {
-            "ok": False,
-            "status_code": "",
-            "error_type": "ssl",
-            "message": _network_error_message(exc),
-        }
-    except OSError as exc:
-        return {
-            "ok": False,
-            "status_code": "",
-            "error_type": _network_error_type(exc),
-            "message": _network_error_message(exc),
-        }
-    except Exception as exc:
-        return {
-            "ok": False,
-            "status_code": "",
-            "error_type": "unexpected",
-            "message": f"Unexpected Crossref connectivity error: {exc}",
-        }
+    return {
+        "ok": True,
+        "status_code": 200,
+        "error_type": "",
+        "message": "Crossref is reachable.",
+    }
 
 
 def proxy_environment() -> dict[str, str]:
@@ -149,6 +189,7 @@ def proxy_environment() -> dict[str, str]:
 
 
 def parse_crossref_work(message: dict[str, Any]) -> dict[str, str]:
+    subjects = _format_keywords(message.get("subject") or message.get("keyword"))
     return {
         "title": _first_string(message.get("title")),
         "authors": _format_authors(message.get("author")),
@@ -156,8 +197,8 @@ def parse_crossref_work(message: dict[str, Any]) -> dict[str, str]:
         "journal": _first_string(message.get("container-title")),
         "doi": normalize_doi(str(message.get("DOI", ""))),
         "abstract": _clean_abstract(message.get("abstract")),
-        "keywords": _format_keywords(message.get("subject")),
-        "crossref_subjects": _format_keywords(message.get("subject")),
+        "keywords": subjects,
+        "crossref_subjects": subjects,
         "metadata_source": "crossref",
         "metadata_confidence": "high",
         "metadata_checked_at": utc_now_iso(),
@@ -177,7 +218,7 @@ def _first_string(value: Any) -> str:
 def _clean_abstract(value: Any) -> str:
     if not isinstance(value, str):
         return ""
-    return " ".join(value.replace("<jats:p>", "").replace("</jats:p>", "").split())
+    return " ".join(re.sub(r"<[^>]+>", " ", value).split())
 
 
 def _format_keywords(value: Any) -> str:
@@ -189,36 +230,10 @@ def _format_keywords(value: Any) -> str:
 
 def _http_error_message(status_code: int) -> str:
     if status_code == 404:
-        return "DOI not found in Crossref."
+        return "DOI was not found in Crossref."
     if status_code == 429:
         return "Crossref rate limited this request. Try again later."
     return f"Crossref returned HTTP {status_code}."
-
-
-def _network_error_type(error: Any) -> str:
-    text = str(error).lower()
-    if isinstance(error, TimeoutError) or "timed out" in text:
-        return "timeout"
-    if isinstance(error, socket.gaierror) or "getaddrinfo" in text or "name resolution" in text:
-        return "dns"
-    if isinstance(error, ConnectionRefusedError) or "10061" in text or "connection refused" in text:
-        return "connection_refused"
-    if isinstance(error, ssl.SSLError) or "ssl" in text or "certificate" in text:
-        return "ssl"
-    return "network"
-
-
-def _network_error_message(error: Any) -> str:
-    error_type = _network_error_type(error)
-    if error_type == "timeout":
-        return "Crossref connection timed out. Check your network or try again later."
-    if error_type == "dns":
-        return "Could not resolve api.crossref.org. Check DNS, VPN, proxy, or offline status."
-    if error_type == "connection_refused":
-        return "Connection to Crossref was refused. This often means a restricted network, firewall, proxy, or offline environment."
-    if error_type == "ssl":
-        return "Could not securely connect to Crossref. Check SSL inspection, proxy, or certificate settings."
-    return f"Could not reach Crossref. Check your network, firewall, proxy, or offline status. Details: {error}"
 
 
 def _sanitize_proxy_value(value: str) -> str:
@@ -243,7 +258,7 @@ def _format_authors(authors: Any) -> str:
         family = str(author.get("family", "")).strip()
         given = str(author.get("given", "")).strip()
         if family and given:
-            formatted.append(f"{family} {given}")
+            formatted.append(f"{given} {family}")
         elif family:
             formatted.append(family)
         elif given:

@@ -1,41 +1,55 @@
-import socket
-import ssl
-from urllib.error import HTTPError, URLError
 from unittest.mock import Mock
 
 import pytest
+import requests
 
 from ingest.crossref import (
     CrossrefLookupError,
     check_crossref_connectivity,
+    crossref_connectivity_url,
     crossref_headers,
     crossref_work_url,
     fetch_crossref_by_doi,
+    lookup_crossref_metadata,
     parse_crossref_work,
     proxy_environment,
 )
 
 
-def test_parse_crossref_work_prefers_print_year_and_formats_authors() -> None:
-    parsed = parse_crossref_work(
-        {
-            "title": ["A Crossref Paper"],
-            "author": [
-                {"family": "Curie", "given": "Marie"},
-                {"family": "Einstein", "given": "Albert"},
-            ],
-            "published-print": {"date-parts": [[1998, 1, 1]]},
-            "published-online": {"date-parts": [[1997, 1, 1]]},
-            "issued": {"date-parts": [[1996, 1, 1]]},
-            "container-title": ["Journal of Local Research"],
-            "DOI": "10.1234/ABC",
-            "abstract": "<jats:p>Structured abstract text.</jats:p>",
-            "subject": ["Synthetic Biology", "Methods"],
-        }
-    )
+class FakeResponse:
+    def __init__(self, status_code: int = 200, payload: object = None, json_error: Exception | None = None) -> None:
+        self.status_code = status_code
+        self.payload = payload
+        self.json_error = json_error
+
+    def json(self):
+        if self.json_error:
+            raise self.json_error
+        return self.payload
+
+
+def complete_work() -> dict:
+    return {
+        "title": ["A Crossref Paper"],
+        "author": [
+            {"family": "Curie", "given": "Marie"},
+            {"family": "Einstein", "given": "Albert"},
+        ],
+        "published-print": {"date-parts": [[1998, 1, 1]]},
+        "published-online": {"date-parts": [[1997, 1, 1]]},
+        "issued": {"date-parts": [[1996, 1, 1]]},
+        "container-title": ["Journal of Local Research"],
+        "DOI": "10.1234/ABC",
+        "abstract": "<jats:p>Structured <jats:bold>abstract</jats:bold> text.</jats:p>",
+        "subject": ["Synthetic Biology", "Methods"],
+    }
+
+
+def test_parse_crossref_work_extracts_supported_metadata() -> None:
+    parsed = parse_crossref_work(complete_work())
 
     assert parsed["title"] == "A Crossref Paper"
-    assert parsed["authors"] == "Curie Marie; Einstein Albert"
+    assert parsed["authors"] == "Marie Curie; Albert Einstein"
     assert parsed["year"] == "1998"
     assert parsed["journal"] == "Journal of Local Research"
     assert parsed["doi"] == "10.1234/abc"
@@ -51,11 +65,7 @@ def test_parse_crossref_work_year_fallback_and_missing_author_fields() -> None:
     parsed = parse_crossref_work(
         {
             "title": ["Fallback Paper"],
-            "author": [
-                {"family": "Onlyfamily"},
-                {"given": "Onlygiven"},
-                {},
-            ],
+            "author": [{"family": "Onlyfamily"}, {"given": "Onlygiven"}, {}],
             "issued": {"date-parts": [["2020"]]},
             "container-title": [],
         }
@@ -67,144 +77,189 @@ def test_parse_crossref_work_year_fallback_and_missing_author_fields() -> None:
     assert parsed["doi"] == ""
 
 
-def test_crossref_work_url_encodes_doi() -> None:
+def test_crossref_work_url_encodes_doi_and_includes_mailto(monkeypatch) -> None:
+    monkeypatch.setenv("CROSSREF_MAILTO", "researcher@example.edu")
+
     assert crossref_work_url("doi: 10.1145/3368089.3409742") == (
-        "https://api.crossref.org/works/10.1145%2F3368089.3409742"
+        "https://api.crossref.org/works/10.1145%2F3368089.3409742?mailto=researcher@example.edu"
     )
 
 
-def test_crossref_headers_include_configured_mailto(monkeypatch) -> None:
+def test_crossref_headers_use_blueprint_user_agent(monkeypatch) -> None:
     monkeypatch.setenv("CROSSREF_MAILTO", "researcher@example.edu")
 
     headers = crossref_headers()
 
-    assert headers["mailto"] == "researcher@example.edu"
-    assert headers["User-Agent"] == "BluePrintReboot/0.5 (mailto:researcher@example.edu)"
+    assert headers["User-Agent"] == "BluePrintReboot/0.9.5 (mailto:researcher@example.edu)"
+    assert headers["Accept"] == "application/json"
 
 
-def test_crossref_headers_default_to_local_mailto(monkeypatch) -> None:
-    monkeypatch.delenv("CROSSREF_MAILTO", raising=False)
+def test_fetch_crossref_uses_polite_url_headers_and_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("CROSSREF_MAILTO", "researcher@example.edu")
+    request = Mock(return_value=FakeResponse(payload={"message": complete_work()}))
+    monkeypatch.setattr("ingest.crossref.requests.get", request)
 
-    headers = crossref_headers()
+    message = fetch_crossref_by_doi("10.1234/ABC", timeout=3.5)
 
-    assert headers["mailto"] == "pplee0300@snu.ac.kr"
-    assert headers["User-Agent"] == "BluePrintReboot/0.5 (mailto:pplee0300@snu.ac.kr)"
-
-
-def test_fetch_crossref_by_doi_connection_refused_is_user_friendly(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise URLError(ConnectionRefusedError(10061, "connection refused"))
-
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
-
-    with pytest.raises(CrossrefLookupError) as exc_info:
-        fetch_crossref_by_doi("10.1145/3368089.3409742")
-
-    message = str(exc_info.value)
-    assert "Connection to Crossref was refused" in message
-    assert "firewall" in message
+    assert message["title"] == ["A Crossref Paper"]
+    request.assert_called_once_with(
+        "https://api.crossref.org/works/10.1234%2Fabc?mailto=researcher@example.edu",
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "BluePrintReboot/0.9.5 (mailto:researcher@example.edu)",
+        },
+        timeout=3.5,
+    )
 
 
-def test_fetch_crossref_by_doi_ssl_error_is_user_friendly(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise ssl.SSLError("certificate verify failed")
+def test_lookup_crossref_metadata_reports_partial_fields(monkeypatch) -> None:
+    work = complete_work()
+    work["author"] = []
+    monkeypatch.setattr(
+        "ingest.crossref.requests.get",
+        Mock(return_value=FakeResponse(payload={"message": work})),
+    )
 
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+    metadata = lookup_crossref_metadata("10.1234/abc")
 
-    with pytest.raises(CrossrefLookupError) as exc_info:
-        fetch_crossref_by_doi("10.1145/3368089.3409742")
-
-    message = str(exc_info.value)
-    assert "SSL inspection" in message
-    assert "certificate settings" in message
+    assert metadata["title"] == "A Crossref Paper"
+    assert metadata["authors"] == ""
+    assert metadata["metadata_confidence"] == "partial"
+    assert "Fill missing fields manually" in metadata["metadata_warning"]
 
 
-def test_fetch_crossref_by_doi_urlerror_ssl_reason_is_user_friendly(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise URLError(ssl.SSLError("certificate verify failed"))
-
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+def test_lookup_crossref_metadata_rejects_missing_core_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ingest.crossref.requests.get",
+        Mock(return_value=FakeResponse(payload={"message": {"DOI": "10.1234/abc"}})),
+    )
 
     with pytest.raises(CrossrefLookupError) as exc_info:
-        fetch_crossref_by_doi("10.1145/3368089.3409742")
+        lookup_crossref_metadata("10.1234/abc")
 
-    assert "SSL inspection" in str(exc_info.value)
-
-
-def test_fetch_crossref_by_doi_timeout_is_user_friendly(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise socket.timeout("timed out")
-
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
-
-    with pytest.raises(CrossrefLookupError) as exc_info:
-        fetch_crossref_by_doi("10.1145/3368089.3409742")
-
-    assert "timed out" in str(exc_info.value)
+    assert exc_info.value.error_type == "missing_metadata"
+    assert str(exc_info.value) == (
+        "Crossref lookup succeeded, but title/year/author metadata was incomplete. "
+        "Fill missing fields manually before using Paper File Hygiene."
+    )
 
 
-def test_fetch_crossref_by_doi_404_is_user_friendly(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise HTTPError("https://api.crossref.org/works/x", 404, "Not Found", {}, None)
-
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+def test_fetch_crossref_timeout_is_classified(monkeypatch) -> None:
+    monkeypatch.setattr("ingest.crossref.requests.get", Mock(side_effect=requests.exceptions.Timeout()))
 
     with pytest.raises(CrossrefLookupError) as exc_info:
-        fetch_crossref_by_doi("10.1145/3368089.3409742")
+        fetch_crossref_by_doi("10.1234/abc")
 
-    assert str(exc_info.value) == "DOI not found in Crossref."
+    assert exc_info.value.error_type == "timeout"
+    assert str(exc_info.value) == "Crossref lookup timed out. Try again later."
 
 
-def test_fetch_crossref_by_doi_other_http_status_is_user_friendly(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise HTTPError("https://api.crossref.org/works/x", 503, "Service Unavailable", {}, None)
-
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+def test_fetch_crossref_network_error_is_classified(monkeypatch) -> None:
+    monkeypatch.setattr("ingest.crossref.requests.get", Mock(side_effect=requests.exceptions.ConnectionError()))
 
     with pytest.raises(CrossrefLookupError) as exc_info:
-        fetch_crossref_by_doi("10.1145/3368089.3409742")
+        fetch_crossref_by_doi("10.1234/abc")
 
+    assert exc_info.value.error_type == "network"
+    assert "network connection failed" in str(exc_info.value)
+
+
+def test_fetch_crossref_ssl_error_is_classified(monkeypatch) -> None:
+    monkeypatch.setattr("ingest.crossref.requests.get", Mock(side_effect=requests.exceptions.SSLError()))
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1234/abc")
+
+    assert exc_info.value.error_type == "ssl"
+    assert str(exc_info.value) == (
+        "Crossref SSL/certificate check failed. Update certifi or check network inspection."
+    )
+
+
+def test_fetch_crossref_404_is_classified(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ingest.crossref.requests.get",
+        Mock(return_value=FakeResponse(status_code=404)),
+    )
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1234/abc")
+
+    assert exc_info.value.error_type == "not_found"
+    assert exc_info.value.status_code == 404
+    assert str(exc_info.value) == "DOI was not found in Crossref."
+
+
+def test_fetch_crossref_non_200_is_classified(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ingest.crossref.requests.get",
+        Mock(return_value=FakeResponse(status_code=503)),
+    )
+
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1234/abc")
+
+    assert exc_info.value.error_type == "http"
+    assert exc_info.value.status_code == 503
     assert str(exc_info.value) == "Crossref returned HTTP 503."
 
 
-def test_fetch_crossref_by_doi_429_is_user_friendly(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise HTTPError("https://api.crossref.org/works/x", 429, "Too Many Requests", {}, None)
-
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+def test_fetch_crossref_malformed_json_is_classified(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ingest.crossref.requests.get",
+        Mock(return_value=FakeResponse(json_error=ValueError("bad json"))),
+    )
 
     with pytest.raises(CrossrefLookupError) as exc_info:
-        fetch_crossref_by_doi("10.1145/3368089.3409742")
+        fetch_crossref_by_doi("10.1234/abc")
 
-    assert "rate limited" in str(exc_info.value)
+    assert exc_info.value.error_type == "malformed_json"
+    assert str(exc_info.value) == "Crossref returned an unexpected response."
 
 
-def test_check_crossref_connectivity_handles_dns_failure(monkeypatch) -> None:
-    def fail_urlopen(*args, **kwargs):
-        raise URLError("getaddrinfo failed")
+def test_fetch_crossref_missing_message_is_classified(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ingest.crossref.requests.get",
+        Mock(return_value=FakeResponse(payload={"status": "ok"})),
+    )
 
-    monkeypatch.setattr("ingest.crossref.urlopen", fail_urlopen)
+    with pytest.raises(CrossrefLookupError) as exc_info:
+        fetch_crossref_by_doi("10.1234/abc")
+
+    assert exc_info.value.error_type == "malformed_response"
+
+
+def test_connectivity_uses_shared_request_helper(monkeypatch) -> None:
+    shared_request = Mock(return_value={"status": "ok", "message": {}})
+    monkeypatch.setattr("ingest.crossref._request_crossref_json", shared_request)
+
+    result = check_crossref_connectivity(timeout=4.0)
+
+    assert result == {
+        "ok": True,
+        "status_code": 200,
+        "error_type": "",
+        "message": "Crossref is reachable.",
+    }
+    shared_request.assert_called_once_with(crossref_connectivity_url(), 4.0)
+
+
+def test_connectivity_returns_shared_error_classification(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ingest.crossref._request_crossref_json",
+        Mock(
+            side_effect=CrossrefLookupError(
+                "Crossref lookup timed out. Try again later.",
+                error_type="timeout",
+            )
+        ),
+    )
 
     result = check_crossref_connectivity()
 
     assert result["ok"] is False
-    assert result["status_code"] == ""
-    assert result["error_type"] == "dns"
-    assert "api.crossref.org" in result["message"]
-
-
-def test_check_crossref_connectivity_success(monkeypatch) -> None:
-    response = Mock()
-    response.status = 200
-    response.__enter__ = Mock(return_value=response)
-    response.__exit__ = Mock(return_value=None)
-    monkeypatch.setattr("ingest.crossref.urlopen", Mock(return_value=response))
-
-    result = check_crossref_connectivity()
-
-    assert result["ok"] is True
-    assert result["status_code"] == 200
-    assert result["error_type"] == ""
+    assert result["error_type"] == "timeout"
+    assert result["message"] == "Crossref lookup timed out. Try again later."
 
 
 def test_proxy_environment_sanitizes_credentials(monkeypatch) -> None:
