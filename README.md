@@ -12,6 +12,7 @@ PDF management, DOI extraction, manual metadata editing, tag suggestions, notes,
 
 - Dashboard counts for papers, reading status, priority, DOI coverage, Crossref metadata, and notes.
 - Recursive PDF scanning from `papers/` with stable paper IDs.
+- Preview-and-confirm Paper File Hygiene for human-readable PDF filenames without changing paper IDs.
 - Local CSV metadata index that preserves user-edited fields across rescans.
 - Search and filtering by metadata, reading status, priority, and tags.
 - DOI detection with `pypdf` and an optional MarkItDown fallback.
@@ -92,6 +93,13 @@ The optional requirements file installs `markitdown[pdf]`. Full-text extraction 
 9. Open **Tag Manager** to review used tags, register aliases, create canonical tags, or preview and explicitly apply a merge. Alias registration changes only the registry; it does not rewrite the library.
 10. Select **Extract full text** to create or reuse a successful current cache. If the PDF hash has changed, BluePrintReboot attempts a fresh extraction. A successful result replaces the stale cache; a failed result preserves the previous usable text and remains marked stale.
 11. Use **Re-extract full text** to force extraction or **Delete cache** to remove cached text and metadata after confirmation.
+12. Open **Settings > Paper File Hygiene** to preview and confirm a single PDF rename. Scanning never renames PDFs automatically.
+
+Paper File Hygiene recommends filenames using:
+
+`{year}_{first_author}_{short_title}.pdf`
+
+For example, `2014_LeCun_Deep_Learning.pdf`. Filename hygiene works best after the paper's metadata is filled in. Missing metadata is shown before confirmation, and a rename is blocked when both year and author are missing rather than recommending an `UnknownYear_UnknownAuthor` filename. Placeholder generation remains available as a defensive internal fallback, not as the preferred rename path. Collisions block the rename, and existing files are never overwritten. A rename updates only the PDF's `filename` and `filepath` index fields. The stable `paper_id` is preserved, so Markdown notes, structured note blocks, project links, and extracted text caches remain attached to the same paper identity.
 
 Extracted text cache files are:
 
@@ -101,6 +109,13 @@ Extracted text cache files are:
 Failed or empty initial extraction results are recorded for diagnostics but are not reusable. If recovery of an existing usable cache fails, the previous text and source fingerprint are preserved while the failed attempt is recorded separately. Older caches without a usable PDF hash remain reusable because their freshness cannot be determined reliably.
 
 ## Version Notes
+
+### v0.9.4
+
+- Adds Paper File Hygiene recommendations using `{year}_{first_author}_{short_title}.pdf`.
+- Adds a preview and explicit confirmation workflow for one PDF rename at a time, with missing-metadata, missing-source, and collision warnings.
+- Keeps scans rename-free and prevents filename hygiene from overwriting an existing file.
+- Preserves `paper_id`; notes, structured note blocks, project links, and extracted text caches remain linked by that stable identity.
 
 ### v0.9.3
 
