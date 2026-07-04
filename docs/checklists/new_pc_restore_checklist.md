@@ -1,6 +1,6 @@
 # Fresh Clone and New-PC Restore Checklist
 
-This checklist is intentionally manual and non-destructive. BluePrintReboot v0.9.9 does not provide automated restore.
+This checklist is intentionally manual and non-destructive. BluePrintReboot v1.0.0-foundation does not provide automated restore.
 
 ## A. Prepare the Old Computer
 

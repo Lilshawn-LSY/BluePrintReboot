@@ -8,7 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Version **0.9.9** is the final pre-v1.0 readiness and documentation pass. The app remains intentionally local-first and single-user:
+Current release target: **v1.0.0-foundation**.
+
+v1.0.0 is a stable foundation release, not a finished-product claim. The release focus is stabilization, documentation, release readiness, and development governance. It does not start a FastAPI backend migration, React/Next frontend migration, hosted service model, or feature-expansion cycle.
+
+The app remains intentionally local-first and single-user:
 
 - Runtime library data is ignored by Git.
 - GitHub stores the application code, not the personal paper library.
@@ -17,29 +21,39 @@ Version **0.9.9** is the final pre-v1.0 readiness and documentation pass. The ap
 
 ## Quick Start
 
-From a fresh clone in PowerShell:
+From a fresh clone in Windows PowerShell:
 
 ```powershell
 git clone <repository-url> BluePrintReboot
 cd BluePrintReboot
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python scripts/smoke_check.py
 streamlit run app.py
 ```
 
-Add PDFs directly to `papers/`, then select **Scan papers** in the app. Open **Library** to choose a paper and continue in **Paper Detail**.
+Add PDFs directly to `papers/`, then select **Scan papers** in the app. Open **Library** to choose a paper and continue in **Paper Detail** or **Reader Workspace**.
 
 For optional MarkItDown PDF support:
 
 ```powershell
-pip install -r requirements-optional.txt
+python -m pip install -r requirements-optional.txt
 ```
 
-## Core Features
+## Core Reading Workflow
 
-### Library and Reader
+The main loop is:
+
+1. Add a paper to `papers/`.
+2. Read the PDF.
+3. Edit metadata, status, priority, and tags.
+4. Write Markdown notes and structured note blocks.
+5. Link papers and useful note blocks to projects.
+6. Retrieve papers, notes, tags, and project context later.
+
+Current support includes:
 
 - Recursive PDF scanning from the canonical `papers/` directory.
 - Stable paper identities and a local CSV metadata index.
@@ -49,50 +63,14 @@ pip install -r requirements-optional.txt
 - Full-text extraction with MarkItDown when available and `pypdf` fallback.
 - SHA-256 cache freshness checks and safe stale-cache recovery.
 
-### Metadata and Organization
+## Metadata/Tag Workflow
 
 - DOI extraction from PDFs.
 - Crossref metadata preview and explicit acceptance with classified diagnostics.
-- Manual metadata editing remains available when enrichment is incomplete or offline.
+- Manual metadata editing when enrichment is incomplete or offline.
 - Deterministic tag suggestions and canonical tag governance.
 - Research projects linking papers and structured note blocks.
 - Paper Hygiene recommendations using `{year}_{first_author}_{short_title}.pdf` without changing `paper_id`.
-
-### Library Maintenance
-
-Settings is organized into four sections:
-
-- **System** - app/runtime information, workspace paths, extraction backends, and index details.
-- **Library Maintenance** - Library Health Check, Tag Rules, Drive Inbox Import, and Paper Hygiene.
-- **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
-- **Backup** - light/full Backup Snapshot controls and manifest summaries.
-
-Library Health Check reports missing or unindexed PDFs, duplicate filenames and DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches.
-
-### Drive Inbox Import
-
-`BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used.
-
-Inbox PDFs are candidates only. An explicit preview/confirm workflow copies one selected PDF into `papers/`, leaves the source untouched, and then uses the existing scanner/index workflow. Inbox paths are never persisted as managed paper paths.
-
-### Backup and Moving Computers
-
-Backup Snapshot creates timestamped ZIP files under `exports/`:
-
-- **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
-- **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
-
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore is manual in v0.9.9. See the [manifest expectations and new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
-
-Recommended move workflow:
-
-1. Run Library Health Check on the old computer.
-2. Create a full snapshot, or create a light snapshot and copy `papers/` separately.
-3. Install BluePrintReboot on the new computer.
-4. With the app stopped, extract the snapshot into the project root while preserving directory structure.
-5. Start the app, scan papers, and run Library Health Check again.
-
-### Crossref Configuration
 
 Crossref polite-access contact resolution uses:
 
@@ -108,23 +86,46 @@ $env:CROSSREF_MAILTO = "researcher@example.edu"
 
 Crossref enrichment requires the base dependencies `requests`, `urllib3`, and `certifi`.
 
-## Project Structure
+## Maintenance/Backup Workflow
 
-- `app.py` - Streamlit entry point.
-- `ui_streamlit/` - application pages and workspace UI.
-- `ingest/` - scanning, DOI, Crossref, tagging, and text-extraction helpers.
-- `services/` - inbox import, filename hygiene, backup, health checks, and workflow orchestration.
-- `storage/` - index, notes, note blocks, projects, links, and extracted-text caches.
-- `config/` - contact/inbox helpers and user-editable tag configuration.
-- `scripts/` - non-destructive readiness utilities.
-- `docs/checklists/` - manual smoke-test and restore procedures.
-- `tests/` - automated test suite.
-- `papers/` - canonical managed PDF library; ignored by Git.
-- `data/` - local metadata and caches; ignored by Git.
-- `notes/` - Markdown reading notes; ignored by Git.
-- `exports/` - snapshots and exports; ignored by Git.
+Settings is organized into four sections:
 
-## Development Commands
+- **System** - app/runtime information, workspace paths, extraction backends, and index details.
+- **Library Maintenance** - Library Health Check, Tag Rules, Drive Inbox Import, and Paper Hygiene.
+- **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
+- **Backup** - light/full Backup Snapshot controls and manifest summaries.
+
+Library Health Check reports missing or unindexed PDFs, duplicate filenames and DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches.
+
+`BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used. Inbox PDFs are candidates only; the app uses an explicit preview/confirm workflow to copy one selected PDF into `papers/` and leaves the source untouched.
+
+Backup Snapshot creates timestamped ZIP files under `exports/`:
+
+- **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
+- **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
+
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore is manual in v1.0.0-foundation. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+
+Recommended move workflow:
+
+1. Run Library Health Check on the old computer.
+2. Create a full snapshot, or create a light snapshot and copy `papers/` separately.
+3. Install BluePrintReboot on the new computer.
+4. With the app stopped, extract the snapshot into the project root while preserving directory structure.
+5. Start the app, scan papers, and run Library Health Check again.
+
+## Development/Release Workflow
+
+Foundation release documents:
+
+- [BluePrint principles](docs/BLUEPRINT_PRINCIPLES.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Backlog](docs/BACKLOG.md)
+- [Development workflow](docs/DEV_WORKFLOW.md)
+- [Release checklist](docs/RELEASE_CHECKLIST.md)
+- [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
+- [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
+- [v1.0.0-foundation release-note draft](docs/release_notes/v1.0_draft.md)
 
 Run the non-destructive readiness check:
 
@@ -144,11 +145,34 @@ Run a focused test file:
 python -m pytest tests/test_library_health.py -q
 ```
 
-The GitHub Actions workflow runs the full pytest suite on pushes to `main` and pull requests.
+Manual release validation is documented in [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) and [docs/checklists/v1.0_smoke_test.md](docs/checklists/v1.0_smoke_test.md).
 
-Manual release validation is documented in [docs/checklists/v1.0_smoke_test.md](docs/checklists/v1.0_smoke_test.md).
+Do not commit, push, merge, or tag release work until review and explicit release approval are complete.
+
+## Project Structure
+
+- `app.py` - Streamlit entry point.
+- `ui_streamlit/` - application pages and workspace UI.
+- `ingest/` - scanning, DOI, Crossref, tagging, and text-extraction helpers.
+- `services/` - inbox import, filename hygiene, backup, health checks, and workflow orchestration.
+- `storage/` - index, notes, note blocks, projects, links, and extracted-text caches.
+- `config/` - contact/inbox helpers and user-editable tag configuration.
+- `scripts/` - non-destructive readiness utilities.
+- `docs/` - release, roadmap, workflow, and checklist documentation.
+- `tests/` - automated test suite.
+- `papers/` - canonical managed PDF library; ignored by Git.
+- `data/` - local metadata and caches; ignored by Git.
+- `notes/` - Markdown reading notes; ignored by Git.
+- `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.0-foundation
+
+- Marks the stable foundation release target.
+- Adds foundation principles, roadmap, backlog, development workflow, and release checklist docs.
+- Keeps the app local-first, single-user, and Streamlit-based.
+- Updates the runtime version reference to `1.0.0`.
 
 ### v0.9.9
 
@@ -205,8 +229,6 @@ Manual release validation is documented in [docs/checklists/v1.0_smoke_test.md](
 - Crossref depends on internet, TLS certificates, proxy settings, and provider availability.
 - Image-only or scanned PDFs may yield no extracted text because OCR is not included.
 - Native Streamlit PDF rendering can vary by environment; the stable HTML viewer remains the default.
-
-See [docs/checklists/v1.0_smoke_test.md](docs/checklists/v1.0_smoke_test.md) for the complete pre-release manual verification pass.
 
 If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:
 
