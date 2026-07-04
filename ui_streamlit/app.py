@@ -47,6 +47,7 @@ from services.pdf_inbox import (
     import_pdf_from_inbox,
     scan_pdf_inbox,
 )
+from services.reading_note_template import refresh_reading_note_header
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
@@ -54,9 +55,15 @@ from storage.index_store import (
     update_index_from_scan,
     update_paper_metadata,
 )
+from storage.note_store import refresh_note_header
 from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
 from ui_streamlit.project_workspace import render_paper_project_links, render_project_workspace
-from ui_streamlit.reader_workspace import render_reader_workspace
+from ui_streamlit.reader_workspace import (
+    note_draft_key,
+    pending_note_reload_key,
+    queue_note_text_update,
+    render_reader_workspace,
+)
 from ui_streamlit.tag_manager import render_tag_manager_page
 
 
@@ -89,6 +96,38 @@ def _selected_record(df: pd.DataFrame) -> dict[str, str] | None:
     if matches.empty:
         return None
     return matches.iloc[0].to_dict()
+
+
+def _latest_record_for_paper(paper_id: str) -> dict[str, str] | None:
+    df = load_index()
+    if df.empty or "paper_id" not in df.columns:
+        return None
+    matches = df[df["paper_id"] == paper_id]
+    if matches.empty:
+        return None
+    return {str(key): str(value) for key, value in matches.iloc[0].fillna("").to_dict().items()}
+
+
+def _refresh_reading_note_header_after_metadata_apply(paper_id: str) -> None:
+    updated_record = _latest_record_for_paper(paper_id)
+    if not updated_record:
+        return
+
+    file_result = refresh_note_header(updated_record)
+    draft_key = note_draft_key(updated_record)
+    if draft_key in st.session_state:
+        draft_result = refresh_reading_note_header(str(st.session_state.get(draft_key, "")), updated_record)
+        if draft_result["changed"]:
+            queue_note_text_update(
+                updated_record,
+                st.session_state,
+                str(draft_result["text"]),
+                notice=str(draft_result["message"]),
+            )
+        return
+
+    if file_result["changed"]:
+        st.session_state[pending_note_reload_key(updated_record)] = True
 
 
 def _scan_button(key: str) -> None:
@@ -261,6 +300,7 @@ def paper_detail_page() -> None:
                     "reading_priority": reading_priority,
                 },
             )
+            _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
             st.success("Metadata saved.")
             st.rerun()
 
@@ -313,6 +353,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
                         "extraction_checked_at": _now_iso(),
                     },
                 )
+                _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
                 saved = True
                 message = "Detected DOI was saved to this paper."
             else:
@@ -387,6 +428,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
                             "extraction_checked_at": _now_iso(),
                         },
                     )
+                    _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
                     st.session_state[extraction_key]["saved"] = True
                     st.session_state[extraction_key]["message"] = "Detected DOI was saved to this paper."
                     st.success("Saved detected DOI.")
@@ -435,6 +477,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         if st.button("Apply suggested tags"):
             merged_tags = merge_tags(record.get("tags", ""), suggestions)
             update_paper_metadata(record["paper_id"], {"tags": merged_tags})
+            _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
             st.success("Suggested tags added.")
             st.rerun()
     else:
@@ -477,6 +520,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
     )
     if st.button("Apply Crossref metadata"):
         accept_crossref_metadata(record["paper_id"], preview)
+        _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
         st.session_state.pop(preview_key, None)
         st.success("Crossref metadata accepted.")
         st.rerun()
@@ -546,6 +590,7 @@ def _render_doi_less_metadata_candidate(
         disabled=not bool(plan["updates"]),
     ):
         result = apply_metadata_candidate_to_index(record["paper_id"], candidate, overwrite=overwrite)
+        _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
         st.session_state.pop(candidate_key, None)
         updated = ", ".join(result["updated_fields"]) if result["updated_fields"] else "none"
         st.success(f"DOI-less metadata applied. Updated fields: {updated}.")

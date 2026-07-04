@@ -5,17 +5,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import MutableMapping
 
+import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
 from ingest.tag_suggester import merge_tags, normalize_tag, suggest_tags
 from ingest.text_extractor import extraction_diagnostics
 from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper
+from services.note_import import (
+    SUPPORTED_EXTENSIONS,
+    apply_external_note_import,
+    build_structured_block_candidates,
+    has_duplicate_note_import,
+    load_external_note_template,
+    match_note_import_to_papers,
+    parse_external_note_file,
+)
+from services.reading_note_template import apply_reading_note_template_to_text
 from storage.extracted_text_store import (
     extraction_cache_status,
     load_cached_extracted_text,
 )
-from storage.index_store import update_paper_metadata
+from storage.index_store import load_index, update_paper_metadata
 from storage.note_block_store import (
     ALLOWED_BLOCK_TYPES,
     create_note_block,
@@ -135,6 +146,14 @@ def pending_note_reload_key(record: dict[str, str]) -> str:
     return f"pending_note_reload_{record['paper_id']}"
 
 
+def pending_note_text_update_key(record: dict[str, str]) -> str:
+    return f"pending_note_text_update_{record['paper_id']}"
+
+
+def pending_note_notice_key(record: dict[str, str]) -> str:
+    return f"pending_note_notice_{record['paper_id']}"
+
+
 def reader_tag_suggestion_preview_key(record: dict[str, str]) -> str:
     return f"reader_tag_suggestion_preview_{record['paper_id']}"
 
@@ -153,6 +172,18 @@ def append_markdown_snapshot(markdown: str, snippet: str) -> str:
     return f"{existing}\n\n{snapshot}\n"
 
 
+def queue_note_text_update(
+    record: dict[str, str],
+    session_state: MutableMapping,
+    text: str,
+    *,
+    notice: str = "",
+) -> None:
+    session_state[pending_note_text_update_key(record)] = str(text)
+    if notice:
+        session_state[pending_note_notice_key(record)] = notice
+
+
 def apply_pending_note_actions(
     record: dict[str, str],
     session_state: MutableMapping,
@@ -166,6 +197,11 @@ def apply_pending_note_actions(
             draft = load_note_text(record)
         else:
             draft = load_note_text(record, notes_dir=notes_dir)
+        session_state[key] = draft
+
+    pending_text_update = session_state.pop(pending_note_text_update_key(record), None)
+    if pending_text_update is not None:
+        draft = str(pending_text_update)
         session_state[key] = draft
 
     pending_snapshot = str(session_state.pop(pending_note_block_append_key(record), "") or "")
@@ -300,6 +336,7 @@ def render_reader_workspace(record: dict[str, str]) -> None:
         _render_pdf_viewer(record)
     with note_col:
         _render_note_editor(record)
+        _render_external_note_import(record)
         _render_structured_note_blocks(record)
 
 
@@ -543,15 +580,46 @@ def _run_full_text_extraction(record: dict[str, str], force: bool = False) -> No
 
 
 def _render_note_editor(record: dict[str, str]) -> None:
-    st.write("Markdown Note")
+    st.write("Reading Note")
+    st.caption(
+        "Reading Note is the main paper note. Structured blocks are separate retrieval cards created "
+        "from imported or manually added content."
+    )
     key = note_draft_key(record)
     apply_pending_note_actions(record, st.session_state)
+    notice = str(st.session_state.pop(pending_note_notice_key(record), "") or "")
+    if notice:
+        st.success(notice)
     st.text_area(
-        "Note draft",
+        "Paper Reading Note",
         height=860,
         key=key,
     )
-    if st.button("Save", key=f"editor_save_note_{record['paper_id']}"):
+    template_key = f"append_reading_note_template_confirm_{record['paper_id']}"
+    if st.button("Insert Reading Note template", key=f"insert_reading_note_template_{record['paper_id']}"):
+        result = apply_reading_note_template_to_text(st.session_state.get(key, ""), record)
+        if result["changed"]:
+            queue_note_text_update(record, st.session_state, str(result["text"]), notice=str(result["message"]))
+            st.rerun()
+        st.session_state[template_key] = True
+
+    if st.session_state.get(template_key):
+        st.warning("This Reading Note already has content. Append the template instead of replacing the note?")
+        confirm_col, cancel_col = st.columns(2)
+        if confirm_col.button("Append template", key=f"append_reading_note_template_{record['paper_id']}"):
+            result = apply_reading_note_template_to_text(
+                st.session_state.get(key, ""),
+                record,
+                append_if_non_empty=True,
+            )
+            queue_note_text_update(record, st.session_state, str(result["text"]), notice=str(result["message"]))
+            st.session_state.pop(template_key, None)
+            st.rerun()
+        if cancel_col.button("Cancel", key=f"cancel_reading_note_template_{record['paper_id']}"):
+            st.session_state.pop(template_key, None)
+            st.rerun()
+
+    if st.button("Save note", key=f"editor_save_note_{record['paper_id']}"):
         save_note_draft(record, st.session_state)
         st.success("Note saved.")
     if st.button("Reload", key=f"editor_reload_note_{record['paper_id']}"):
@@ -562,11 +630,196 @@ def _render_note_editor(record: dict[str, str]) -> None:
         st.caption(f"Last saved: {saved_at}")
 
 
+def _render_external_note_import(record: dict[str, str]) -> None:
+    paper_id = record["paper_id"]
+    success_key = f"external_note_import_success_{paper_id}"
+    success = st.session_state.pop(success_key, None)
+    if success:
+        st.success(
+            "BluePrint Reading Note import complete. "
+            f"Created {len(success['created_block_ids'])} structured blocks; "
+            f"appended to Reading Note: {'yes' if success['appended_markdown'] else 'no'}."
+        )
+
+    with st.expander("BluePrint Reading Note Import"):
+        st.caption(
+            "Download the same BluePrint Reading Note template used inside the app, write notes outside BluePrint, "
+            "then import the completed file back here. Imports are local, one-way, and require confirmation."
+        )
+        try:
+            template_text = load_external_note_template()
+        except OSError:
+            template_text = ""
+            st.warning("External note template file is missing.")
+
+        if template_text:
+            md_col, txt_col = st.columns(2)
+            md_col.download_button(
+                "Download .md template",
+                data=template_text,
+                file_name="blueprint_reading_note_template.md",
+                mime="text/markdown",
+                key=f"download_external_note_md_{paper_id}",
+            )
+            txt_col.download_button(
+                "Download .txt template",
+                data=template_text,
+                file_name="blueprint_reading_note_template.txt",
+                mime="text/plain",
+                key=f"download_external_note_txt_{paper_id}",
+            )
+
+        uploaded = st.file_uploader(
+            "Import completed external note",
+            type=sorted(extension.lstrip(".") for extension in SUPPORTED_EXTENSIONS),
+            key=f"external_note_upload_{paper_id}",
+        )
+        if not uploaded:
+            return
+
+        parsed = parse_external_note_file(uploaded.name, uploaded.getvalue())
+        _render_external_note_import_preview(record, parsed, success_key)
+
+
+def _render_external_note_import_preview(
+    record: dict[str, str],
+    parsed: dict[str, object],
+    success_key: str,
+) -> None:
+    parse_errors = list(parsed.get("parse_errors", []))
+    diagnostics = list(parsed.get("diagnostics", []))
+    source_hash = str(parsed.get("source_sha256", ""))
+    st.write(f"Template version: `{parsed.get('template_version', '') or 'unknown'}`")
+    st.caption(f"Source: `{parsed.get('source_filename', '')}` | SHA-256: `{source_hash[:12]}`")
+
+    header = parsed.get("header_fields", {})
+    if isinstance(header, dict):
+        st.dataframe(
+            pd.DataFrame([{"field": field, "value": value} for field, value in header.items()]),
+            width="stretch",
+            hide_index=True,
+        )
+
+    sections = parsed.get("sections", {})
+    if isinstance(sections, dict):
+        section_rows = [
+            {"section": name, "characters": len(str(value or "")), "detected": bool(str(value or "").strip())}
+            for name, value in sections.items()
+        ]
+        st.write("Sections detected")
+        st.dataframe(pd.DataFrame(section_rows), width="stretch", hide_index=True)
+
+    block_candidates = build_structured_block_candidates(parsed)
+    raw_notes = str(parsed.get("sections", {}).get("Raw Notes", "") if isinstance(parsed.get("sections", {}), dict) else "")
+    st.caption(
+        f"Structured blocks to create: {len(block_candidates)} | "
+        f"Raw Notes available for Reading Note append: {'yes' if raw_notes.strip() else 'no'}"
+    )
+    append_to_reading_note = st.checkbox(
+        "Append imported Raw Notes to Reading Note",
+        value=True,
+        key=f"external_note_append_reading_note_{record['paper_id']}_{source_hash[:8]}",
+        disabled=not raw_notes.strip(),
+    )
+    create_structured_blocks = st.checkbox(
+        "Create structured note blocks",
+        value=True,
+        key=f"external_note_create_blocks_{record['paper_id']}_{source_hash[:8]}",
+        disabled=not bool(block_candidates),
+    )
+    st.caption("Parsed tags are shown for review only; they are not applied automatically.")
+    has_import_content = bool((append_to_reading_note and raw_notes.strip()) or (create_structured_blocks and block_candidates))
+    if not has_import_content:
+        st.warning("No selected import action has non-empty content to apply.")
+
+    if diagnostics:
+        with st.expander("Import diagnostics"):
+            for diagnostic in diagnostics:
+                st.write(f"- {diagnostic}")
+    if parse_errors:
+        st.error("This file cannot be imported until parse errors are resolved.")
+        for error in parse_errors:
+            st.write(f"- {error}")
+        return
+
+    dataframe = load_index()
+    if dataframe.empty:
+        st.warning("No papers are indexed. Scan papers before importing external notes.")
+        return
+
+    match = match_note_import_to_papers(parsed, dataframe)
+    _render_note_import_matches(match)
+
+    labels = {
+        str(row.paper_id): f"{row.title or row.filename or row.paper_id} ({row.filename})"
+        for row in dataframe.itertuples(index=False)
+    }
+    default_paper_id = str(match.get("auto_target_paper_id") or record["paper_id"])
+    paper_ids = list(labels)
+    default_index = paper_ids.index(default_paper_id) if default_paper_id in labels else 0
+    selected_paper_id = st.selectbox(
+        "Target paper",
+        options=paper_ids,
+        index=default_index,
+        format_func=lambda value: labels.get(value, value),
+        key=f"external_note_target_{record['paper_id']}_{source_hash[:8]}",
+    )
+
+    if has_duplicate_note_import(selected_paper_id, source_hash):
+        st.warning("This same source file was previously imported into the selected paper.")
+
+    confirmation = st.checkbox(
+        "I understand this imports into the Reading Note and/or structured blocks without overwriting existing content.",
+        key=f"external_note_confirm_{record['paper_id']}_{source_hash[:8]}",
+        disabled=not has_import_content,
+    )
+    if st.button(
+        "Apply external note import",
+        key=f"external_note_apply_{record['paper_id']}_{source_hash[:8]}",
+        disabled=not confirmation or not has_import_content,
+    ):
+        target_record = dataframe[dataframe["paper_id"] == selected_paper_id].iloc[0].to_dict()
+        result = apply_external_note_import(
+            target_record,
+            parsed,
+            import_mode=(
+                f"append_reading_note={append_to_reading_note};"
+                f"create_structured_blocks={create_structured_blocks}"
+            ),
+            append_raw_notes=append_to_reading_note,
+            create_structured_blocks=create_structured_blocks,
+        )
+        st.session_state[success_key] = result
+        if selected_paper_id == record["paper_id"]:
+            st.session_state[pending_note_reload_key(record)] = True
+        st.rerun()
+
+
+def _render_note_import_matches(match: dict[str, object]) -> None:
+    confident = list(match.get("confident_matches", []))
+    title_candidates = list(match.get("title_candidates", []))
+    diagnostics = list(match.get("diagnostics", []))
+    if confident:
+        st.success("Confident paper match found.")
+        st.dataframe(pd.DataFrame(confident), width="stretch", hide_index=True)
+    if title_candidates:
+        st.warning("Title candidates require explicit target confirmation.")
+        st.dataframe(pd.DataFrame(title_candidates), width="stretch", hide_index=True)
+    if diagnostics:
+        with st.expander("Matching diagnostics"):
+            for diagnostic in diagnostics:
+                st.write(f"- {diagnostic}")
+
+
 def _render_structured_note_blocks(record: dict[str, str]) -> None:
     paper_id = record["paper_id"]
     edit_key = structured_note_edit_key(record)
     with st.container(border=True):
         st.write("Structured Note Blocks")
+        st.caption(
+            "Structured blocks are retrieval/project-link cards, not the canonical Reading Note document. "
+            "They do not live-sync back to the Reading Note."
+        )
         blocks = list_note_blocks(paper_id)
         type_counts = {
             block_type: sum(block["block_type"] == block_type for block in blocks)
@@ -583,7 +836,7 @@ def _render_structured_note_blocks(record: dict[str, str]) -> None:
             key=f"structured_note_filter_{paper_id}",
         )
         st.caption(
-            "Markdown notes remain freeform. Appending a block creates a one-way snapshot in the current draft; "
+            "Reading Notes remain editable documents. Appending a block creates a one-way snapshot in the current note; "
             "later block edits are not synchronized."
         )
 
@@ -643,7 +896,7 @@ def _render_structured_note_block_card(
         if edit_col.button("Edit", key=f"edit_note_block_{paper_id}_{block_id}"):
             st.session_state[edit_key] = block_id
             st.rerun()
-        if append_col.button("Append to Markdown", key=f"append_note_block_{paper_id}_{block_id}"):
+        if append_col.button("Append to Reading Note", key=f"append_note_block_{paper_id}_{block_id}"):
             st.session_state[pending_note_block_append_key(record)] = render_note_block_as_markdown(block)
             st.rerun()
         block_delete_key = confirmation_key("delete_note_block", block_id)
