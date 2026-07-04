@@ -19,6 +19,7 @@ def _seed_workspace(name: str) -> Path:
         "paper_id,filename,filepath,title,authors,year\npaper-1,Paper.pdf,Paper.pdf,Paper,Author,2024\n",
         encoding="utf-8",
     )
+    (workspace / "data" / "note_imports.json").write_text("[]", encoding="utf-8")
     (workspace / "data" / "projects" / "projects.json").write_text(
         json.dumps([{"id": "project-1"}]), encoding="utf-8"
     )
@@ -53,6 +54,7 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
         names = set(archive.namelist())
         manifest = json.loads(archive.read("manifest.json"))
     assert "data/paper_index.csv" in names
+    assert "data/note_imports.json" in names
     assert "data/projects/projects.json" in names
     assert "data/projects/project_links.json" in names
     assert "data/note_blocks/paper-1.json" in names
@@ -61,7 +63,7 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
     assert "config/canonical_tags.json" in names
     assert ".streamlit/config.toml" in names
     assert "papers/Paper.pdf" not in names
-    assert manifest["app_version"] == "1.0.1"
+    assert manifest["app_version"] == "1.0.2"
     assert manifest["snapshot_type"] == "light"
     assert manifest["includes_pdfs"] is False
     assert manifest["counts"]["index_rows"] == 1

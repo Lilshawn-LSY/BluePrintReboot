@@ -13,10 +13,13 @@ from ui_streamlit.reader_workspace import (
     native_pdf_support_status,
     note_draft_key,
     pending_note_block_append_key,
+    pending_note_notice_key,
     pending_note_reload_key,
+    pending_note_text_update_key,
     pdf_embed_html,
     pdf_path_status,
     preview_reader_tag_suggestions,
+    queue_note_text_update,
     reader_tag_suggestion_preview_key,
     save_note_draft,
 )
@@ -41,7 +44,10 @@ def test_load_note_draft_uses_default_template_when_missing() -> None:
 
     draft = load_note_draft(record, session_state, notes_dir=notes_dir)
 
-    assert "# Reader Paper" in draft
+    assert "# BluePrint Reading Note" in draft
+    assert "paper_id: paper-1" in draft
+    assert "title: Reader Paper" in draft
+    assert "first_author: Curie Marie" in draft
     assert "## Key Claims" in draft
     assert session_state[note_draft_key(record)] == draft
 
@@ -107,6 +113,25 @@ def test_apply_pending_note_append_updates_draft_and_clears_pending_key() -> Non
     assert draft == "Existing draft\n\n### Evidence: Result\n\nBlock text\n"
     assert session_state[note_draft_key(record)] == draft
     assert pending_key not in session_state
+
+
+def test_queued_note_text_update_applies_before_pending_append_and_clears_key() -> None:
+    notes_dir = make_workspace("reader-pending-text-update")
+    record = {"paper_id": "paper-1", "title": "Reader Paper"}
+    append_key = pending_note_block_append_key(record)
+    session_state = {
+        note_draft_key(record): "Existing draft",
+        append_key: "### Evidence: Result\n\nBlock text\n",
+    }
+    queue_note_text_update(record, session_state, "Queued draft", notice="Draft updated.")
+
+    draft = apply_pending_note_actions(record, session_state, notes_dir=notes_dir)
+
+    assert draft == "Queued draft\n\n### Evidence: Result\n\nBlock text\n"
+    assert session_state[note_draft_key(record)] == draft
+    assert pending_note_text_update_key(record) not in session_state
+    assert append_key not in session_state
+    assert session_state[pending_note_notice_key(record)] == "Draft updated."
 
 
 def test_apply_pending_reload_happens_before_pending_append() -> None:

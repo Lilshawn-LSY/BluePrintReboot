@@ -2,15 +2,15 @@
 
 ## What is BluePrintReboot?
 
-BluePrintReboot is a local-first research paper library built with Streamlit. It keeps PDFs, metadata, reading notes, structured note blocks, project links, tags, and extracted text on the local machine.
+BluePrintReboot is a local-first research paper library built with Streamlit. It keeps PDFs, metadata, BluePrint Reading Notes, structured note blocks, project links, tags, and extracted text on the local machine.
 
-The canonical managed PDF directory is `papers/`. Paper identity is the stable `paper_id` stored in `data/paper_index.csv`; notes, note blocks, project links, and extracted-text caches remain attached to that identity even when a PDF filename changes.
+The canonical managed PDF directory is `papers/`. Paper identity is the stable `paper_id` stored in `data/paper_index.csv`; Reading Notes, note blocks, project links, and extracted-text caches remain attached to that identity even when a PDF filename changes.
 
 ## Current Status
 
-Current release target: **v1.0.1-doi-less-metadata**.
+Current release target: **v1.0.2-google-docs-note-import**.
 
-v1.0.1 builds on the stable foundation release with conservative metadata fallback for papers that do not have a DOI or where DOI/Crossref enrichment is unavailable. It does not start a FastAPI backend migration, React/Next frontend migration, hosted service model, or feature-expansion cycle.
+v1.0.2 adds a one-way local import workflow for the canonical **BluePrint Reading Note** template, including Markdown/text files and Google Docs-exported `.docx` files. It does not start a FastAPI backend migration, React/Next frontend migration, hosted service model, Google OAuth, Google Docs API integration, live sync, or export back to Google Docs.
 
 The app remains intentionally local-first and single-user:
 
@@ -49,7 +49,7 @@ The main loop is:
 1. Add a paper to `papers/`.
 2. Read the PDF.
 3. Edit metadata, status, priority, and tags.
-4. Write Markdown notes and structured note blocks.
+4. Write the BluePrint Reading Note and structured note blocks.
 5. Link papers and useful note blocks to projects.
 6. Retrieve papers, notes, tags, and project context later.
 
@@ -58,8 +58,10 @@ Current support includes:
 - Recursive PDF scanning from the canonical `papers/` directory.
 - Stable paper identities and a local CSV metadata index.
 - Search and filtering by metadata, status, priority, and tags.
-- Reader Workspace with PDF viewing, Markdown notes, status, priority, and tags.
+- Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, and tags.
+- Reading Note headers refresh from accepted paper metadata while preserving existing note body sections.
 - Structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
+- BluePrint Reading Note template download and confirmed local import into the Reading Note and structured note blocks.
 - Full-text extraction with MarkItDown when available and `pypdf` fallback.
 - SHA-256 cache freshness checks and safe stale-cache recovery.
 
@@ -106,7 +108,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.1. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.2. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -168,6 +170,15 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.2-google-docs-note-import
+
+- Adds one canonical BluePrint Reading Note template under `docs/templates/`.
+- Adds local one-way import from Markdown/text template files and Google Docs-exported `.docx` files.
+- Previews parsed fields, detected sections, target paper matches, block counts, raw-note append behavior, and duplicate imports before apply.
+- Appends imported Raw Notes into the Reading Note and creates structured note blocks only after explicit confirmation.
+- Refreshes only the BluePrint Reading Note metadata header after accepted metadata updates; note body sections are preserved.
+- Clarifies that structured blocks are retrieval/project-link cards while the Reading Note is the main paper note.
 
 ### v1.0.1-doi-less-metadata
 
@@ -234,6 +245,8 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 
 - Visual PDF highlighting, coordinate annotations, OCR, graph visualization, Zotero integration, and relation graphs are not implemented.
 - Google Drive support is local-folder based only; there is no Drive API or OAuth integration.
+- BluePrint Reading Note import is local file import only; there is no Google OAuth, Google Docs API, live sync, or export to Google Docs.
+- Structured note blocks are separate retrieval/project-link cards, not a live-synced replacement for the Reading Note.
 - Backup restore is manual and should be performed while the app is stopped.
 - Crossref depends on internet, TLS certificates, proxy settings, and provider availability.
 - Image-only or scanned PDFs may yield no extracted text because OCR is not included.

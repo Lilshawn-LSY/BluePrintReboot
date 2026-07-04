@@ -25,6 +25,7 @@ REQUIRED_FILES = (
     "docs/BACKLOG.md",
     "docs/DEV_WORKFLOW.md",
     "docs/RELEASE_CHECKLIST.md",
+    "docs/templates/blueprint_reading_note_template.md",
     "config/tag_rules.json",
     "config/canonical_tags.json",
     "docs/checklists/v1.0_smoke_test.md",
@@ -46,8 +47,10 @@ KEY_MODULES = (
     "services.backup_snapshot",
     "services.library_health",
     "services.metadata_fallback",
+    "services.note_import",
     "services.pdf_inbox",
     "services.paper_file_hygiene",
+    "services.reading_note_template",
 )
 
 

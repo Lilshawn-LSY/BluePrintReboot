@@ -15,6 +15,7 @@ from storage.paths import EXPORTS_DIR, PROJECT_ROOT
 IGNORED_NAMES = {".git", ".pytest_cache", ".venv", "__pycache__", "venv"}
 TAG_CONFIG_FILES = ("config/tag_rules.json", "config/canonical_tags.json")
 LOCAL_SETTING_FILES = (".streamlit/config.toml", "config/settings.json", "data/settings.json")
+LOCAL_LIBRARY_FILES = ("data/note_imports.json",)
 
 
 def _timestamp(value: datetime | None = None) -> datetime:
@@ -58,7 +59,7 @@ def collect_snapshot_files(
         candidates.append(index_path)
     for relative_directory in ("data/projects", "notes", "data/note_blocks"):
         candidates.extend(_files_under(project_root / relative_directory, project_root))
-    for relative_file in (*TAG_CONFIG_FILES, *LOCAL_SETTING_FILES):
+    for relative_file in (*TAG_CONFIG_FILES, *LOCAL_SETTING_FILES, *LOCAL_LIBRARY_FILES):
         path = project_root / relative_file
         if path.is_file() and not _is_ignored(path, project_root):
             candidates.append(path)
