@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.0-foundation**.
+Current release target: **v1.0.1-doi-less-metadata**.
 
-v1.0.0 is a stable foundation release, not a finished-product claim. The release focus is stabilization, documentation, release readiness, and development governance. It does not start a FastAPI backend migration, React/Next frontend migration, hosted service model, or feature-expansion cycle.
+v1.0.1 builds on the stable foundation release with conservative metadata fallback for papers that do not have a DOI or where DOI/Crossref enrichment is unavailable. It does not start a FastAPI backend migration, React/Next frontend migration, hosted service model, or feature-expansion cycle.
 
 The app remains intentionally local-first and single-user:
 
@@ -67,7 +67,9 @@ Current support includes:
 
 - DOI extraction from PDFs.
 - Crossref metadata preview and explicit acceptance with classified diagnostics.
+- DOI-less metadata fallback for arXiv/preprint/workshop PDFs, including arXiv ID detection, optional arXiv metadata lookup, and weak title guesses from PDF text or filename.
 - Manual metadata editing when enrichment is incomplete or offline.
+- Fallback metadata suggestions are previewed and user-applied; they do not claim perfect extraction.
 - Deterministic tag suggestions and canonical tag governance.
 - Research projects linking papers and structured note blocks.
 - Paper Hygiene recommendations using `{year}_{first_author}_{short_title}.pdf` without changing `paper_id`.
@@ -104,7 +106,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore is manual in v1.0.0-foundation. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.1. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -166,6 +168,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.1-doi-less-metadata
+
+- Adds DOI-less metadata candidates for arXiv/preprint/workshop PDFs.
+- Detects modern and old-style arXiv IDs from filenames and PDF/extracted text.
+- Adds optional arXiv metadata lookup with graceful offline/network failure diagnostics.
+- Applies fallback metadata only after preview, preserving existing non-empty fields unless replacement is explicitly selected.
 
 ### v1.0.0-foundation
 

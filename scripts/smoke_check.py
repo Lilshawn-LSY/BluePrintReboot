@@ -45,6 +45,7 @@ KEY_MODULES = (
     "storage.index_store",
     "services.backup_snapshot",
     "services.library_health",
+    "services.metadata_fallback",
     "services.pdf_inbox",
     "services.paper_file_hygiene",
 )
