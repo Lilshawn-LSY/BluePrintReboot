@@ -36,6 +36,11 @@ from services.paper_file_hygiene import (
 )
 from services.backup_snapshot import create_backup_snapshot
 from services.library_health import run_library_health_check
+from services.metadata_fallback import (
+    apply_metadata_candidate_to_index,
+    build_doi_less_metadata_candidate,
+    build_metadata_candidate_update,
+)
 from services.pdf_inbox import (
     PDFInboxError,
     build_inbox_import_plan,
@@ -283,6 +288,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
     preview_key = f"crossref_preview_{record['paper_id']}"
     extraction_key = f"doi_extraction_{record['paper_id']}"
     enrichment_key = f"metadata_enrichment_{record['paper_id']}"
+    doi_less_key = f"doi_less_metadata_candidate_{record['paper_id']}"
 
     if st.button("Enrich Metadata", type="primary"):
         normalized_current_doi = normalize_doi(current_doi)
@@ -345,6 +351,8 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         st.session_state[enrichment_key] = {
             "crossref_status": crossref_status,
         }
+        if crossref_status.startswith("failed:") or crossref_status == "not attempted; no DOI available":
+            st.session_state[doi_less_key] = build_doi_less_metadata_candidate(record)
         if saved or crossref_status.startswith("metadata found"):
             st.rerun()
 
@@ -399,6 +407,13 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
             st.write(f"DOI extraction source: `{extraction.get('source', 'none')}`")
             st.write("Saved to index: `no`")
             st.write(f"Crossref lookup status: `{enrichment.get('crossref_status', 'not attempted')}`")
+
+    if st.button("Find DOI-less metadata", key=f"doi_less_metadata_button_{record['paper_id']}"):
+        st.session_state[doi_less_key] = build_doi_less_metadata_candidate(record)
+
+    doi_less_candidate = st.session_state.get(doi_less_key)
+    if doi_less_candidate:
+        _render_doi_less_metadata_candidate(record, doi_less_candidate, doi_less_key)
 
     preview = st.session_state.get(preview_key)
     suggestion_record = build_tag_suggestion_record(record, form_values=form_values, crossref_preview=preview)
@@ -464,6 +479,79 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         accept_crossref_metadata(record["paper_id"], preview)
         st.session_state.pop(preview_key, None)
         st.success("Crossref metadata accepted.")
+        st.rerun()
+
+
+def _render_doi_less_metadata_candidate(
+    record: dict[str, str],
+    candidate: dict[str, object],
+    candidate_key: str,
+) -> None:
+    st.write("DOI-less metadata candidate")
+    st.caption(
+        f"Source: `{candidate.get('source', 'none')}` | "
+        f"Confidence: `{candidate.get('confidence', 'none')}` | "
+        f"arXiv ID: `{candidate.get('arxiv_id', '') or 'not found'}`"
+    )
+    diagnostics = candidate.get("diagnostics", [])
+    if diagnostics:
+        with st.expander("DOI-less metadata diagnostics"):
+            for diagnostic in diagnostics:
+                st.write(f"- {diagnostic}")
+
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "field": field,
+                    "candidate": candidate.get(field, ""),
+                    "current": record.get(field, ""),
+                }
+                for field in ("title", "authors", "year", "abstract", "doi")
+            ]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+
+    overwrite = st.checkbox(
+        "Replace existing non-empty metadata fields",
+        key=f"doi_less_overwrite_{record['paper_id']}",
+    )
+    plan = build_metadata_candidate_update(record, candidate, overwrite=overwrite)
+    if plan["updates"]:
+        with st.expander("Fields that will be applied"):
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {"field": field, "value": value}
+                        for field, value in plan["updates"].items()
+                    ]
+                ),
+                width="stretch",
+                hide_index=True,
+            )
+    else:
+        st.info("This candidate has no new metadata fields to apply with the current overwrite setting.")
+
+    skipped = plan["skipped_existing_fields"]
+    if skipped:
+        st.caption("Existing non-empty fields will be preserved unless replacement is checked.")
+        st.write(", ".join(f"`{field}`" for field in skipped))
+
+    col1, col2 = st.columns(2)
+    if col1.button(
+        "Apply DOI-less metadata",
+        key=f"doi_less_apply_{record['paper_id']}",
+        disabled=not bool(plan["updates"]),
+    ):
+        result = apply_metadata_candidate_to_index(record["paper_id"], candidate, overwrite=overwrite)
+        st.session_state.pop(candidate_key, None)
+        updated = ", ".join(result["updated_fields"]) if result["updated_fields"] else "none"
+        st.success(f"DOI-less metadata applied. Updated fields: {updated}.")
+        st.rerun()
+    if col2.button("Clear DOI-less candidate", key=f"doi_less_clear_{record['paper_id']}"):
+        st.session_state.pop(candidate_key, None)
         st.rerun()
 
 
