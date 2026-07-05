@@ -41,6 +41,14 @@ from services.metadata_fallback import (
     build_doi_less_metadata_candidate,
     build_metadata_candidate_update,
 )
+from services.missing_pdf_repair import (
+    ARCHIVE_DEFERRED_MESSAGE,
+    MissingPDFRepairError,
+    build_reconnect_plan,
+    list_reconnect_candidates,
+    reconnect_missing_pdf,
+    remove_missing_pdf_from_index,
+)
 from services.pdf_inbox import (
     PDFInboxError,
     build_inbox_import_plan,
@@ -792,6 +800,10 @@ def _render_library_health_check() -> None:
         except Exception:
             st.error("The library health check could not finish. Check access to local library files.")
 
+    success_message = st.session_state.pop("library_health_repair_success", "")
+    if success_message:
+        st.success(success_message)
+
     report = st.session_state.get("library_health_report")
     if not report:
         return
@@ -823,10 +835,127 @@ def _render_library_health_check() -> None:
         if not items:
             continue
         with st.expander(f"{title} ({len(items)})"):
-            if isinstance(items[0], dict):
+            if key == "missing_pdfs":
+                _render_missing_pdf_repair(items)
+            elif isinstance(items[0], dict):
                 st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
             else:
                 st.dataframe(pd.DataFrame({"path_or_message": items}), width="stretch", hide_index=True)
+
+
+def _render_missing_pdf_repair(items: list[dict[str, object]]) -> None:
+    st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
+    dataframe = _index()
+    missing_ids = [str(item.get("paper_id", "")) for item in items if item.get("paper_id")]
+    if dataframe.empty or not missing_ids:
+        return
+
+    labels: dict[str, str] = {}
+    for paper_id in missing_ids:
+        matches = dataframe[dataframe["paper_id"] == paper_id]
+        if matches.empty:
+            labels[paper_id] = paper_id
+            continue
+        record = matches.iloc[0]
+        labels[paper_id] = f"{record.get('title', '') or record.get('filename', '') or paper_id} ({paper_id})"
+
+    selected_paper_id = st.selectbox(
+        "Missing PDF record",
+        options=missing_ids,
+        format_func=lambda paper_id: labels.get(paper_id, paper_id),
+        key="missing_pdf_repair_selected_id",
+    )
+    selected_record = dataframe[dataframe["paper_id"] == selected_paper_id].iloc[0].to_dict()
+    st.code(
+        "\n".join(
+            [
+                f"paper_id: {selected_paper_id}",
+                f"missing filepath: {selected_record.get('filepath', '')}",
+                f"stored pdf_sha256: {selected_record.get('pdf_sha256', '') or 'unavailable'}",
+            ]
+        )
+    )
+
+    candidates = list_reconnect_candidates(selected_record)
+    reconnectable_candidates = [candidate for candidate in candidates if candidate["can_reconnect"]]
+    if reconnectable_candidates:
+        candidate_labels = {
+            candidate["path"]: f"{candidate['filename']} - {candidate['status']}"
+            for candidate in reconnectable_candidates
+        }
+        selected_target = st.selectbox(
+            "Reconnect target in papers/",
+            options=list(candidate_labels),
+            format_func=lambda path: candidate_labels.get(path, path),
+            key=f"missing_pdf_reconnect_target_{selected_paper_id}",
+        )
+        plan = build_reconnect_plan(selected_paper_id, selected_target)
+        st.write(f"Reconnect status: `{plan['status']}`")
+        st.write(plan["message"])
+        st.code(
+            "\n".join(
+                [
+                    f"Current: {plan['current_filepath']}",
+                    f"Target:  {plan['target_path']}",
+                    f"Expected SHA-256: {plan['current_pdf_sha256'] or 'unavailable'}",
+                    f"Target SHA-256:   {plan['target_pdf_sha256'] or 'unavailable'}",
+                ]
+            )
+        )
+        mismatch_confirmed = True
+        if plan["requires_hash_mismatch_confirmation"]:
+            st.warning("The selected PDF content differs from the stored hash for this paper.")
+            mismatch_confirmed = st.checkbox(
+                "I understand this replacement PDF has a different SHA-256.",
+                key=f"missing_pdf_hash_mismatch_confirm_{selected_paper_id}",
+            )
+        reconnect_confirmed = st.checkbox(
+            "I understand reconnect updates only filename, filepath, and pdf_sha256.",
+            key=f"missing_pdf_reconnect_confirm_{selected_paper_id}",
+            disabled=not bool(plan["can_reconnect"]),
+        )
+        if st.button(
+            "Reconnect PDF",
+            key=f"missing_pdf_reconnect_apply_{selected_paper_id}",
+            disabled=not reconnect_confirmed or not mismatch_confirmed or not bool(plan["can_reconnect"]),
+        ):
+            try:
+                result = reconnect_missing_pdf(
+                    selected_paper_id,
+                    selected_target,
+                    confirm_hash_mismatch=bool(mismatch_confirmed),
+                )
+            except MissingPDFRepairError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("library_health_report", None)
+                st.session_state["library_health_repair_success"] = result["message"]
+                st.rerun()
+    else:
+        st.info("No reconnectable PDFs were found inside papers/.")
+
+    with st.expander("Other missing-PDF actions"):
+        remove_confirmed = st.checkbox(
+            "I understand this removes only the paper_index.csv row and leaves all files untouched.",
+            key=f"missing_pdf_remove_confirm_{selected_paper_id}",
+        )
+        if st.button(
+            "Remove from index",
+            key=f"missing_pdf_remove_apply_{selected_paper_id}",
+            disabled=not remove_confirmed,
+        ):
+            try:
+                result = remove_missing_pdf_from_index(selected_paper_id, confirm=True)
+            except MissingPDFRepairError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("library_health_report", None)
+                st.session_state["library_health_repair_success"] = result["message"]
+                st.rerun()
+        if st.button("Keep missing", key=f"missing_pdf_keep_{selected_paper_id}"):
+            st.info("No changes were made.")
+        st.button("Archive missing record", key=f"missing_pdf_archive_{selected_paper_id}", disabled=True)
+        st.caption(ARCHIVE_DEFERRED_MESSAGE)
 
 
 def _render_pdf_inbox() -> None:

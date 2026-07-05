@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.5-pdf-hash-identity-foundation`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.6-missing-pdf-repair-workflow`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 

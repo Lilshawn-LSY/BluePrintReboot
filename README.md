@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.5-pdf-hash-identity-foundation**.
+Current release target: **v1.0.6-missing-pdf-repair-workflow**.
 
-v1.0.5 introduces a durable PDF SHA-256 identity foundation so exact same-file renames can preserve the existing `paper_id`. It does not add a missing-PDF repair workflow, archive/remove UI, duplicate repair UI, tag suggestion v2, FastAPI, frontend migration, packaging, or launcher changes.
+v1.0.6 adds a safe missing-PDF repair workflow in Settings > Library Health Check. Missing indexed PDFs can be reconnected to an explicit PDF inside `papers/` or removed from the index without deleting notes, note blocks, project links, PDFs, or caches. Full duplicate repair, orphan cleanup, archive lifecycle, FastAPI, frontend migration, packaging, and launcher changes remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -99,7 +99,7 @@ Settings is organized into four sections:
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
 
-Library Health Check reports missing or unindexed PDFs, duplicate filenames and DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches.
+Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
 
 `BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used. Inbox PDFs are candidates only; the app uses an explicit preview/confirm workflow to copy one selected PDF into `papers/` and leaves the source untouched.
 
@@ -108,7 +108,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.5. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.6. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -173,6 +173,14 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.6-missing-pdf-repair-workflow
+
+- Adds explicit missing-PDF repair actions in Library Health Check.
+- Reconnects a missing index record to a selected PDF in `papers/` while preserving `paper_id` and updating only filename, filepath, and `pdf_sha256`.
+- Requires explicit confirmation before accepting a replacement PDF with a different SHA-256.
+- Removes missing records from the index only after confirmation and leaves notes, note blocks, project links, PDFs, and caches untouched.
+- Defers archive lifecycle, orphan cleanup, and full duplicate repair.
 
 ### v1.0.5-pdf-hash-identity-foundation
 

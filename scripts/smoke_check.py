@@ -48,6 +48,7 @@ KEY_MODULES = (
     "services.backup_snapshot",
     "services.library_health",
     "services.metadata_fallback",
+    "services.missing_pdf_repair",
     "services.note_import",
     "services.pdf_inbox",
     "services.paper_file_hygiene",
