@@ -808,6 +808,7 @@ def _render_library_health_check() -> None:
         ("Missing indexed PDFs", "missing_pdfs"),
         ("Unindexed PDFs", "unindexed_pdfs"),
         ("Duplicate filenames", "duplicate_filenames"),
+        ("Duplicate PDF hashes", "duplicate_pdf_hashes"),
         ("Duplicate DOI values", "duplicate_dois"),
         ("Missing metadata", "missing_metadata"),
         ("Orphan notes", "orphan_notes"),

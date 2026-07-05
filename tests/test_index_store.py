@@ -1,3 +1,7 @@
+import hashlib
+import json
+from pathlib import Path
+
 import pandas as pd
 
 from storage.index_store import (
@@ -24,6 +28,10 @@ class FakePdfReader:
         self.pages = [FakePage(text)]
 
 
+def _sha256(contents: bytes) -> str:
+    return hashlib.sha256(contents).hexdigest()
+
+
 def test_update_index_from_scan_appends_without_duplicates() -> None:
     workspace = make_workspace("index")
     data_dir = workspace / "data"
@@ -32,7 +40,8 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     index_csv = data_dir / "paper_index.csv"
     papers_dir.mkdir(parents=True)
     notes_dir.mkdir()
-    (papers_dir / "Paper.pdf").write_bytes(b"%PDF-1.4\n")
+    contents = b"%PDF-1.4\n"
+    (papers_dir / "Paper.pdf").write_bytes(contents)
 
     first = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
     second = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
@@ -40,6 +49,7 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     assert len(first) == 1
     assert len(second) == 1
     assert load_index(index_csv).iloc[0]["filename"] == "Paper.pdf"
+    assert load_index(index_csv).iloc[0]["pdf_sha256"] == _sha256(contents)
 
 
 def test_update_index_from_scan_auto_detects_and_normalizes_doi(monkeypatch) -> None:
@@ -143,6 +153,7 @@ def test_v1_index_is_migrated_to_v3_columns() -> None:
     assert row["authors"] == ""
     assert row["journal"] == ""
     assert row["doi"] == ""
+    assert row["pdf_sha256"] == ""
     assert row["abstract"] == ""
     assert row["keywords"] == ""
     assert row["tags"] == ""
@@ -158,6 +169,109 @@ def test_v1_index_is_migrated_to_v3_columns() -> None:
     assert row["added_at"]
     assert row["updated_at"]
     assert row["custom_extra"] == "keep me"
+
+
+def test_legacy_index_backfills_pdf_sha256_when_pdf_exists() -> None:
+    workspace = make_workspace("migration-pdf-sha256")
+    papers_dir = workspace / "papers"
+    index_csv = workspace / "data" / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    index_csv.parent.mkdir(parents=True)
+    contents = b"%PDF-1.4\nlegacy hash"
+    pdf_path = papers_dir / "Legacy.pdf"
+    pdf_path.write_bytes(contents)
+    pd.DataFrame(
+        [
+            {
+                "paper_id": "legacy-paper-id",
+                "filename": pdf_path.name,
+                "filepath": str(pdf_path.resolve()),
+                "title": "Legacy",
+            }
+        ]
+    ).to_csv(index_csv, index=False)
+
+    migrated = load_index(index_csv)
+
+    assert migrated.iloc[0]["pdf_sha256"] == _sha256(contents)
+    saved = pd.read_csv(index_csv, dtype=str).fillna("")
+    assert "pdf_sha256" in saved.columns
+    assert saved.iloc[0]["pdf_sha256"] == _sha256(contents)
+
+
+def test_external_pdf_rename_preserves_paper_id_by_pdf_hash() -> None:
+    workspace = make_workspace("hash-rename")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    note_blocks_dir = data_dir / "note_blocks"
+    projects_dir = data_dir / "projects"
+    index_csv = data_dir / "paper_index.csv"
+    for directory in (papers_dir, notes_dir, note_blocks_dir, projects_dir):
+        directory.mkdir(parents=True)
+    contents = b"%PDF-1.4\nsame paper bytes"
+    original = papers_dir / "Original.pdf"
+    renamed = papers_dir / "Renamed.pdf"
+    original.write_bytes(contents)
+
+    first = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    paper_id = first.iloc[0]["paper_id"]
+    note_path = Path(first.iloc[0]["note_path"])
+    note_path.write_text("note sentinel", encoding="utf-8")
+    (note_blocks_dir / f"{paper_id}.json").write_text("[]", encoding="utf-8")
+    project_links_path = projects_dir / "project_links.json"
+    project_links_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "link-1",
+                    "project_id": "project-1",
+                    "paper_id": paper_id,
+                    "target_type": "paper",
+                    "target_id": paper_id,
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    original.rename(renamed)
+    rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    row = rescanned.iloc[0]
+
+    assert len(rescanned) == 1
+    assert row["paper_id"] == paper_id
+    assert row["filename"] == "Renamed.pdf"
+    assert row["filepath"] == str(renamed.resolve())
+    assert row["pdf_sha256"] == _sha256(contents)
+    assert row["note_path"] == str(note_path)
+    assert note_path.read_text(encoding="utf-8") == "note sentinel"
+    assert (note_blocks_dir / f"{paper_id}.json").exists()
+    assert paper_id in project_links_path.read_text(encoding="utf-8")
+
+
+def test_same_hash_copy_is_left_unindexed_instead_of_creating_duplicate_row() -> None:
+    workspace = make_workspace("hash-duplicate-copy")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    contents = b"%PDF-1.4\nsame content"
+    original = papers_dir / "Original.pdf"
+    copy = papers_dir / "Copy.pdf"
+    original.write_bytes(contents)
+    first = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    paper_id = first.iloc[0]["paper_id"]
+
+    copy.write_bytes(contents)
+    rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert len(rescanned) == 1
+    assert rescanned.iloc[0]["paper_id"] == paper_id
+    assert rescanned.iloc[0]["filename"] == "Original.pdf"
+    assert str(copy.resolve()) not in set(rescanned["filepath"].tolist())
 
 
 def test_rescan_preserves_manual_metadata() -> None:

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
 
 from ingest.doi import normalize_doi
-from ingest.scanner import scan_papers
+from ingest.scanner import compute_pdf_sha256, scan_papers
 from storage.paths import INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
 
 
@@ -16,6 +17,7 @@ INDEX_COLUMNS = [
     "paper_id",
     "filename",
     "filepath",
+    "pdf_sha256",
     "title",
     "authors",
     "year",
@@ -108,6 +110,7 @@ SYSTEM_COLUMNS = [
     "paper_id",
     "filename",
     "filepath",
+    "pdf_sha256",
     "note_path",
     "added_at",
     "updated_at",
@@ -150,6 +153,41 @@ def migrate_index_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return migrated[ordered]
 
 
+def _infer_papers_dir(index_csv: Path) -> Path:
+    index_csv = Path(index_csv).resolve(strict=False)
+    if index_csv.parent.name.lower() == "data":
+        return index_csv.parent.parent / "papers"
+    return PAPERS_DIR
+
+
+def _record_pdf_path(row: pd.Series, papers_dir: Path) -> Path | None:
+    filepath = str(row.get("filepath", "")).strip()
+    filename = str(row.get("filename", "")).strip()
+    if filepath:
+        path = Path(filepath)
+        return path if path.is_absolute() else Path(papers_dir) / path
+    if filename:
+        return Path(papers_dir) / filename
+    return None
+
+
+def backfill_pdf_sha256(df: pd.DataFrame, papers_dir: Path) -> pd.DataFrame:
+    backfilled = df.copy().fillna("")
+    if "pdf_sha256" not in backfilled.columns:
+        backfilled["pdf_sha256"] = ""
+    for index, row in backfilled.iterrows():
+        if str(backfilled.at[index, "pdf_sha256"]).strip():
+            continue
+        pdf_path = _record_pdf_path(row, Path(papers_dir))
+        if pdf_path is None or not pdf_path.exists() or not pdf_path.is_file():
+            continue
+        try:
+            backfilled.at[index, "pdf_sha256"] = compute_pdf_sha256(pdf_path)
+        except OSError:
+            continue
+    return backfilled
+
+
 def ensure_index(index_csv: Path = INDEX_CSV) -> None:
     ensure_workspace_dirs()
     index_csv = Path(index_csv)
@@ -158,19 +196,20 @@ def ensure_index(index_csv: Path = INDEX_CSV) -> None:
         save_index(empty_index(), index_csv)
 
 
-def load_index(index_csv: Path = INDEX_CSV) -> pd.DataFrame:
+def load_index(index_csv: Path = INDEX_CSV, papers_dir: Path | None = None) -> pd.DataFrame:
     ensure_index(index_csv)
     df = pd.read_csv(index_csv, dtype=str).fillna("")
     migrated = migrate_index_dataframe(df)
-    if list(df.columns) != list(migrated.columns) or df.shape != migrated.shape or not df.equals(migrated):
-        save_index(migrated, index_csv)
-    return migrated
+    backfilled = backfill_pdf_sha256(migrated, papers_dir or _infer_papers_dir(index_csv))
+    if list(df.columns) != list(backfilled.columns) or df.shape != backfilled.shape or not df.equals(backfilled):
+        save_index(backfilled, index_csv)
+    return backfilled
 
 
 def save_index(df: pd.DataFrame, index_csv: Path = INDEX_CSV) -> None:
     index_csv = Path(index_csv)
     index_csv.parent.mkdir(parents=True, exist_ok=True)
-    output = migrate_index_dataframe(df)
+    output = backfill_pdf_sha256(migrate_index_dataframe(df), _infer_papers_dir(index_csv))
     temporary_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -195,25 +234,60 @@ def update_index_from_scan(
     papers_dir: Path = PAPERS_DIR,
     notes_dir: Path = NOTES_DIR,
 ) -> pd.DataFrame:
-    df = load_index(index_csv)
+    df = load_index(index_csv, papers_dir=papers_dir)
     scanned = scan_papers(papers_dir=papers_dir, notes_dir=notes_dir)
+    existing_records = df.to_dict("records")
     existing_by_path = {
-        os.path.normcase(os.path.abspath(str(row.filepath))): row
-        for row in df.itertuples(index=False)
-        if str(row.filepath).strip()
+        os.path.normcase(os.path.abspath(str(record.get("filepath", "")))): record
+        for record in existing_records
+        if str(record.get("filepath", "")).strip()
     }
+    existing_by_hash: dict[str, list[dict[str, str]]] = {}
+    for record in existing_records:
+        digest = str(record.get("pdf_sha256", "")).strip()
+        if digest:
+            existing_by_hash.setdefault(digest, []).append(record)
+
+    scanned_hash_counts = Counter(str(record.get("pdf_sha256", "")).strip() for record in scanned)
+    records_to_apply: list[dict[str, str]] = []
+    unmatched: list[dict[str, str]] = []
+    claimed_existing_ids: set[str] = set()
     for record in scanned:
         existing = existing_by_path.get(os.path.normcase(os.path.abspath(record["filepath"])))
         if existing is not None:
-            record["paper_id"] = existing.paper_id
-            record["note_path"] = existing.note_path
-    scanned_by_id = {record["paper_id"]: record for record in scanned}
+            record["paper_id"] = str(existing.get("paper_id", ""))
+            record["note_path"] = str(existing.get("note_path", ""))
+            claimed_existing_ids.add(record["paper_id"])
+            records_to_apply.append(record)
+        else:
+            unmatched.append(record)
+
+    for record in unmatched:
+        digest = str(record.get("pdf_sha256", "")).strip()
+        hash_matches = existing_by_hash.get(digest, []) if digest else []
+        matched_claimed_record = any(
+            str(match.get("paper_id", "")) in claimed_existing_ids for match in hash_matches
+        )
+        if digest and len(hash_matches) == 1 and scanned_hash_counts[digest] == 1:
+            existing = hash_matches[0]
+            existing_id = str(existing.get("paper_id", ""))
+            if existing_id not in claimed_existing_ids:
+                record["paper_id"] = existing_id
+                record["note_path"] = str(existing.get("note_path", ""))
+                claimed_existing_ids.add(existing_id)
+                records_to_apply.append(record)
+                continue
+        if digest and hash_matches and (matched_claimed_record or len(hash_matches) != 1 or scanned_hash_counts[digest] != 1):
+            continue
+        records_to_apply.append(record)
+
+    scanned_by_id = {record["paper_id"]: record for record in records_to_apply}
     existing_ids = set(df["paper_id"].tolist())
 
     for paper_id, record in scanned_by_id.items():
         if paper_id in existing_ids:
             row_mask = df["paper_id"] == paper_id
-            for column in ("filename", "filepath", "note_path"):
+            for column in ("filename", "filepath", "pdf_sha256", "note_path"):
                 df.loc[row_mask, column] = record[column]
             if (df.loc[row_mask, "title"] == "").any():
                 df.loc[row_mask, "title"] = record["title"]

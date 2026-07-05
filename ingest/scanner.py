@@ -26,6 +26,14 @@ def make_paper_id(pdf_path: Path, papers_dir: Path = PAPERS_DIR) -> str:
     return f"{_safe_stem(pdf_path.stem)}-{digest}"
 
 
+def compute_pdf_sha256(pdf_path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(pdf_path).open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 @dataclass(frozen=True)
 class DoiExtractionResult:
     doi: str = ""
@@ -73,6 +81,7 @@ def scan_papers(
                 "paper_id": paper_id,
                 "filename": pdf_path.name,
                 "filepath": str(pdf_path.resolve()),
+                "pdf_sha256": compute_pdf_sha256(pdf_path),
                 "title": pdf_path.stem,
                 "authors": "",
                 "year": "",

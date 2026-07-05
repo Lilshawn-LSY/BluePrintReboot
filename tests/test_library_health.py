@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import pandas as pd
@@ -41,6 +42,10 @@ def _record(paper_id: str, pdf_path: Path, doi: str = "") -> dict[str, str]:
         "year": "2024",
         "doi": doi,
     }
+
+
+def _sha256(contents: bytes) -> str:
+    return hashlib.sha256(contents).hexdigest()
 
 
 def test_health_check_detects_missing_indexed_pdf() -> None:
@@ -96,5 +101,32 @@ def test_health_check_detects_normalized_duplicate_doi() -> None:
             "doi": "10.1000/abc",
             "count": 2,
             "paper_ids": "paper-1, paper-2",
+        }
+    ]
+
+
+def test_health_check_reports_duplicate_pdf_hash_for_unindexed_copy() -> None:
+    paths = _workspace("health-duplicate-pdf-hash")
+    papers_dir, *_, index_csv = paths
+    contents = b"%PDF-1.4\nsame content"
+    indexed_pdf = papers_dir / "Indexed.pdf"
+    duplicate_pdf = papers_dir / "Duplicate.pdf"
+    indexed_pdf.write_bytes(contents)
+    duplicate_pdf.write_bytes(contents)
+    record = _record("paper-1", indexed_pdf)
+    record["pdf_sha256"] = _sha256(contents)
+    pd.DataFrame([record]).to_csv(index_csv, index=False)
+
+    report = _run_health(paths)
+
+    assert report["unindexed_pdfs"] == [str(duplicate_pdf.resolve())]
+    assert report["duplicate_pdf_hashes"] == [
+        {
+            "pdf_sha256": _sha256(contents),
+            "count": 2,
+            "paper_ids": "paper-1",
+            "filenames": "Indexed.pdf, Duplicate.pdf",
+            "filepaths": f"{indexed_pdf.resolve()} | {duplicate_pdf.resolve()}",
+            "indexed": "yes, no",
         }
     ]
