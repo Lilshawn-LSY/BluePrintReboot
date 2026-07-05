@@ -29,6 +29,7 @@ REQUIRED_FILES = (
     "config/tag_rules.json",
     "config/canonical_tags.json",
     "docs/checklists/v1.0_smoke_test.md",
+    "docs/checklists/regression_checklist.md",
     "docs/checklists/new_pc_restore_checklist.md",
     "docs/release_notes/v1.0_draft.md",
 )

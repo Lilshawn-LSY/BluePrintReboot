@@ -9,7 +9,7 @@ from typing import Any
 import pandas as pd
 
 from ingest.doi import normalize_doi
-from storage.extracted_text_store import extraction_cache_status
+from storage.extracted_text_store import extraction_cache_status, pdf_fingerprint
 from storage.index_store import INDEX_COLUMNS
 from storage.paths import (
     EXTRACTED_TEXT_DIR,
@@ -74,6 +74,70 @@ def _load_json_list(path: Path, errors: list[str]) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def _pdf_sha256(path: Path, errors: list[str]) -> str:
+    try:
+        return str(pdf_fingerprint(path).get("pdf_sha256") or "")
+    except OSError as exc:
+        errors.append(f"PDF hash check failed for {path}: {exc}")
+        return ""
+
+
+def _duplicate_pdf_hashes(
+    records: list[dict[str, Any]],
+    managed_pdfs: list[Path],
+    indexed_paths: set[str],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    items_by_hash: dict[str, list[dict[str, str]]] = {}
+    for record in records:
+        filepath = str(record.get("filepath", "")).strip()
+        resolved = _absolute(filepath) if filepath else None
+        digest = str(record.get("pdf_sha256", "")).strip()
+        if not digest and resolved is not None and resolved.exists() and resolved.is_file():
+            digest = _pdf_sha256(resolved, errors)
+        if not digest:
+            continue
+        items_by_hash.setdefault(digest, []).append(
+            {
+                "paper_id": str(record.get("paper_id", "")),
+                "filename": str(record.get("filename", "")),
+                "filepath": str(resolved or ""),
+                "indexed": "yes",
+            }
+        )
+
+    for path in managed_pdfs:
+        if _path_key(path) in indexed_paths:
+            continue
+        digest = _pdf_sha256(path, errors)
+        if not digest:
+            continue
+        items_by_hash.setdefault(digest, []).append(
+            {
+                "paper_id": "",
+                "filename": path.name,
+                "filepath": str(path),
+                "indexed": "no",
+            }
+        )
+
+    duplicates: list[dict[str, Any]] = []
+    for digest, items in items_by_hash.items():
+        if len(items) <= 1:
+            continue
+        duplicates.append(
+            {
+                "pdf_sha256": digest,
+                "count": len(items),
+                "paper_ids": ", ".join(item["paper_id"] for item in items if item["paper_id"]),
+                "filenames": ", ".join(item["filename"] for item in items),
+                "filepaths": " | ".join(item["filepath"] for item in items),
+                "indexed": ", ".join(item["indexed"] for item in items),
+            }
+        )
+    return duplicates
+
+
 def _note_block_ids(note_blocks_dir: Path, errors: list[str]) -> dict[str, set[str]]:
     blocks_by_paper: dict[str, set[str]] = {}
     if not note_blocks_dir.exists():
@@ -122,6 +186,7 @@ def run_library_health_check(
 
     managed_pdfs = _pdf_files(papers_dir)
     unindexed_pdfs = [str(path) for path in managed_pdfs if _path_key(path) not in indexed_paths]
+    duplicate_pdf_hashes = _duplicate_pdf_hashes(records, managed_pdfs, indexed_paths, errors)
 
     filenames: dict[str, list[dict[str, str]]] = {}
     dois: dict[str, list[dict[str, str]]] = {}
@@ -217,6 +282,7 @@ def run_library_health_check(
         "missing_pdfs": missing_pdfs,
         "unindexed_pdfs": unindexed_pdfs,
         "duplicate_filenames": duplicate_filenames,
+        "duplicate_pdf_hashes": duplicate_pdf_hashes,
         "duplicate_dois": duplicate_dois,
         "missing_metadata": missing_metadata,
         "orphan_notes": orphan_notes,

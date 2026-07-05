@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.4-baseline-regression-lock**.
+Current release target: **v1.0.5-pdf-hash-identity-foundation**.
 
-v1.0.4 is a release-hygiene and regression-baseline lock. It carries forward the current Streamlit product behavior and adds no PDF identity, repair, tag-suggestion, Google Docs import, FastAPI, frontend migration, packaging, or launcher changes.
+v1.0.5 introduces a durable PDF SHA-256 identity foundation so exact same-file renames can preserve the existing `paper_id`. It does not add a missing-PDF repair workflow, archive/remove UI, duplicate repair UI, tag suggestion v2, FastAPI, frontend migration, packaging, or launcher changes.
 
 The app remains intentionally local-first and single-user:
 
@@ -108,7 +108,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.4. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.5. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -173,6 +173,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.5-pdf-hash-identity-foundation
+
+- Adds `pdf_sha256` to the paper index schema with non-destructive migration/backfill when PDFs are available.
+- Preserves the existing `paper_id` when a scanned PDF's SHA-256 safely matches one existing record after a path rename.
+- Leaves ambiguous same-hash duplicate content out of automatic merge/repair behavior and reports duplicate PDF hashes through Library Health Check.
+- Introduces no repair UI, duplicate lifecycle workflow, viewer change, API, frontend migration, or packaging change.
 
 ### v1.0.4-baseline-regression-lock
 

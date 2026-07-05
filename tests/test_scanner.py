@@ -1,3 +1,5 @@
+import hashlib
+
 from ingest.scanner import extract_doi_from_pdf, extract_doi_metadata_from_pdf, scan_papers
 from tests.helpers import make_workspace
 
@@ -34,7 +36,8 @@ def test_scan_papers_returns_pdf_records() -> None:
     notes_dir = workspace / "notes"
     papers_dir.mkdir()
     notes_dir.mkdir()
-    (papers_dir / "Example Paper.pdf").write_bytes(b"%PDF-1.4\n")
+    contents = b"%PDF-1.4\n"
+    (papers_dir / "Example Paper.pdf").write_bytes(contents)
     (papers_dir / "ignore.txt").write_text("not a pdf", encoding="utf-8")
 
     records = scan_papers(papers_dir=papers_dir, notes_dir=notes_dir)
@@ -53,6 +56,7 @@ def test_scan_papers_returns_pdf_records() -> None:
     assert record["status"] == "unread"
     assert record["reading_priority"] == "normal"
     assert record["doi_source"] == ""
+    assert record["pdf_sha256"] == hashlib.sha256(contents).hexdigest()
     assert record["extraction_source"] == "none"
     assert record["extraction_checked_at"]
     assert record["metadata_source"] == ""
