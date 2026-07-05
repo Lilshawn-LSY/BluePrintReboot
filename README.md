@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.2-google-docs-note-import**.
+Current release target: **v1.0.4-baseline-regression-lock**.
 
-v1.0.2 adds a one-way local import workflow for the canonical **BluePrint Reading Note** template, including Markdown/text files and Google Docs-exported `.docx` files. It does not start a FastAPI backend migration, React/Next frontend migration, hosted service model, Google OAuth, Google Docs API integration, live sync, or export back to Google Docs.
+v1.0.4 is a release-hygiene and regression-baseline lock. It carries forward the current Streamlit product behavior and adds no PDF identity, repair, tag-suggestion, Google Docs import, FastAPI, frontend migration, packaging, or launcher changes.
 
 The app remains intentionally local-first and single-user:
 
@@ -108,7 +108,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.2. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.4. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -127,20 +127,23 @@ Foundation release documents:
 - [Backlog](docs/BACKLOG.md)
 - [Development workflow](docs/DEV_WORKFLOW.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
+- [Mandatory regression checklist](docs/checklists/regression_checklist.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.0-foundation release-note draft](docs/release_notes/v1.0_draft.md)
 
-Run the non-destructive readiness check:
+Before Codex-assisted changes, run the baseline validation commands and note the result:
 
 ```powershell
 python scripts/smoke_check.py
+python -m pytest -q
 ```
 
-Run the complete automated test suite:
+After Codex-assisted changes, run the same commands again before review. For release hygiene work, also complete the [mandatory regression checklist](docs/checklists/regression_checklist.md).
 
 ```powershell
-python -m pytest
+python scripts/smoke_check.py
+python -m pytest -q
 ```
 
 Run a focused test file:
@@ -149,7 +152,7 @@ Run a focused test file:
 python -m pytest tests/test_library_health.py -q
 ```
 
-Manual release validation is documented in [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) and [docs/checklists/v1.0_smoke_test.md](docs/checklists/v1.0_smoke_test.md).
+Manual release validation is documented in [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/checklists/regression_checklist.md](docs/checklists/regression_checklist.md), and [docs/checklists/v1.0_smoke_test.md](docs/checklists/v1.0_smoke_test.md).
 
 Do not commit, push, merge, or tag release work until review and explicit release approval are complete.
 
@@ -170,6 +173,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.4-baseline-regression-lock
+
+- Locks the current Streamlit baseline with mandatory before/after regression validation.
+- Adds a mandatory regression checklist and makes the smoke check require it.
+- Aligns runtime version metadata with `1.0.4`.
+- Introduces no product behavior changes.
 
 ### v1.0.2-google-docs-note-import
 
