@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.6-missing-pdf-repair-workflow**.
+Current release target: **v1.0.8-orphan-record-repair-review**.
 
-v1.0.6 adds a safe missing-PDF repair workflow in Settings > Library Health Check. Missing indexed PDFs can be reconnected to an explicit PDF inside `papers/` or removed from the index without deleting notes, note blocks, project links, PDFs, or caches. Full duplicate repair, orphan cleanup, archive lifecycle, FastAPI, frontend migration, packaging, and launcher changes remain deferred.
+v1.0.8 adds conservative orphan record review in Settings > Library Health Check. Orphan notes, note block files, and project links are shown with clear review context; only orphan project links can be removed, and only after explicit confirmation. Missing-PDF repair from v1.0.6 and same-hash duplicate review from v1.0.7 remain available. Automatic note deletion, note-block deletion, PDF deletion, index-row removal, duplicate merge/remove workflow, archive lifecycle, FastAPI, frontend migration, packaging, and launcher changes remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -99,7 +99,7 @@ Settings is organized into four sections:
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
 
-Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
+Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches. Duplicate PDF hashes are shown as review-only groups with `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Unindexed duplicate PDFs are marked "Do not add to index yet; handle later." Orphan note files and note block files are review-only and marked to preserve for now, reattach manually later, or export before deletion. Orphan project links can be explicitly removed without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
 
 `BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used. Inbox PDFs are candidates only; the app uses an explicit preview/confirm workflow to copy one selected PDF into `papers/` and leaves the source untouched.
 
@@ -108,7 +108,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.6. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.8. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -173,6 +173,22 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.8-orphan-record-repair-review
+
+- Adds dedicated orphan note file, orphan note block file, and orphan project link review records in Library Health Check.
+- Keeps orphan note and note block handling review-only with preserve/reattach/export guidance.
+- Adds explicit confirmed removal for orphan project links only.
+- Leaves papers, PDFs, notes, note blocks, and index rows untouched during orphan project-link removal.
+- Preserves v1.0.6 missing-PDF repair and v1.0.7 same-hash duplicate review behavior.
+
+### v1.0.7-same-hash-duplicate-review
+
+- Adds classified duplicate PDF hash review groups for indexed duplicates, indexed + unindexed duplicates, and multiple unindexed duplicates.
+- Shows enough context to choose a future canonical record/file: `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available.
+- Marks unindexed duplicate files as "Do not add to index yet; handle later."
+- Preserves v1.0.6 missing-PDF reconnect/remove behavior.
+- Adds no automatic merge, PDF deletion, or index-row removal; real merge/remove workflow remains deferred.
 
 ### v1.0.6-missing-pdf-repair-workflow
 

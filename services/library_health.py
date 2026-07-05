@@ -11,6 +11,7 @@ import pandas as pd
 from ingest.doi import normalize_doi
 from storage.extracted_text_store import extraction_cache_status, pdf_fingerprint
 from storage.index_store import INDEX_COLUMNS
+from storage.project_link_store import delete_project_link
 from storage.paths import (
     EXTRACTED_TEXT_DIR,
     INDEX_CSV,
@@ -19,6 +20,16 @@ from storage.paths import (
     PAPERS_DIR,
     PROJECTS_DIR,
 )
+
+
+ORPHAN_PRESERVE_ACTION = "Preserve for now; reattach manually later or export before deletion."
+ORPHAN_PROJECT_LINK_ACTION = "Remove only this project link after confirmation."
+
+
+class OrphanProjectLinkRepairError(RuntimeError):
+    def __init__(self, message: str, plan: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.plan = plan
 
 
 def _absolute(path: str | Path) -> Path:
@@ -82,13 +93,217 @@ def _pdf_sha256(path: Path, errors: list[str]) -> str:
         return ""
 
 
+def _file_modified_at(path: Path, errors: list[str]) -> str:
+    try:
+        timestamp = path.stat().st_mtime
+    except OSError as exc:
+        errors.append(f"File stat failed for {path}: {exc}")
+        return ""
+    return datetime.fromtimestamp(timestamp, timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _file_size(path: Path, errors: list[str]) -> int:
+    try:
+        return path.stat().st_size
+    except OSError as exc:
+        errors.append(f"File stat failed for {path}: {exc}")
+        return 0
+
+
+def _text_preview(value: object, limit: int = 160) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 3]}..."
+
+
+def _note_path_for_record(record: dict[str, Any], notes_dir: Path) -> Path | None:
+    note_path = str(record.get("note_path", "")).strip()
+    if note_path:
+        return _absolute(note_path)
+    paper_id = str(record.get("paper_id", "")).strip()
+    if not paper_id:
+        return None
+    return _absolute(notes_dir / f"{paper_id}.md")
+
+
+def _note_block_summary(block: dict[str, Any]) -> dict[str, str]:
+    text = str(block.get("text", "") or "").strip() or str(block.get("quote", "") or "").strip()
+    return {
+        "block_id": str(block.get("id", "")),
+        "block_type": str(block.get("block_type", "")),
+        "title": str(block.get("title", "")),
+        "text_preview": _text_preview(text),
+        "created_at": str(block.get("created_at", "")),
+        "updated_at": str(block.get("updated_at", "")),
+    }
+
+
+def _note_blocks_by_paper(
+    note_blocks_dir: Path,
+    errors: list[str],
+) -> tuple[dict[str, set[str]], dict[str, int], dict[str, list[dict[str, str]]]]:
+    block_ids_by_paper: dict[str, set[str]] = {}
+    block_counts_by_paper: dict[str, int] = {}
+    block_details_by_paper: dict[str, list[dict[str, str]]] = {}
+    if not note_blocks_dir.exists():
+        return block_ids_by_paper, block_counts_by_paper, block_details_by_paper
+    for path in note_blocks_dir.glob("*.json"):
+        blocks = _load_json_list(path, errors)
+        block_ids_by_paper[path.stem] = {str(block.get("id", "")) for block in blocks if block.get("id")}
+        block_counts_by_paper[path.stem] = len(blocks)
+        block_details_by_paper[path.stem] = [_note_block_summary(block) for block in blocks]
+    return block_ids_by_paper, block_counts_by_paper, block_details_by_paper
+
+
+def _project_link_counts(project_links: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for link in project_links:
+        paper_id = str(link.get("paper_id", "")).strip()
+        if paper_id:
+            counts[paper_id] = counts.get(paper_id, 0) + 1
+    return counts
+
+
+def _duplicate_pdf_hash_classification(indexed_count: int, unindexed_count: int) -> str:
+    if indexed_count and unindexed_count:
+        return "indexed + unindexed duplicate"
+    if indexed_count > 1:
+        return "indexed duplicate"
+    return "multiple unindexed duplicate"
+
+
+def _orphan_note_records(notes_dir: Path, paper_ids: set[str], errors: list[str]) -> list[dict[str, Any]]:
+    if not notes_dir.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in sorted(notes_dir.glob("*.md"), key=lambda item: item.as_posix().lower()):
+        if path.stem in paper_ids:
+            continue
+        resolved = path.resolve()
+        records.append(
+            {
+                "classification": "orphan note file",
+                "paper_id": path.stem,
+                "filename": path.name,
+                "filepath": str(resolved),
+                "size_bytes": _file_size(resolved, errors),
+                "modified_at": _file_modified_at(resolved, errors),
+                "review_action": ORPHAN_PRESERVE_ACTION,
+            }
+        )
+    return records
+
+
+def _orphan_note_block_records(
+    note_blocks_dir: Path,
+    paper_ids: set[str],
+    note_block_counts: dict[str, int],
+    note_block_details: dict[str, list[dict[str, str]]],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    if not note_blocks_dir.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in sorted(note_blocks_dir.glob("*.json"), key=lambda item: item.as_posix().lower()):
+        if path.stem in paper_ids:
+            continue
+        resolved = path.resolve()
+        blocks = note_block_details.get(path.stem, [])
+        records.append(
+            {
+                "classification": "orphan note block file",
+                "paper_id": path.stem,
+                "filename": path.name,
+                "filepath": str(resolved),
+                "block_count": note_block_counts.get(path.stem, 0),
+                "block_ids": ", ".join(block["block_id"] for block in blocks if block.get("block_id")),
+                "modified_at": _file_modified_at(resolved, errors),
+                "review_action": ORPHAN_PRESERVE_ACTION,
+                "blocks": blocks,
+            }
+        )
+    return records
+
+
+def _project_names(projects: list[dict[str, Any]]) -> dict[str, str]:
+    return {str(project.get("id", "")): str(project.get("name", "")) for project in projects if project.get("id")}
+
+
+def _orphan_project_link_reasons(
+    link: dict[str, Any],
+    *,
+    paper_ids: set[str],
+    project_ids: set[str],
+    blocks_by_paper: dict[str, set[str]],
+) -> list[str]:
+    reasons: list[str] = []
+    project_id = str(link.get("project_id", "")).strip()
+    paper_id = str(link.get("paper_id", "")).strip()
+    target_type = str(link.get("target_type", "")).strip()
+    target_id = str(link.get("target_id", "")).strip()
+    if project_id not in project_ids:
+        reasons.append("missing project")
+    if target_type == "paper":
+        if target_id not in paper_ids:
+            reasons.append("missing target paper")
+    else:
+        if not paper_id or paper_id not in paper_ids:
+            reasons.append("missing paper context")
+    if target_type == "note_block" and target_id not in blocks_by_paper.get(paper_id, set()):
+        reasons.append("missing target note block")
+    return reasons
+
+
+def _orphan_project_link_records(
+    project_links: list[dict[str, Any]],
+    *,
+    paper_ids: set[str],
+    project_ids: set[str],
+    project_names: dict[str, str],
+    blocks_by_paper: dict[str, set[str]],
+) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    for link in project_links:
+        reasons = _orphan_project_link_reasons(
+            link,
+            paper_ids=paper_ids,
+            project_ids=project_ids,
+            blocks_by_paper=blocks_by_paper,
+        )
+        if not reasons:
+            continue
+        project_id = str(link.get("project_id", ""))
+        records.append(
+            {
+                "classification": "orphan project link",
+                "link_id": str(link.get("id", "")),
+                "project_id": project_id,
+                "project_name": project_names.get(project_id, ""),
+                "target_type": str(link.get("target_type", "")),
+                "target_id": str(link.get("target_id", "")),
+                "paper_id": str(link.get("paper_id", "")),
+                "link_type": str(link.get("link_type", "")),
+                "note": str(link.get("note", "")),
+                "created_at": str(link.get("created_at", "")),
+                "reason": ", ".join(reasons),
+                "review_action": ORPHAN_PROJECT_LINK_ACTION,
+            }
+        )
+    return records
+
+
 def _duplicate_pdf_hashes(
     records: list[dict[str, Any]],
     managed_pdfs: list[Path],
     indexed_paths: set[str],
     errors: list[str],
+    *,
+    notes_dir: Path,
+    note_block_counts: dict[str, int],
+    project_link_counts: dict[str, int],
 ) -> list[dict[str, Any]]:
-    items_by_hash: dict[str, list[dict[str, str]]] = {}
+    items_by_hash: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for record in records:
         filepath = str(record.get("filepath", "")).strip()
         resolved = _absolute(filepath) if filepath else None
@@ -97,12 +312,20 @@ def _duplicate_pdf_hashes(
             digest = _pdf_sha256(resolved, errors)
         if not digest:
             continue
-        items_by_hash.setdefault(digest, []).append(
+        paper_id = str(record.get("paper_id", ""))
+        note_path = _note_path_for_record(record, notes_dir)
+        group = items_by_hash.setdefault(digest, {"indexed_records": [], "unindexed_files": []})
+        group["indexed_records"].append(
             {
-                "paper_id": str(record.get("paper_id", "")),
+                "paper_id": paper_id,
+                "title": str(record.get("title", "")),
                 "filename": str(record.get("filename", "")),
                 "filepath": str(resolved or ""),
-                "indexed": "yes",
+                "status": str(record.get("status", "")),
+                "note_path": str(note_path or ""),
+                "note_file_count": 1 if note_path is not None and note_path.exists() else 0,
+                "note_block_count": note_block_counts.get(paper_id, 0),
+                "project_link_count": project_link_counts.get(paper_id, 0),
             }
         )
 
@@ -112,40 +335,40 @@ def _duplicate_pdf_hashes(
         digest = _pdf_sha256(path, errors)
         if not digest:
             continue
-        items_by_hash.setdefault(digest, []).append(
+        group = items_by_hash.setdefault(digest, {"indexed_records": [], "unindexed_files": []})
+        group["unindexed_files"].append(
             {
-                "paper_id": "",
                 "filename": path.name,
                 "filepath": str(path),
-                "indexed": "no",
+                "review_action": "Do not add to index yet; handle later.",
             }
         )
 
     duplicates: list[dict[str, Any]] = []
-    for digest, items in items_by_hash.items():
-        if len(items) <= 1:
+    for digest, grouped_items in items_by_hash.items():
+        indexed_records = grouped_items["indexed_records"]
+        unindexed_files = grouped_items["unindexed_files"]
+        indexed_count = len(indexed_records)
+        unindexed_count = len(unindexed_files)
+        if indexed_count + unindexed_count <= 1:
             continue
         duplicates.append(
             {
                 "pdf_sha256": digest,
-                "count": len(items),
-                "paper_ids": ", ".join(item["paper_id"] for item in items if item["paper_id"]),
-                "filenames": ", ".join(item["filename"] for item in items),
-                "filepaths": " | ".join(item["filepath"] for item in items),
-                "indexed": ", ".join(item["indexed"] for item in items),
+                "classification": _duplicate_pdf_hash_classification(indexed_count, unindexed_count),
+                "indexed_record_count": indexed_count,
+                "unindexed_file_count": unindexed_count,
+                "indexed_records": indexed_records,
+                "unindexed_files": unindexed_files,
             }
         )
-    return duplicates
-
-
-def _note_block_ids(note_blocks_dir: Path, errors: list[str]) -> dict[str, set[str]]:
-    blocks_by_paper: dict[str, set[str]] = {}
-    if not note_blocks_dir.exists():
-        return blocks_by_paper
-    for path in note_blocks_dir.glob("*.json"):
-        blocks = _load_json_list(path, errors)
-        blocks_by_paper[path.stem] = {str(block.get("id", "")) for block in blocks if block.get("id")}
-    return blocks_by_paper
+    return sorted(
+        duplicates,
+        key=lambda item: (
+            str(item["classification"]),
+            str(item["pdf_sha256"]),
+        ),
+    )
 
 
 def run_library_health_check(
@@ -186,8 +409,20 @@ def run_library_health_check(
             noncanonical_filepaths.append(item)
 
     managed_pdfs = _pdf_files(papers_dir)
+    projects = _load_json_list(projects_dir / "projects.json", errors)
+    project_links = _load_json_list(projects_dir / "project_links.json", errors)
+    blocks_by_paper, note_block_counts, note_block_details = _note_blocks_by_paper(note_blocks_dir, errors)
+    project_link_counts = _project_link_counts(project_links)
     unindexed_pdfs = [str(path) for path in managed_pdfs if _path_key(path) not in indexed_paths]
-    duplicate_pdf_hashes = _duplicate_pdf_hashes(records, managed_pdfs, indexed_paths, errors)
+    duplicate_pdf_hashes = _duplicate_pdf_hashes(
+        records,
+        managed_pdfs,
+        indexed_paths,
+        errors,
+        notes_dir=notes_dir,
+        note_block_counts=note_block_counts,
+        project_link_counts=project_link_counts,
+    )
 
     filenames: dict[str, list[dict[str, str]]] = {}
     dois: dict[str, list[dict[str, str]]] = {}
@@ -220,43 +455,23 @@ def run_library_health_check(
         if len(items) > 1
     ]
 
-    orphan_notes = []
-    if notes_dir.exists():
-        orphan_notes = [str(path.resolve()) for path in notes_dir.glob("*.md") if path.stem not in paper_ids]
-    orphan_note_blocks = []
-    if note_blocks_dir.exists():
-        orphan_note_blocks = [
-            str(path.resolve()) for path in note_blocks_dir.glob("*.json") if path.stem not in paper_ids
-        ]
-
-    projects = _load_json_list(projects_dir / "projects.json", errors)
-    project_links = _load_json_list(projects_dir / "project_links.json", errors)
     project_ids = {str(project.get("id", "")) for project in projects if project.get("id")}
-    blocks_by_paper = _note_block_ids(note_blocks_dir, errors)
-    orphan_project_links: list[dict[str, str]] = []
-    for link in project_links:
-        reasons: list[str] = []
-        project_id = str(link.get("project_id", ""))
-        paper_id = str(link.get("paper_id", ""))
-        target_type = str(link.get("target_type", ""))
-        target_id = str(link.get("target_id", ""))
-        if project_id not in project_ids:
-            reasons.append("project missing")
-        if paper_id and paper_id not in paper_ids:
-            reasons.append("paper missing")
-        if target_type == "paper" and target_id not in paper_ids:
-            reasons.append("target paper missing")
-        if target_type == "note_block" and target_id not in blocks_by_paper.get(paper_id, set()):
-            reasons.append("target note block missing")
-        if reasons:
-            orphan_project_links.append(
-                {
-                    "link_id": str(link.get("id", "")),
-                    "project_id": project_id,
-                    "paper_id": paper_id,
-                    "reason": ", ".join(reasons),
-                }
-            )
+    project_names = _project_names(projects)
+    orphan_notes = _orphan_note_records(notes_dir, paper_ids, errors)
+    orphan_note_blocks = _orphan_note_block_records(
+        note_blocks_dir,
+        paper_ids,
+        note_block_counts,
+        note_block_details,
+        errors,
+    )
+    orphan_project_links = _orphan_project_link_records(
+        project_links,
+        paper_ids=paper_ids,
+        project_ids=project_ids,
+        project_names=project_names,
+        blocks_by_paper=blocks_by_paper,
+    )
 
     stale_extracted_text: list[dict[str, str]] = []
     for record in records:
@@ -304,3 +519,90 @@ def run_library_health_check(
         },
         **issue_sections,
     }
+
+
+def build_orphan_project_link_removal_plan(
+    link_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    projects_dir: Path = PROJECTS_DIR,
+) -> dict[str, Any]:
+    index_csv = Path(index_csv)
+    note_blocks_dir = Path(note_blocks_dir)
+    projects_dir = Path(projects_dir)
+    dataframe, errors = _read_index(index_csv)
+    projects = _load_json_list(projects_dir / "projects.json", errors)
+    project_links = _load_json_list(projects_dir / "project_links.json", errors)
+    blocks_by_paper, _note_block_counts, _note_block_details = _note_blocks_by_paper(note_blocks_dir, errors)
+    paper_ids = {str(record.get("paper_id", "")) for record in dataframe.to_dict("records") if record.get("paper_id")}
+    project_ids = {str(project.get("id", "")) for project in projects if project.get("id")}
+    project_names = _project_names(projects)
+
+    plan: dict[str, Any] = {
+        "link_id": str(link_id),
+        "status": "not_found",
+        "message": "Project link was not found.",
+        "can_remove": False,
+        "removes": "project_link_only",
+        "errors": errors,
+    }
+    if errors:
+        plan.update(
+            status="diagnostic_error",
+            message="Project link removal is blocked until health diagnostics can verify orphan status.",
+        )
+        return plan
+
+    orphan_links = _orphan_project_link_records(
+        project_links,
+        paper_ids=paper_ids,
+        project_ids=project_ids,
+        project_names=project_names,
+        blocks_by_paper=blocks_by_paper,
+    )
+    for orphan_link in orphan_links:
+        if orphan_link["link_id"] == str(link_id):
+            plan.update(
+                orphan_link,
+                status="ready",
+                message="Ready to remove only this orphan project link.",
+                can_remove=True,
+            )
+            return plan
+    if any(str(link.get("id", "")) == str(link_id) for link in project_links):
+        plan.update(
+            status="not_orphan",
+            message="Project link exists but is no longer orphaned.",
+        )
+    return plan
+
+
+def remove_orphan_project_link(
+    link_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    projects_dir: Path = PROJECTS_DIR,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    plan = build_orphan_project_link_removal_plan(
+        link_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        projects_dir=projects_dir,
+    )
+    if not plan["can_remove"]:
+        raise OrphanProjectLinkRepairError(f"Remove is blocked with status {plan['status']}.", plan)
+    if not confirm:
+        raise OrphanProjectLinkRepairError("Orphan project link removal requires explicit confirmation.", plan)
+    if not delete_project_link(str(link_id), projects_dir):
+        raise OrphanProjectLinkRepairError("Project link was not found during removal.", plan)
+
+    result = dict(plan)
+    result.update(
+        status="removed_project_link",
+        message="Orphan project link removed. Papers, PDFs, notes, note blocks, and index rows were left untouched.",
+        can_remove=False,
+    )
+    return result

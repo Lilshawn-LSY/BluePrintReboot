@@ -35,7 +35,13 @@ from services.paper_file_hygiene import (
     build_rename_plan,
 )
 from services.backup_snapshot import create_backup_snapshot
-from services.library_health import run_library_health_check
+from services.library_health import (
+    ORPHAN_PRESERVE_ACTION,
+    OrphanProjectLinkRepairError,
+    build_orphan_project_link_removal_plan,
+    remove_orphan_project_link,
+    run_library_health_check,
+)
 from services.metadata_fallback import (
     apply_metadata_candidate_to_index,
     build_doi_less_metadata_candidate,
@@ -837,10 +843,150 @@ def _render_library_health_check() -> None:
         with st.expander(f"{title} ({len(items)})"):
             if key == "missing_pdfs":
                 _render_missing_pdf_repair(items)
+            elif key == "duplicate_pdf_hashes":
+                _render_duplicate_pdf_hash_review(items)
+            elif key == "orphan_notes":
+                _render_orphan_note_review(items)
+            elif key == "orphan_note_blocks":
+                _render_orphan_note_block_review(items)
+            elif key == "orphan_project_links":
+                _render_orphan_project_link_repair(items)
             elif isinstance(items[0], dict):
                 st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
             else:
                 st.dataframe(pd.DataFrame({"path_or_message": items}), width="stretch", hide_index=True)
+
+
+def _duplicate_pdf_hash_rows(group: dict[str, object]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for record in group.get("indexed_records", []):
+        if not isinstance(record, dict):
+            continue
+        rows.append(
+            {
+                "index_state": "indexed",
+                "paper_id": record.get("paper_id", ""),
+                "title": record.get("title", ""),
+                "filename": record.get("filename", ""),
+                "filepath": record.get("filepath", ""),
+                "status": record.get("status", ""),
+                "note_file_count": record.get("note_file_count", 0),
+                "note_block_count": record.get("note_block_count", 0),
+                "project_link_count": record.get("project_link_count", 0),
+                "review_action": "Review canonical record; merge/remove workflow is deferred.",
+            }
+        )
+    for duplicate_file in group.get("unindexed_files", []):
+        if not isinstance(duplicate_file, dict):
+            continue
+        rows.append(
+            {
+                "index_state": "unindexed",
+                "paper_id": "",
+                "title": "",
+                "filename": duplicate_file.get("filename", ""),
+                "filepath": duplicate_file.get("filepath", ""),
+                "status": "",
+                "note_file_count": 0,
+                "note_block_count": 0,
+                "project_link_count": 0,
+                "review_action": duplicate_file.get("review_action", "Do not add to index yet; handle later."),
+            }
+        )
+    return rows
+
+
+def _render_duplicate_pdf_hash_review(items: list[dict[str, object]]) -> None:
+    st.caption("Review only: no merge, PDF deletion, or index-row removal is automated here.")
+    summary_rows = [
+        {
+            "classification": item.get("classification", ""),
+            "pdf_sha256": item.get("pdf_sha256", ""),
+            "indexed_record_count": item.get("indexed_record_count", 0),
+            "unindexed_file_count": item.get("unindexed_file_count", 0),
+        }
+        for item in items
+    ]
+    st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
+    for index, group in enumerate(items, start=1):
+        classification = str(group.get("classification", "duplicate"))
+        pdf_sha256 = str(group.get("pdf_sha256", ""))
+        st.write(f"Group {index}: `{classification}`")
+        st.code(f"pdf_sha256: {pdf_sha256 or 'unavailable'}")
+        rows = _duplicate_pdf_hash_rows(group)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+
+
+def _render_orphan_note_review(items: list[dict[str, object]]) -> None:
+    st.caption(ORPHAN_PRESERVE_ACTION)
+    st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
+
+
+def _render_orphan_note_block_review(items: list[dict[str, object]]) -> None:
+    st.caption(ORPHAN_PRESERVE_ACTION)
+    summary_rows = [{key: value for key, value in item.items() if key != "blocks"} for item in items]
+    st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
+    for item in items:
+        blocks = item.get("blocks", [])
+        if not blocks:
+            continue
+        st.write(f"Blocks for `{item.get('paper_id', '')}`")
+        st.dataframe(pd.DataFrame(blocks), width="stretch", hide_index=True)
+
+
+def _render_orphan_project_link_repair(items: list[dict[str, object]]) -> None:
+    st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
+    link_ids = [str(item.get("link_id", "")) for item in items if item.get("link_id")]
+    if not link_ids:
+        return
+    labels = {
+        str(item.get("link_id", "")): (
+            f"{item.get('reason', 'orphan')} - "
+            f"{item.get('target_type', '')}:{item.get('target_id', '')}"
+        )
+        for item in items
+        if item.get("link_id")
+    }
+    selected_link_id = st.selectbox(
+        "Orphan project link",
+        options=link_ids,
+        format_func=lambda link_id: labels.get(link_id, link_id),
+        key="orphan_project_link_selected_id",
+    )
+    plan = build_orphan_project_link_removal_plan(selected_link_id)
+    st.write(f"Removal status: `{plan['status']}`")
+    st.write(plan["message"])
+    st.code(
+        "\n".join(
+            [
+                f"link_id: {plan.get('link_id', '')}",
+                f"project_id: {plan.get('project_id', '')}",
+                f"target: {plan.get('target_type', '')}:{plan.get('target_id', '')}",
+                f"paper_id: {plan.get('paper_id', '')}",
+                f"reason: {plan.get('reason', '')}",
+                f"removes: {plan.get('removes', '')}",
+            ]
+        )
+    )
+    remove_confirmed = st.checkbox(
+        "I understand this removes only the project link and leaves papers, PDFs, notes, note blocks, and index rows untouched.",
+        key=f"orphan_project_link_remove_confirm_{selected_link_id}",
+        disabled=not bool(plan["can_remove"]),
+    )
+    if st.button(
+        "Remove orphan project link",
+        key=f"orphan_project_link_remove_apply_{selected_link_id}",
+        disabled=not remove_confirmed or not bool(plan["can_remove"]),
+    ):
+        try:
+            result = remove_orphan_project_link(selected_link_id, confirm=True)
+        except OrphanProjectLinkRepairError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state.pop("library_health_report", None)
+            st.session_state["library_health_repair_success"] = result["message"]
+            st.rerun()
 
 
 def _render_missing_pdf_repair(items: list[dict[str, object]]) -> None:
