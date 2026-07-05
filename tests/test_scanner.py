@@ -57,8 +57,8 @@ def test_scan_papers_returns_pdf_records() -> None:
     assert record["reading_priority"] == "normal"
     assert record["doi_source"] == ""
     assert record["pdf_sha256"] == hashlib.sha256(contents).hexdigest()
-    assert record["extraction_source"] == "none"
-    assert record["extraction_checked_at"]
+    assert record["extraction_source"] == ""
+    assert record["extraction_checked_at"] == ""
     assert record["metadata_source"] == ""
     assert record["metadata_confidence"] == ""
     assert record["metadata_checked_at"] == ""
@@ -78,6 +78,27 @@ def test_scan_papers_uses_stable_ids() -> None:
     second = scan_papers(papers_dir=papers_dir, notes_dir=notes_dir)
 
     assert first[0]["paper_id"] == second[0]["paper_id"]
+
+
+def test_scan_papers_does_not_extract_doi_by_default(monkeypatch) -> None:
+    workspace = make_workspace("scanner-cheap-no-doi")
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    papers_dir.mkdir()
+    notes_dir.mkdir()
+    (papers_dir / "Cheap Scan.pdf").write_bytes(b"%PDF-1.4\n")
+
+    def fail_if_called(path):
+        raise AssertionError("cheap scan should not extract DOI metadata")
+
+    monkeypatch.setattr("ingest.scanner.extract_doi_metadata_from_pdf", fail_if_called)
+
+    records = scan_papers(papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert len(records) == 1
+    assert records[0]["doi"] == ""
+    assert records[0]["doi_source"] == ""
+    assert records[0]["extraction_checked_at"] == ""
 
 
 def test_extract_doi_from_pdf_detects_and_normalizes(monkeypatch) -> None:

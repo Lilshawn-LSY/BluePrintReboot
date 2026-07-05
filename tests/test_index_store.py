@@ -7,6 +7,7 @@ import pandas as pd
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
+    enrich_paper_doi_from_pdf,
     load_index,
     save_index,
     update_index_from_scan,
@@ -52,8 +53,8 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     assert load_index(index_csv).iloc[0]["pdf_sha256"] == _sha256(contents)
 
 
-def test_update_index_from_scan_auto_detects_and_normalizes_doi(monkeypatch) -> None:
-    workspace = make_workspace("index-scan-doi")
+def test_update_index_from_scan_does_not_auto_detect_doi(monkeypatch) -> None:
+    workspace = make_workspace("index-scan-cheap-no-doi")
     data_dir = workspace / "data"
     papers_dir = workspace / "papers"
     notes_dir = workspace / "notes"
@@ -68,6 +69,32 @@ def test_update_index_from_scan_auto_detects_and_normalizes_doi(monkeypatch) -> 
 
     updated = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
 
+    assert updated.iloc[0]["doi"] == ""
+    assert updated.iloc[0]["doi_source"] == ""
+    assert updated.iloc[0]["extraction_source"] == ""
+    assert updated.iloc[0]["extraction_checked_at"] == ""
+
+
+def test_explicit_doi_enrichment_detects_and_normalizes_doi(monkeypatch) -> None:
+    workspace = make_workspace("index-explicit-doi-enrichment")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    (papers_dir / "Detected.pdf").write_bytes(b"%PDF-1.4\n")
+    monkeypatch.setattr(
+        "ingest.document_text.PdfReader",
+        lambda path: FakePdfReader("Article text doi: 10.1111/PCE.13021."),
+    )
+
+    scanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    result = enrich_paper_doi_from_pdf(scanned.iloc[0]["paper_id"], index_csv=index_csv, papers_dir=papers_dir)
+    updated = load_index(index_csv, papers_dir=papers_dir)
+
+    assert result["status"] == "doi_saved"
+    assert result["saved"] is True
     assert updated.iloc[0]["doi"] == "10.1111/pce.13021"
     assert updated.iloc[0]["doi_source"] == "pypdf"
     assert updated.iloc[0]["extraction_source"] == "pypdf"
@@ -100,6 +127,32 @@ def test_update_index_from_scan_does_not_overwrite_existing_doi(monkeypatch) -> 
 
     assert rescanned.iloc[0]["doi"] == "10.2222/manual"
     assert rescanned.iloc[0]["doi_source"] == "manual"
+
+
+def test_explicit_doi_enrichment_preserves_existing_doi_by_default(monkeypatch) -> None:
+    workspace = make_workspace("index-enrichment-preserve-existing")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    (papers_dir / "Manual.pdf").write_bytes(b"%PDF-1.4\n")
+    scanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    paper_id = scanned.iloc[0]["paper_id"]
+    update_paper_metadata(paper_id, {"doi": "10.2222/manual"}, index_csv=index_csv)
+    monkeypatch.setattr(
+        "ingest.document_text.PdfReader",
+        lambda path: FakePdfReader("Article text DOI 10.3333/replacement."),
+    )
+
+    result = enrich_paper_doi_from_pdf(paper_id, index_csv=index_csv, papers_dir=papers_dir)
+    row = load_index(index_csv, papers_dir=papers_dir).iloc[0]
+
+    assert result["status"] == "existing_doi"
+    assert result["saved"] is False
+    assert row["doi"] == "10.2222/manual"
+    assert row["doi_source"] == "manual"
 
 
 def test_update_index_from_scan_survives_pdf_text_extraction_failure(monkeypatch) -> None:

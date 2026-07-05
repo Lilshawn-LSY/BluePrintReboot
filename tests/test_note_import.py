@@ -2,8 +2,10 @@
 from zipfile import ZipFile
 
 import pandas as pd
+import pytest
 
 from services.note_import import (
+    DuplicateNoteImportError,
     apply_external_note_import,
     build_structured_block_candidates,
     extract_docx_paragraph_text,
@@ -302,6 +304,67 @@ def test_duplicate_import_detection() -> None:
 
     assert has_duplicate_note_import("paper-1", parsed["source_sha256"], log_path=log_path) is True
     assert has_duplicate_note_import("paper-2", parsed["source_sha256"], log_path=log_path) is False
+
+
+def test_duplicate_import_is_blocked_by_default() -> None:
+    workspace = make_workspace("note-import-duplicate-block")
+    notes_dir = workspace / "notes"
+    note_blocks_dir = workspace / "data" / "note_blocks"
+    log_path = workspace / "data" / "note_imports.json"
+    record = {"paper_id": "paper-1", "title": "Paper", "filename": "Paper.pdf"}
+    parsed = parse_external_note_text(SAMPLE_TEMPLATE, source_filename="note.md")
+
+    apply_external_note_import(
+        record,
+        parsed,
+        notes_dir=notes_dir,
+        note_blocks_dir=note_blocks_dir,
+        log_path=log_path,
+    )
+    note_text_after_first_import = load_note_text(record, notes_dir=notes_dir)
+
+    with pytest.raises(DuplicateNoteImportError):
+        apply_external_note_import(
+            record,
+            parsed,
+            notes_dir=notes_dir,
+            note_blocks_dir=note_blocks_dir,
+            log_path=log_path,
+        )
+
+    assert len(load_note_import_log(log_path)) == 1
+    assert len(list_note_blocks("paper-1", note_blocks_dir)) == 7
+    assert load_note_text(record, notes_dir=notes_dir) == note_text_after_first_import
+
+
+def test_force_reimport_allows_deliberate_duplicate_import() -> None:
+    workspace = make_workspace("note-import-duplicate-force")
+    notes_dir = workspace / "notes"
+    note_blocks_dir = workspace / "data" / "note_blocks"
+    log_path = workspace / "data" / "note_imports.json"
+    record = {"paper_id": "paper-1", "title": "Paper", "filename": "Paper.pdf"}
+    parsed = parse_external_note_text(SAMPLE_TEMPLATE, source_filename="note.md")
+
+    first = apply_external_note_import(
+        record,
+        parsed,
+        notes_dir=notes_dir,
+        note_blocks_dir=note_blocks_dir,
+        log_path=log_path,
+    )
+    second = apply_external_note_import(
+        record,
+        parsed,
+        force_reimport=True,
+        notes_dir=notes_dir,
+        note_blocks_dir=note_blocks_dir,
+        log_path=log_path,
+    )
+
+    log_entries = load_note_import_log(log_path)
+    assert len(log_entries) == 2
+    assert first["import_id"] != second["import_id"]
+    assert len(list_note_blocks("paper-1", note_blocks_dir)) == 14
 
 
 def test_import_apply_appends_markdown_without_overwriting_existing_note() -> None:
