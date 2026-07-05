@@ -44,6 +44,7 @@ REQUIRED_DEPENDENCIES = {
 }
 KEY_MODULES = (
     "ui_streamlit.app",
+    "storage.atomic_json",
     "storage.index_store",
     "services.backup_snapshot",
     "services.library_health",

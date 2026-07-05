@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ from ingest.tag_suggester import (
     preview_tag_merge,
     resolve_canonical_tag,
 )
+from storage.atomic_json import atomic_write_json
 from storage.index_store import save_index
 from storage.paths import INDEX_CSV
 
@@ -213,13 +213,7 @@ def create_canonical_tag(
 
 def save_canonical_tags(registry: dict, path: str | Path = DEFAULT_CANONICAL_TAG_PATH) -> None:
     registry_path = Path(path)
-    registry_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = registry_path.with_suffix(registry_path.suffix + ".tmp")
-    temporary_path.write_text(
-        json.dumps(registry, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    temporary_path.replace(registry_path)
+    atomic_write_json(registry_path, registry, ensure_ascii=False, indent=2, trailing_newline=True)
 
 
 def _alias_owners(normalized_alias: str, registry: dict) -> set[str]:

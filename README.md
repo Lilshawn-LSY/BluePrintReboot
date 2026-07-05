@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.8-orphan-record-repair-review**.
+Current release target: **v1.0.9-atomic-json-writes**.
 
-v1.0.8 adds conservative orphan record review in Settings > Library Health Check. Orphan notes, note block files, and project links are shown with clear review context; only orphan project links can be removed, and only after explicit confirmation. Missing-PDF repair from v1.0.6 and same-hash duplicate review from v1.0.7 remain available. Automatic note deletion, note-block deletion, PDF deletion, index-row removal, duplicate merge/remove workflow, archive lifecycle, FastAPI, frontend migration, packaging, and launcher changes remain deferred.
+v1.0.9 makes project JSON persistence safer with atomic JSON writes for user-data stores. Project lists, project links, note blocks, note-import logs, canonical tag config, and extracted-text metadata now write through a temp file in the target directory, flush/fsync it, and replace the target only after a complete write. Missing-PDF repair from v1.0.6, same-hash duplicate review from v1.0.7, and orphan record review from v1.0.8 remain available. JSON schemas, note/PDF/index behavior, duplicate merge/remove workflow, archive lifecycle, FastAPI, frontend migration, packaging, and launcher changes remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -108,7 +108,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.8. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.9. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -173,6 +173,14 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.9-atomic-json-writes
+
+- Adds a shared atomic JSON write helper using same-directory temporary files, flush/fsync, and `os.replace`.
+- Converts project, project-link, note-block, note-import log, canonical tag, and extracted-text metadata JSON writes to atomic writes.
+- Preserves existing JSON formatting conventions and schemas.
+- Keeps original target files unchanged when serialization or replacement fails.
+- Adds no destructive cleanup behavior beyond removing failed temporary files.
 
 ### v1.0.8-orphan-record-repair-review
 

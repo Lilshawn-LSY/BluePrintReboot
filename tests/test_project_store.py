@@ -8,6 +8,7 @@ from storage.project_store import (
     get_project,
     list_projects,
     projects_path,
+    save_projects,
     update_project,
 )
 from tests.helpers import make_workspace
@@ -129,3 +130,35 @@ def test_project_tags_are_normalized_to_strings() -> None:
     )
 
     assert project["tags"] == ["roots", "42"]
+
+
+def test_save_projects_serialization_failure_preserves_existing_file() -> None:
+    base_dir = make_workspace("projects-atomic-serialization")
+    project = create_project("Existing", base_dir=base_dir)
+    path = projects_path(base_dir)
+    before = path.read_bytes()
+
+    with pytest.raises(TypeError):
+        save_projects([{**project, "future_field": object()}], base_dir=base_dir)
+
+    assert path.read_bytes() == before
+    assert list_projects(base_dir) == [project]
+
+
+def test_save_projects_replace_failure_preserves_existing_file_and_cleans_temp(monkeypatch) -> None:
+    base_dir = make_workspace("projects-atomic-replace")
+    project = create_project("Existing", base_dir=base_dir)
+    path = projects_path(base_dir)
+    before = path.read_bytes()
+
+    def fail_replace(source, target):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr("storage.atomic_json.os.replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        save_projects([{**project, "name": "Updated"}], base_dir=base_dir)
+
+    assert path.read_bytes() == before
+    assert list_projects(base_dir) == [project]
+    assert sorted(item.name for item in base_dir.iterdir()) == ["projects.json"]

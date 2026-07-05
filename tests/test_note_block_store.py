@@ -10,6 +10,7 @@ from storage.note_block_store import (
     list_note_blocks,
     note_blocks_path,
     render_note_block_as_markdown,
+    save_note_blocks,
     update_note_block,
 )
 from tests.helpers import make_workspace
@@ -230,3 +231,22 @@ def test_render_note_block_as_markdown_omits_empty_metadata() -> None:
     assert "* Page:" not in snippet
     assert "* Figure:" not in snippet
     assert "* Tags:" not in snippet
+
+
+def test_save_note_blocks_replace_failure_preserves_existing_file_and_cleans_temp(monkeypatch) -> None:
+    base_dir = make_workspace("note-block-atomic-replace")
+    block = create_note_block("paper-1", "summary", text="Existing", base_dir=base_dir)
+    path = note_blocks_path("paper-1", base_dir)
+    before = path.read_bytes()
+
+    def fail_replace(source, target):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr("storage.atomic_json.os.replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        save_note_blocks("paper-1", [{**block, "text": "Updated"}], base_dir=base_dir)
+
+    assert path.read_bytes() == before
+    assert list_note_blocks("paper-1", base_dir) == [block]
+    assert sorted(item.name for item in base_dir.iterdir()) == ["paper-1.json"]
