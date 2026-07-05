@@ -155,7 +155,7 @@ def test_audit_library_tags_reports_unused_rulebook_tags_and_duplicates() -> Non
 
 def test_suggest_tags_avoids_existing_tags_and_supports_future_fields() -> None:
     record = {
-        "title": "Synthetic Biology review of root single-cell methods",
+        "title": "Synthetic Biology review of root scRNA-seq methods",
         "abstract": "Machine learning pipeline for Arabidopsis spatial transcriptomics.",
         "journal": "Bioinformatics",
         "filename": "protein design protocol.pdf",
@@ -260,6 +260,6 @@ def test_explain_tag_suggestions_returns_metadata() -> None:
     )
     bioinformatics = next(item for item in explanations if item["tag"] == "bioinformatics")
 
-    assert bioinformatics["category"] == "method"
+    assert bioinformatics["category"] == "field"
     assert bioinformatics["score"] == 70
     assert bioinformatics["matched_fields"] == ["keywords", "title"]

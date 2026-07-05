@@ -31,6 +31,8 @@ from services.tag_book import (
     group_suggestions_by_category,
     load_tag_book,
     preview_near_duplicate_tags,
+    selected_suggestion_tag_values,
+    suggestion_selection_id,
     validate_tag_book,
 )
 from services.paper_file_hygiene import (
@@ -460,11 +462,6 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
     preview = st.session_state.get(preview_key)
     suggestion_record = build_tag_suggestion_record(record, form_values=form_values, crossref_preview=preview)
     suggestion_details = explain_tag_suggestions(suggestion_record)
-    suggestions = [
-        item["canonical"]
-        for item in suggestion_details
-        if item.get("kind", "known_canonical") == "known_canonical"
-    ]
     st.write("Suggested tags")
     with st.expander("Tag suggestion input"):
         st.write(f"Title: `{suggestion_record.get('title', '')}`")
@@ -475,16 +472,20 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         st.write(f"Crossref subjects: `{suggestion_record.get('crossref_subjects', '')}`")
         st.write(f"Existing tags: `{suggestion_record.get('tags', '')}`")
     if suggestion_details:
-        _render_grouped_tag_suggestions(suggestion_details)
-    if suggestions:
-        if st.button("Apply suggested tags"):
-            merged_tags = merge_tags(record.get("tags", ""), suggestions)
+        st.caption("Candidate tags are added only to this paper unless promoted in Tag Manager.")
+        selected_suggestion_ids = _render_grouped_tag_suggestions(
+            suggestion_details,
+            key_prefix=f"metadata_assist_{record['paper_id']}",
+        )
+        if st.button("Apply selected suggested tags", disabled=not selected_suggestion_ids):
+            selected_tags = selected_suggestion_tag_values(suggestion_details, selected_suggestion_ids)
+            merged_tags = merge_tags(record.get("tags", ""), selected_tags)
             update_paper_metadata(record["paper_id"], {"tags": merged_tags})
             _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-            st.success("Known suggested tags added.")
+            st.success("Selected suggested tags added.")
             st.rerun()
     else:
-        st.caption("No new known canonical tag suggestions.")
+        st.caption("No new tag suggestions.")
 
     with st.expander("Advanced manual lookup"):
         if st.button("Lookup Crossref by DOI"):
@@ -529,7 +530,8 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         st.rerun()
 
 
-def _render_grouped_tag_suggestions(suggestion_details: list[dict]) -> None:
+def _render_grouped_tag_suggestions(suggestion_details: list[dict], *, key_prefix: str) -> list[str]:
+    selected_ids: list[str] = []
     for category, items in group_suggestions_by_category(suggestion_details).items():
         st.write(f"**{category}**")
         for detail in items:
@@ -540,9 +542,30 @@ def _render_grouped_tag_suggestions(suggestion_details: list[dict]) -> None:
             reason = str(detail.get("reason", ""))
             source_label = f" from {source}" if source else ""
             match_label = f" matched `{matched_text}`" if matched_text else ""
-            st.caption(f"`{label}` ({kind}){source_label}{match_label}")
+            selection_id = suggestion_selection_id(detail)
+            selected = st.checkbox(
+                f"{label} ({kind})",
+                key=f"{key_prefix}_{selection_id}",
+            )
+            if selected:
+                selected_ids.append(selection_id)
+            st.caption(f"{source_label}{match_label}".strip() or "No match details.")
             if reason:
                 st.caption(reason)
+            snippet = _tag_suggestion_snippet(detail)
+            if snippet:
+                st.caption(f"Evidence: {snippet}")
+    return selected_ids
+
+
+def _tag_suggestion_snippet(suggestion: dict) -> str:
+    evidence = suggestion.get("evidence", [])
+    if not isinstance(evidence, list):
+        return ""
+    for item in evidence:
+        if isinstance(item, dict) and str(item.get("snippet", "")).strip():
+            return str(item["snippet"]).strip()
+    return ""
 
 
 def _render_doi_less_metadata_candidate(

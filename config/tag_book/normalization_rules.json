@@ -2,7 +2,9 @@
   "version": "2",
   "canonical_format": "kebab-case",
   "lowercase": true,
+  "casefold": false,
   "trim_whitespace": true,
+  "strip_trailing_punctuation": true,
   "collapse_non_alphanumeric_to_hyphen": true,
   "notes": [
     "Normalization is deterministic and local-only.",

@@ -6,13 +6,10 @@
       "label": "AI Biology",
       "category": "model_or_algorithm",
       "aliases": [
-        "machine learning",
-        "machine-learning",
-        "deep learning",
-        "deep-learning",
-        "AI",
-        "ai",
         "artificial intelligence",
+        "artificial intelligence in biology",
+        "machine learning in biology",
+        "biological machine learning",
         "ai biology",
         "ai-biology"
       ],
@@ -37,7 +34,7 @@
     {
       "canonical": "bioinformatics",
       "label": "Bioinformatics",
-      "category": "method",
+      "category": "field",
       "aliases": [
         "bioinformatics"
       ],
@@ -51,7 +48,8 @@
       "label": "Lateral Root",
       "category": "tissue_or_cell_type",
       "aliases": [
-        "lr"
+        "lateral root",
+        "lateral roots"
       ],
       "status": "active",
       "suggestion_strength": 1,
@@ -76,10 +74,8 @@
       "label": "Method",
       "category": "paper_type",
       "aliases": [
-        "method",
-        "methods"
       ],
-      "status": "active",
+      "status": "deprecated",
       "suggestion_strength": 5,
       "description": "Paper type tag for method papers.",
       "created_from": "config/tag_rules.json"
@@ -186,8 +182,6 @@
         "scrna-seq",
         "scRNA-seq",
         "sc RNA-seq",
-        "single-cell",
-        "single cell",
         "single cell rna-seq",
         "single-cell rna-seq",
         "single-cell-rna-seq",

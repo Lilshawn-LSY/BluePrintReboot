@@ -29,7 +29,7 @@ def test_resolve_canonical_tag_accepts_aliases_and_labels() -> None:
     assert resolve_canonical_tag("Arabidopsis thaliana", registry) == "arabidopsis"
     assert resolve_canonical_tag("AI Biology", registry) == "ai-biology"
     assert resolve_canonical_tag("not-registered", registry) is None
-    assert canonicalize_tags("AI, custom tag, ai-biology", registry) == ["ai-biology", "custom-tag"]
+    assert canonicalize_tags("AI Biology, custom tag, ai-biology", registry) == ["ai-biology", "custom-tag"]
 
 
 def test_build_tag_alias_index_reports_ambiguous_aliases() -> None:
@@ -81,7 +81,7 @@ def test_apply_tag_merge_deduplicates_and_preserves_unrelated_tag_order() -> Non
         {
             "paper_id": "paper-1",
             "title": "Paper",
-            "tags": "first-personal, machine learning, bioinformatics, AI Biology, last-personal",
+            "tags": "first-personal, artificial intelligence, bioinformatics, AI Biology, last-personal",
         }
     ]
 
@@ -89,7 +89,7 @@ def test_apply_tag_merge_deduplicates_and_preserves_unrelated_tag_order() -> Non
 
     assert merged[0]["tags"] == "first-personal, bioinformatics, last-personal"
     assert merged[0]["title"] == "Paper"
-    assert records[0]["tags"] == "first-personal, machine learning, bioinformatics, AI Biology, last-personal"
+    assert records[0]["tags"] == "first-personal, artificial intelligence, bioinformatics, AI Biology, last-personal"
 
 
 def test_apply_tag_merge_can_map_an_unknown_tag_to_a_canonical_tag() -> None:

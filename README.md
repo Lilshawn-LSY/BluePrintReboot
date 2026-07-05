@@ -92,8 +92,9 @@ Current support includes:
 - Deterministic tag suggestions and canonical tag governance through the local Tag Book.
 - Tag Book configuration lives under `config/tag_book/`: `tag_book.json`, `method_lexicon.json`, `normalization_rules.json`, `blocked_terms.json`, and `candidate_patterns.json`.
 - A canonical tag is the approved stored tag value; an alias is a matched spelling or phrase that resolves to a canonical tag; category and status control grouping and suggestion eligibility.
-- Candidate tags are plausible new tags detected from metadata, filenames, and available extracted-text previews. They are preview-only until a user explicitly promotes them as canonical tags or aliases.
+- Candidate tags are plausible new tags detected from metadata, filenames, and available extracted-text previews. They are preview-only until a user explicitly selects them as paper-local tags or promotes them later as canonical tags or aliases in Tag Manager.
 - Tag suggestions include category, source, matched text, evidence, and reason. No LLM tagging, external ontology lookup, semantic synonym auto-merge, image parsing, or automatic retagging is performed.
+- `normalization_rules.json` is loaded by the Tag Book helper for deterministic kebab-case normalization; full semantic normalization remains out of scope.
 - Research projects linking papers and structured note blocks.
 - Paper Hygiene recommendations using `{year}_{first_author}_{short_title}.pdf` without changing `paper_id`.
 

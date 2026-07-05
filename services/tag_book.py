@@ -54,9 +54,36 @@ SOURCE_WEIGHTS = {
 }
 SOURCE_FIELDS = tuple(SOURCE_WEIGHTS.keys())
 
+DEFAULT_NORMALIZATION_RULES = {
+    "lowercase": True,
+    "casefold": False,
+    "trim_whitespace": True,
+    "strip_trailing_punctuation": True,
+    "collapse_non_alphanumeric_to_hyphen": True,
+}
+SELECTABLE_SUGGESTION_KINDS = {"known_canonical", "new_candidate", "weak_candidate"}
+
 
 def normalize_tag(value: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+    return normalize_tag_with_rules(value, DEFAULT_NORMALIZATION_RULES)
+
+
+def normalize_tag_with_rules(value: Any, rules: dict[str, Any] | None = None) -> str:
+    active_rules = {**DEFAULT_NORMALIZATION_RULES, **(rules or {})}
+    text = str(value or "")
+    if active_rules.get("trim_whitespace", True):
+        text = text.strip()
+    if active_rules.get("strip_trailing_punctuation", True):
+        text = re.sub(r"[\s\.,;:!\?]+$", "", text)
+    if active_rules.get("casefold", False):
+        text = text.casefold()
+    elif active_rules.get("lowercase", True):
+        text = text.lower()
+    if active_rules.get("collapse_non_alphanumeric_to_hyphen", True):
+        text = re.sub(r"[^a-zA-Z0-9]+", "-", text)
+    else:
+        text = re.sub(r"[\s_]+", "-", text)
+    return text.strip("-")
 
 
 def load_tag_book(tag_book_dir: str | Path | None = None) -> dict[str, Any]:
@@ -193,8 +220,6 @@ def validate_tag_book(tag_book: dict[str, Any] | None = None) -> list[str]:
             continue
         if record["category"] and record["category"] not in CATEGORY_VALUES:
             warnings.append(f"Tag '{canonical}' uses non-standard category '{record['category']}'.")
-        if record["status"].lower() in INACTIVE_STATUSES:
-            warnings.append(f"Tag '{canonical}' has {record['status']} status and will not be suggested.")
         if canonical in blocked_terms:
             warnings.append(f"Tag '{canonical}' matches a blocked term.")
         for raw_alias in _alias_values_for_validation(record):
@@ -272,6 +297,63 @@ def group_suggestions_by_category(suggestions: list[dict]) -> dict[str, list[dic
         category = str(suggestion.get("category", "") or "other")
         grouped.setdefault(category, []).append(suggestion)
     return dict(sorted(grouped.items(), key=lambda item: item[0]))
+
+
+def suggestion_selection_id(suggestion: dict[str, Any]) -> str:
+    kind = str(suggestion.get("kind", "known_canonical") or "known_canonical")
+    canonical = normalize_tag(suggestion.get("canonical") or suggestion.get("tag") or suggestion.get("display"))
+    return f"{kind}:{canonical}"
+
+
+def selected_suggestion_tag_values(suggestions: list[dict], selected_ids: set[str] | list[str] | tuple[str, ...]) -> list[str]:
+    selected = set(selected_ids)
+    values: list[str] = []
+    seen: set[str] = set()
+    for suggestion in suggestions:
+        kind = str(suggestion.get("kind", "known_canonical") or "known_canonical")
+        value = normalize_tag(suggestion.get("canonical") or suggestion.get("tag") or suggestion.get("display"))
+        if kind not in SELECTABLE_SUGGESTION_KINDS or not value:
+            continue
+        if suggestion_selection_id(suggestion) not in selected or value in seen:
+            continue
+        values.append(value)
+        seen.add(value)
+    return values
+
+
+def extract_evidence_snippet(text: str, matched_text: str, max_chars: int = 240) -> str:
+    source = " ".join(str(text or "").split())
+    match_text = str(matched_text or "").strip()
+    if not source or not match_text or max_chars <= 0:
+        return ""
+
+    match = re.search(re.escape(match_text), source, flags=re.IGNORECASE)
+    if not match:
+        return source[:max_chars].rstrip()
+
+    sentence_start = max(source.rfind(".", 0, match.start()), source.rfind("!", 0, match.start()), source.rfind("?", 0, match.start()))
+    start = sentence_start + 1 if sentence_start >= 0 else 0
+    while start < len(source) and source[start].isspace():
+        start += 1
+
+    sentence_ends = [index for index in (source.find(".", match.end()), source.find("!", match.end()), source.find("?", match.end())) if index >= 0]
+    end = min(sentence_ends) + 1 if sentence_ends else len(source)
+    snippet = source[start:end].strip()
+
+    if len(snippet) <= max_chars:
+        return snippet
+
+    match_offset = match.start() - start
+    half_window = max(max_chars // 2, len(match_text))
+    window_start = max(0, match_offset - half_window)
+    window_end = min(len(snippet), window_start + max_chars)
+    window_start = max(0, window_end - max_chars)
+    clipped = snippet[window_start:window_end].strip()
+    if window_start > 0:
+        clipped = "..." + clipped.lstrip()
+    if window_end < len(snippet):
+        clipped = clipped.rstrip() + "..."
+    return clipped
 
 
 def preview_near_duplicate_tags(
@@ -362,6 +444,7 @@ def _candidates_from_pattern(
                 "matched_text": matched_text,
                 "alias": matched_text,
                 "weight": SOURCE_WEIGHTS.get(field, 0),
+                "snippet": extract_evidence_snippet(text, matched_text),
             }
             current = candidates.setdefault(
                 canonical,
@@ -430,15 +513,16 @@ def _collect_alias_evidence(record: dict[str, Any], aliases: list[str]) -> list[
             evidence.append(
                 {
                     "source": field,
-                    "matched_text": match,
-                    "alias": match,
+                    "matched_text": match["matched_text"],
+                    "alias": match["alias"],
                     "weight": SOURCE_WEIGHTS.get(field, 0),
+                    "snippet": extract_evidence_snippet(text, match["matched_text"]),
                 }
             )
     return evidence
 
 
-def _first_alias_match(text: str, aliases: list[str]) -> str:
+def _first_alias_match(text: str, aliases: list[str]) -> dict[str, str]:
     for alias in sorted(aliases, key=lambda value: (-len(str(value)), str(value).lower())):
         needle = str(alias).strip()
         if not needle:
@@ -446,8 +530,8 @@ def _first_alias_match(text: str, aliases: list[str]) -> str:
         pattern = r"(?<![a-z0-9])" + re.escape(needle).replace(r"\ ", r"\s+") + r"(?![a-z0-9])"
         match = re.search(pattern, text, flags=re.IGNORECASE)
         if match:
-            return match.group(0)
-    return ""
+            return {"matched_text": match.group(0), "alias": needle}
+    return {}
 
 
 def _score_evidence(evidence: list[dict[str, Any]], suggestion_strength: int) -> int:

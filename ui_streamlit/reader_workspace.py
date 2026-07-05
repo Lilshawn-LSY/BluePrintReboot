@@ -11,7 +11,11 @@ import streamlit.components.v1 as components
 
 from ingest.tag_suggester import explain_tag_suggestions, merge_tags, normalize_tag, suggest_tags
 from ingest.text_extractor import extraction_diagnostics
-from services.tag_book import group_suggestions_by_category
+from services.tag_book import (
+    group_suggestions_by_category,
+    selected_suggestion_tag_values,
+    suggestion_selection_id,
+)
 from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper
 from services.note_import import (
     DuplicateNoteImportError,
@@ -179,6 +183,14 @@ def preview_reader_tag_suggestions(record: dict[str, str]) -> list[str]:
 
 def preview_reader_tag_suggestion_details(record: dict[str, str]) -> list[dict]:
     return explain_tag_suggestions(build_reader_tag_suggestion_record(record))
+
+
+def merge_selected_reader_tag_suggestions(
+    existing_tags: str,
+    suggestion_details: list[dict],
+    selected_ids: set[str] | list[str] | tuple[str, ...],
+) -> str:
+    return merge_tags(existing_tags, selected_suggestion_tag_values(suggestion_details, selected_ids))
 
 
 def append_markdown_snapshot(markdown: str, snippet: str) -> str:
@@ -401,23 +413,23 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
         st.rerun()
     if suggestion_key in st.session_state:
         suggestion_details = _coerce_reader_suggestion_details(st.session_state.get(suggestion_key, []))
-        known_suggestions = [
-            item["canonical"]
-            for item in suggestion_details
-            if item.get("kind", "known_canonical") == "known_canonical"
-        ]
         if suggestion_details:
-            _render_grouped_reader_suggestions(suggestion_details)
+            st.caption("Candidate tags are added only to this paper unless promoted in Tag Manager.")
+            selected_ids = _render_grouped_reader_suggestions(record, suggestion_details)
             apply_col, cancel_col = st.columns(2)
             if apply_col.button(
-                "Apply known",
+                "Apply selected",
                 key=f"reader_apply_tags_{record['paper_id']}",
-                disabled=not known_suggestions,
+                disabled=not selected_ids,
             ):
-                updated_tags = merge_tags(str(record.get("tags", "")), known_suggestions)
+                updated_tags = merge_selected_reader_tag_suggestions(
+                    str(record.get("tags", "")),
+                    suggestion_details,
+                    selected_ids,
+                )
                 update_paper_metadata(record["paper_id"], {"tags": updated_tags})
                 clear_session_keys(st.session_state, suggestion_key)
-                st.success("Known suggested tags applied.")
+                st.success("Selected suggested tags applied.")
                 st.rerun()
             if cancel_col.button("Cancel", key=f"reader_cancel_tags_{record['paper_id']}"):
                 clear_session_keys(st.session_state, suggestion_key)
@@ -474,7 +486,8 @@ def _coerce_reader_suggestion_details(value: object) -> list[dict]:
     return [item for item in value if isinstance(item, dict)]
 
 
-def _render_grouped_reader_suggestions(suggestion_details: list[dict]) -> None:
+def _render_grouped_reader_suggestions(record: dict[str, str], suggestion_details: list[dict]) -> list[str]:
+    selected_ids: list[str] = []
     for category, items in group_suggestions_by_category(suggestion_details).items():
         st.caption(f"{category}")
         for item in items:
@@ -485,9 +498,30 @@ def _render_grouped_reader_suggestions(suggestion_details: list[dict]) -> None:
             reason = str(item.get("reason", ""))
             evidence = f" from {source}" if source else ""
             match_text = f" matched `{matched}`" if matched else ""
-            st.write(f"`{label}` ({kind}){evidence}{match_text}")
+            selection_id = suggestion_selection_id(item)
+            selected = st.checkbox(
+                f"{label} ({kind})",
+                key=f"reader_tag_select_{record['paper_id']}_{selection_id}",
+            )
+            if selected:
+                selected_ids.append(selection_id)
+            st.caption(f"{evidence}{match_text}".strip() or "No match details.")
             if reason:
                 st.caption(reason)
+            snippet = _suggestion_snippet(item)
+            if snippet:
+                st.caption(f"Evidence: {snippet}")
+    return selected_ids
+
+
+def _suggestion_snippet(suggestion: dict) -> str:
+    evidence = suggestion.get("evidence", [])
+    if not isinstance(evidence, list):
+        return ""
+    for item in evidence:
+        if isinstance(item, dict) and str(item.get("snippet", "")).strip():
+            return str(item["snippet"]).strip()
+    return ""
 
 
 def _render_pdf_viewer(record: dict[str, str]) -> None:

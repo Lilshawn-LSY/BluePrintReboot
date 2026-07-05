@@ -10,6 +10,7 @@
     load_note_draft,
     mark_pdf_render_fallback,
     mark_pdf_render_native_attempt,
+    merge_selected_reader_tag_suggestions,
     native_pdf_support_status,
     note_draft_key,
     pending_note_block_append_key,
@@ -23,6 +24,7 @@
     reader_tag_suggestion_preview_key,
     save_note_draft,
 )
+from services.tag_book import load_tag_book, suggestion_selection_id
 from storage.note_store import save_note_text
 from tests.helpers import make_workspace
 
@@ -83,6 +85,38 @@ def test_reader_tag_suggestions_are_previewed_without_mutating_record() -> None:
     assert suggestions[:3] == ["arabidopsis", "root-development", "protocol"]
     assert record["tags"] == "existing-tag"
     assert reader_tag_suggestion_preview_key(record) == "reader_tag_suggestion_preview_paper-1"
+
+
+def test_reader_selected_known_suggestion_adds_canonical_tag() -> None:
+    suggestion = {
+        "display": "Lateral Root",
+        "canonical": "lateral-root",
+        "category": "tissue_or_cell_type",
+        "kind": "known_canonical",
+    }
+
+    updated = merge_selected_reader_tag_suggestions(
+        "existing-tag",
+        [suggestion],
+        [suggestion_selection_id(suggestion)],
+    )
+
+    assert updated == "existing-tag, lateral-root"
+
+
+def test_reader_candidate_suggestion_adds_paper_local_tag_only() -> None:
+    suggestion = {
+        "display": "CRISPR screen",
+        "canonical": "crispr-screen",
+        "category": "method",
+        "kind": "new_candidate",
+    }
+
+    assert merge_selected_reader_tag_suggestions("", [suggestion], []) == ""
+    updated = merge_selected_reader_tag_suggestions("", [suggestion], [suggestion_selection_id(suggestion)])
+
+    assert updated == "crispr-screen"
+    assert "crispr-screen" not in load_tag_book()["tags"]
 
 
 def test_insert_note_block_appends_without_erasing_existing_text() -> None:
