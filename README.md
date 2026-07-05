@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.10-dev-bootstrap**.
+Current release target: **v1.0.11-scan-enrich-import-guard**.
 
-v1.0.10 adds Windows PowerShell bootstrap scripts for fresh setup, local verification, and Streamlit launch. The app runtime behavior from v1.0.10 remains unchanged: project JSON persistence uses atomic writes for user-data stores, and missing-PDF repair, same-hash duplicate review, and orphan record review remain available. FastAPI, frontend migration, sample workspace verification, scanner/index/tag/PDF viewer changes, and data lifecycle changes remain deferred.
+v1.0.11 keeps the normal scan path cheap and local by separating PDF/index sync from DOI/Crossref enrichment, and it blocks duplicate external note imports by default unless a deliberate force re-import is selected. The app remains Streamlit-based and local-first; FastAPI, frontend migration, tag suggestion v2, PDF viewer changes, paper_id lifecycle changes, packaging, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -33,7 +33,7 @@ cd BluePrintReboot
 
 After setup, `start_blueprint.bat` is available as a convenience launcher from File Explorer or Command Prompt. It starts the existing `.venv` app; it does not run setup automatically.
 
-Add PDFs directly to `papers/`, then select **Scan papers** in the app. Open **Library** to choose a paper and continue in **Paper Detail** or **Reader Workspace**.
+Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the app. Open **Library** to choose a paper and continue in **Paper Detail** or **Reader Workspace**.
 
 For optional MarkItDown PDF support:
 
@@ -72,19 +72,19 @@ The main loop is:
 
 Current support includes:
 
-- Recursive PDF scanning from the canonical `papers/` directory.
+- Fast recursive PDF/index sync from the canonical `papers/` directory without default metadata enrichment.
 - Stable paper identities and a local CSV metadata index.
 - Search and filtering by metadata, status, priority, and tags.
 - Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, and tags.
 - Reading Note headers refresh from accepted paper metadata while preserving existing note body sections.
 - Structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
-- BluePrint Reading Note template download and confirmed local import into the Reading Note and structured note blocks.
+- BluePrint Reading Note template download and confirmed local import into the Reading Note and structured note blocks, with duplicate source imports blocked unless explicitly forced.
 - Full-text extraction with MarkItDown when available and `pypdf` fallback.
 - SHA-256 cache freshness checks and safe stale-cache recovery.
 
 ## Metadata/Tag Workflow
 
-- DOI extraction from PDFs.
+- Explicit DOI extraction from PDFs through metadata assist, separate from the normal local scan.
 - Crossref metadata preview and explicit acceptance with classified diagnostics.
 - DOI-less metadata fallback for arXiv/preprint/workshop PDFs, including arXiv ID detection, optional arXiv metadata lookup, and weak title guesses from PDF text or filename.
 - Manual metadata editing when enrichment is incomplete or offline.
@@ -125,7 +125,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.10. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.11. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -189,6 +189,14 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 
 ## Version History
 
+### v1.0.11-scan-enrich-import-guard
+
+- Keeps normal paper scanning focused on local PDF discovery, path/hash sync, and index row updates.
+- Moves DOI extraction and Crossref lookup behind explicit metadata assist actions instead of the default scan path.
+- Preserves existing DOI, metadata, tags, notes, note blocks, project links, and extracted-text data during cheap scans.
+- Blocks duplicate external note imports at the service layer by default.
+- Adds a deliberate force re-import path in the Streamlit import UI for intentional duplicate external note imports.
+
 ### v1.0.10-dev-bootstrap
 
 - Adds Windows PowerShell scripts for setup, local checks, and Streamlit launch.
@@ -197,7 +205,7 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - Adds text-inspection tests for the developer bootstrap scripts.
 - Keeps app behavior, scanner/index/tag/PDF viewer behavior, and user data lifecycle unchanged.
 
-### v1.0.10-atomic-json-writes
+### v1.0.9-atomic-json-writes
 
 - Adds a shared atomic JSON write helper using same-directory temporary files, flush/fsync, and `os.replace`.
 - Converts project, project-link, note-block, note-import log, canonical tag, and extracted-text metadata JSON writes to atomic writes.

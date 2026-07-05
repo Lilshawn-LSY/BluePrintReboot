@@ -46,6 +46,10 @@ SECTION_TO_BLOCK_TYPE = {
 }
 
 
+class DuplicateNoteImportError(ValueError):
+    pass
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -300,11 +304,19 @@ def apply_external_note_import(
     import_mode: str = "append_raw_notes_and_create_blocks",
     append_raw_notes: bool = True,
     create_structured_blocks: bool = True,
+    force_reimport: bool = False,
     notes_dir: Path = NOTES_DIR,
     note_blocks_dir: Path = NOTE_BLOCKS_DIR,
     log_path: Path = NOTE_IMPORTS_JSON,
 ) -> dict[str, Any]:
     paper_id = str(target_record["paper_id"])
+    source_sha256 = str(parsed_note.get("source_sha256", ""))
+    if source_sha256 and not force_reimport and has_duplicate_note_import(paper_id, source_sha256, log_path=log_path):
+        raise DuplicateNoteImportError(
+            "This source file has already been imported into the selected paper. "
+            "Use force_reimport=True only for an intentional duplicate import."
+        )
+
     imported_at = utc_now_iso()
     created_block_ids: list[str] = []
 
@@ -336,7 +348,7 @@ def apply_external_note_import(
         "import_id": import_id,
         "target_paper_id": paper_id,
         "source_filename": str(parsed_note.get("source_filename", "")),
-        "source_sha256": str(parsed_note.get("source_sha256", "")),
+        "source_sha256": source_sha256,
         "template_version": str(parsed_note.get("template_version", "")),
         "imported_at": imported_at,
         "import_mode": import_mode,

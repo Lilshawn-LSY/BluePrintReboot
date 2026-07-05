@@ -13,6 +13,7 @@ from ingest.tag_suggester import merge_tags, normalize_tag, suggest_tags
 from ingest.text_extractor import extraction_diagnostics
 from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper
 from services.note_import import (
+    DuplicateNoteImportError,
     SUPPORTED_EXTENSIONS,
     apply_external_note_import,
     build_structured_block_candidates,
@@ -765,8 +766,14 @@ def _render_external_note_import_preview(
         key=f"external_note_target_{record['paper_id']}_{source_hash[:8]}",
     )
 
-    if has_duplicate_note_import(selected_paper_id, source_hash):
+    duplicate_import = has_duplicate_note_import(selected_paper_id, source_hash)
+    force_reimport = False
+    if duplicate_import:
         st.warning("This same source file was previously imported into the selected paper.")
+        force_reimport = st.checkbox(
+            "Force duplicate re-import for this source file",
+            key=f"external_note_force_reimport_{record['paper_id']}_{source_hash[:8]}",
+        )
 
     confirmation = st.checkbox(
         "I understand this imports into the Reading Note and/or structured blocks without overwriting existing content.",
@@ -776,23 +783,28 @@ def _render_external_note_import_preview(
     if st.button(
         "Apply external note import",
         key=f"external_note_apply_{record['paper_id']}_{source_hash[:8]}",
-        disabled=not confirmation or not has_import_content,
+        disabled=not confirmation or not has_import_content or (duplicate_import and not force_reimport),
     ):
         target_record = dataframe[dataframe["paper_id"] == selected_paper_id].iloc[0].to_dict()
-        result = apply_external_note_import(
-            target_record,
-            parsed,
-            import_mode=(
-                f"append_reading_note={append_to_reading_note};"
-                f"create_structured_blocks={create_structured_blocks}"
-            ),
-            append_raw_notes=append_to_reading_note,
-            create_structured_blocks=create_structured_blocks,
-        )
-        st.session_state[success_key] = result
-        if selected_paper_id == record["paper_id"]:
-            st.session_state[pending_note_reload_key(record)] = True
-        st.rerun()
+        try:
+            result = apply_external_note_import(
+                target_record,
+                parsed,
+                import_mode=(
+                    f"append_reading_note={append_to_reading_note};"
+                    f"create_structured_blocks={create_structured_blocks}"
+                ),
+                append_raw_notes=append_to_reading_note,
+                create_structured_blocks=create_structured_blocks,
+                force_reimport=force_reimport,
+            )
+        except DuplicateNoteImportError as exc:
+            st.error(str(exc))
+        else:
+            st.session_state[success_key] = result
+            if selected_paper_id == record["paper_id"]:
+                st.session_state[pending_note_reload_key(record)] = True
+            st.rerun()
 
 
 def _render_note_import_matches(match: dict[str, object]) -> None:

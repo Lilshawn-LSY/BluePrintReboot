@@ -1,5 +1,4 @@
 import platform
-from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -16,7 +15,6 @@ from ingest.crossref import (
 )
 from ingest.document_text import get_text_extraction_backends
 from ingest.doi import is_probable_doi, normalize_doi
-from ingest.scanner import extract_doi_metadata_from_pdf
 from ingest.tag_suggester import (
     DEFAULT_CANONICAL_TAG_PATH,
     DEFAULT_RULE_PATH,
@@ -65,6 +63,7 @@ from services.reading_note_template import refresh_reading_note_header
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
+    enrich_paper_doi_from_pdf,
     load_index,
     update_index_from_scan,
     update_paper_metadata,
@@ -145,9 +144,13 @@ def _refresh_reading_note_header_after_metadata_apply(paper_id: str) -> None:
 
 
 def _scan_button(key: str) -> None:
-    if st.button("Scan papers", key=key):
+    if st.button(
+        "Scan papers (local sync)",
+        key=key,
+        help="Fast local file/index sync; metadata enrichment runs separately.",
+    ):
         update_index_from_scan()
-        st.success("Paper index updated.")
+        st.success("Paper index updated from local PDFs.")
         st.rerun()
 
 
@@ -346,48 +349,20 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
     if st.button("Enrich Metadata", type="primary"):
         normalized_current_doi = normalize_doi(current_doi)
-        if normalized_current_doi:
-            detected_doi = ""
-            extraction_source = "none"
-            saved = False
-            message = "Existing DOI used; PDF extraction was not needed."
-        else:
-            result = extract_doi_metadata_from_pdf(Path(record["filepath"]))
-            detected_doi = result.doi
-            extraction_source = result.source
-            saved = False
-            message = ""
-            if detected_doi:
-                update_paper_metadata(
-                    record["paper_id"],
-                    {
-                        "doi": detected_doi,
-                        "doi_source": extraction_source,
-                        "extraction_source": extraction_source,
-                        "extraction_checked_at": _now_iso(),
-                    },
-                )
-                _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-                saved = True
-                message = "Detected DOI was saved to this paper."
-            else:
-                message = "No DOI detected. You can paste one manually."
-
-        if normalized_current_doi:
-            saved = False
-        elif detected_doi:
-            saved = True
-
-        if detected_doi and normalized_current_doi and detected_doi == normalized_current_doi:
-            message = "Detected DOI already matches the saved DOI."
-        elif detected_doi and normalized_current_doi:
-            message = "Detected DOI was not saved because this paper already has a DOI."
+        doi_result = enrich_paper_doi_from_pdf(record["paper_id"])
+        detected_doi = str(doi_result.get("doi", ""))
+        extraction_source = str(doi_result.get("source", "none"))
+        saved = bool(doi_result.get("saved", False))
+        message = str(doi_result.get("message", ""))
+        if saved:
+            _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
 
         st.session_state[extraction_key] = {
             "doi": detected_doi,
             "source": extraction_source,
             "saved": saved,
             "message": message,
+            "status": str(doi_result.get("status", "")),
         }
 
         doi_for_lookup = detected_doi or normalized_current_doi
@@ -425,8 +400,13 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
                 st.success(extraction["message"])
             else:
                 st.info(extraction["message"])
-            st.write(f"Detected DOI: `{detected_doi}`")
-            st.write(f"Extraction source: `{extraction.get('source', 'none')}`")
+            doi_label = "Detected DOI" if extraction.get("status") == "doi_saved" else "DOI for lookup"
+            st.write(f"{doi_label}: `{detected_doi}`")
+            extraction_source = extraction.get("source", "none")
+            if extraction.get("status") == "existing_doi":
+                st.write("PDF DOI extraction: `not run; existing DOI used`")
+            else:
+                st.write(f"Extraction source: `{extraction_source}`")
             st.write(f"Saved to index: `{'yes' if extraction.get('saved') else 'no'}`")
             st.write(f"Crossref lookup status: `{enrichment.get('crossref_status', 'not attempted')}`")
 
