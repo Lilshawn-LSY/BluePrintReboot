@@ -62,6 +62,7 @@ def test_health_check_detects_missing_indexed_pdf() -> None:
             "paper_id": "paper-1",
             "filename": "Missing.pdf",
             "filepath": str(missing_pdf.resolve()),
+            "pdf_sha256": "",
         }
     ]
 

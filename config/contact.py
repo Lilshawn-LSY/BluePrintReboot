@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 DEFAULT_CONTACT_EMAIL = "pplee0300@snu.ac.kr"
 
 

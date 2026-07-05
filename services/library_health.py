@@ -178,6 +178,7 @@ def run_library_health_check(
             "paper_id": str(record.get("paper_id", "")),
             "filename": str(record.get("filename", "")),
             "filepath": str(resolved),
+            "pdf_sha256": str(record.get("pdf_sha256", "")),
         }
         if not resolved.exists() or not resolved.is_file():
             missing_pdfs.append(item)
