@@ -1,0 +1,231 @@
+{
+  "version": "2",
+  "tags": [
+    {
+      "canonical": "ai-biology",
+      "label": "AI Biology",
+      "category": "model_or_algorithm",
+      "aliases": [
+        "machine learning",
+        "machine-learning",
+        "deep learning",
+        "deep-learning",
+        "AI",
+        "ai",
+        "artificial intelligence",
+        "ai biology",
+        "ai-biology"
+      ],
+      "status": "active",
+      "suggestion_strength": 7,
+      "description": "AI and machine-learning methods used in biology papers.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "arabidopsis",
+      "label": "Arabidopsis",
+      "category": "organism",
+      "aliases": [
+        "arabidopsis",
+        "arabidopsis thaliana"
+      ],
+      "status": "active",
+      "suggestion_strength": 8,
+      "description": "Arabidopsis thaliana organism tag.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "bioinformatics",
+      "label": "Bioinformatics",
+      "category": "method",
+      "aliases": [
+        "bioinformatics"
+      ],
+      "status": "active",
+      "suggestion_strength": 7,
+      "description": "Computational biology and bioinformatics methods.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "lateral-root",
+      "label": "Lateral Root",
+      "category": "tissue_or_cell_type",
+      "aliases": [
+        "lr"
+      ],
+      "status": "active",
+      "suggestion_strength": 1,
+      "description": "Lateral root biology tag preserved from the canonical registry.",
+      "created_from": "config/canonical_tags.json"
+    },
+    {
+      "canonical": "metabolic-engineering",
+      "label": "Metabolic Engineering",
+      "category": "field",
+      "aliases": [
+        "metabolic engineering",
+        "metabolic-engineering"
+      ],
+      "status": "active",
+      "suggestion_strength": 10,
+      "description": "Metabolic engineering field tag.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "method",
+      "label": "Method",
+      "category": "paper_type",
+      "aliases": [
+        "method",
+        "methods"
+      ],
+      "status": "active",
+      "suggestion_strength": 5,
+      "description": "Paper type tag for method papers.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "physics",
+      "label": "Physics",
+      "category": "field",
+      "aliases": [
+        "physics"
+      ],
+      "status": "active",
+      "suggestion_strength": 1,
+      "description": "Physics field tag preserved from the canonical registry.",
+      "created_from": "config/canonical_tags.json"
+    },
+    {
+      "canonical": "pipeline",
+      "label": "Pipeline",
+      "category": "paper_type",
+      "aliases": [
+        "pipeline",
+        "pipelines"
+      ],
+      "status": "active",
+      "suggestion_strength": 5,
+      "description": "Paper type tag for computational or experimental pipelines.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "protein-design",
+      "label": "Protein Design",
+      "category": "field",
+      "aliases": [
+        "protein design",
+        "protein-design"
+      ],
+      "status": "active",
+      "suggestion_strength": 9,
+      "description": "Protein design field tag.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "protocol",
+      "label": "Protocol",
+      "category": "paper_type",
+      "aliases": [
+        "protocol",
+        "protocols"
+      ],
+      "status": "active",
+      "suggestion_strength": 5,
+      "description": "Paper type tag for protocols.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "review",
+      "label": "Review",
+      "category": "paper_type",
+      "aliases": [
+        "review"
+      ],
+      "status": "active",
+      "suggestion_strength": 5,
+      "description": "Paper type tag for reviews.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "root-apical-meristem",
+      "label": "Root Apical Meristem",
+      "category": "tissue_or_cell_type",
+      "aliases": [
+        "root apical meristem",
+        "ram",
+        "root-apical-meristem"
+      ],
+      "status": "active",
+      "suggestion_strength": 8,
+      "description": "Root apical meristem tissue/cell-type tag.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "root-development",
+      "label": "Root Development",
+      "category": "concept",
+      "aliases": [
+        "root development",
+        "root growth",
+        "root system",
+        "root meristem",
+        "root-development"
+      ],
+      "status": "active",
+      "suggestion_strength": 7,
+      "description": "Root development concept tag.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "single-cell-rna-seq",
+      "label": "Single-cell RNA-seq",
+      "category": "assay",
+      "aliases": [
+        "scrna",
+        "scrna-seq",
+        "scRNA-seq",
+        "sc RNA-seq",
+        "single-cell",
+        "single cell",
+        "single cell rna-seq",
+        "single-cell rna-seq",
+        "single-cell-rna-seq",
+        "single-cell RNA sequencing",
+        "single cell RNA sequencing",
+        "single-cell transcriptomics",
+        "single cell transcriptomics"
+      ],
+      "status": "active",
+      "suggestion_strength": 9,
+      "description": "Single-cell RNA sequencing assay tag.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "spatial-transcriptomics",
+      "label": "Spatial Transcriptomics",
+      "category": "assay",
+      "aliases": [
+        "spatial transcriptomics",
+        "spatial-transcriptomics"
+      ],
+      "status": "active",
+      "suggestion_strength": 9,
+      "description": "Spatial transcriptomics assay tag.",
+      "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "synthetic-biology",
+      "label": "Synthetic Biology",
+      "category": "field",
+      "aliases": [
+        "synthetic biology",
+        "synthetic-biology"
+      ],
+      "status": "active",
+      "suggestion_strength": 10,
+      "description": "Synthetic biology field tag.",
+      "created_from": "config/tag_rules.json"
+    }
+  ]
+}

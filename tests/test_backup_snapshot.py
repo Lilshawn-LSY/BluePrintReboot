@@ -14,6 +14,7 @@ def _seed_workspace(name: str) -> Path:
     (workspace / "notes").mkdir()
     (workspace / "papers").mkdir()
     (workspace / "config").mkdir()
+    (workspace / "config" / "tag_book").mkdir()
     (workspace / ".streamlit").mkdir()
     (workspace / "data" / "paper_index.csv").write_text(
         "paper_id,filename,filepath,title,authors,year\npaper-1,Paper.pdf,Paper.pdf,Paper,Author,2024\n",
@@ -30,6 +31,14 @@ def _seed_workspace(name: str) -> Path:
     (workspace / "notes" / "paper-1.md").write_text("# Note", encoding="utf-8")
     (workspace / "config" / "tag_rules.json").write_text("[]", encoding="utf-8")
     (workspace / "config" / "canonical_tags.json").write_text("[]", encoding="utf-8")
+    for filename in (
+        "tag_book.json",
+        "method_lexicon.json",
+        "normalization_rules.json",
+        "blocked_terms.json",
+        "candidate_patterns.json",
+    ):
+        (workspace / "config" / "tag_book" / filename).write_text("{}", encoding="utf-8")
     (workspace / ".streamlit" / "config.toml").write_text("[theme]", encoding="utf-8")
     (workspace / "papers" / "Paper.pdf").write_bytes(b"%PDF-1.4\ncontent")
     return workspace
@@ -61,9 +70,14 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
     assert "notes/paper-1.md" in names
     assert "config/tag_rules.json" in names
     assert "config/canonical_tags.json" in names
+    assert "config/tag_book/tag_book.json" in names
+    assert "config/tag_book/method_lexicon.json" in names
+    assert "config/tag_book/normalization_rules.json" in names
+    assert "config/tag_book/blocked_terms.json" in names
+    assert "config/tag_book/candidate_patterns.json" in names
     assert ".streamlit/config.toml" in names
     assert "papers/Paper.pdf" not in names
-    assert manifest["app_version"] == "1.0.11"
+    assert manifest["app_version"] == "1.0.12"
     assert manifest["snapshot_type"] == "light"
     assert manifest["includes_pdfs"] is False
     assert manifest["counts"]["index_rows"] == 1

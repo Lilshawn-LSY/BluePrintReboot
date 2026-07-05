@@ -5,6 +5,14 @@ import re
 from pathlib import Path
 from typing import Any
 
+from services.tag_book import (
+    explain_tag_book_suggestions,
+    load_tag_book,
+    normalize_tag as normalize_tag_value,
+    tag_book_to_registry,
+    tag_book_to_rulebook,
+)
+
 
 DEFAULT_RULE_PATH = Path(__file__).resolve().parents[1] / "config" / "tag_rules.json"
 DEFAULT_CANONICAL_TAG_PATH = Path(__file__).resolve().parents[1] / "config" / "canonical_tags.json"
@@ -29,6 +37,9 @@ CROSSREF_PREVIEW_SUGGESTION_FIELDS = ("title", "abstract", "keywords", "journal"
 
 def load_tag_rules(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
     rule_path = Path(path) if path is not None else DEFAULT_RULE_PATH
+    if path is None or _same_path(rule_path, DEFAULT_RULE_PATH):
+        return tag_book_to_rulebook(load_tag_book())
+
     with rule_path.open("r", encoding="utf-8") as file:
         raw_rules = json.load(file)
 
@@ -50,6 +61,9 @@ def load_tag_rules(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
 
 def load_canonical_tags(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
     registry_path = Path(path) if path is not None else DEFAULT_CANONICAL_TAG_PATH
+    if path is None or _same_path(registry_path, DEFAULT_CANONICAL_TAG_PATH):
+        return tag_book_to_registry(load_tag_book())
+
     with registry_path.open("r", encoding="utf-8") as file:
         raw_registry = json.load(file)
 
@@ -344,7 +358,7 @@ def audit_library_tags(records: list[dict], rules: dict) -> dict:
 
 
 def normalize_tag(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", str(value).strip().lower()).strip("-")
+    return normalize_tag_value(value)
 
 
 def parse_tags(value: str) -> list[str]:
@@ -370,10 +384,17 @@ def merge_tags(existing_tags: str, suggested_tags: list[str]) -> str:
 
 
 def suggest_tags(record: dict[str, str], rules: dict | None = None) -> list[str]:
-    return [explanation["tag"] for explanation in explain_tag_suggestions(record, rules)]
+    return [
+        explanation["tag"]
+        for explanation in explain_tag_suggestions(record, rules)
+        if explanation.get("kind", "known_canonical") == "known_canonical"
+    ]
 
 
 def explain_tag_suggestions(record: dict[str, str], rules: dict | None = None) -> list[dict]:
+    if rules is None:
+        return explain_tag_book_suggestions(record)
+
     active_rules = rules if rules is not None else load_tag_rules()
     existing = set(parse_tags(str(record.get("tags", ""))))
     suggestions: dict[str, dict[str, Any]] = {}
@@ -470,3 +491,10 @@ def _matches_any_alias(text: str, aliases: list[str]) -> bool:
 
 def _source_sort_key(field: str) -> tuple[int, str]:
     return (-SOURCE_WEIGHTS.get(field, 0), field)
+
+
+def _same_path(left: Path, right: Path) -> bool:
+    try:
+        return left.resolve() == right.resolve()
+    except OSError:
+        return left == right

@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.11-scan-enrich-import-guard**.
+Current release target: **v1.0.12-tag-book-v2**.
 
-v1.0.11 keeps the normal scan path cheap and local by separating PDF/index sync from DOI/Crossref enrichment, and it blocks duplicate external note imports by default unless a deliberate force re-import is selected. The app remains Streamlit-based and local-first; FastAPI, frontend migration, tag suggestion v2, PDF viewer changes, paper_id lifecycle changes, packaging, and unrelated UI redesigns remain deferred.
+v1.0.12 adds a dedicated local Tag Book under `config/tag_book/` for canonical tags, aliases, categories, method lexicon entries, candidate patterns, normalization rules, and blocked terms. The app remains Streamlit-based and local-first; FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, LLM tagging, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -89,7 +89,11 @@ Current support includes:
 - DOI-less metadata fallback for arXiv/preprint/workshop PDFs, including arXiv ID detection, optional arXiv metadata lookup, and weak title guesses from PDF text or filename.
 - Manual metadata editing when enrichment is incomplete or offline.
 - Fallback metadata suggestions are previewed and user-applied; they do not claim perfect extraction.
-- Deterministic tag suggestions and canonical tag governance.
+- Deterministic tag suggestions and canonical tag governance through the local Tag Book.
+- Tag Book configuration lives under `config/tag_book/`: `tag_book.json`, `method_lexicon.json`, `normalization_rules.json`, `blocked_terms.json`, and `candidate_patterns.json`.
+- A canonical tag is the approved stored tag value; an alias is a matched spelling or phrase that resolves to a canonical tag; category and status control grouping and suggestion eligibility.
+- Candidate tags are plausible new tags detected from metadata, filenames, and available extracted-text previews. They are preview-only until a user explicitly promotes them as canonical tags or aliases.
+- Tag suggestions include category, source, matched text, evidence, and reason. No LLM tagging, external ontology lookup, semantic synonym auto-merge, image parsing, or automatic retagging is performed.
 - Research projects linking papers and structured note blocks.
 - Paper Hygiene recommendations using `{year}_{first_author}_{short_title}.pdf` without changing `paper_id`.
 
@@ -112,7 +116,7 @@ Crossref enrichment requires the base dependencies `requests`, `urllib3`, and `c
 Settings is organized into four sections:
 
 - **System** - app/runtime information, workspace paths, extraction backends, and index details.
-- **Library Maintenance** - Library Health Check, Tag Rules, Drive Inbox Import, and Paper Hygiene.
+- **Library Maintenance** - Library Health Check, Tag Book, Drive Inbox Import, and Paper Hygiene.
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
 
@@ -125,7 +129,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.11. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.12. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -188,6 +192,14 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.12-tag-book-v2
+
+- Adds dedicated Tag Book configuration under `config/tag_book/`.
+- Routes default canonical tag, alias, validation, and suggestion flows through the Tag Book while preserving legacy config files for compatibility.
+- Adds evidence-bearing grouped tag suggestions and preview-only method candidates.
+- Adds Tag Book validation for duplicate canonicals, alias conflicts, normalized alias conflicts, blocked terms, and inactive statuses.
+- Keeps paper, note, note-block, project, and project-link storage schemas unchanged.
 
 ### v1.0.11-scan-enrich-import-guard
 

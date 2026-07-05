@@ -1,0 +1,25 @@
+{
+  "version": "2",
+  "terms": [
+    {
+      "term": "study",
+      "reason": "Generic paper word."
+    },
+    {
+      "term": "paper",
+      "reason": "Generic document word."
+    },
+    {
+      "term": "result",
+      "reason": "Generic section word."
+    },
+    {
+      "term": "results",
+      "reason": "Generic section word."
+    },
+    {
+      "term": "discussion",
+      "reason": "Generic section word."
+    }
+  ]
+}

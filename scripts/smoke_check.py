@@ -28,6 +28,11 @@ REQUIRED_FILES = (
     "docs/templates/blueprint_reading_note_template.md",
     "config/tag_rules.json",
     "config/canonical_tags.json",
+    "config/tag_book/tag_book.json",
+    "config/tag_book/method_lexicon.json",
+    "config/tag_book/normalization_rules.json",
+    "config/tag_book/blocked_terms.json",
+    "config/tag_book/candidate_patterns.json",
     "docs/checklists/v1.0_smoke_test.md",
     "docs/checklists/regression_checklist.md",
     "docs/checklists/new_pc_restore_checklist.md",
@@ -54,6 +59,7 @@ KEY_MODULES = (
     "services.pdf_inbox",
     "services.paper_file_hygiene",
     "services.reading_note_template",
+    "services.tag_book",
 )
 
 

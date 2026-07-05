@@ -1,0 +1,120 @@
+{
+  "version": "2",
+  "entries": [
+    {
+      "display": "ATAC-seq",
+      "canonical": "atac-seq",
+      "category": "assay",
+      "aliases": [
+        "ATAC-seq",
+        "assay for transposase-accessible chromatin"
+      ],
+      "suggestion_strength": 6,
+      "confidence": 0.72,
+      "reason": "Matched a method lexicon entry for an assay not yet canonical."
+    },
+    {
+      "display": "ChIP-seq",
+      "canonical": "chip-seq",
+      "category": "assay",
+      "aliases": [
+        "ChIP-seq",
+        "chromatin immunoprecipitation sequencing"
+      ],
+      "suggestion_strength": 6,
+      "confidence": 0.72,
+      "reason": "Matched a method lexicon entry for an assay not yet canonical."
+    },
+    {
+      "display": "CRISPR screen",
+      "canonical": "crispr-screen",
+      "category": "method",
+      "aliases": [
+        "CRISPR screen",
+        "CRISPR screening",
+        "genome-wide CRISPR screen"
+      ],
+      "suggestion_strength": 6,
+      "confidence": 0.74,
+      "reason": "Matched a method lexicon entry for a screening method not yet canonical."
+    },
+    {
+      "display": "flow cytometry",
+      "canonical": "flow-cytometry",
+      "category": "assay",
+      "aliases": [
+        "flow cytometry",
+        "FACS",
+        "fluorescence-activated cell sorting"
+      ],
+      "suggestion_strength": 5,
+      "confidence": 0.68,
+      "reason": "Matched a method lexicon entry for an assay not yet canonical."
+    },
+    {
+      "display": "graph neural network",
+      "canonical": "graph-neural-network",
+      "category": "model_or_algorithm",
+      "aliases": [
+        "graph neural network",
+        "graph neural networks",
+        "GNN"
+      ],
+      "suggestion_strength": 5,
+      "confidence": 0.68,
+      "reason": "Matched a method lexicon entry for a model not yet canonical."
+    },
+    {
+      "display": "mass spectrometry",
+      "canonical": "mass-spectrometry",
+      "category": "assay",
+      "aliases": [
+        "mass spectrometry",
+        "LC-MS",
+        "LC MS",
+        "tandem mass spectrometry"
+      ],
+      "suggestion_strength": 5,
+      "confidence": 0.68,
+      "reason": "Matched a method lexicon entry for an assay not yet canonical."
+    },
+    {
+      "display": "qPCR",
+      "canonical": "qpcr",
+      "category": "assay",
+      "aliases": [
+        "qPCR",
+        "quantitative PCR",
+        "real-time PCR"
+      ],
+      "suggestion_strength": 4,
+      "confidence": 0.62,
+      "reason": "Matched a method lexicon entry for an assay not yet canonical."
+    },
+    {
+      "display": "random forest",
+      "canonical": "random-forest",
+      "category": "model_or_algorithm",
+      "aliases": [
+        "random forest",
+        "random forests"
+      ],
+      "suggestion_strength": 4,
+      "confidence": 0.6,
+      "reason": "Matched a method lexicon entry for a model not yet canonical."
+    },
+    {
+      "display": "Western blot",
+      "canonical": "western-blot",
+      "category": "assay",
+      "aliases": [
+        "Western blot",
+        "western blotting",
+        "immunoblot"
+      ],
+      "suggestion_strength": 4,
+      "confidence": 0.62,
+      "reason": "Matched a method lexicon entry for an assay not yet canonical."
+    }
+  ]
+}

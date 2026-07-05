@@ -4,6 +4,12 @@ import pandas as pd
 import streamlit as st
 
 from ingest.tag_suggester import load_canonical_tags
+from services.tag_book import (
+    CATEGORY_VALUES,
+    load_tag_book,
+    preview_near_duplicate_tags,
+    validate_tag_book,
+)
 from services.tag_governance import (
     CANONICAL_TAG_CATEGORIES,
     TAG_MANAGER_FILTERS,
@@ -26,6 +32,8 @@ def render_tag_manager_page() -> None:
 
     records = load_tag_manager_records()
     registry = load_canonical_tags()
+    tag_book = load_tag_book()
+    _render_tag_book_panel(tag_book)
     summaries = summarize_used_tags(records, registry)
 
     metric_columns = st.columns(4)
@@ -69,6 +77,76 @@ def render_tag_manager_page() -> None:
     selected = next(item for item in filtered if item["normalized_tag"] == selected_normalized)
     _render_tag_detail(selected)
     _render_tag_actions(selected, records, registry)
+
+
+def _render_tag_book_panel(tag_book: dict) -> None:
+    with st.expander("Tag Book", expanded=True):
+        tags = list(tag_book.get("tags", {}).values())
+        warnings = validate_tag_book(tag_book)
+        near_duplicates = preview_near_duplicate_tags(tag_book)
+        metric_columns = st.columns(3)
+        metric_columns[0].metric("Canonical tags", len(tags))
+        metric_columns[1].metric("Validation warnings", len(warnings))
+        metric_columns[2].metric("Near-duplicate previews", len(near_duplicates))
+
+        filters = st.columns([2, 2, 3])
+        category_options = ("all",) + CATEGORY_VALUES
+        category = filters[0].selectbox("Category", category_options, key="tag_book_category_filter")
+        statuses = tuple(sorted({str(tag.get("status", "active") or "active") for tag in tags}))
+        status = filters[1].selectbox("Status", ("all",) + statuses, key="tag_book_status_filter")
+        search = filters[2].text_input("Search Tag Book", key="tag_book_search")
+
+        filtered = _filter_tag_book_entries(tags, category, status, search)
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {
+                        "Canonical": tag["canonical"],
+                        "Label": tag.get("label", ""),
+                        "Category": tag.get("category", ""),
+                        "Status": tag.get("status", ""),
+                        "Aliases": ", ".join(tag.get("aliases", [])),
+                    }
+                    for tag in filtered
+                ]
+            ),
+            width="stretch",
+            hide_index=True,
+        )
+
+        if warnings:
+            with st.expander("Validation warnings"):
+                for warning in warnings:
+                    st.write(f"- {warning}")
+        if near_duplicates:
+            with st.expander("Near-duplicate preview"):
+                for item in near_duplicates[:20]:
+                    st.write(
+                        f"`{item['left']}` ~ `{item['right']}` "
+                        f"({item['similarity']}) - {item['reason']}"
+                    )
+
+
+def _filter_tag_book_entries(tags: list[dict], category: str, status: str, search: str) -> list[dict]:
+    needle = str(search or "").strip().lower()
+    filtered: list[dict] = []
+    for tag in tags:
+        if category != "all" and tag.get("category") != category:
+            continue
+        if status != "all" and str(tag.get("status", "active") or "active") != status:
+            continue
+        haystack = " ".join(
+            [
+                str(tag.get("canonical", "")),
+                str(tag.get("label", "")),
+                str(tag.get("category", "")),
+                " ".join(str(alias) for alias in tag.get("aliases", [])),
+            ]
+        ).lower()
+        if needle and needle not in haystack:
+            continue
+        filtered.append(tag)
+    return sorted(filtered, key=lambda item: str(item.get("canonical", "")))
 
 
 def _render_tag_detail(selected: dict) -> None:

@@ -6,7 +6,6 @@ from typing import Any
 import pandas as pd
 
 from ingest.tag_suggester import (
-    DEFAULT_CANONICAL_TAG_PATH,
     apply_tag_merge_to_records,
     build_tag_alias_index,
     load_canonical_tags,
@@ -14,21 +13,13 @@ from ingest.tag_suggester import (
     preview_tag_merge,
     resolve_canonical_tag,
 )
+from services.tag_book import CATEGORY_VALUES, save_tag_book_canonical_registry
 from storage.atomic_json import atomic_write_json
 from storage.index_store import save_index
 from storage.paths import INDEX_CSV
 
 
-CANONICAL_TAG_CATEGORIES = (
-    "field",
-    "organism",
-    "assay",
-    "method",
-    "biology",
-    "paper-type",
-    "concept",
-    "project",
-)
+CANONICAL_TAG_CATEGORIES = CATEGORY_VALUES
 
 TAG_MANAGER_FILTERS = ("all", "unknown", "canonical", "alias-resolved", "ambiguous/short")
 
@@ -150,7 +141,7 @@ def apply_used_tag_merge_to_index(
 def register_tag_alias(
     raw_alias: str,
     target_tag: str,
-    registry_path: str | Path = DEFAULT_CANONICAL_TAG_PATH,
+    registry_path: str | Path | None = None,
 ) -> dict:
     registry = load_canonical_tags(registry_path)
     canonical_target = resolve_canonical_tag(target_tag, registry)
@@ -179,7 +170,7 @@ def create_canonical_tag(
     raw_alias: str,
     label: str,
     category: str,
-    registry_path: str | Path = DEFAULT_CANONICAL_TAG_PATH,
+    registry_path: str | Path | None = None,
 ) -> dict:
     clean_label = str(label).strip()
     canonical_tag = normalize_tag(clean_label)
@@ -211,7 +202,11 @@ def create_canonical_tag(
     return registry
 
 
-def save_canonical_tags(registry: dict, path: str | Path = DEFAULT_CANONICAL_TAG_PATH) -> None:
+def save_canonical_tags(registry: dict, path: str | Path | None = None) -> None:
+    if path is None:
+        save_tag_book_canonical_registry(registry)
+        return
+
     registry_path = Path(path)
     atomic_write_json(registry_path, registry, ensure_ascii=False, indent=2, trailing_newline=True)
 

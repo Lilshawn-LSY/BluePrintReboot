@@ -24,8 +24,14 @@ from ingest.tag_suggester import (
     load_canonical_tags,
     load_tag_rules,
     merge_tags,
-    suggest_tags,
     validate_tag_rules,
+)
+from services.tag_book import (
+    DEFAULT_TAG_BOOK_DIR,
+    group_suggestions_by_category,
+    load_tag_book,
+    preview_near_duplicate_tags,
+    validate_tag_book,
 )
 from services.paper_file_hygiene import (
     PaperFileHygieneError,
@@ -453,8 +459,12 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
     preview = st.session_state.get(preview_key)
     suggestion_record = build_tag_suggestion_record(record, form_values=form_values, crossref_preview=preview)
-    suggestions = suggest_tags(suggestion_record)
     suggestion_details = explain_tag_suggestions(suggestion_record)
+    suggestions = [
+        item["canonical"]
+        for item in suggestion_details
+        if item.get("kind", "known_canonical") == "known_canonical"
+    ]
     st.write("Suggested tags")
     with st.expander("Tag suggestion input"):
         st.write(f"Title: `{suggestion_record.get('title', '')}`")
@@ -464,18 +474,17 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         st.write(f"Filename: `{suggestion_record.get('filename', '')}`")
         st.write(f"Crossref subjects: `{suggestion_record.get('crossref_subjects', '')}`")
         st.write(f"Existing tags: `{suggestion_record.get('tags', '')}`")
+    if suggestion_details:
+        _render_grouped_tag_suggestions(suggestion_details)
     if suggestions:
-        for detail in suggestion_details:
-            fields = "/".join(detail.get("matched_fields", []))
-            st.caption(f"`{detail['tag']}` - matched {fields}")
         if st.button("Apply suggested tags"):
             merged_tags = merge_tags(record.get("tags", ""), suggestions)
             update_paper_metadata(record["paper_id"], {"tags": merged_tags})
             _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-            st.success("Suggested tags added.")
+            st.success("Known suggested tags added.")
             st.rerun()
     else:
-        st.caption("No new tag suggestions.")
+        st.caption("No new known canonical tag suggestions.")
 
     with st.expander("Advanced manual lookup"):
         if st.button("Lookup Crossref by DOI"):
@@ -518,6 +527,22 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         st.session_state.pop(preview_key, None)
         st.success("Crossref metadata accepted.")
         st.rerun()
+
+
+def _render_grouped_tag_suggestions(suggestion_details: list[dict]) -> None:
+    for category, items in group_suggestions_by_category(suggestion_details).items():
+        st.write(f"**{category}**")
+        for detail in items:
+            label = detail.get("display") or detail.get("canonical") or detail.get("tag")
+            kind = str(detail.get("kind", "known_canonical")).replace("_", " ")
+            source = str(detail.get("source", ""))
+            matched_text = str(detail.get("matched_text", ""))
+            reason = str(detail.get("reason", ""))
+            source_label = f" from {source}" if source else ""
+            match_label = f" matched `{matched_text}`" if matched_text else ""
+            st.caption(f"`{label}` ({kind}){source_label}{match_label}")
+            if reason:
+                st.caption(reason)
 
 
 def _render_doi_less_metadata_candidate(
@@ -676,23 +701,32 @@ def render_library_maintenance_settings() -> None:
 
 
 def _render_tag_rules_settings() -> None:
-    st.subheader("Tag Rules")
+    st.subheader("Tag Book")
+    tag_book = load_tag_book()
     rules = load_tag_rules()
     canonical_registry = load_canonical_tags()
-    validation_warnings = validate_tag_rules(rules)
+    validation_warnings = validate_tag_book(tag_book)
+    compatibility_warnings = validate_tag_rules(rules)
     tag_audit = audit_canonical_tags(_index().to_dict("records"), canonical_registry)
+    near_duplicates = preview_near_duplicate_tags(tag_book)
+    st.write(f"Tag Book path: `{DEFAULT_TAG_BOOK_DIR}`")
     st.write(f"Rulebook path: `{DEFAULT_RULE_PATH}`")
     st.write(f"Suggestion rules: `{len(rules)}`")
     st.write(f"Canonical registry: `{DEFAULT_CANONICAL_TAG_PATH}`")
     st.write(f"Canonical tags: `{len(canonical_registry)}`")
     if validation_warnings:
-        st.warning("Rulebook validation warnings:")
+        st.warning("Tag Book validation warnings:")
         for warning in validation_warnings:
             st.write(f"- {warning}")
     else:
-        st.success("Rulebook validation passed.")
+        st.success("Tag Book validation passed.")
+    if compatibility_warnings:
+        with st.expander("Compatibility rule warnings"):
+            for warning in compatibility_warnings:
+                st.write(f"- {warning}")
     st.write(f"Unknown library tags: `{len(tag_audit['unknown_tags'])}`")
     st.write(f"Unused canonical tags: `{len(tag_audit['unused_canonical_tags'])}`")
+    st.write(f"Near-duplicate preview: `{len(near_duplicates)}`")
     st.write("Canonical alias collisions")
     if tag_audit["alias_collisions"]:
         for alias, owners in tag_audit["alias_collisions"].items():

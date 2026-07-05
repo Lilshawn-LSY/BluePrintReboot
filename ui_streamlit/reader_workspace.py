@@ -9,8 +9,9 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from ingest.tag_suggester import merge_tags, normalize_tag, suggest_tags
+from ingest.tag_suggester import explain_tag_suggestions, merge_tags, normalize_tag, suggest_tags
 from ingest.text_extractor import extraction_diagnostics
+from services.tag_book import group_suggestions_by_category
 from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper
 from services.note_import import (
     DuplicateNoteImportError,
@@ -159,8 +160,25 @@ def reader_tag_suggestion_preview_key(record: dict[str, str]) -> str:
     return f"reader_tag_suggestion_preview_{record['paper_id']}"
 
 
+def build_reader_tag_suggestion_record(record: dict[str, str]) -> dict[str, str]:
+    suggestion_record = dict(record)
+    paper_id = str(record.get("paper_id", ""))
+    if paper_id and "extracted_text_preview" not in suggestion_record:
+        try:
+            text = load_cached_extracted_text(paper_id)
+        except OSError:
+            text = ""
+        if text:
+            suggestion_record["extracted_text_preview"] = text[:5000]
+    return suggestion_record
+
+
 def preview_reader_tag_suggestions(record: dict[str, str]) -> list[str]:
-    return suggest_tags(dict(record))
+    return suggest_tags(build_reader_tag_suggestion_record(record))
+
+
+def preview_reader_tag_suggestion_details(record: dict[str, str]) -> list[dict]:
+    return explain_tag_suggestions(build_reader_tag_suggestion_record(record))
 
 
 def append_markdown_snapshot(markdown: str, snippet: str) -> str:
@@ -379,18 +397,27 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
 
     suggestion_key = reader_tag_suggestion_preview_key(record)
     if st.button("Preview tags", key=f"reader_suggest_tags_{record['paper_id']}"):
-        st.session_state[suggestion_key] = preview_reader_tag_suggestions(record)
+        st.session_state[suggestion_key] = preview_reader_tag_suggestion_details(record)
         st.rerun()
     if suggestion_key in st.session_state:
-        suggestions = list(st.session_state.get(suggestion_key, []))
-        if suggestions:
-            st.caption("Suggested: " + ", ".join(f"`{tag}`" for tag in suggestions))
+        suggestion_details = _coerce_reader_suggestion_details(st.session_state.get(suggestion_key, []))
+        known_suggestions = [
+            item["canonical"]
+            for item in suggestion_details
+            if item.get("kind", "known_canonical") == "known_canonical"
+        ]
+        if suggestion_details:
+            _render_grouped_reader_suggestions(suggestion_details)
             apply_col, cancel_col = st.columns(2)
-            if apply_col.button("Apply", key=f"reader_apply_tags_{record['paper_id']}"):
-                updated_tags = merge_tags(str(record.get("tags", "")), suggestions)
+            if apply_col.button(
+                "Apply known",
+                key=f"reader_apply_tags_{record['paper_id']}",
+                disabled=not known_suggestions,
+            ):
+                updated_tags = merge_tags(str(record.get("tags", "")), known_suggestions)
                 update_paper_metadata(record["paper_id"], {"tags": updated_tags})
                 clear_session_keys(st.session_state, suggestion_key)
-                st.success("Suggested tags applied.")
+                st.success("Known suggested tags applied.")
                 st.rerun()
             if cancel_col.button("Cancel", key=f"reader_cancel_tags_{record['paper_id']}"):
                 clear_session_keys(st.session_state, suggestion_key)
@@ -424,6 +451,43 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
     if selected_priority != record.get("reading_priority", ""):
         update_paper_metadata(record["paper_id"], {"reading_priority": selected_priority})
         st.rerun()
+
+
+def _coerce_reader_suggestion_details(value: object) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    if all(isinstance(item, str) for item in value):
+        return [
+            {
+                "display": item,
+                "canonical": item,
+                "tag": item,
+                "category": "other",
+                "kind": "known_canonical",
+                "source": "",
+                "matched_text": "",
+                "evidence": [],
+                "reason": "Legacy preview result.",
+            }
+            for item in value
+        ]
+    return [item for item in value if isinstance(item, dict)]
+
+
+def _render_grouped_reader_suggestions(suggestion_details: list[dict]) -> None:
+    for category, items in group_suggestions_by_category(suggestion_details).items():
+        st.caption(f"{category}")
+        for item in items:
+            label = item.get("display") or item.get("canonical") or item.get("tag")
+            kind = str(item.get("kind", "known_canonical")).replace("_", " ")
+            matched = str(item.get("matched_text", ""))
+            source = str(item.get("source", ""))
+            reason = str(item.get("reason", ""))
+            evidence = f" from {source}" if source else ""
+            match_text = f" matched `{matched}`" if matched else ""
+            st.write(f"`{label}` ({kind}){evidence}{match_text}")
+            if reason:
+                st.caption(reason)
 
 
 def _render_pdf_viewer(record: dict[str, str]) -> None:

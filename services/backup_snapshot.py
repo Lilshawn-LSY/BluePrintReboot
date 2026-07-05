@@ -13,7 +13,15 @@ from storage.paths import EXPORTS_DIR, PROJECT_ROOT
 
 
 IGNORED_NAMES = {".git", ".pytest_cache", ".venv", "__pycache__", "venv"}
-TAG_CONFIG_FILES = ("config/tag_rules.json", "config/canonical_tags.json")
+TAG_CONFIG_FILES = (
+    "config/tag_rules.json",
+    "config/canonical_tags.json",
+    "config/tag_book/tag_book.json",
+    "config/tag_book/method_lexicon.json",
+    "config/tag_book/normalization_rules.json",
+    "config/tag_book/blocked_terms.json",
+    "config/tag_book/candidate_patterns.json",
+)
 LOCAL_SETTING_FILES = (".streamlit/config.toml", "config/settings.json", "data/settings.json")
 LOCAL_LIBRARY_FILES = ("data/note_imports.json",)
 

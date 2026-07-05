@@ -1,0 +1,11 @@
+{
+  "version": "2",
+  "canonical_format": "kebab-case",
+  "lowercase": true,
+  "trim_whitespace": true,
+  "collapse_non_alphanumeric_to_hyphen": true,
+  "notes": [
+    "Normalization is deterministic and local-only.",
+    "Semantic synonym merging is not performed automatically."
+  ]
+}
