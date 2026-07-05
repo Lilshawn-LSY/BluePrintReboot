@@ -1,4 +1,4 @@
-from ui_streamlit.app import navigation_pages, run
+﻿from ui_streamlit.app import navigation_pages, run
 
 
 def test_streamlit_entrypoint_is_callable() -> None:

@@ -1,4 +1,4 @@
-from copy import deepcopy
+﻿from copy import deepcopy
 
 from ingest.tag_suggester import (
     apply_tag_merge_to_records,

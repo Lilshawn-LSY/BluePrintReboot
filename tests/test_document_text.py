@@ -1,4 +1,4 @@
-from ingest.document_text import get_text_extraction_backends
+﻿from ingest.document_text import get_text_extraction_backends
 
 
 def test_get_text_extraction_backends_reports_import_status(monkeypatch) -> None:

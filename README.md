@@ -1,4 +1,4 @@
-# BluePrintReboot
+﻿# BluePrintReboot
 
 ## What is BluePrintReboot?
 
@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.9-atomic-json-writes**.
+Current release target: **v1.0.10-dev-bootstrap**.
 
-v1.0.9 makes project JSON persistence safer with atomic JSON writes for user-data stores. Project lists, project links, note blocks, note-import logs, canonical tag config, and extracted-text metadata now write through a temp file in the target directory, flush/fsync it, and replace the target only after a complete write. Missing-PDF repair from v1.0.6, same-hash duplicate review from v1.0.7, and orphan record review from v1.0.8 remain available. JSON schemas, note/PDF/index behavior, duplicate merge/remove workflow, archive lifecycle, FastAPI, frontend migration, packaging, and launcher changes remain deferred.
+v1.0.10 adds Windows PowerShell bootstrap scripts for fresh setup, local verification, and Streamlit launch. The app runtime behavior from v1.0.10 remains unchanged: project JSON persistence uses atomic writes for user-data stores, and missing-PDF repair, same-hash duplicate review, and orphan record review remain available. FastAPI, frontend migration, sample workspace verification, scanner/index/tag/PDF viewer changes, and data lifecycle changes remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -19,28 +19,45 @@ The app remains intentionally local-first and single-user:
 - Crossref is optional; core reading and organization workflows work offline.
 - Maintenance actions use preview and confirmation where files or records can change.
 
-## Quick Start
+## Windows Quick Start
 
 From a fresh clone in Windows PowerShell:
 
 ```powershell
 git clone <repository-url> BluePrintReboot
 cd BluePrintReboot
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python scripts/smoke_check.py
-streamlit run app.py
+.\scripts\dev_setup.ps1
+.\scripts\dev_check.ps1
+.\scripts\run_app.ps1
 ```
+
+After setup, `start_blueprint.bat` is available as a convenience launcher from File Explorer or Command Prompt. It starts the existing `.venv` app; it does not run setup automatically.
 
 Add PDFs directly to `papers/`, then select **Scan papers** in the app. Open **Library** to choose a paper and continue in **Paper Detail** or **Reader Workspace**.
 
 For optional MarkItDown PDF support:
 
 ```powershell
-python -m pip install -r requirements-optional.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-optional.txt
 ```
+
+Manual environment commands are a troubleshooting fallback when the scripts cannot be used:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe scripts\smoke_check.py
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+
+### Troubleshooting
+
+- **PowerShell execution policy** - Run scripts from PowerShell with `.\scripts\dev_setup.ps1`. If local policy blocks a script, use a process-only bypass such as `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev_setup.ps1`.
+- **Python not found** - Install Python 3, make sure either `py` or `python` is available on `PATH`, reopen PowerShell, and rerun `.\scripts\dev_setup.ps1`.
+- **Missing `.venv`** - Run `.\scripts\dev_setup.ps1`. `.\scripts\dev_check.ps1`, `.\scripts\run_app.ps1`, and `start_blueprint.bat` expect the environment to already exist.
+- **Port 8501 already in use** - Launch with another port, for example `.\scripts\run_app.ps1 -Port 8502`.
 
 ## Core Reading Workflow
 
@@ -108,7 +125,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.9. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.10. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -132,24 +149,22 @@ Foundation release documents:
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.0-foundation release-note draft](docs/release_notes/v1.0_draft.md)
 
-Before Codex-assisted changes, run the baseline validation commands and note the result:
+Before Codex-assisted changes, run the baseline validation command and note the result:
 
 ```powershell
-python scripts/smoke_check.py
-python -m pytest -q
+.\scripts\dev_check.ps1
 ```
 
-After Codex-assisted changes, run the same commands again before review. For release hygiene work, also complete the [mandatory regression checklist](docs/checklists/regression_checklist.md).
+After Codex-assisted changes, run the same command again before review. For release hygiene work, also complete the [mandatory regression checklist](docs/checklists/regression_checklist.md).
 
 ```powershell
-python scripts/smoke_check.py
-python -m pytest -q
+.\scripts\dev_check.ps1
 ```
 
 Run a focused test file:
 
 ```powershell
-python -m pytest tests/test_library_health.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_library_health.py -q
 ```
 
 Manual release validation is documented in [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md), [docs/checklists/regression_checklist.md](docs/checklists/regression_checklist.md), and [docs/checklists/v1.0_smoke_test.md](docs/checklists/v1.0_smoke_test.md).
@@ -164,7 +179,7 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `services/` - inbox import, filename hygiene, backup, health checks, and workflow orchestration.
 - `storage/` - index, notes, note blocks, projects, links, and extracted-text caches.
 - `config/` - contact/inbox helpers and user-editable tag configuration.
-- `scripts/` - non-destructive readiness utilities.
+- `scripts/` - non-destructive setup, check, launch, and readiness utilities.
 - `docs/` - release, roadmap, workflow, and checklist documentation.
 - `tests/` - automated test suite.
 - `papers/` - canonical managed PDF library; ignored by Git.
@@ -174,7 +189,15 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 
 ## Version History
 
-### v1.0.9-atomic-json-writes
+### v1.0.10-dev-bootstrap
+
+- Adds Windows PowerShell scripts for setup, local checks, and Streamlit launch.
+- Adds `start_blueprint.bat` as a simple launcher after setup.
+- Makes the script-based Windows workflow the default README path.
+- Adds text-inspection tests for the developer bootstrap scripts.
+- Keeps app behavior, scanner/index/tag/PDF viewer behavior, and user data lifecycle unchanged.
+
+### v1.0.10-atomic-json-writes
 
 - Adds a shared atomic JSON write helper using same-directory temporary files, flush/fsync, and `os.replace`.
 - Converts project, project-link, note-block, note-import log, canonical tag, and extracted-text metadata JSON writes to atomic writes.

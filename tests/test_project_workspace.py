@@ -1,4 +1,4 @@
-from ui_streamlit.project_workspace import (
+﻿from ui_streamlit.project_workspace import (
     PROJECT_LINK_EDIT_KEY,
     clear_project_link_action_state,
     open_paper_in_reader,

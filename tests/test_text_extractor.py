@@ -1,4 +1,4 @@
-from ingest.text_extractor import extract_full_text_from_pdf
+﻿from ingest.text_extractor import extract_full_text_from_pdf
 from tests.helpers import make_workspace
 
 

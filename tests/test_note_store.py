@@ -1,4 +1,4 @@
-from services.reading_note_template import render_reading_note_template
+﻿from services.reading_note_template import render_reading_note_template
 from storage.note_store import create_note_if_missing, load_note_text, refresh_note_header, save_note_text
 from tests.helpers import make_workspace
 

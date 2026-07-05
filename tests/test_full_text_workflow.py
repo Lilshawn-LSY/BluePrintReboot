@@ -1,4 +1,4 @@
-import pandas as pd
+﻿import pandas as pd
 
 from ingest.text_extractor import FullTextExtractionResult
 from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper

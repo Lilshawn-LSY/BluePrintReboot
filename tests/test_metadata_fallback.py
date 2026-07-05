@@ -1,4 +1,4 @@
-import pandas as pd
+﻿import pandas as pd
 import requests
 
 from services.metadata_fallback import (

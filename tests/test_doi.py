@@ -1,4 +1,4 @@
-from ingest.doi import is_probable_doi, normalize_doi
+﻿from ingest.doi import is_probable_doi, normalize_doi
 
 
 def test_normalize_doi_common_formats() -> None:

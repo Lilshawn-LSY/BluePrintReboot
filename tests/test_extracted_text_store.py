@@ -1,4 +1,4 @@
-from ingest.text_extractor import FullTextExtractionResult
+﻿from ingest.text_extractor import FullTextExtractionResult
 from storage.extracted_text_store import (
     build_extraction_metadata,
     clear_extraction_cache,

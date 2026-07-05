@@ -1,4 +1,4 @@
-import hashlib
+﻿import hashlib
 
 from ingest.scanner import extract_doi_from_pdf, extract_doi_metadata_from_pdf, scan_papers
 from tests.helpers import make_workspace
