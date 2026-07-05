@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.6-missing-pdf-repair-workflow`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.7-same-hash-duplicate-review`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -25,6 +25,10 @@ Required before and after Codex-assisted release work, including `v1.0.6-missing
 - [ ] Open Tag Manager and confirm canonical, alias, unknown, and unused tag views render.
 - [ ] Open Project Workspace and confirm project listing/linking controls render.
 - [ ] Open Settings and run Library Health Check.
+- [ ] With disposable PDFs, confirm duplicate PDF hash review shows `indexed duplicate` for two indexed records with the same SHA-256.
+- [ ] With a disposable indexed PDF and an unindexed copy, confirm duplicate PDF hash review shows `indexed + unindexed duplicate` and marks the unindexed file "Do not add to index yet; handle later."
+- [ ] With two disposable unindexed copies, confirm duplicate PDF hash review shows `multiple unindexed duplicate`.
+- [ ] Confirm running duplicate PDF hash review does not merge records, delete PDFs, remove index rows, or mutate notes/project links.
 - [ ] If external note import is present, open the import preview with a disposable Markdown/text or Google Docs-exported `.docx` note and confirm no import is applied before explicit confirmation.
 
 ## 4. Final Safety

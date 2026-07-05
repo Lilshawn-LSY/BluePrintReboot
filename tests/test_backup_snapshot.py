@@ -63,7 +63,7 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
     assert "config/canonical_tags.json" in names
     assert ".streamlit/config.toml" in names
     assert "papers/Paper.pdf" not in names
-    assert manifest["app_version"] == "1.0.6"
+    assert manifest["app_version"] == "1.0.7"
     assert manifest["snapshot_type"] == "light"
     assert manifest["includes_pdfs"] is False
     assert manifest["counts"]["index_rows"] == 1

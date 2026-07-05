@@ -21,7 +21,7 @@ def test_backup_manifest_contract_passes() -> None:
     result = check_manifest_contract(PROJECT_ROOT)
 
     assert result.status == "pass"
-    assert "1.0.6" in result.detail
+    assert "1.0.7" in result.detail
 
 
 def test_smoke_check_main_succeeds(capsys) -> None:

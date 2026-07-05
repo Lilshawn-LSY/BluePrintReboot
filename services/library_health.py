@@ -82,13 +82,56 @@ def _pdf_sha256(path: Path, errors: list[str]) -> str:
         return ""
 
 
+def _note_path_for_record(record: dict[str, Any], notes_dir: Path) -> Path | None:
+    note_path = str(record.get("note_path", "")).strip()
+    if note_path:
+        return _absolute(note_path)
+    paper_id = str(record.get("paper_id", "")).strip()
+    if not paper_id:
+        return None
+    return _absolute(notes_dir / f"{paper_id}.md")
+
+
+def _note_blocks_by_paper(note_blocks_dir: Path, errors: list[str]) -> tuple[dict[str, set[str]], dict[str, int]]:
+    block_ids_by_paper: dict[str, set[str]] = {}
+    block_counts_by_paper: dict[str, int] = {}
+    if not note_blocks_dir.exists():
+        return block_ids_by_paper, block_counts_by_paper
+    for path in note_blocks_dir.glob("*.json"):
+        blocks = _load_json_list(path, errors)
+        block_ids_by_paper[path.stem] = {str(block.get("id", "")) for block in blocks if block.get("id")}
+        block_counts_by_paper[path.stem] = len(blocks)
+    return block_ids_by_paper, block_counts_by_paper
+
+
+def _project_link_counts(project_links: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for link in project_links:
+        paper_id = str(link.get("paper_id", "")).strip()
+        if paper_id:
+            counts[paper_id] = counts.get(paper_id, 0) + 1
+    return counts
+
+
+def _duplicate_pdf_hash_classification(indexed_count: int, unindexed_count: int) -> str:
+    if indexed_count and unindexed_count:
+        return "indexed + unindexed duplicate"
+    if indexed_count > 1:
+        return "indexed duplicate"
+    return "multiple unindexed duplicate"
+
+
 def _duplicate_pdf_hashes(
     records: list[dict[str, Any]],
     managed_pdfs: list[Path],
     indexed_paths: set[str],
     errors: list[str],
+    *,
+    notes_dir: Path,
+    note_block_counts: dict[str, int],
+    project_link_counts: dict[str, int],
 ) -> list[dict[str, Any]]:
-    items_by_hash: dict[str, list[dict[str, str]]] = {}
+    items_by_hash: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for record in records:
         filepath = str(record.get("filepath", "")).strip()
         resolved = _absolute(filepath) if filepath else None
@@ -97,12 +140,20 @@ def _duplicate_pdf_hashes(
             digest = _pdf_sha256(resolved, errors)
         if not digest:
             continue
-        items_by_hash.setdefault(digest, []).append(
+        paper_id = str(record.get("paper_id", ""))
+        note_path = _note_path_for_record(record, notes_dir)
+        group = items_by_hash.setdefault(digest, {"indexed_records": [], "unindexed_files": []})
+        group["indexed_records"].append(
             {
-                "paper_id": str(record.get("paper_id", "")),
+                "paper_id": paper_id,
+                "title": str(record.get("title", "")),
                 "filename": str(record.get("filename", "")),
                 "filepath": str(resolved or ""),
-                "indexed": "yes",
+                "status": str(record.get("status", "")),
+                "note_path": str(note_path or ""),
+                "note_file_count": 1 if note_path is not None and note_path.exists() else 0,
+                "note_block_count": note_block_counts.get(paper_id, 0),
+                "project_link_count": project_link_counts.get(paper_id, 0),
             }
         )
 
@@ -112,40 +163,40 @@ def _duplicate_pdf_hashes(
         digest = _pdf_sha256(path, errors)
         if not digest:
             continue
-        items_by_hash.setdefault(digest, []).append(
+        group = items_by_hash.setdefault(digest, {"indexed_records": [], "unindexed_files": []})
+        group["unindexed_files"].append(
             {
-                "paper_id": "",
                 "filename": path.name,
                 "filepath": str(path),
-                "indexed": "no",
+                "review_action": "Do not add to index yet; handle later.",
             }
         )
 
     duplicates: list[dict[str, Any]] = []
-    for digest, items in items_by_hash.items():
-        if len(items) <= 1:
+    for digest, grouped_items in items_by_hash.items():
+        indexed_records = grouped_items["indexed_records"]
+        unindexed_files = grouped_items["unindexed_files"]
+        indexed_count = len(indexed_records)
+        unindexed_count = len(unindexed_files)
+        if indexed_count + unindexed_count <= 1:
             continue
         duplicates.append(
             {
                 "pdf_sha256": digest,
-                "count": len(items),
-                "paper_ids": ", ".join(item["paper_id"] for item in items if item["paper_id"]),
-                "filenames": ", ".join(item["filename"] for item in items),
-                "filepaths": " | ".join(item["filepath"] for item in items),
-                "indexed": ", ".join(item["indexed"] for item in items),
+                "classification": _duplicate_pdf_hash_classification(indexed_count, unindexed_count),
+                "indexed_record_count": indexed_count,
+                "unindexed_file_count": unindexed_count,
+                "indexed_records": indexed_records,
+                "unindexed_files": unindexed_files,
             }
         )
-    return duplicates
-
-
-def _note_block_ids(note_blocks_dir: Path, errors: list[str]) -> dict[str, set[str]]:
-    blocks_by_paper: dict[str, set[str]] = {}
-    if not note_blocks_dir.exists():
-        return blocks_by_paper
-    for path in note_blocks_dir.glob("*.json"):
-        blocks = _load_json_list(path, errors)
-        blocks_by_paper[path.stem] = {str(block.get("id", "")) for block in blocks if block.get("id")}
-    return blocks_by_paper
+    return sorted(
+        duplicates,
+        key=lambda item: (
+            str(item["classification"]),
+            str(item["pdf_sha256"]),
+        ),
+    )
 
 
 def run_library_health_check(
@@ -186,8 +237,20 @@ def run_library_health_check(
             noncanonical_filepaths.append(item)
 
     managed_pdfs = _pdf_files(papers_dir)
+    projects = _load_json_list(projects_dir / "projects.json", errors)
+    project_links = _load_json_list(projects_dir / "project_links.json", errors)
+    blocks_by_paper, note_block_counts = _note_blocks_by_paper(note_blocks_dir, errors)
+    project_link_counts = _project_link_counts(project_links)
     unindexed_pdfs = [str(path) for path in managed_pdfs if _path_key(path) not in indexed_paths]
-    duplicate_pdf_hashes = _duplicate_pdf_hashes(records, managed_pdfs, indexed_paths, errors)
+    duplicate_pdf_hashes = _duplicate_pdf_hashes(
+        records,
+        managed_pdfs,
+        indexed_paths,
+        errors,
+        notes_dir=notes_dir,
+        note_block_counts=note_block_counts,
+        project_link_counts=project_link_counts,
+    )
 
     filenames: dict[str, list[dict[str, str]]] = {}
     dois: dict[str, list[dict[str, str]]] = {}
@@ -229,10 +292,7 @@ def run_library_health_check(
             str(path.resolve()) for path in note_blocks_dir.glob("*.json") if path.stem not in paper_ids
         ]
 
-    projects = _load_json_list(projects_dir / "projects.json", errors)
-    project_links = _load_json_list(projects_dir / "project_links.json", errors)
     project_ids = {str(project.get("id", "")) for project in projects if project.get("id")}
-    blocks_by_paper = _note_block_ids(note_blocks_dir, errors)
     orphan_project_links: list[dict[str, str]] = []
     for link in project_links:
         reasons: list[str] = []

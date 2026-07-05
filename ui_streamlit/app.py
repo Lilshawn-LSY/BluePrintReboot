@@ -837,10 +837,73 @@ def _render_library_health_check() -> None:
         with st.expander(f"{title} ({len(items)})"):
             if key == "missing_pdfs":
                 _render_missing_pdf_repair(items)
+            elif key == "duplicate_pdf_hashes":
+                _render_duplicate_pdf_hash_review(items)
             elif isinstance(items[0], dict):
                 st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
             else:
                 st.dataframe(pd.DataFrame({"path_or_message": items}), width="stretch", hide_index=True)
+
+
+def _duplicate_pdf_hash_rows(group: dict[str, object]) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for record in group.get("indexed_records", []):
+        if not isinstance(record, dict):
+            continue
+        rows.append(
+            {
+                "index_state": "indexed",
+                "paper_id": record.get("paper_id", ""),
+                "title": record.get("title", ""),
+                "filename": record.get("filename", ""),
+                "filepath": record.get("filepath", ""),
+                "status": record.get("status", ""),
+                "note_file_count": record.get("note_file_count", 0),
+                "note_block_count": record.get("note_block_count", 0),
+                "project_link_count": record.get("project_link_count", 0),
+                "review_action": "Review canonical record; merge/remove workflow is deferred.",
+            }
+        )
+    for duplicate_file in group.get("unindexed_files", []):
+        if not isinstance(duplicate_file, dict):
+            continue
+        rows.append(
+            {
+                "index_state": "unindexed",
+                "paper_id": "",
+                "title": "",
+                "filename": duplicate_file.get("filename", ""),
+                "filepath": duplicate_file.get("filepath", ""),
+                "status": "",
+                "note_file_count": 0,
+                "note_block_count": 0,
+                "project_link_count": 0,
+                "review_action": duplicate_file.get("review_action", "Do not add to index yet; handle later."),
+            }
+        )
+    return rows
+
+
+def _render_duplicate_pdf_hash_review(items: list[dict[str, object]]) -> None:
+    st.caption("Review only: no merge, PDF deletion, or index-row removal is automated here.")
+    summary_rows = [
+        {
+            "classification": item.get("classification", ""),
+            "pdf_sha256": item.get("pdf_sha256", ""),
+            "indexed_record_count": item.get("indexed_record_count", 0),
+            "unindexed_file_count": item.get("unindexed_file_count", 0),
+        }
+        for item in items
+    ]
+    st.dataframe(pd.DataFrame(summary_rows), width="stretch", hide_index=True)
+    for index, group in enumerate(items, start=1):
+        classification = str(group.get("classification", "duplicate"))
+        pdf_sha256 = str(group.get("pdf_sha256", ""))
+        st.write(f"Group {index}: `{classification}`")
+        st.code(f"pdf_sha256: {pdf_sha256 or 'unavailable'}")
+        rows = _duplicate_pdf_hash_rows(group)
+        if rows:
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 def _render_missing_pdf_repair(items: list[dict[str, object]]) -> None:
