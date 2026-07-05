@@ -24,6 +24,7 @@ from services.reading_note_template import (
     get_canonical_reading_note_template,
     reading_note_template_file_text,
 )
+from storage.atomic_json import atomic_write_json
 from storage.note_block_store import create_note_block
 from storage.note_store import load_note_text, save_note_text
 from storage.paths import NOTE_BLOCKS_DIR, NOTE_IMPORTS_JSON, NOTES_DIR
@@ -363,10 +364,9 @@ def build_raw_notes_markdown_append(parsed_note: Mapping[str, Any], *, imported_
 
 def _append_note_import_log(entry: dict[str, Any], log_path: Path) -> None:
     path = Path(log_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
     entries = load_note_import_log(path)
     entries.append(entry)
-    path.write_text(json.dumps(entries, indent=2, ensure_ascii=False), encoding="utf-8")
+    atomic_write_json(path, entries, indent=2, ensure_ascii=False)
 
 
 def _append_markdown(existing: str, append_text: str) -> str:

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ingest.text_extractor import FullTextExtractionResult
+from storage.atomic_json import atomic_write_json
 from storage.paths import EXTRACTED_TEXT_DIR
 
 
@@ -104,9 +105,7 @@ def save_extraction_metadata(
     cache_dir: Path = EXTRACTED_TEXT_DIR,
 ) -> Path:
     path = extraction_metadata_path(paper_id, cache_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
-    return path
+    return atomic_write_json(path, metadata, indent=2, ensure_ascii=False)
 
 
 def load_cached_extracted_text(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> str:

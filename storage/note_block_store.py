@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from storage.atomic_json import atomic_write_json
 from storage.paths import NOTE_BLOCKS_DIR
 
 
@@ -49,9 +50,7 @@ def save_note_blocks(
         raise ValueError("Note block IDs must be unique within a paper.")
 
     path = note_blocks_path(paper_id, base_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(normalized_blocks, indent=2, ensure_ascii=False), encoding="utf-8")
-    return path
+    return atomic_write_json(path, normalized_blocks, indent=2, ensure_ascii=False)
 
 
 def create_note_block(

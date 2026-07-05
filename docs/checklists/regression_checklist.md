@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.8-orphan-record-repair-review`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.9-atomic-json-writes`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -33,6 +33,7 @@ Required before and after Codex-assisted release work, including `v1.0.8-orphan-
 - [ ] With a disposable note-block JSON file whose stem is not in `paper_index.csv`, confirm orphan note block review shows `orphan note block file` and does not offer deletion.
 - [ ] With a disposable project link targeting a missing paper or missing note block, confirm orphan project link review shows `orphan project link` with a reason.
 - [ ] Remove one disposable orphan project link only after explicit confirmation and confirm papers, PDFs, notes, note blocks, and index rows are unchanged.
+- [ ] Exercise project, project-link, and note-block saves with disposable data and confirm JSON files remain valid after app reload.
 - [ ] If external note import is present, open the import preview with a disposable Markdown/text or Google Docs-exported `.docx` note and confirm no import is applied before explicit confirmation.
 
 ## 4. Final Safety

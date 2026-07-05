@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from storage.atomic_json import atomic_write_json
 from storage.paths import PROJECTS_DIR
 
 
@@ -41,9 +42,7 @@ def save_projects(
         raise ValueError("Project IDs must be unique.")
 
     path = projects_path(base_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(normalized_projects, indent=2, ensure_ascii=False), encoding="utf-8")
-    return path
+    return atomic_write_json(path, normalized_projects, indent=2, ensure_ascii=False)
 
 
 def create_project(

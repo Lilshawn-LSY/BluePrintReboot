@@ -9,6 +9,7 @@ from storage.project_link_store import (
     list_links_for_target,
     list_project_links,
     project_links_path,
+    save_project_links,
     update_project_link,
 )
 from tests.helpers import make_workspace
@@ -206,3 +207,22 @@ def test_delete_links_for_project_only_removes_matching_links() -> None:
 
     assert delete_links_for_project("project-1", base_dir) == 1
     assert list_project_links(base_dir) == [remaining]
+
+
+def test_save_project_links_replace_failure_preserves_existing_file_and_cleans_temp(monkeypatch) -> None:
+    base_dir = make_workspace("project-links-atomic-replace")
+    link = create_project_link("project-1", "paper", "paper-1", base_dir=base_dir)
+    path = project_links_path(base_dir)
+    before = path.read_bytes()
+
+    def fail_replace(source, target):
+        raise OSError("replace failed")
+
+    monkeypatch.setattr("storage.atomic_json.os.replace", fail_replace)
+
+    with pytest.raises(OSError, match="replace failed"):
+        save_project_links([{**link, "note": "Updated"}], base_dir=base_dir)
+
+    assert path.read_bytes() == before
+    assert list_project_links(base_dir) == [link]
+    assert sorted(item.name for item in base_dir.iterdir()) == ["project_links.json"]
