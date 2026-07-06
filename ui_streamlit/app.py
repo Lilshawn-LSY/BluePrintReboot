@@ -40,6 +40,7 @@ from services.paper_file_hygiene import (
     apply_paper_file_rename,
     build_rename_plan,
 )
+from storage.paper_profile_store import load_profile
 from services.backup_snapshot import create_backup_snapshot
 from services.library_health import (
     ORPHAN_PRESERVE_ACTION,
@@ -460,13 +461,26 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         _render_doi_less_metadata_candidate(record, doi_less_candidate, doi_less_key)
 
     preview = st.session_state.get(preview_key)
-    suggestion_record = build_tag_suggestion_record(record, form_values=form_values, crossref_preview=preview)
+    profile = load_profile(str(record.get("paper_id", "")))
+    suggestion_record = build_tag_suggestion_record(
+        record,
+        form_values=form_values,
+        crossref_preview=preview,
+        paper_text_profile=profile,
+    )
     suggestion_details = explain_tag_suggestions(suggestion_record)
     st.write("Suggested tags")
     with st.expander("Tag suggestion input"):
+        st.write(f"PaperTextProfile: `{'available' if profile else 'not built'}`")
         st.write(f"Title: `{suggestion_record.get('title', '')}`")
         st.write(f"Abstract length: `{len(str(suggestion_record.get('abstract', '') or ''))}`")
         st.write(f"Keywords: `{suggestion_record.get('keywords', '')}`")
+        note_sources = [
+            field
+            for field in ("note_summary", "note_methods", "note_evidence")
+            if str(suggestion_record.get(field, "")).strip()
+        ]
+        st.write(f"Profile note sources: `{', '.join(note_sources) or 'none'}`")
         st.write(f"Journal: `{suggestion_record.get('journal', '')}`")
         st.write(f"Filename: `{suggestion_record.get('filename', '')}`")
         st.write(f"Crossref subjects: `{suggestion_record.get('crossref_subjects', '')}`")
@@ -538,9 +552,10 @@ def _render_grouped_tag_suggestions(suggestion_details: list[dict], *, key_prefi
             label = detail.get("display") or detail.get("canonical") or detail.get("tag")
             kind = str(detail.get("kind", "known_canonical")).replace("_", " ")
             source = str(detail.get("source", ""))
+            source_label = str(detail.get("source_label", "") or source)
             matched_text = str(detail.get("matched_text", ""))
             reason = str(detail.get("reason", ""))
-            source_label = f" from {source}" if source else ""
+            source_label = f" from {source_label}" if source_label else ""
             match_label = f" matched `{matched_text}`" if matched_text else ""
             selection_id = suggestion_selection_id(detail)
             selected = st.checkbox(

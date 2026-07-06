@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from core.paper_text_profile import PaperTextProfile, coerce_paper_text_profile
 from services.tag_book import (
     explain_tag_book_suggestions,
     load_tag_book,
@@ -19,11 +20,18 @@ DEFAULT_CANONICAL_TAG_PATH = Path(__file__).resolve().parents[1] / "config" / "c
 
 SOURCE_WEIGHTS = {
     "keywords": 6,
+    "title": 5,
     "openalex_topics": 5,
     "openalex_keywords": 5,
-    "title": 4,
     "abstract": 4,
     "markdown_text": 3,
+    "note_methods": 3,
+    "note_evidence": 3,
+    "note_summary": 2,
+    "note_claims": 2,
+    "note_questions": 1,
+    "note_ideas": 1,
+    "note_limitations": 1,
     "crossref_subjects": 3,
     "journal": 2,
     "filename": 1,
@@ -33,6 +41,18 @@ SOURCE_FIELDS = tuple(SOURCE_WEIGHTS.keys())
 
 FORM_SUGGESTION_FIELDS = ("title", "abstract", "keywords", "journal", "filename", "tags")
 CROSSREF_PREVIEW_SUGGESTION_FIELDS = ("title", "abstract", "keywords", "journal", "crossref_subjects")
+PROFILE_NOTE_SECTION_FIELDS = {
+    "One-line Summary": "note_summary",
+    "Summary": "note_summary",
+    "Key Claims": "note_claims",
+    "Methods": "note_methods",
+    "Method": "note_methods",
+    "Evidence / Results": "note_evidence",
+    "Evidence": "note_evidence",
+    "Questions": "note_questions",
+    "Ideas": "note_ideas",
+    "Limitations": "note_limitations",
+}
 
 
 def load_tag_rules(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
@@ -265,8 +285,11 @@ def build_tag_suggestion_record(
     saved_record: dict,
     form_values: dict | None = None,
     crossref_preview: dict | None = None,
+    paper_text_profile: PaperTextProfile | dict | None = None,
 ) -> dict:
     suggestion_record = dict(saved_record or {})
+    if paper_text_profile is not None:
+        suggestion_record = apply_paper_text_profile_to_record(suggestion_record, paper_text_profile)
     if form_values:
         for field in FORM_SUGGESTION_FIELDS:
             value = form_values.get(field)
@@ -277,6 +300,28 @@ def build_tag_suggestion_record(
             value = crossref_preview.get(field)
             if _has_value(value):
                 suggestion_record[field] = value
+    return suggestion_record
+
+
+def apply_paper_text_profile_to_record(
+    record: dict,
+    paper_text_profile: PaperTextProfile | dict,
+) -> dict:
+    profile = coerce_paper_text_profile(paper_text_profile)
+    suggestion_record = dict(record or {})
+    if _has_value(profile.title):
+        suggestion_record["title"] = profile.title
+    if _has_value(profile.abstract):
+        suggestion_record["abstract"] = profile.abstract
+    if _has_value(profile.keywords):
+        suggestion_record["keywords"] = profile.keywords
+    suggestion_record["paper_text_profile_schema_version"] = profile.schema_version
+    for section, text in profile.note_sections.items():
+        field = PROFILE_NOTE_SECTION_FIELDS.get(str(section))
+        if not field or not _has_value(text):
+            continue
+        existing = _record_field_text(suggestion_record.get(field, ""))
+        suggestion_record[field] = _join_text_values(existing, str(text))
     return suggestion_record
 
 
@@ -383,20 +428,33 @@ def merge_tags(existing_tags: str, suggested_tags: list[str]) -> str:
     return ", ".join(merged)
 
 
-def suggest_tags(record: dict[str, str], rules: dict | None = None) -> list[str]:
+def suggest_tags(
+    record: dict[str, Any],
+    rules: dict | None = None,
+    paper_text_profile: PaperTextProfile | dict | None = None,
+) -> list[str]:
     return [
         explanation["tag"]
-        for explanation in explain_tag_suggestions(record, rules)
+        for explanation in explain_tag_suggestions(record, rules, paper_text_profile=paper_text_profile)
         if explanation.get("kind", "known_canonical") == "known_canonical"
     ]
 
 
-def explain_tag_suggestions(record: dict[str, str], rules: dict | None = None) -> list[dict]:
+def explain_tag_suggestions(
+    record: dict[str, Any],
+    rules: dict | None = None,
+    paper_text_profile: PaperTextProfile | dict | None = None,
+) -> list[dict]:
+    suggestion_record = (
+        apply_paper_text_profile_to_record(record, paper_text_profile)
+        if paper_text_profile is not None
+        else dict(record or {})
+    )
     if rules is None:
-        return explain_tag_book_suggestions(record)
+        return explain_tag_book_suggestions(suggestion_record)
 
     active_rules = rules if rules is not None else load_tag_rules()
-    existing = set(parse_tags(str(record.get("tags", ""))))
+    existing = set(parse_tags(str(suggestion_record.get("tags", ""))))
     suggestions: dict[str, dict[str, Any]] = {}
 
     for tag, rule in active_rules.items():
@@ -410,7 +468,7 @@ def explain_tag_suggestions(record: dict[str, str], rules: dict | None = None) -
         aliases = [str(alias) for alias in rule.get("aliases", [])]
 
         for field in SOURCE_FIELDS:
-            text = _record_field_text(record.get(field, ""))
+            text = _record_field_text(suggestion_record.get(field, ""))
             if text and _matches_any_alias(text, aliases):
                 matched_fields.add(field)
                 score += rule_weight * SOURCE_WEIGHTS[field]
@@ -435,6 +493,16 @@ def _record_field_text(value: Any) -> str:
     if isinstance(value, dict):
         return " ".join(str(item) for item in value.values())
     return str(value or "")
+
+
+def _join_text_values(left: str, right: str) -> str:
+    left_text = str(left or "").strip()
+    right_text = str(right or "").strip()
+    if not left_text:
+        return right_text
+    if not right_text or right_text in left_text:
+        return left_text
+    return f"{left_text}\n\n{right_text}"
 
 
 def _raw_tag_values(value: Any) -> list[str]:

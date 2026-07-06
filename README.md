@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.12-tag-book-v2**.
+Current release target: **v1.0.13-paper-text-profile-minimal**.
 
-v1.0.12 adds a dedicated local Tag Book under `config/tag_book/` for canonical tags, aliases, categories, method lexicon entries, candidate patterns, normalization rules, and blocked terms. The app remains Streamlit-based and local-first; FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, LLM tagging, and unrelated UI redesigns remain deferred.
+v1.0.13 adds a minimal derived `PaperTextProfile` cache under `data/paper_profiles/` so tag suggestion can use structured title, abstract, keyword, and reading-note section signals before falling back to raw text previews. Methods/results extraction from PDFs, weak keyphrase mining, LLM tagging, FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -90,6 +90,7 @@ Current support includes:
 - Manual metadata editing when enrichment is incomplete or offline.
 - Fallback metadata suggestions are previewed and user-applied; they do not claim perfect extraction.
 - Deterministic tag suggestions and canonical tag governance through the local Tag Book.
+- Minimal `PaperTextProfile` caches are derived from `paper_index.csv`, extracted-text abstract fallback, Reading Notes, and structured note blocks. They are rebuildable caches, not the source of truth.
 - Tag Book configuration lives under `config/tag_book/`: `tag_book.json`, `method_lexicon.json`, `normalization_rules.json`, `blocked_terms.json`, and `candidate_patterns.json`.
 - A canonical tag is the approved stored tag value; an alias is a matched spelling or phrase that resolves to a canonical tag; category and status control grouping and suggestion eligibility.
 - Candidate tags are plausible new tags detected from metadata, filenames, and available extracted-text previews. They are preview-only until a user explicitly selects them as paper-local tags or promotes them later as canonical tags or aliases in Tag Manager.
@@ -130,7 +131,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.12. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.13. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -193,6 +194,14 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.13-paper-text-profile-minimal
+
+- Adds a JSON-backed minimal `PaperTextProfile` cache in `data/paper_profiles/{paper_id}.json`.
+- Builds profiles from existing paper metadata, conservative abstract fallback text, Reading Note sections, and structured note blocks.
+- Lets tag suggestion use profile title, abstract, keywords, and note sections with source-aware evidence while preserving Tag Book canonical/alias matching.
+- Adds a Reader Workspace rebuild action and compact profile summary.
+- Defers PDF methods/results extraction and weak keyphrase mining; profiles remain derived and rebuildable, not source-of-truth records.
 
 ### v1.0.12-tag-book-v2
 

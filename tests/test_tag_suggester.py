@@ -1,4 +1,6 @@
-﻿from ingest.tag_suggester import (
+from core.paper_text_profile import PaperTextProfile
+from ingest.tag_suggester import (
+    apply_paper_text_profile_to_record,
     audit_library_tags,
     build_tag_suggestion_record,
     explain_tag_suggestions,
@@ -82,6 +84,44 @@ def test_build_tag_suggestion_record_empty_preview_fields_do_not_erase_values() 
     assert built["title"] == "Form title"
     assert built["abstract"] == "Form abstract"
     assert built["tags"] == "form-tag"
+
+
+def test_build_tag_suggestion_record_applies_profile_before_form_values() -> None:
+    profile = PaperTextProfile(
+        paper_id="paper-1",
+        title="Profile title",
+        abstract="Profile abstract with single-cell RNA sequencing.",
+        keywords=["spatial transcriptomics"],
+        note_sections={"Methods": "The structured note used microscopy."},
+    )
+
+    built = build_tag_suggestion_record(
+        {"paper_id": "paper-1", "title": "Saved title", "tags": ""},
+        form_values={"title": "Unsaved form title"},
+        paper_text_profile=profile,
+    )
+
+    assert built["title"] == "Unsaved form title"
+    assert built["abstract"] == "Profile abstract with single-cell RNA sequencing."
+    assert built["keywords"] == ["spatial transcriptomics"]
+    assert built["note_methods"] == "The structured note used microscopy."
+
+
+def test_apply_paper_text_profile_maps_note_sections_without_references() -> None:
+    profile = PaperTextProfile(
+        paper_id="paper-1",
+        note_sections={
+            "Summary": "Summary signal",
+            "Methods": "Method signal",
+            "References": "Reference signal",
+        },
+    )
+
+    built = apply_paper_text_profile_to_record({"paper_id": "paper-1"}, profile)
+
+    assert built["note_summary"] == "Summary signal"
+    assert built["note_methods"] == "Method signal"
+    assert "references" not in " ".join(built)
 
 
 def test_validate_tag_rules_reports_duplicate_aliases() -> None:
@@ -219,7 +259,36 @@ def test_source_aware_scoring_is_deterministic() -> None:
 
     assert [item["tag"] for item in explanations] == ["high-score", "alpha-tag", "beta-tag"]
     assert explanations[0]["score"] == 18
-    assert explanations[1]["score"] == 8
+    assert explanations[1]["score"] == 10
+
+
+def test_profile_source_evidence_affects_explanation_and_score() -> None:
+    profile = PaperTextProfile(
+        paper_id="paper-1",
+        title="Synthetic biology design",
+        abstract="Synthetic biology circuits are tested in cells.",
+        keywords=["spatial transcriptomics"],
+        note_sections={"Methods": "The method uses a reproducible pipeline."},
+    )
+
+    explanations = explain_tag_suggestions({"paper_id": "paper-1", "tags": ""}, paper_text_profile=profile)
+    synthetic = next(item for item in explanations if item["tag"] == "synthetic-biology")
+    spatial = next(item for item in explanations if item["tag"] == "spatial-transcriptomics")
+    pipeline = next(item for item in explanations if item["tag"] == "pipeline")
+
+    assert synthetic["score"] == 90
+    assert synthetic["matched_fields"] == ["title", "abstract"]
+    assert synthetic["source_label"] == "title"
+    assert spatial["matched_fields"] == ["keywords"]
+    assert pipeline["matched_fields"] == ["note_methods"]
+    assert pipeline["source_label"] == "note section: Methods"
+
+
+def test_missing_profile_keeps_existing_suggestion_fallback() -> None:
+    built = build_tag_suggestion_record({"title": "Arabidopsis root development protocol"}, paper_text_profile=None)
+
+    assert built["title"] == "Arabidopsis root development protocol"
+    assert suggest_tags(built)[:3] == ["arabidopsis", "root-development", "protocol"]
 
 
 def test_markdown_text_can_generate_suggestions() -> None:
@@ -261,5 +330,5 @@ def test_explain_tag_suggestions_returns_metadata() -> None:
     bioinformatics = next(item for item in explanations if item["tag"] == "bioinformatics")
 
     assert bioinformatics["category"] == "field"
-    assert bioinformatics["score"] == 70
+    assert bioinformatics["score"] == 77
     assert bioinformatics["matched_fields"] == ["keywords", "title"]

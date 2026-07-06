@@ -1,9 +1,11 @@
-﻿from ui_streamlit.reader_workspace import (
+from core.paper_text_profile import PaperTextProfile
+from ui_streamlit.reader_workspace import (
     NATIVE_STREAMLIT_RENDERER,
     STABLE_HTML_RENDERER,
     add_manual_tag,
     apply_pending_note_actions,
     append_markdown_snapshot,
+    build_reader_tag_suggestion_record,
     citation_block,
     initial_pdf_render_status,
     insert_note_block,
@@ -21,6 +23,7 @@
     pdf_path_status,
     preview_reader_tag_suggestions,
     queue_note_text_update,
+    reader_profile_summary,
     reader_tag_suggestion_preview_key,
     save_note_draft,
 )
@@ -85,6 +88,31 @@ def test_reader_tag_suggestions_are_previewed_without_mutating_record() -> None:
     assert suggestions[:3] == ["arabidopsis", "root-development", "protocol"]
     assert record["tags"] == "existing-tag"
     assert reader_tag_suggestion_preview_key(record) == "reader_tag_suggestion_preview_paper-1"
+
+
+def test_reader_tag_suggestion_record_uses_profile_cache(monkeypatch) -> None:
+    profile = PaperTextProfile(
+        paper_id="paper-profile",
+        title="Synthetic biology profile",
+        abstract="Profile abstract mentions single-cell RNA sequencing.",
+        keywords=["spatial transcriptomics"],
+        note_sections={"Methods": "The profile method uses a pipeline."},
+        confidence={"title": "high", "abstract": "high", "keywords": "high", "note_sections": "high"},
+        generated_at="2026-07-06T00:00:00+00:00",
+    )
+    monkeypatch.setattr("ui_streamlit.reader_workspace.load_profile", lambda paper_id: profile)
+    record = {"paper_id": "paper-profile", "title": "Saved title", "tags": ""}
+
+    built = build_reader_tag_suggestion_record(record)
+    summary = reader_profile_summary(profile)
+
+    assert built["title"] == "Synthetic biology profile"
+    assert built["abstract"] == "Profile abstract mentions single-cell RNA sequencing."
+    assert built["keywords"] == ["spatial transcriptomics"]
+    assert built["note_methods"] == "The profile method uses a pipeline."
+    assert "extracted_text_preview" not in built
+    assert summary["available"] is True
+    assert summary["note_sections"] == ["Methods"]
 
 
 def test_reader_selected_known_suggestion_adds_canonical_tag() -> None:

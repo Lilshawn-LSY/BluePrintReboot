@@ -116,7 +116,7 @@ def test_known_canonical_suggestion_from_title_and_abstract() -> None:
 
     assert synthetic["kind"] == "known_canonical"
     assert synthetic["category"] == "field"
-    assert synthetic["matched_fields"] == ["abstract", "title"]
+    assert synthetic["matched_fields"] == ["title", "abstract"]
 
 
 def test_single_cell_rna_seq_does_not_match_generic_single_cell() -> None:

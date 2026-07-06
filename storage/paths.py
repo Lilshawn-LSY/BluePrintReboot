@@ -8,6 +8,7 @@ NOTES_DIR = PROJECT_ROOT / "notes"
 EXPORTS_DIR = PROJECT_ROOT / "exports"
 EXTRACTED_TEXT_DIR = DATA_DIR / "extracted_text"
 NOTE_BLOCKS_DIR = DATA_DIR / "note_blocks"
+PAPER_PROFILES_DIR = DATA_DIR / "paper_profiles"
 PROJECTS_DIR = DATA_DIR / "projects"
 PROJECTS_JSON = PROJECTS_DIR / "projects.json"
 PROJECT_LINKS_JSON = PROJECTS_DIR / "project_links.json"
@@ -23,6 +24,7 @@ def ensure_workspace_dirs() -> None:
         EXPORTS_DIR,
         EXTRACTED_TEXT_DIR,
         NOTE_BLOCKS_DIR,
+        PAPER_PROFILES_DIR,
         PROJECTS_DIR,
     ):
         directory.mkdir(parents=True, exist_ok=True)

@@ -40,19 +40,39 @@ INACTIVE_STATUSES = {"blocked", "deprecated"}
 
 SOURCE_WEIGHTS = {
     "keywords": 6,
+    "title": 5,
     "openalex_topics": 5,
     "openalex_keywords": 5,
-    "title": 4,
     "abstract": 4,
     "markdown_text": 3,
     "extracted_text_preview": 3,
     "extracted_text": 3,
     "text_preview": 3,
+    "note_methods": 3,
+    "note_evidence": 3,
+    "note_summary": 2,
+    "note_claims": 2,
+    "note_questions": 1,
+    "note_ideas": 1,
+    "note_limitations": 1,
     "crossref_subjects": 3,
     "journal": 2,
     "filename": 1,
 }
 SOURCE_FIELDS = tuple(SOURCE_WEIGHTS.keys())
+SOURCE_LABELS = {
+    "title": "title",
+    "abstract": "abstract",
+    "keywords": "keywords",
+    "filename": "filename",
+    "note_methods": "note section: Methods",
+    "note_evidence": "note section: Evidence / Results",
+    "note_summary": "note section: Summary",
+    "note_claims": "note section: Key Claims",
+    "note_questions": "note section: Questions",
+    "note_ideas": "note section: Ideas",
+    "note_limitations": "note section: Limitations",
+}
 
 DEFAULT_NORMALIZATION_RULES = {
     "lowercase": True,
@@ -441,6 +461,7 @@ def _candidates_from_pattern(
                 continue
             evidence = {
                 "source": field,
+                "source_label": _source_label(field),
                 "matched_text": matched_text,
                 "alias": matched_text,
                 "weight": SOURCE_WEIGHTS.get(field, 0),
@@ -469,6 +490,7 @@ def _candidates_from_pattern(
                 default=2,
             )
             current["source"] = current["matched_fields"][0] if current["matched_fields"] else ""
+            current["source_label"] = _source_label(current["source"]) if current["source"] else ""
             current["matched_text"] = str(current["evidence"][0]["matched_text"]) if current["evidence"] else ""
     return list(candidates.values())
 
@@ -486,6 +508,7 @@ def _build_suggestion(
 ) -> dict[str, Any]:
     matched_fields = sorted({str(item.get("source", "")) for item in evidence if item.get("source")}, key=_source_sort_key)
     matched_text = str(evidence[0].get("matched_text", "")) if evidence else ""
+    source_label = _source_label(matched_fields[0]) if matched_fields else ""
     return {
         "display": display,
         "canonical": canonical,
@@ -495,6 +518,7 @@ def _build_suggestion(
         "confidence": round(float(confidence), 3),
         "score": int(score),
         "source": matched_fields[0] if matched_fields else "",
+        "source_label": source_label,
         "matched_text": matched_text,
         "evidence": evidence,
         "reason": reason,
@@ -513,6 +537,7 @@ def _collect_alias_evidence(record: dict[str, Any], aliases: list[str]) -> list[
             evidence.append(
                 {
                     "source": field,
+                    "source_label": _source_label(field),
                     "matched_text": match["matched_text"],
                     "alias": match["alias"],
                     "weight": SOURCE_WEIGHTS.get(field, 0),
@@ -756,3 +781,7 @@ def _label_from_canonical(canonical: str) -> str:
 
 def _source_sort_key(field: str) -> tuple[int, str]:
     return (-SOURCE_WEIGHTS.get(field, 0), field)
+
+
+def _source_label(field: str) -> str:
+    return SOURCE_LABELS.get(field, field.replace("_", " "))

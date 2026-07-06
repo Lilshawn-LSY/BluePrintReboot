@@ -3,13 +3,20 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import MutableMapping
+from typing import Any, MutableMapping
 
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
-from ingest.tag_suggester import explain_tag_suggestions, merge_tags, normalize_tag, suggest_tags
+from core.paper_text_profile import PaperTextProfile
+from ingest.tag_suggester import (
+    apply_paper_text_profile_to_record,
+    explain_tag_suggestions,
+    merge_tags,
+    normalize_tag,
+    suggest_tags,
+)
 from ingest.text_extractor import extraction_diagnostics
 from services.tag_book import (
     group_suggestions_by_category,
@@ -28,6 +35,7 @@ from services.note_import import (
     parse_external_note_file,
 )
 from services.reading_note_template import apply_reading_note_template_to_text
+from services.paper_text_profile_builder import build_and_save_paper_text_profile
 from storage.extracted_text_store import (
     extraction_cache_status,
     load_cached_extracted_text,
@@ -42,6 +50,7 @@ from storage.note_block_store import (
     update_note_block,
 )
 from storage.note_store import load_note_text, save_note_text
+from storage.paper_profile_store import load_profile
 from ui_streamlit.project_workspace import render_note_block_project_links, render_paper_project_link_summary
 from ui_streamlit.ui_helpers import (
     clear_session_keys,
@@ -164,9 +173,12 @@ def reader_tag_suggestion_preview_key(record: dict[str, str]) -> str:
     return f"reader_tag_suggestion_preview_{record['paper_id']}"
 
 
-def build_reader_tag_suggestion_record(record: dict[str, str]) -> dict[str, str]:
+def build_reader_tag_suggestion_record(record: dict[str, str]) -> dict[str, Any]:
     suggestion_record = dict(record)
     paper_id = str(record.get("paper_id", ""))
+    profile = load_profile(paper_id) if paper_id else None
+    if profile is not None:
+        return apply_paper_text_profile_to_record(suggestion_record, profile)
     if paper_id and "extracted_text_preview" not in suggestion_record:
         try:
             text = load_cached_extracted_text(paper_id)
@@ -175,6 +187,21 @@ def build_reader_tag_suggestion_record(record: dict[str, str]) -> dict[str, str]
         if text:
             suggestion_record["extracted_text_preview"] = text[:5000]
     return suggestion_record
+
+
+def reader_profile_summary(profile: PaperTextProfile | None) -> dict[str, object]:
+    if profile is None:
+        return {"available": False}
+    return {
+        "available": True,
+        "schema_version": profile.schema_version,
+        "generated_at": profile.generated_at,
+        "title": bool(profile.title),
+        "abstract_chars": len(profile.abstract),
+        "keyword_count": len(profile.keywords),
+        "note_sections": sorted(profile.note_sections),
+        "confidence": dict(profile.confidence),
+    }
 
 
 def preview_reader_tag_suggestions(record: dict[str, str]) -> list[str]:
@@ -408,6 +435,32 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
             st.info("No tag added.")
 
     suggestion_key = reader_tag_suggestion_preview_key(record)
+    profile = load_profile(str(record.get("paper_id", "")))
+    if st.button("Rebuild PaperTextProfile", key=f"reader_rebuild_profile_{record['paper_id']}"):
+        try:
+            profile = build_and_save_paper_text_profile(record)
+        except (OSError, ValueError) as exc:
+            st.warning(f"PaperTextProfile was not rebuilt: {exc}")
+        else:
+            clear_session_keys(st.session_state, suggestion_key)
+            st.success("PaperTextProfile rebuilt.")
+            st.rerun()
+
+    with st.expander("PaperTextProfile"):
+        summary = reader_profile_summary(profile)
+        if not summary["available"]:
+            st.caption("No profile cache for this paper.")
+        else:
+            st.write(f"Schema: `{summary['schema_version']}`")
+            st.write(f"Generated: `{summary['generated_at']}`")
+            st.write(f"Title present: `{summary['title']}`")
+            st.write(f"Abstract characters: `{summary['abstract_chars']}`")
+            st.write(f"Keywords: `{summary['keyword_count']}`")
+            sections = ", ".join(str(section) for section in summary["note_sections"]) or "none"
+            st.write(f"Note sections: `{sections}`")
+            st.write("Confidence")
+            st.json(summary["confidence"])
+
     if st.button("Preview tags", key=f"reader_suggest_tags_{record['paper_id']}"):
         st.session_state[suggestion_key] = preview_reader_tag_suggestion_details(record)
         st.rerun()
@@ -495,8 +548,9 @@ def _render_grouped_reader_suggestions(record: dict[str, str], suggestion_detail
             kind = str(item.get("kind", "known_canonical")).replace("_", " ")
             matched = str(item.get("matched_text", ""))
             source = str(item.get("source", ""))
+            source_label = str(item.get("source_label", "") or source)
             reason = str(item.get("reason", ""))
-            evidence = f" from {source}" if source else ""
+            evidence = f" from {source_label}" if source_label else ""
             match_text = f" matched `{matched}`" if matched else ""
             selection_id = suggestion_selection_id(item)
             selected = st.checkbox(
