@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.13-paper-text-profile-minimal**.
+Current release target: **v1.0.15-pdf-profile-extraction-repair**.
 
-v1.0.13 adds a minimal derived `PaperTextProfile` cache under `data/paper_profiles/` so tag suggestion can use structured title, abstract, keyword, and reading-note section signals before falling back to raw text previews. Methods/results extraction from PDFs, weak keyphrase mining, LLM tagging, FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
+v1.0.15 repairs the PDF profile extraction layer so cached/full extracted PDF text can supply cleaned front-matter title, authors, DOI, abstract, keywords, article type, and section headings when external metadata is high-confidence but incomplete. The app preserves the local Tag Book and `PaperTextProfile` architecture; full PDF methods/results extraction, LLM/API tagging, FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -131,7 +131,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.13. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.15. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -194,6 +194,22 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.15-pdf-profile-extraction-repair
+
+- Adds deterministic PDF text cleanup for profile extraction, including soft-wrap joining, line-break dehyphenation, common header/footer removal, downloaded-from/page-number noise removal, and safer author superscript cleanup.
+- Extends `PaperTextProfile` with authors, DOI, article type, section headings, and extraction warnings.
+- Extracts Abstract and Keywords from cached/full extracted PDF text and uses them to fill blank Crossref preview fields without overwriting non-empty current metadata.
+- Adds explicit `pdf_abstract`, `pdf_keywords`, and `pdf_section_headings` tag suggestion sources.
+- Keeps generated candidate tags preview-only; no LLM/API tagging and no automatic candidate application.
+
+### v1.0.14-tag-quality-hygiene
+
+- Adds deterministic cleanup for generated tag candidate phrases, including leaked section/source prefixes and low-information boilerplate tails.
+- Classifies generated candidates as high, medium, weak, or rejected, with source-aware scoring that prefers title, keywords, and note Methods evidence over generic abstract fragments.
+- Rejects duplicate candidate phrases already covered by canonical tags or aliases and preserves alias suggestions for safer future promotion review.
+- Separates known canonical suggestions from candidate phrase suggestions in the UI and keeps rejected phrases in a collapsed debug view.
+- Still defers full PDF methods/results extraction, LLM/API tagging, and automatic candidate application.
 
 ### v1.0.13-paper-text-profile-minimal
 

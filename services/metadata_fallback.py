@@ -10,8 +10,10 @@ from urllib.parse import urlencode
 import requests
 
 from config.contact import build_blueprint_user_agent
+from core.paper_text_profile import PaperTextProfile, coerce_paper_text_profile
 from ingest.document_text import extract_pdf_text_with_markitdown, extract_pdf_text_with_pypdf
 from ingest.doi import normalize_doi
+from services.pdf_profile_extraction import extract_pdf_profile_from_text
 from storage.extracted_text_store import load_cached_extracted_text
 from storage.index_store import load_index, save_index
 from storage.paths import EXTRACTED_TEXT_DIR, INDEX_CSV
@@ -19,7 +21,7 @@ from storage.paths import EXTRACTED_TEXT_DIR, INDEX_CSV
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 DEFAULT_ARXIV_TIMEOUT = 8.0
-APPLY_FIELDS = ("title", "authors", "year", "abstract", "doi")
+APPLY_FIELDS = ("title", "authors", "year", "abstract", "keywords", "doi")
 MODERN_ARXIV_PATTERN = re.compile(
     r"(?i)(?<![A-Za-z0-9])(?:arxiv\s*[:_\-\s]\s*)?(\d{4}\.\d{4,5})(?:v\d+)?(?![A-Za-z0-9])"
 )
@@ -56,6 +58,7 @@ def empty_metadata_candidate(
         "arxiv_id": arxiv_id,
         "source": source,
         "confidence": confidence,
+        "field_sources": {},
         "diagnostics": diagnostics or [],
     }
 
@@ -222,6 +225,11 @@ def build_doi_less_metadata_candidate(
             candidate["title"] = _filename_title_guess(filename)
         return candidate
 
+    pdf_profile_candidate = pdf_profile_metadata_candidate_from_text(text or "")
+    if any(str(pdf_profile_candidate.get(field, "") or "").strip() for field in ("title", "authors", "abstract", "keywords", "doi")):
+        pdf_profile_candidate["diagnostics"] = diagnostics + list(pdf_profile_candidate.get("diagnostics", []))
+        return pdf_profile_candidate
+
     title_guess = title_guess_from_pdf_text(text or "")
     if title_guess:
         return {
@@ -245,6 +253,82 @@ def build_doi_less_metadata_candidate(
         }
 
     return empty_metadata_candidate(diagnostics=diagnostics + ["No DOI-less metadata candidate was found."])
+
+
+def pdf_profile_metadata_candidate_from_text(text: str) -> dict[str, Any]:
+    profile = extract_pdf_profile_from_text(text)
+    field_sources: dict[str, str] = {}
+    candidate = empty_metadata_candidate(
+        source="pdf_profile",
+        confidence="medium" if profile.abstract or profile.keywords else "low",
+        diagnostics=["PDF profile front matter parsed.", *profile.warnings],
+    )
+    for field, value in (
+        ("title", profile.title),
+        ("authors", profile.authors),
+        ("abstract", profile.abstract),
+        ("keywords", ", ".join(profile.keywords)),
+        ("doi", profile.doi),
+    ):
+        if value:
+            candidate[field] = value
+            field_sources[field] = "pdf_profile"
+    candidate["article_type"] = profile.article_type
+    candidate["section_headings"] = profile.section_headings
+    candidate["field_sources"] = field_sources
+    return candidate
+
+
+def fill_metadata_gaps_from_pdf_profile(
+    record: dict[str, Any],
+    candidate: dict[str, Any] | None,
+    profile: PaperTextProfile | dict | None,
+) -> dict[str, Any]:
+    filled = dict(candidate or {})
+    if not profile:
+        return filled
+
+    pdf_profile = coerce_paper_text_profile(profile)
+    field_sources = dict(filled.get("field_sources", {}) if isinstance(filled.get("field_sources"), dict) else {})
+    candidate_source = str(filled.get("source", "") or "candidate")
+    for field in ("title", "authors", "abstract", "keywords", "doi"):
+        if str(filled.get(field, "") or "").strip():
+            field_sources.setdefault(field, candidate_source)
+
+    fallback_values = {
+        "title": pdf_profile.title,
+        "authors": pdf_profile.authors,
+        "abstract": pdf_profile.abstract,
+        "keywords": ", ".join(pdf_profile.keywords),
+        "doi": pdf_profile.doi,
+    }
+    changed_fields: list[str] = []
+    for field, value in fallback_values.items():
+        if not str(value or "").strip():
+            continue
+        if str(filled.get(field, "") or "").strip():
+            continue
+        if str(record.get(field, "") or "").strip():
+            continue
+        filled[field] = value
+        field_sources[field] = "pdf_profile"
+        changed_fields.append(field)
+
+    if pdf_profile.article_type and pdf_profile.article_type != "unknown":
+        filled.setdefault("article_type", pdf_profile.article_type)
+    if pdf_profile.section_headings:
+        filled.setdefault("section_headings", list(pdf_profile.section_headings))
+    filled["field_sources"] = field_sources
+    if changed_fields:
+        diagnostics = list(filled.get("diagnostics", []))
+        diagnostics.append("Filled blank metadata fields from PDF profile: " + ", ".join(changed_fields) + ".")
+        filled["diagnostics"] = diagnostics
+        source = str(filled.get("source", "") or "")
+        if source and source != "pdf_profile":
+            filled["source"] = f"{source}+pdf_profile"
+        else:
+            filled["source"] = "pdf_profile"
+    return filled
 
 
 def title_guess_from_pdf_text(text: str) -> str:

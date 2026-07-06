@@ -40,11 +40,14 @@ INACTIVE_STATUSES = {"blocked", "deprecated"}
 
 SOURCE_WEIGHTS = {
     "keywords": 6,
+    "pdf_keywords": 6,
     "title": 5,
     "openalex_topics": 5,
     "openalex_keywords": 5,
     "abstract": 4,
+    "pdf_abstract": 4,
     "markdown_text": 3,
+    "pdf_section_headings": 3,
     "extracted_text_preview": 3,
     "extracted_text": 3,
     "text_preview": 3,
@@ -64,6 +67,9 @@ SOURCE_LABELS = {
     "title": "title",
     "abstract": "abstract",
     "keywords": "keywords",
+    "pdf_abstract": "pdf abstract",
+    "pdf_keywords": "pdf keywords",
+    "pdf_section_headings": "pdf section headings",
     "filename": "filename",
     "note_methods": "note section: Methods",
     "note_evidence": "note section: Evidence / Results",
@@ -82,6 +88,103 @@ DEFAULT_NORMALIZATION_RULES = {
     "collapse_non_alphanumeric_to_hyphen": True,
 }
 SELECTABLE_SUGGESTION_KINDS = {"known_canonical", "new_candidate", "weak_candidate"}
+REJECTED_SUGGESTION_KIND = "rejected_candidate"
+QUALITY_LABELS = ("high", "medium", "weak", "rejected")
+SECTION_PREFIXES = (
+    "abstract",
+    "background",
+    "conclusion",
+    "conclusions",
+    "discussion",
+    "evidence",
+    "evidence results",
+    "introduction",
+    "keyword",
+    "keywords",
+    "materials and methods",
+    "method",
+    "methods",
+    "result",
+    "results",
+    "summary",
+    "title",
+)
+BOILERPLATE_TAIL_PATTERNS = (
+    r"\s+levels?\s+for\s+(?:the\s+)?analysis$",
+    r"\s+for\s+(?:the\s+)?analysis$",
+    r"\s+for\s+various\s+downstream\s+tasks?$",
+    r"\s+for\s+downstream\s+tasks?$",
+    r"\s+for\s+the\s+downstream\s+analysis$",
+    r"\s+in\s+this\s+study$",
+    r"\s+of\s+this\s+study$",
+    r"\s+of\s+the\s+study$",
+    r"\s+used\s+in\s+this\s+study$",
+)
+STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "into",
+    "is",
+    "of",
+    "on",
+    "or",
+    "the",
+    "these",
+    "this",
+    "those",
+    "to",
+    "using",
+    "via",
+    "with",
+}
+METHOD_LIKE_TERMS = {
+    "algorithm",
+    "analysis",
+    "assay",
+    "atlas",
+    "cytometry",
+    "imaging",
+    "method",
+    "microscopy",
+    "model",
+    "network",
+    "pipeline",
+    "protocol",
+    "screen",
+    "screening",
+    "sequencing",
+    "spectrometry",
+}
+MODALITY_LIKE_TERMS = {
+    "atac-seq",
+    "chip-seq",
+    "crispr",
+    "cytometry",
+    "genomics",
+    "metabolomics",
+    "microscopy",
+    "proteomics",
+    "qpcr",
+    "rna-seq",
+    "scrna-seq",
+    "sequencing",
+    "spatial",
+    "spectrometry",
+    "transcriptomics",
+}
+GENERIC_MODEL_TERMS = {"foundation", "large-scale", "large", "scale", "deep", "learning", "model"}
+SPECIFICITY_SUPPRESSIONS = {
+    "root-development": {"lateral-root", "root-apical-meristem", "lateral-root-development"},
+}
 
 
 def normalize_tag(value: Any) -> str:
@@ -301,8 +404,9 @@ def explain_tag_book_suggestions(record: dict[str, Any], tag_book: dict[str, Any
             if key not in suggestions:
                 suggestions[key] = suggestion
 
+    filtered_suggestions = _suppress_generic_specific_overlaps(list(suggestions.values()))
     return sorted(
-        suggestions.values(),
+        filtered_suggestions,
         key=lambda item: (
             -int(item.get("score", 0)),
             str(item.get("category", "")),
@@ -332,7 +436,10 @@ def selected_suggestion_tag_values(suggestions: list[dict], selected_ids: set[st
     for suggestion in suggestions:
         kind = str(suggestion.get("kind", "known_canonical") or "known_canonical")
         value = normalize_tag(suggestion.get("canonical") or suggestion.get("tag") or suggestion.get("display"))
+        selectable = bool(suggestion.get("selectable", kind in SELECTABLE_SUGGESTION_KINDS))
         if kind not in SELECTABLE_SUGGESTION_KINDS or not value:
+            continue
+        if not selectable or str(suggestion.get("quality", "")) == "rejected":
             continue
         if suggestion_selection_id(suggestion) not in selected or value in seen:
             continue
@@ -399,6 +506,94 @@ def preview_near_duplicate_tags(
     return preview
 
 
+def clean_candidate_phrase(raw_phrase: Any) -> dict[str, Any]:
+    original = str(raw_phrase or "")
+    phrase = _normalize_candidate_spacing(original)
+    cleanup_notes: list[str] = []
+
+    stripped_phrase, stripped_prefixes = _strip_candidate_prefixes(phrase)
+    if stripped_prefixes:
+        phrase = stripped_phrase
+        cleanup_notes.extend(f"stripped source prefix: {prefix}" for prefix in stripped_prefixes)
+
+    phrase, removed_tails = _strip_boilerplate_tails(phrase)
+    cleanup_notes.extend(f"removed boilerplate tail: {tail}" for tail in removed_tails)
+
+    phrase, removed_article = _strip_leading_article(phrase)
+    if removed_article:
+        cleanup_notes.append(f"removed leading article: {removed_article}")
+
+    phrase = _normalize_candidate_spacing(phrase)
+    canonical = normalize_tag(phrase)
+    structural_rejection = _candidate_structural_rejection(phrase)
+    return {
+        "original": original,
+        "cleaned": phrase,
+        "canonical": canonical,
+        "cleanup_notes": cleanup_notes,
+        "rejected": bool(structural_rejection),
+        "rejection_reason": structural_rejection,
+    }
+
+
+def score_candidate_quality(
+    raw_phrase: Any,
+    evidence: list[dict[str, Any]] | None = None,
+    *,
+    category: str = "",
+    tag_book: dict[str, Any] | None = None,
+    blocked_terms: set[str] | None = None,
+    allow_single_token: bool = False,
+) -> dict[str, Any]:
+    cleanup = clean_candidate_phrase(raw_phrase)
+    phrase = str(cleanup["cleaned"])
+    canonical = str(cleanup["canonical"])
+    evidence = list(evidence or [])
+    active_book = tag_book if tag_book is not None else {"tags": {}, "blocked_terms": []}
+    active_blocked_terms = blocked_terms if blocked_terms is not None else _blocked_term_set(active_book)
+
+    rejection = ""
+    duplicate_of = ""
+    cleanup_rejection = str(cleanup["rejection_reason"])
+    if cleanup_rejection and not (allow_single_token and cleanup_rejection == "too short or low information"):
+        rejection = cleanup_rejection
+    elif not allow_single_token and len(_candidate_words(phrase)) < 2:
+        rejection = "too short or low information"
+    elif canonical in active_blocked_terms or _contains_blocked_token(canonical, active_blocked_terms):
+        rejection = "blocked term"
+    elif _generic_model_phrase(phrase):
+        rejection = "generic model phrase"
+    else:
+        duplicate_of = _duplicate_canonical_for_candidate(canonical, active_book)
+        if duplicate_of:
+            rejection = f"already covered by canonical tag: {duplicate_of}"
+
+    score = _candidate_quality_points(phrase, evidence, category)
+    if rejection:
+        quality = "rejected"
+        score = 0
+    elif score >= 80:
+        quality = "high"
+    elif score >= 60:
+        quality = "medium"
+    elif score >= 35:
+        quality = "weak"
+    else:
+        quality = "rejected"
+        rejection = "low candidate quality"
+        score = 0
+
+    return {
+        **cleanup,
+        "quality": quality,
+        "quality_score": int(score),
+        "quality_reason": rejection or _candidate_quality_reason(phrase, evidence, category, quality),
+        "duplicate_of_canonical": duplicate_of,
+        "selectable": quality != "rejected",
+        "alias_suggestions": _candidate_alias_suggestions(cleanup["original"], phrase),
+    }
+
+
 def _candidate_from_method_entry(
     record: dict[str, Any],
     method_entry: dict[str, Any],
@@ -414,16 +609,27 @@ def _candidate_from_method_entry(
     if not evidence:
         return None
     score = _score_evidence(evidence, _safe_int(method_entry.get("suggestion_strength"), default=4))
-    return _build_suggestion(
+    quality = score_candidate_quality(
+        method_entry.get("display") or canonical,
+        evidence,
+        category=str(method_entry.get("category", "method") or "method"),
+        tag_book=tag_book,
+        blocked_terms=blocked_terms,
+        allow_single_token=True,
+    )
+    if quality["quality"] == "rejected":
+        return None
+    suggestion = _build_suggestion(
         display=str(method_entry.get("display") or _label_from_canonical(canonical)),
         canonical=canonical,
         category=str(method_entry.get("category", "method") or "method"),
         kind="new_candidate",
-        score=score,
+        score=score + int(quality["quality_score"]),
         confidence=float(method_entry.get("confidence", _candidate_confidence(score))),
         evidence=evidence,
         reason=str(method_entry.get("reason", "Matched a method lexicon entry not yet in the Tag Book.")),
     )
+    return _with_candidate_quality(suggestion, quality)
 
 
 def _candidates_from_pattern(
@@ -443,30 +649,45 @@ def _candidates_from_pattern(
 
     source_fields = tuple(pattern_entry.get("source_fields", []) or SOURCE_FIELDS)
     candidates: dict[str, dict[str, Any]] = {}
+    rejected_candidates: dict[str, dict[str, Any]] = {}
     for field in source_fields:
         text = _record_field_text(record.get(field, ""))
         if not text:
             continue
         for match in compiled.finditer(text):
-            matched_text = str(match.group(1) if match.groups() else match.group(0)).strip(" .,:;()[]{}")
-            canonical = normalize_tag(matched_text)
-            if (
-                not canonical
-                or len(canonical) <= 2
-                or canonical in existing
-                or canonical in tag_book.get("tags", {})
-                or canonical in blocked_terms
-                or _contains_blocked_token(canonical, blocked_terms)
-            ):
-                continue
+            raw_matched_text = str(match.group(1) if match.groups() else match.group(0)).strip(" .,:;()[]{}")
+            cleanup = clean_candidate_phrase(raw_matched_text)
+            matched_text = str(cleanup["cleaned"])
+            canonical = str(cleanup["canonical"])
             evidence = {
                 "source": field,
                 "source_label": _source_label(field),
                 "matched_text": matched_text,
+                "raw_matched_text": raw_matched_text,
                 "alias": matched_text,
                 "weight": SOURCE_WEIGHTS.get(field, 0),
-                "snippet": extract_evidence_snippet(text, matched_text),
+                "snippet": extract_evidence_snippet(text, raw_matched_text),
             }
+            quality = score_candidate_quality(
+                raw_matched_text,
+                [evidence],
+                category=str(pattern_entry.get("category", "method") or "method"),
+                tag_book=tag_book,
+                blocked_terms=blocked_terms,
+            )
+            canonical = str(quality["canonical"] or canonical)
+            matched_text = str(quality["cleaned"] or matched_text)
+            evidence["matched_text"] = matched_text
+            evidence["alias"] = matched_text
+
+            if canonical in existing:
+                continue
+            if quality["quality"] == "rejected":
+                rejected = _build_rejected_candidate_suggestion(pattern_entry, quality, evidence)
+                if rejected and canonical not in candidates:
+                    rejected_candidates.setdefault(canonical or str(id(rejected)), rejected)
+                continue
+
             current = candidates.setdefault(
                 canonical,
                 _build_suggestion(
@@ -485,14 +706,27 @@ def _candidates_from_pattern(
                 {item["source"] for item in current["evidence"]},
                 key=_source_sort_key,
             )
-            current["score"] += SOURCE_WEIGHTS.get(field, 0) * _safe_int(
-                pattern_entry.get("suggestion_strength"),
-                default=2,
+            evidence_score = _score_evidence(
+                current["evidence"],
+                _safe_int(pattern_entry.get("suggestion_strength"), default=2),
             )
+            quality = score_candidate_quality(
+                current["display"],
+                current["evidence"],
+                category=str(pattern_entry.get("category", "method") or "method"),
+                tag_book=tag_book,
+                blocked_terms=blocked_terms,
+            )
+            current["score"] = evidence_score + int(quality["quality_score"])
+            current["confidence"] = _candidate_confidence_from_quality(
+                str(quality["quality"]),
+                int(quality["quality_score"]),
+            )
+            _with_candidate_quality(current, quality)
             current["source"] = current["matched_fields"][0] if current["matched_fields"] else ""
             current["source_label"] = _source_label(current["source"]) if current["source"] else ""
             current["matched_text"] = str(current["evidence"][0]["matched_text"]) if current["evidence"] else ""
-    return list(candidates.values())
+    return list(candidates.values()) + list(rejected_candidates.values())
 
 
 def _build_suggestion(
@@ -524,6 +758,73 @@ def _build_suggestion(
         "reason": reason,
         "matched_fields": matched_fields,
     }
+
+
+def _suppress_generic_specific_overlaps(suggestions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    canonicals = {str(item.get("canonical", "")) for item in suggestions}
+    suppressed: set[str] = set()
+    for generic, specifics in SPECIFICITY_SUPPRESSIONS.items():
+        present_specifics = specifics & canonicals
+        if not present_specifics or generic not in canonicals:
+            continue
+        generic_item = next(item for item in suggestions if item.get("canonical") == generic)
+        if _specific_overlap_supports_suppression(generic_item, present_specifics):
+            suppressed.add(generic)
+    return [item for item in suggestions if str(item.get("canonical", "")) not in suppressed]
+
+
+def _specific_overlap_supports_suppression(generic_item: dict[str, Any], present_specifics: set[str]) -> bool:
+    evidence_text = " ".join(
+        str(part)
+        for evidence in generic_item.get("evidence", [])
+        if isinstance(evidence, dict)
+        for part in (evidence.get("snippet", ""), evidence.get("matched_text", ""))
+    ).lower()
+    if "lateral root" in evidence_text and ("lateral-root" in present_specifics or "lateral-root-development" in present_specifics):
+        return True
+    if "root apical meristem" in evidence_text and "root-apical-meristem" in present_specifics:
+        return True
+    return False
+
+
+def _with_candidate_quality(suggestion: dict[str, Any], quality: dict[str, Any]) -> dict[str, Any]:
+    suggestion["quality"] = str(quality.get("quality", "weak"))
+    suggestion["quality_score"] = int(quality.get("quality_score", 0) or 0)
+    suggestion["quality_reason"] = str(quality.get("quality_reason", ""))
+    suggestion["cleanup_notes"] = list(quality.get("cleanup_notes", []))
+    suggestion["alias_suggestions"] = list(quality.get("alias_suggestions", []))
+    suggestion["duplicate_of_canonical"] = str(quality.get("duplicate_of_canonical", ""))
+    suggestion["selectable"] = bool(quality.get("selectable", True))
+    suggestion["promotion_note"] = "Review aliases before promoting this candidate to the Tag Book."
+    if suggestion["quality"] == "rejected":
+        suggestion["kind"] = REJECTED_SUGGESTION_KIND
+        suggestion["selectable"] = False
+        suggestion["rejection_reason"] = suggestion["quality_reason"]
+    elif str(suggestion.get("kind", "")) in {"new_candidate", "weak_candidate"}:
+        suggestion["kind"] = "new_candidate" if suggestion["quality"] in {"high", "medium"} else "weak_candidate"
+    return suggestion
+
+
+def _build_rejected_candidate_suggestion(
+    pattern_entry: dict[str, Any],
+    quality: dict[str, Any],
+    evidence: dict[str, Any],
+) -> dict[str, Any] | None:
+    canonical = str(quality.get("canonical", "") or normalize_tag(quality.get("cleaned", "")))
+    display = str(quality.get("cleaned", "") or quality.get("original", "")).strip()
+    if not canonical and not display:
+        return None
+    suggestion = _build_suggestion(
+        display=display or canonical,
+        canonical=canonical,
+        category=str(pattern_entry.get("category", "method") or "method"),
+        kind=REJECTED_SUGGESTION_KIND,
+        score=0,
+        confidence=0.0,
+        evidence=[evidence],
+        reason=str(quality.get("quality_reason", "Rejected by candidate hygiene.")),
+    )
+    return _with_candidate_quality(suggestion, quality)
 
 
 def _collect_alias_evidence(record: dict[str, Any], aliases: list[str]) -> list[dict[str, Any]]:
@@ -570,6 +871,216 @@ def _known_confidence(score: int) -> float:
 
 def _candidate_confidence(score: int) -> float:
     return min(0.8, max(0.45, 0.3 + (score / 100)))
+
+
+def _normalize_candidate_spacing(value: str) -> str:
+    text = str(value or "")
+    text = re.sub(r"[\u2010-\u2015]", "-", text)
+    text = re.sub(r"\s*/\s*", "/", text)
+    text = re.sub(r"(?<=\w)\s*-\s*(?=\w)", "-", text)
+    text = re.sub(r"[_\t\r\n]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" \t\r\n.,;:!?()[]{}'\"")
+
+
+def _strip_candidate_prefixes(phrase: str) -> tuple[str, list[str]]:
+    text = phrase
+    stripped: list[str] = []
+    prefix_pattern = "|".join(re.escape(prefix).replace(r"\ ", r"\s+") for prefix in sorted(SECTION_PREFIXES, key=len, reverse=True))
+    while True:
+        match = re.match(
+            rf"^(?:#+\s*)?(?P<prefix>{prefix_pattern})\b\s*(?:[/:\.\-]+|\s+)?\s*",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return text, stripped
+        prefix = " ".join(match.group("prefix").lower().split())
+        stripped.append(prefix)
+        text = text[match.end() :].strip(" \t\r\n.,;:!?-")
+        text, article = _strip_leading_article(text)
+        if article:
+            stripped.append(article)
+
+
+def _strip_boilerplate_tails(phrase: str) -> tuple[str, list[str]]:
+    text = phrase
+    removed: list[str] = []
+    changed = True
+    while changed:
+        changed = False
+        for pattern in BOILERPLATE_TAIL_PATTERNS:
+            match = re.search(pattern, text, flags=re.IGNORECASE)
+            if not match:
+                continue
+            removed.append(match.group(0).strip())
+            text = text[: match.start()].strip(" \t\r\n.,;:!?-")
+            changed = True
+            break
+    return text, removed
+
+
+def _strip_leading_article(phrase: str) -> tuple[str, str]:
+    match = re.match(r"^(a|an|the)\s+(.+)$", phrase.strip(), flags=re.IGNORECASE)
+    if not match:
+        return phrase, ""
+    return match.group(2).strip(), match.group(1).lower()
+
+
+def _candidate_structural_rejection(phrase: str) -> str:
+    words = _candidate_words(phrase)
+    canonical = normalize_tag(phrase)
+    if not canonical:
+        return "empty after cleanup"
+    if len(canonical) <= 2:
+        return "too short or low information"
+    if len(words) > 5:
+        return "too long"
+    if not words:
+        return "empty after cleanup"
+    if _punctuation_ratio(phrase) > 0.18:
+        return "punctuation-heavy"
+    if len(words) >= 3 and _stopword_ratio(words) >= 0.5:
+        return "stopword-heavy"
+    if _sentence_like(phrase, words):
+        return "sentence-like phrase"
+    return ""
+
+
+def _candidate_quality_points(phrase: str, evidence: list[dict[str, Any]], category: str) -> int:
+    words = _candidate_words(phrase)
+    sources = {str(item.get("source", "")) for item in evidence if item.get("source")}
+    score = 30
+    if _method_like_phrase(phrase, category):
+        score += 20
+    if _modality_like_phrase(phrase):
+        score += 16
+    if len(words) in (2, 3):
+        score += 8
+    elif len(words) == 4:
+        score += 4
+
+    source_points = {
+        "keywords": 18,
+        "pdf_keywords": 18,
+        "title": 16,
+        "note_methods": 15,
+        "note_evidence": 10,
+        "abstract": 6,
+        "pdf_abstract": 8,
+        "pdf_section_headings": 8,
+        "markdown_text": 4,
+        "extracted_text_preview": 3,
+        "extracted_text": 3,
+        "filename": 1,
+    }
+    score += sum(source_points.get(source, 0) for source in sources)
+    if sources and sources <= {"abstract", "markdown_text", "extracted_text_preview", "extracted_text"}:
+        score -= 8
+    if _generic_noun_phrase(phrase):
+        score -= 12
+    return max(0, min(100, score))
+
+
+def _candidate_quality_reason(
+    phrase: str,
+    evidence: list[dict[str, Any]],
+    category: str,
+    quality: str,
+) -> str:
+    reasons: list[str] = []
+    if _method_like_phrase(phrase, category):
+        reasons.append("method-like phrase")
+    if _modality_like_phrase(phrase):
+        reasons.append("data modality signal")
+    preferred_sources = [
+        _source_label(source)
+        for source in ("keywords", "title", "note_methods")
+        if any(str(item.get("source", "")) == source for item in evidence)
+    ]
+    if preferred_sources:
+        reasons.append("preferred source: " + ", ".join(preferred_sources))
+    if not reasons and quality == "weak":
+        reasons.append("limited source or phrase specificity")
+    return "; ".join(reasons) if reasons else quality
+
+
+def _candidate_words(phrase: str) -> list[str]:
+    return [
+        match.group(0).lower()
+        for match in re.finditer(r"[A-Za-z0-9]+(?:[+/\-][A-Za-z0-9]+)*", str(phrase or ""))
+    ]
+
+
+def _punctuation_ratio(phrase: str) -> float:
+    text = str(phrase or "")
+    if not text:
+        return 0.0
+    punctuation = re.findall(r"[^A-Za-z0-9\s/\-+]", text)
+    return len(punctuation) / max(1, len(text))
+
+
+def _stopword_ratio(words: list[str]) -> float:
+    if not words:
+        return 1.0
+    return sum(word in STOPWORDS for word in words) / len(words)
+
+
+def _sentence_like(phrase: str, words: list[str]) -> bool:
+    text = str(phrase or "").strip()
+    if re.search(r"[.!?]\s+\w", text):
+        return True
+    if text.endswith((".", "!", "?")) and len(words) > 3:
+        return True
+    return any(word in {"shows", "showed", "using", "uses", "used", "were", "was"} for word in words)
+
+
+def _method_like_phrase(phrase: str, category: str) -> bool:
+    words = set(_candidate_words(phrase))
+    if str(category or "").strip() in {"assay", "method", "model_or_algorithm", "dataset"}:
+        return True
+    return bool(words & METHOD_LIKE_TERMS) or any(
+        token.endswith("-seq") or token.endswith("omics") for token in words
+    )
+
+
+def _modality_like_phrase(phrase: str) -> bool:
+    words = set(_candidate_words(phrase))
+    canonical = normalize_tag(phrase)
+    return bool(words & MODALITY_LIKE_TERMS) or any(term in canonical for term in MODALITY_LIKE_TERMS)
+
+
+def _generic_model_phrase(phrase: str) -> bool:
+    words = set(_candidate_words(phrase))
+    return bool(words) and words <= GENERIC_MODEL_TERMS and "model" in words
+
+
+def _generic_noun_phrase(phrase: str) -> bool:
+    words = set(_candidate_words(phrase))
+    generic = {"analysis", "approach", "data", "feature", "gene", "level", "levels", "method", "model", "task", "tasks"}
+    return bool(words) and words <= generic
+
+
+def _duplicate_canonical_for_candidate(canonical: str, tag_book: dict[str, Any]) -> str:
+    if not canonical:
+        return ""
+    if canonical in tag_book.get("tags", {}):
+        return canonical
+    return _tag_book_alias_index(tag_book).get(canonical, "")
+
+
+def _candidate_alias_suggestions(original: Any, cleaned: Any) -> list[str]:
+    return _dedupe_aliases([str(cleaned or ""), str(original or "")])
+
+
+def _candidate_confidence_from_quality(quality: str, score: int) -> float:
+    if quality == "high":
+        return 0.78
+    if quality == "medium":
+        return 0.62
+    if quality == "weak":
+        return 0.42
+    return 0.0
 
 
 def _existing_tag_identities(record: dict[str, Any], tag_book: dict[str, Any]) -> set[str]:

@@ -197,9 +197,13 @@ def reader_profile_summary(profile: PaperTextProfile | None) -> dict[str, object
         "schema_version": profile.schema_version,
         "generated_at": profile.generated_at,
         "title": bool(profile.title),
+        "authors": bool(profile.authors),
         "abstract_chars": len(profile.abstract),
         "keyword_count": len(profile.keywords),
+        "article_type": profile.article_type,
+        "section_headings": list(profile.section_headings),
         "note_sections": sorted(profile.note_sections),
+        "extraction_warnings": list(profile.extraction_warnings),
         "confidence": dict(profile.confidence),
     }
 
@@ -454,10 +458,18 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
             st.write(f"Schema: `{summary['schema_version']}`")
             st.write(f"Generated: `{summary['generated_at']}`")
             st.write(f"Title present: `{summary['title']}`")
+            st.write(f"Authors present: `{summary['authors']}`")
             st.write(f"Abstract characters: `{summary['abstract_chars']}`")
             st.write(f"Keywords: `{summary['keyword_count']}`")
+            st.write(f"Article type: `{summary['article_type']}`")
+            headings = ", ".join(str(heading) for heading in summary["section_headings"]) or "none"
+            st.write(f"Section headings: `{headings}`")
             sections = ", ".join(str(section) for section in summary["note_sections"]) or "none"
             st.write(f"Note sections: `{sections}`")
+            if summary["extraction_warnings"]:
+                st.write("Extraction warnings")
+                for warning in summary["extraction_warnings"]:
+                    st.write(f"- {warning}")
             st.write("Confidence")
             st.json(summary["confidence"])
 
@@ -541,25 +553,67 @@ def _coerce_reader_suggestion_details(value: object) -> list[dict]:
 
 def _render_grouped_reader_suggestions(record: dict[str, str], suggestion_details: list[dict]) -> list[str]:
     selected_ids: list[str] = []
+    known = [item for item in suggestion_details if str(item.get("kind", "known_canonical")) == "known_canonical"]
+    rejected = [
+        item
+        for item in suggestion_details
+        if str(item.get("kind", "")) == "rejected_candidate" or str(item.get("quality", "")) == "rejected"
+    ]
+    candidates = [item for item in suggestion_details if item not in known and item not in rejected]
+
+    if known:
+        st.caption("Known canonical suggestions")
+        selected_ids.extend(_render_reader_suggestion_items(record, known))
+    if candidates:
+        st.caption("Candidate phrase suggestions")
+        selected_ids.extend(_render_reader_suggestion_items(record, candidates, key_suffix="candidate"))
+    if rejected:
+        with st.expander("Rejected candidate phrases"):
+            _render_reader_suggestion_items(record, rejected, key_suffix="rejected", force_disabled=True)
+    return selected_ids
+
+
+def _render_reader_suggestion_items(
+    record: dict[str, str],
+    suggestion_details: list[dict],
+    *,
+    key_suffix: str = "",
+    force_disabled: bool = False,
+) -> list[str]:
+    selected_ids: list[str] = []
     for category, items in group_suggestions_by_category(suggestion_details).items():
         st.caption(f"{category}")
         for item in items:
             label = item.get("display") or item.get("canonical") or item.get("tag")
             kind = str(item.get("kind", "known_canonical")).replace("_", " ")
+            quality = str(item.get("quality", ""))
+            quality_label = f", {quality}" if quality and kind != "known canonical" else ""
             matched = str(item.get("matched_text", ""))
             source = str(item.get("source", ""))
             source_label = str(item.get("source_label", "") or source)
             reason = str(item.get("reason", ""))
+            quality_reason = str(item.get("quality_reason") or item.get("rejection_reason") or "")
             evidence = f" from {source_label}" if source_label else ""
             match_text = f" matched `{matched}`" if matched else ""
             selection_id = suggestion_selection_id(item)
+            selectable = bool(item.get("selectable", not force_disabled)) and not force_disabled
+            key_parts = ["reader_tag_select", record["paper_id"]]
+            if key_suffix:
+                key_parts.append(key_suffix)
+            key_parts.append(selection_id)
             selected = st.checkbox(
-                f"{label} ({kind})",
-                key=f"reader_tag_select_{record['paper_id']}_{selection_id}",
+                f"{label} ({kind}{quality_label})",
+                key="_".join(key_parts),
+                disabled=not selectable,
             )
-            if selected:
+            if selected and selectable:
                 selected_ids.append(selection_id)
             st.caption(f"{evidence}{match_text}".strip() or "No match details.")
+            if quality and kind != "known canonical":
+                quality_caption = f"Quality: `{quality}`"
+                if quality_reason:
+                    quality_caption += f" - {quality_reason}"
+                st.caption(quality_caption)
             if reason:
                 st.caption(reason)
             snippet = _suggestion_snippet(item)

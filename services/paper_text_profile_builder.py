@@ -8,6 +8,7 @@ from typing import Any, Mapping
 
 from core.paper_text_profile import PaperTextProfile, PAPER_TEXT_PROFILE_SCHEMA_VERSION
 from services.note_import import parse_external_note_text
+from services.pdf_profile_extraction import PdfProfileExtraction, extract_pdf_profile_from_text
 from storage.extracted_text_store import load_cached_extracted_text
 from storage.index_store import INDEX_CSV, load_index
 from storage.note_block_store import list_note_blocks
@@ -35,17 +36,6 @@ PROFILE_NOTE_SECTIONS = (
     "Ideas",
     "Limitations",
 )
-ABSTRACT_STOP_HEADINGS = {
-    "keywords",
-    "keyword",
-    "introduction",
-    "background",
-    "materials and methods",
-    "methods",
-    "results",
-    "references",
-}
-
 
 def build_paper_text_profile(
     record: Mapping[str, Any],
@@ -55,13 +45,15 @@ def build_paper_text_profile(
     extracted_text_dir: Path = EXTRACTED_TEXT_DIR,
 ) -> PaperTextProfile:
     paper_id = _required_paper_id(record)
-    title, title_source, title_confidence = _title_from_record(record)
-    abstract, abstract_source, abstract_confidence = _abstract_from_sources(
-        paper_id,
-        record,
-        extracted_text_dir,
-    )
-    keywords = _keyword_values(record.get("keywords", ""))
+    pdf_profile = _pdf_profile_from_cache(paper_id, extracted_text_dir)
+    title, title_source, title_confidence = _title_from_sources(record, pdf_profile)
+    authors, authors_source, authors_confidence = _authors_from_sources(record, pdf_profile)
+    abstract, abstract_source, abstract_confidence = _abstract_from_sources(record, pdf_profile)
+    keywords, keywords_source, keywords_confidence = _keywords_from_sources(record, pdf_profile)
+    doi, doi_source, doi_confidence = _doi_from_sources(record, pdf_profile)
+    article_type = pdf_profile.article_type if pdf_profile else "unknown"
+    article_type_source = "pdf_profile" if pdf_profile and pdf_profile.article_type != "unknown" else ""
+    section_headings = list(pdf_profile.section_headings) if pdf_profile else []
     note_sections, section_sources = _note_sections_from_sources(
         paper_id,
         notes_dir=notes_dir,
@@ -70,16 +62,24 @@ def build_paper_text_profile(
 
     sources: dict[str, str] = {
         "title": title_source,
+        "authors": authors_source,
         "abstract": abstract_source,
-        "keywords": "paper_index" if keywords else "",
+        "keywords": keywords_source,
+        "doi": doi_source,
+        "article_type": article_type_source,
+        "section_headings": "pdf_profile" if section_headings else "",
         "note_sections": ", ".join(sorted(set(section_sources.values()))) if section_sources else "",
     }
     sources.update({f"note_sections.{section}": source for section, source in section_sources.items()})
 
     confidence = {
         "title": title_confidence,
+        "authors": authors_confidence,
         "abstract": abstract_confidence,
-        "keywords": "high" if keywords else "none",
+        "keywords": keywords_confidence,
+        "doi": doi_confidence,
+        "article_type": "medium" if article_type_source else "none",
+        "section_headings": "medium" if section_headings else "none",
         "note_sections": _note_section_confidence(section_sources),
     }
 
@@ -87,9 +87,14 @@ def build_paper_text_profile(
         schema_version=PAPER_TEXT_PROFILE_SCHEMA_VERSION,
         paper_id=paper_id,
         title=title,
+        authors=authors,
         abstract=abstract,
         keywords=keywords,
+        doi=doi,
+        article_type=article_type,
+        section_headings=section_headings,
         note_sections=note_sections,
+        extraction_warnings=list(pdf_profile.warnings) if pdf_profile else [],
         sources=sources,
         confidence=confidence,
         generated_at=_utc_now_iso(),
@@ -145,62 +150,65 @@ def _required_paper_id(record: Mapping[str, Any]) -> str:
     return paper_id
 
 
-def _title_from_record(record: Mapping[str, Any]) -> tuple[str, str, str]:
+def _pdf_profile_from_cache(paper_id: str, extracted_text_dir: Path) -> PdfProfileExtraction | None:
+    try:
+        cached_text = load_cached_extracted_text(paper_id, extracted_text_dir)
+    except OSError:
+        cached_text = ""
+    if not cached_text.strip():
+        return None
+    return extract_pdf_profile_from_text(cached_text)
+
+
+def _title_from_sources(record: Mapping[str, Any], pdf_profile: PdfProfileExtraction | None) -> tuple[str, str, str]:
     title = _clean_text(record.get("title"))
     if title:
         return title, "paper_index", "high"
+    if pdf_profile and pdf_profile.title:
+        return pdf_profile.title, "pdf_profile", "medium"
     filename_stem = Path(_clean_text(record.get("filename"))).stem
     if filename_stem:
         return filename_stem, "filename", "low"
     return "", "", "none"
 
 
-def _abstract_from_sources(
-    paper_id: str,
-    record: Mapping[str, Any],
-    extracted_text_dir: Path,
-) -> tuple[str, str, str]:
-    abstract = _clean_text(record.get("abstract"))
-    if abstract:
-        return abstract, "paper_index", "high"
-
-    try:
-        cached_text = load_cached_extracted_text(paper_id, extracted_text_dir)
-    except OSError:
-        cached_text = ""
-    fallback = _abstract_from_cached_text(cached_text)
-    if fallback:
-        return fallback, "extracted_text_cache", "low"
+def _authors_from_sources(record: Mapping[str, Any], pdf_profile: PdfProfileExtraction | None) -> tuple[str, str, str]:
+    authors = _clean_text(record.get("authors"))
+    if authors:
+        return authors, "paper_index", "high"
+    if pdf_profile and pdf_profile.authors:
+        return pdf_profile.authors, "pdf_profile", "medium"
     return "", "", "none"
 
 
-def _abstract_from_cached_text(text: str) -> str:
-    lines = str(text or "").splitlines()
-    abstract_lines: list[str] = []
-    in_abstract = False
-    for raw_line in lines[:250]:
-        line = raw_line.strip()
-        if not line and not in_abstract:
-            continue
-        heading = _heading_token(line)
-        if in_abstract and heading in ABSTRACT_STOP_HEADINGS:
-            break
-        if not in_abstract:
-            if heading == "abstract":
-                in_abstract = True
-                inline = _inline_heading_text(line, "abstract")
-                if inline:
-                    abstract_lines.append(inline)
-            continue
-        if line:
-            abstract_lines.append(line)
-        elif abstract_lines:
-            break
-        if len(" ".join(abstract_lines)) >= 2500:
-            break
+def _abstract_from_sources(record: Mapping[str, Any], pdf_profile: PdfProfileExtraction | None) -> tuple[str, str, str]:
+    abstract = _clean_text(record.get("abstract"))
+    if abstract:
+        return abstract, "paper_index", "high"
+    if pdf_profile and pdf_profile.abstract:
+        return pdf_profile.abstract, "pdf_profile", "medium"
+    return "", "", "none"
 
-    abstract = " ".join(" ".join(abstract_lines).split())
-    return abstract if len(abstract) >= 40 else ""
+
+def _keywords_from_sources(
+    record: Mapping[str, Any],
+    pdf_profile: PdfProfileExtraction | None,
+) -> tuple[list[str], str, str]:
+    keywords = _keyword_values(record.get("keywords", ""))
+    if keywords:
+        return keywords, "paper_index", "high"
+    if pdf_profile and pdf_profile.keywords:
+        return list(pdf_profile.keywords), "pdf_profile", "medium"
+    return [], "", "none"
+
+
+def _doi_from_sources(record: Mapping[str, Any], pdf_profile: PdfProfileExtraction | None) -> tuple[str, str, str]:
+    doi = _clean_text(record.get("doi"))
+    if doi:
+        return doi, "paper_index", "high"
+    if pdf_profile and pdf_profile.doi:
+        return pdf_profile.doi, "pdf_profile", "medium"
+    return "", "", "none"
 
 
 def _note_sections_from_sources(

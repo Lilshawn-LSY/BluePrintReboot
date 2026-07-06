@@ -20,11 +20,14 @@ DEFAULT_CANONICAL_TAG_PATH = Path(__file__).resolve().parents[1] / "config" / "c
 
 SOURCE_WEIGHTS = {
     "keywords": 6,
+    "pdf_keywords": 6,
     "title": 5,
     "openalex_topics": 5,
     "openalex_keywords": 5,
     "abstract": 4,
+    "pdf_abstract": 4,
     "markdown_text": 3,
+    "pdf_section_headings": 3,
     "note_methods": 3,
     "note_evidence": 3,
     "note_summary": 2,
@@ -312,9 +315,19 @@ def apply_paper_text_profile_to_record(
     if _has_value(profile.title):
         suggestion_record["title"] = profile.title
     if _has_value(profile.abstract):
-        suggestion_record["abstract"] = profile.abstract
+        if profile.sources.get("abstract") == "pdf_profile":
+            suggestion_record["pdf_abstract"] = profile.abstract
+        else:
+            suggestion_record["abstract"] = profile.abstract
     if _has_value(profile.keywords):
-        suggestion_record["keywords"] = profile.keywords
+        if profile.sources.get("keywords") == "pdf_profile":
+            suggestion_record["pdf_keywords"] = profile.keywords
+        else:
+            suggestion_record["keywords"] = profile.keywords
+    if _has_value(profile.section_headings):
+        suggestion_record["pdf_section_headings"] = profile.section_headings
+    if _has_value(profile.article_type):
+        suggestion_record["article_type"] = profile.article_type
     suggestion_record["paper_text_profile_schema_version"] = profile.schema_version
     for section, text in profile.note_sections.items():
         field = PROFILE_NOTE_SECTION_FIELDS.get(str(section))

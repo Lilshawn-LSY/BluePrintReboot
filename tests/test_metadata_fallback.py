@@ -1,13 +1,16 @@
-﻿import pandas as pd
+import pandas as pd
 import requests
 
+from core.paper_text_profile import PaperTextProfile
 from services.metadata_fallback import (
     apply_metadata_candidate_to_index,
     build_doi_less_metadata_candidate,
     extract_arxiv_id_from_text,
+    fill_metadata_gaps_from_pdf_profile,
     lookup_arxiv_metadata,
     normalize_arxiv_id,
     parse_arxiv_atom_metadata,
+    pdf_profile_metadata_candidate_from_text,
 )
 from storage.index_store import load_index, save_index
 from tests.helpers import make_workspace
@@ -104,6 +107,76 @@ def test_arxiv_network_failure_returns_diagnostic_without_crashing() -> None:
     assert candidate["source"] == "arxiv_id"
     assert candidate["confidence"] == "medium"
     assert "network connection failed" in " ".join(candidate["diagnostics"])
+
+
+def test_crossref_blank_abstract_and_keywords_fill_from_pdf_profile() -> None:
+    profile = PaperTextProfile(
+        paper_id="paper-1",
+        abstract="PDF profile abstract from the paper front matter.",
+        keywords=["lateral root", "Arabidopsis"],
+        sources={"abstract": "pdf_profile", "keywords": "pdf_profile"},
+    )
+    crossref_candidate = {
+        "title": "Crossref Title",
+        "abstract": "",
+        "keywords": "",
+        "source": "crossref",
+        "confidence": "high",
+    }
+
+    filled = fill_metadata_gaps_from_pdf_profile(
+        {"paper_id": "paper-1", "abstract": "", "keywords": ""},
+        crossref_candidate,
+        profile,
+    )
+
+    assert filled["title"] == "Crossref Title"
+    assert filled["abstract"] == "PDF profile abstract from the paper front matter."
+    assert filled["keywords"] == "lateral root, Arabidopsis"
+    assert filled["source"] == "crossref+pdf_profile"
+    assert filled["field_sources"]["title"] == "crossref"
+    assert filled["field_sources"]["abstract"] == "pdf_profile"
+    assert filled["field_sources"]["keywords"] == "pdf_profile"
+
+
+def test_pdf_profile_gap_fill_does_not_overwrite_manual_fields() -> None:
+    profile = PaperTextProfile(
+        paper_id="paper-1",
+        abstract="PDF profile abstract should not replace manual text.",
+        keywords=["pdf keyword"],
+        sources={"abstract": "pdf_profile", "keywords": "pdf_profile"},
+    )
+
+    filled = fill_metadata_gaps_from_pdf_profile(
+        {"paper_id": "paper-1", "abstract": "Manual abstract", "keywords": "manual keyword"},
+        {"title": "Crossref Title", "abstract": "", "keywords": "", "source": "crossref"},
+        profile,
+    )
+
+    assert filled["abstract"] == ""
+    assert filled["keywords"] == ""
+    assert "abstract" not in filled["field_sources"]
+    assert "keywords" not in filled["field_sources"]
+
+
+def test_pdf_profile_metadata_candidate_from_review_text() -> None:
+    candidate = pdf_profile_metadata_candidate_from_text(
+        """REVIEW
+Lateral Root Development Review
+Jane Doe1, John Smith2
+Abstract
+This review covers lateral root biology.
+Keywords
+lateral root; Arabidopsis
+"""
+    )
+
+    assert candidate["title"] == "Lateral Root Development Review"
+    assert candidate["authors"] == "Jane Doe, John Smith"
+    assert candidate["abstract"] == "This review covers lateral root biology."
+    assert candidate["keywords"] == "lateral root, Arabidopsis"
+    assert candidate["article_type"] == "review"
+    assert candidate["field_sources"]["abstract"] == "pdf_profile"
 
 
 def test_candidate_apply_does_not_overwrite_existing_non_empty_metadata() -> None:

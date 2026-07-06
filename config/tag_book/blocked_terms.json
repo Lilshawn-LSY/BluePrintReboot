@@ -20,6 +20,18 @@
     {
       "term": "discussion",
       "reason": "Generic section word."
+    },
+    {
+      "term": "abstract",
+      "reason": "Generic section/source word."
+    },
+    {
+      "term": "background",
+      "reason": "Generic section/source word."
+    },
+    {
+      "term": "conclusion",
+      "reason": "Generic section/source word."
     }
   ]
 }

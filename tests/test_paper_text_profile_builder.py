@@ -1,4 +1,5 @@
 from services.paper_text_profile_builder import build_paper_text_profile
+from ingest.tag_suggester import build_tag_suggestion_record, explain_tag_suggestions
 from storage.extracted_text_store import save_extracted_text
 from storage.note_block_store import save_note_blocks
 from tests.helpers import make_workspace
@@ -21,7 +22,7 @@ def test_profile_construction_from_index_metadata() -> None:
         extracted_text_dir=workspace / "extracted_text",
     )
 
-    assert profile.schema_version == "1.0.13"
+    assert profile.schema_version == "1.0.15"
     assert profile.paper_id == "paper-1"
     assert profile.title == "Synthetic biology design in Arabidopsis"
     assert profile.abstract == "A deterministic profile should preserve metadata abstracts."
@@ -118,6 +119,42 @@ def test_extracted_text_cache_is_only_abstract_fallback() -> None:
     )
 
     assert profile.abstract.startswith("This fallback abstract is long enough")
-    assert profile.sources["abstract"] == "extracted_text_cache"
-    assert profile.confidence["abstract"] == "low"
+    assert profile.sources["abstract"] == "pdf_profile"
+    assert profile.confidence["abstract"] == "medium"
     assert profile.note_sections == {}
+
+
+def test_pdf_keywords_become_explicit_tag_suggestion_source() -> None:
+    workspace = make_workspace("paper-profile-pdf-keywords")
+    extracted_text_dir = workspace / "extracted_text"
+    save_extracted_text(
+        "paper-1",
+        "\n".join(
+            [
+                "Generic Review",
+                "Abstract",
+                "This review summarizes plant development.",
+                "Keywords",
+                "lateral root; Arabidopsis",
+            ]
+        ),
+        extracted_text_dir,
+    )
+
+    profile = build_paper_text_profile(
+        {"paper_id": "paper-1", "title": "Generic Review", "keywords": "", "tags": ""},
+        notes_dir=workspace / "notes",
+        note_blocks_dir=workspace / "note_blocks",
+        extracted_text_dir=extracted_text_dir,
+    )
+    suggestion_record = build_tag_suggestion_record(
+        {"paper_id": "paper-1", "title": "Generic Review", "tags": ""},
+        paper_text_profile=profile,
+    )
+    suggestions = explain_tag_suggestions(suggestion_record)
+    lateral = next(item for item in suggestions if item["canonical"] == "lateral-root")
+
+    assert profile.keywords == ["lateral root", "Arabidopsis"]
+    assert suggestion_record["pdf_keywords"] == ["lateral root", "Arabidopsis"]
+    assert lateral["matched_fields"] == ["pdf_keywords"]
+    assert lateral["source_label"] == "pdf keywords"

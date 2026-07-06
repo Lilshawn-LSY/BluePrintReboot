@@ -11,6 +11,8 @@
         "title",
         "abstract",
         "keywords",
+        "note_methods",
+        "note_evidence",
         "filename",
         "markdown_text",
         "extracted_text_preview"

@@ -53,6 +53,7 @@ from services.metadata_fallback import (
     apply_metadata_candidate_to_index,
     build_doi_less_metadata_candidate,
     build_metadata_candidate_update,
+    fill_metadata_gaps_from_pdf_profile,
 )
 from services.missing_pdf_repair import (
     ARCHIVE_DEFERRED_MESSAGE,
@@ -69,6 +70,7 @@ from services.pdf_inbox import (
     scan_pdf_inbox,
 )
 from services.reading_note_template import refresh_reading_note_header
+from services.paper_text_profile_builder import build_paper_text_profile
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
@@ -355,6 +357,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
     extraction_key = f"doi_extraction_{record['paper_id']}"
     enrichment_key = f"metadata_enrichment_{record['paper_id']}"
     doi_less_key = f"doi_less_metadata_candidate_{record['paper_id']}"
+    metadata_profile = _metadata_assist_profile(record)
 
     if st.button("Enrich Metadata", type="primary"):
         normalized_current_doi = normalize_doi(current_doi)
@@ -378,7 +381,11 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         crossref_status = "not attempted"
         if doi_for_lookup:
             try:
-                st.session_state[preview_key] = lookup_crossref_metadata(doi_for_lookup)
+                st.session_state[preview_key] = fill_metadata_gaps_from_pdf_profile(
+                    record,
+                    lookup_crossref_metadata(doi_for_lookup),
+                    metadata_profile,
+                )
                 crossref_status = "metadata found; review the preview before accepting"
             except CrossrefLookupError as exc:
                 crossref_status = f"failed: {exc}"
@@ -439,7 +446,11 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
             if st.button("Fetch Crossref metadata for detected DOI"):
                 try:
-                    st.session_state[preview_key] = lookup_crossref_metadata(detected_doi)
+                    st.session_state[preview_key] = fill_metadata_gaps_from_pdf_profile(
+                        record,
+                        lookup_crossref_metadata(detected_doi),
+                        metadata_profile,
+                    )
                     st.success("Crossref metadata found. Review the preview before accepting it.")
                     st.rerun()
                 except CrossrefLookupError as exc:
@@ -461,7 +472,9 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         _render_doi_less_metadata_candidate(record, doi_less_candidate, doi_less_key)
 
     preview = st.session_state.get(preview_key)
-    profile = load_profile(str(record.get("paper_id", "")))
+    if preview:
+        preview = fill_metadata_gaps_from_pdf_profile(record, preview, metadata_profile)
+    profile = metadata_profile
     suggestion_record = build_tag_suggestion_record(
         record,
         form_values=form_values,
@@ -485,6 +498,8 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         st.write(f"Filename: `{suggestion_record.get('filename', '')}`")
         st.write(f"Crossref subjects: `{suggestion_record.get('crossref_subjects', '')}`")
         st.write(f"Existing tags: `{suggestion_record.get('tags', '')}`")
+    if profile:
+        _render_metadata_profile_preview(profile)
     if suggestion_details:
         st.caption("Candidate tags are added only to this paper unless promoted in Tag Manager.")
         selected_suggestion_ids = _render_grouped_tag_suggestions(
@@ -503,7 +518,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
     with st.expander("Advanced manual lookup"):
         if st.button("Lookup Crossref by DOI"):
-            _lookup_crossref_by_current_doi(current_doi, preview_key)
+            _lookup_crossref_by_current_doi(current_doi, preview_key, record, metadata_profile)
 
     if not preview:
         return
@@ -512,12 +527,14 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
     st.write("Metadata source: Crossref")
     if preview.get("metadata_warning"):
         st.warning(preview["metadata_warning"])
+    field_sources = preview.get("field_sources", {}) if isinstance(preview.get("field_sources"), dict) else {}
     st.dataframe(
         pd.DataFrame(
             [
                 {
                     "field": field,
                     "value": preview.get(field, ""),
+                    "source": field_sources.get(field, "crossref" if preview.get(field, "") else ""),
                 }
                 for field in (
                     "title",
@@ -546,25 +563,62 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
 def _render_grouped_tag_suggestions(suggestion_details: list[dict], *, key_prefix: str) -> list[str]:
     selected_ids: list[str] = []
+    known = [item for item in suggestion_details if str(item.get("kind", "known_canonical")) == "known_canonical"]
+    rejected = [
+        item
+        for item in suggestion_details
+        if str(item.get("kind", "")) == "rejected_candidate" or str(item.get("quality", "")) == "rejected"
+    ]
+    candidates = [item for item in suggestion_details if item not in known and item not in rejected]
+
+    if known:
+        st.caption("Known canonical suggestions")
+        selected_ids.extend(_render_suggestion_items(known, key_prefix=key_prefix))
+    if candidates:
+        st.caption("Candidate phrase suggestions")
+        selected_ids.extend(_render_suggestion_items(candidates, key_prefix=f"{key_prefix}_candidate"))
+    if rejected:
+        with st.expander("Rejected candidate phrases"):
+            _render_suggestion_items(rejected, key_prefix=f"{key_prefix}_rejected", force_disabled=True)
+    return selected_ids
+
+
+def _render_suggestion_items(
+    suggestion_details: list[dict],
+    *,
+    key_prefix: str,
+    force_disabled: bool = False,
+) -> list[str]:
+    selected_ids: list[str] = []
     for category, items in group_suggestions_by_category(suggestion_details).items():
         st.write(f"**{category}**")
         for detail in items:
             label = detail.get("display") or detail.get("canonical") or detail.get("tag")
             kind = str(detail.get("kind", "known_canonical")).replace("_", " ")
+            quality = str(detail.get("quality", ""))
+            quality_label = f", {quality}" if quality and kind != "known canonical" else ""
             source = str(detail.get("source", ""))
             source_label = str(detail.get("source_label", "") or source)
             matched_text = str(detail.get("matched_text", ""))
             reason = str(detail.get("reason", ""))
+            quality_reason = str(detail.get("quality_reason") or detail.get("rejection_reason") or "")
             source_label = f" from {source_label}" if source_label else ""
             match_label = f" matched `{matched_text}`" if matched_text else ""
             selection_id = suggestion_selection_id(detail)
+            selectable = bool(detail.get("selectable", not force_disabled)) and not force_disabled
             selected = st.checkbox(
-                f"{label} ({kind})",
+                f"{label} ({kind}{quality_label})",
                 key=f"{key_prefix}_{selection_id}",
+                disabled=not selectable,
             )
-            if selected:
+            if selected and selectable:
                 selected_ids.append(selection_id)
             st.caption(f"{source_label}{match_label}".strip() or "No match details.")
+            if quality and kind != "known canonical":
+                quality_caption = f"Quality: `{quality}`"
+                if quality_reason:
+                    quality_caption += f" - {quality_reason}"
+                st.caption(quality_caption)
             if reason:
                 st.caption(reason)
             snippet = _tag_suggestion_snippet(detail)
@@ -663,7 +717,31 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def _lookup_crossref_by_current_doi(current_doi: str, preview_key: str) -> None:
+def _metadata_assist_profile(record: dict[str, str]):
+    profile = load_profile(str(record.get("paper_id", "")))
+    if profile is not None:
+        return profile
+    try:
+        return build_paper_text_profile(record)
+    except (OSError, ValueError):
+        return None
+
+
+def _render_metadata_profile_preview(profile) -> None:
+    with st.expander("PaperTextProfile preview"):
+        st.write(f"Title: `{profile.title}`")
+        st.write(f"Abstract characters: `{len(profile.abstract)}`")
+        st.write(f"Keywords: `{', '.join(profile.keywords) or 'none'}`")
+        st.write(f"Article type: `{profile.article_type}`")
+        headings = ", ".join(profile.section_headings) or "none"
+        st.write(f"Section headings: `{headings}`")
+        if profile.extraction_warnings:
+            st.write("Extraction warnings")
+            for warning in profile.extraction_warnings:
+                st.write(f"- {warning}")
+
+
+def _lookup_crossref_by_current_doi(current_doi: str, preview_key: str, record: dict[str, str], profile) -> None:
     normalized = normalize_doi(current_doi)
     if not normalized:
         st.warning("Enter and save a DOI before looking up Crossref metadata.")
@@ -671,7 +749,11 @@ def _lookup_crossref_by_current_doi(current_doi: str, preview_key: str) -> None:
         st.warning("The DOI does not look valid.")
     else:
         try:
-            st.session_state[preview_key] = lookup_crossref_metadata(normalized)
+            st.session_state[preview_key] = fill_metadata_gaps_from_pdf_profile(
+                record,
+                lookup_crossref_metadata(normalized),
+                profile,
+            )
             st.success("Crossref metadata found. Review the preview before accepting it.")
             st.rerun()
         except CrossrefLookupError as exc:

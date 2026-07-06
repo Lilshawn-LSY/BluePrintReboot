@@ -137,6 +137,14 @@ def test_lateral_root_matches_specific_alias() -> None:
     assert lateral["matched_text"] == "Lateral root"
 
 
+def test_specific_root_suggestion_suppresses_generic_root_development() -> None:
+    suggestions = explain_tag_book_suggestions({"abstract": "Lateral root development was reviewed.", "tags": ""})
+    canonicals = {item["canonical"] for item in suggestions}
+
+    assert "lateral-root" in canonicals
+    assert "root-development" not in canonicals
+
+
 def test_new_method_candidate_suggestion_from_lexicon() -> None:
     suggestions = explain_tag_book_suggestions(
         {"abstract": "We performed a genome-wide CRISPR screen in pooled cells.", "tags": ""}
