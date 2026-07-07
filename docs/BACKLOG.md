@@ -2,7 +2,7 @@
 
 Last synced: 2026-07-07
 
-This backlog is ordered for the post-v1.0.17 Reader stabilization cycle. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered for the post-v1.0.19 file lifecycle and orphan hardening cycle. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
 
 ## Completed Since v1.0.9
 
@@ -17,6 +17,8 @@ These items should not remain in the active Next queue.
 - **v1.0.15 PDF profile extraction repair** - cached/full extracted PDF text can supply cleaned front-matter title, authors, DOI, abstract, keywords, article type, section headings, warnings, metadata gap-fill, and explicit PDF profile tag sources.
 - **v1.0.16 Roadmap/release evidence sync** - roadmap, backlog, regression checklist, release notes, and README were synced to the implemented v1.0.10 through v1.0.15 state.
 - **v1.0.17 Reader PDF stabilization** - native PDF rendering is the default Reader path, HTML/base64 rendering is an explicit experimental fallback, large PDFs avoid automatic base64 rendering, external path guidance is available, and Reader paper context is preserved across note, tag, status, priority, and Reader project-link actions.
+- **v1.0.18 File lifecycle duplicate policy** - read-only lifecycle diagnosis, same-hash duplicate keep/reconnect/ignore/remove controls, `paper_id`-preserving duplicate reconnect, confirmed duplicate index-row removal, and no-auto-merge regression coverage are implemented.
+- **v1.0.19 Orphan repair and storage hardening** - orphan extracted-text cache detection, orphan note/note-block export/reattach/delete, orphan project-link export/reattach/unlink, and atomic extracted-text `.txt` cache writes are implemented.
 
 ## Next
 
@@ -29,16 +31,14 @@ These items should be implemented before starting FastAPI or frontend migration.
 - Reduce PDF rerenders where Streamlit allows it.
 - Keep Save/Reload/Insert/Import precedence explicit.
 
-### 2. Library lifecycle repair completion
+### 2. Library lifecycle edge-case polish
 
-- Decide and implement duplicate merge/remove semantics.
+- Keep automatic duplicate merge deferred unless a future design proves it is safe.
 - Add clearer user-facing outcomes for unindexed duplicate PDFs skipped by scan.
 - Decide how archive should work if `status` remains limited to `unread`, `reading`, and `read`.
-- Add orphan note and note-block reattach/export/delete workflows with explicit confirmation.
 
 ### 3. Storage safety polish
 
-- Make extracted full-text `.txt` cache writes atomic.
 - Consider backup or quarantine behavior for corrupt JSON/text cache files.
 - Surface corrupt cache/state files in Library Health Check.
 
@@ -52,11 +52,12 @@ Current state:
 
 - Missing indexed PDF reconnect/remove exists.
 - `pdf_sha256` supports repair and duplicate review.
-- Same-hash duplicates can be reviewed.
+- Same-hash duplicates can be reviewed and repaired through explicit keep/reconnect/ignore/remove actions.
+- Confirmed duplicate index-row removal deletes only the selected index row and preserves linked user data by default.
 
 Still needed:
 
-- Decide and implement duplicate merge/remove semantics.
+- Keep automatic duplicate merge deferred unless future UX and recovery policy make it safe.
 - Add clearer user-facing outcomes for unindexed duplicate PDFs skipped by scan.
 - Decide how archive should work if `status` remains limited to `unread`, `reading`, and `read`.
 
@@ -65,14 +66,14 @@ Still needed:
 Current state:
 
 - Orphan note files and note block files are detected.
-- Orphan project links can be removed with confirmation.
+- Orphan extracted-text caches are detected.
+- Orphan notes and note blocks can be exported, reattached, or deleted with confirmation.
+- Orphan project links can be exported, reattached, or unlinked with confirmation.
 
 Still needed:
 
-- Reattach orphan note files to a selected paper.
-- Export orphan notes/note blocks before deletion.
-- Optional confirmed delete for orphan note/note-block files.
-- Tests for every destructive and non-destructive branch.
+- Consider whether orphan extracted-text caches need an export/delete workflow, or whether detection plus manual cleanup is enough.
+- Add corrupt-cache quarantine guidance.
 
 ### Storage safety
 
@@ -80,10 +81,10 @@ Current state:
 
 - Key JSON writes use atomic temp-file + fsync + replace.
 - `paper_index.csv` already uses atomic CSV replacement.
+- Extracted full-text `.txt` cache writes use atomic temp-file + fsync + replace.
 
 Still needed:
 
-- Make extracted full-text `.txt` cache writes atomic.
 - Consider backup or quarantine behavior for corrupt JSON/text cache files.
 - Surface corrupt cache/state files in Library Health Check.
 

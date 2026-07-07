@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ingest.text_extractor import FullTextExtractionResult
 from storage.atomic_json import atomic_write_json
@@ -92,11 +94,44 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def save_extracted_text(paper_id: str, text: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> Path:
+def _atomic_write_text(
+    path: str | Path,
+    text: str,
+    *,
+    replace_file: Callable[[str | Path, str | Path], None] | None = None,
+) -> Path:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    replace = replace_file or os.replace
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=target.parent,
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(text)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        replace(temporary_path, target)
+    finally:
+        if temporary_path and temporary_path.exists():
+            temporary_path.unlink()
+    return target
+
+
+def save_extracted_text(
+    paper_id: str,
+    text: str,
+    cache_dir: Path = EXTRACTED_TEXT_DIR,
+    *,
+    replace_file: Callable[[str | Path, str | Path], None] | None = None,
+) -> Path:
     path = extracted_text_path(paper_id, cache_dir)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
+    return _atomic_write_text(path, text, replace_file=replace_file)
 
 
 def save_extraction_metadata(

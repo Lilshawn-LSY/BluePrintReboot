@@ -44,10 +44,23 @@ from storage.paper_profile_store import load_profile
 from services.backup_snapshot import create_backup_snapshot
 from services.library_health import (
     ORPHAN_PRESERVE_ACTION,
+    ORPHAN_EXPORT_ACTION,
+    OrphanRepairError,
     OrphanProjectLinkRepairError,
+    build_orphan_note_block_repair_plan,
+    build_orphan_note_repair_plan,
     build_orphan_project_link_removal_plan,
-    remove_orphan_project_link,
+    build_orphan_project_link_reattach_plan,
+    delete_orphan_note,
+    delete_orphan_note_blocks,
+    export_orphan_note,
+    export_orphan_note_blocks,
+    export_orphan_project_link,
+    reattach_orphan_note,
+    reattach_orphan_note_blocks,
+    reattach_orphan_project_link,
     run_library_health_check,
+    unlink_orphan_project_link,
 )
 from services.metadata_fallback import (
     apply_metadata_candidate_to_index,
@@ -62,6 +75,13 @@ from services.missing_pdf_repair import (
     list_reconnect_candidates,
     reconnect_missing_pdf,
     remove_missing_pdf_from_index,
+)
+from services.file_lifecycle import (
+    FileLifecycleRepairError,
+    build_duplicate_reconnect_plan,
+    build_duplicate_remove_plan,
+    reconnect_duplicate_pdf,
+    remove_duplicate_index_row,
 )
 from services.pdf_inbox import (
     PDFInboxError,
@@ -972,6 +992,7 @@ def _render_library_health_check() -> None:
         ("Orphan notes", "orphan_notes"),
         ("Orphan note blocks", "orphan_note_blocks"),
         ("Orphan project links", "orphan_project_links"),
+        ("Orphan extracted text caches", "orphan_extracted_text"),
         ("Stale extracted text", "stale_extracted_text"),
         ("Noncanonical PDF paths", "noncanonical_filepaths"),
         ("Diagnostic errors", "errors"),
@@ -1013,7 +1034,7 @@ def _duplicate_pdf_hash_rows(group: dict[str, object]) -> list[dict[str, object]
                 "note_file_count": record.get("note_file_count", 0),
                 "note_block_count": record.get("note_block_count", 0),
                 "project_link_count": record.get("project_link_count", 0),
-                "review_action": "Review canonical record; merge/remove workflow is deferred.",
+                "review_action": "Choose keep, reconnect, ignore, or confirmed index-row removal below.",
             }
         )
     for duplicate_file in group.get("unindexed_files", []):
@@ -1037,7 +1058,10 @@ def _duplicate_pdf_hash_rows(group: dict[str, object]) -> list[dict[str, object]
 
 
 def _render_duplicate_pdf_hash_review(items: list[dict[str, object]]) -> None:
-    st.caption("Review only: no merge, PDF deletion, or index-row removal is automated here.")
+    st.caption(
+        "No same-hash duplicates are merged automatically. Repair actions preserve PDFs, notes, note blocks, "
+        "project links, and extracted text unless a confirmed index-row removal is selected."
+    )
     summary_rows = [
         {
             "classification": item.get("classification", ""),
@@ -1056,11 +1080,221 @@ def _render_duplicate_pdf_hash_review(items: list[dict[str, object]]) -> None:
         rows = _duplicate_pdf_hash_rows(group)
         if rows:
             st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        indexed_records = [
+            record for record in group.get("indexed_records", []) if isinstance(record, dict) and record.get("paper_id")
+        ]
+        if not indexed_records:
+            st.info("Only unindexed PDFs are in this group. Keep or ignore them for now; no index row can be repaired.")
+            continue
+        labels = {
+            str(record.get("paper_id", "")): (
+                f"{record.get('title', '') or record.get('filename', '') or record.get('paper_id', '')} "
+                f"({record.get('paper_id', '')})"
+            )
+            for record in indexed_records
+        }
+        selected_paper_id = st.selectbox(
+            "Indexed duplicate row",
+            options=list(labels),
+            format_func=lambda paper_id: labels.get(paper_id, paper_id),
+            key=f"duplicate_pdf_row_{index}_{pdf_sha256}",
+        )
+        action = st.radio(
+            "Duplicate action",
+            options=("Keep", "Reconnect", "Ignore", "Remove index row"),
+            horizontal=True,
+            key=f"duplicate_pdf_action_{index}_{pdf_sha256}_{selected_paper_id}",
+        )
+        if action == "Keep":
+            if st.button("Keep duplicate rows", key=f"duplicate_pdf_keep_{index}_{selected_paper_id}"):
+                st.info("No changes were made. This duplicate group remains visible in health checks.")
+        elif action == "Ignore":
+            if st.button("Ignore for now", key=f"duplicate_pdf_ignore_{index}_{selected_paper_id}"):
+                ignored = set(st.session_state.get("ignored_duplicate_pdf_hashes", set()))
+                ignored.add(pdf_sha256)
+                st.session_state["ignored_duplicate_pdf_hashes"] = ignored
+                st.info("No library data was changed. This duplicate was marked ignored for the current app session.")
+        elif action == "Reconnect":
+            candidate_files = [
+                candidate
+                for candidate in group.get("unindexed_files", [])
+                if isinstance(candidate, dict) and candidate.get("filepath")
+            ]
+            if not candidate_files:
+                st.info("No unindexed same-hash PDF is available for reconnect in this group.")
+                continue
+            target_labels = {
+                str(candidate.get("filepath", "")): str(candidate.get("filename", "") or candidate.get("filepath", ""))
+                for candidate in candidate_files
+            }
+            selected_target = st.selectbox(
+                "Reconnect target PDF",
+                options=list(target_labels),
+                format_func=lambda path: target_labels.get(path, path),
+                key=f"duplicate_pdf_reconnect_target_{index}_{selected_paper_id}",
+            )
+            plan = build_duplicate_reconnect_plan(selected_paper_id, selected_target)
+            st.write(f"Reconnect status: `{plan['status']}`")
+            st.write(plan["message"])
+            st.code(
+                "\n".join(
+                    [
+                        f"paper_id: {plan.get('paper_id', '')}",
+                        f"current filepath: {plan.get('current_filepath', '')}",
+                        f"target filepath:  {plan.get('target_path', '')}",
+                        f"stored SHA-256:  {plan.get('current_pdf_sha256', '') or 'unavailable'}",
+                        f"target SHA-256:  {plan.get('target_pdf_sha256', '') or 'unavailable'}",
+                        f"updates: {plan.get('updates', '')}",
+                        f"preserves: {plan.get('preserves', '')}",
+                    ]
+                )
+            )
+            mismatch_confirmed = True
+            if plan["requires_hash_mismatch_confirmation"]:
+                st.warning("The selected PDF has a different SHA-256 from this index row.")
+                mismatch_confirmed = st.checkbox(
+                    "I understand this reconnect uses a different SHA-256.",
+                    key=f"duplicate_pdf_reconnect_mismatch_{index}_{selected_paper_id}",
+                )
+            reconnect_confirmed = st.checkbox(
+                "I understand reconnect updates only file identity fields and keeps paper_id-linked data.",
+                key=f"duplicate_pdf_reconnect_confirm_{index}_{selected_paper_id}",
+                disabled=not bool(plan["can_reconnect"]),
+            )
+            if st.button(
+                "Reconnect duplicate row",
+                key=f"duplicate_pdf_reconnect_apply_{index}_{selected_paper_id}",
+                disabled=not reconnect_confirmed or not mismatch_confirmed or not bool(plan["can_reconnect"]),
+            ):
+                try:
+                    result = reconnect_duplicate_pdf(
+                        selected_paper_id,
+                        selected_target,
+                        confirm_hash_mismatch=bool(mismatch_confirmed),
+                    )
+                except FileLifecycleRepairError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state.pop("library_health_report", None)
+                    st.session_state["library_health_repair_success"] = result["message"]
+                    st.rerun()
+        else:
+            plan = build_duplicate_remove_plan(selected_paper_id)
+            st.warning(plan["warning"])
+            st.write(f"Remove status: `{plan['status']}`")
+            st.write(plan["message"])
+            st.code(
+                "\n".join(
+                    [
+                        f"paper_id: {plan.get('paper_id', '')}",
+                        f"filepath: {plan.get('filepath', '')}",
+                        f"pdf_sha256: {plan.get('pdf_sha256', '') or 'unavailable'}",
+                        f"same-hash indexed rows: {plan.get('same_hash_index_row_count', 0)}",
+                        f"removes: {plan.get('removes', '')}",
+                        f"preserves: {plan.get('preserves', '')}",
+                    ]
+                )
+            )
+            remove_confirmed = st.checkbox(
+                "I understand this removes only the selected paper_index.csv row.",
+                key=f"duplicate_pdf_remove_confirm_{index}_{selected_paper_id}",
+                disabled=not bool(plan["can_remove"]),
+            )
+            if st.button(
+                "Remove duplicate index row",
+                key=f"duplicate_pdf_remove_apply_{index}_{selected_paper_id}",
+                disabled=not remove_confirmed or not bool(plan["can_remove"]),
+            ):
+                try:
+                    result = remove_duplicate_index_row(selected_paper_id, confirm=True)
+                except FileLifecycleRepairError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state.pop("library_health_report", None)
+                    st.session_state["library_health_repair_success"] = result["message"]
+                    st.rerun()
+
+
+def _indexed_paper_labels() -> dict[str, str]:
+    dataframe = _index()
+    labels: dict[str, str] = {}
+    if dataframe.empty or "paper_id" not in dataframe.columns:
+        return labels
+    for record in dataframe.to_dict("records"):
+        paper_id = str(record.get("paper_id", "")).strip()
+        if not paper_id:
+            continue
+        labels[paper_id] = f"{record.get('title', '') or record.get('filename', '') or paper_id} ({paper_id})"
+    return labels
 
 
 def _render_orphan_note_review(items: list[dict[str, object]]) -> None:
     st.caption(ORPHAN_PRESERVE_ACTION)
     st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
+    paper_ids = [str(item.get("paper_id", "")) for item in items if item.get("paper_id")]
+    if not paper_ids:
+        return
+    selected_orphan_id = st.selectbox(
+        "Orphan note",
+        options=paper_ids,
+        key="orphan_note_selected_id",
+    )
+    target_labels = _indexed_paper_labels()
+    if st.button("Export orphan note", key=f"orphan_note_export_{selected_orphan_id}"):
+        try:
+            result = export_orphan_note(selected_orphan_id)
+        except OrphanRepairError as exc:
+            st.error(str(exc))
+        else:
+            st.success(result["message"])
+            st.caption(result["export_path"])
+    if target_labels:
+        selected_target_id = st.selectbox(
+            "Reattach note to paper",
+            options=list(target_labels),
+            format_func=lambda paper_id: target_labels.get(paper_id, paper_id),
+            key=f"orphan_note_target_{selected_orphan_id}",
+        )
+        plan = build_orphan_note_repair_plan(selected_orphan_id, selected_target_id)
+        st.write(f"Reattach status: `{plan['status']}`")
+        st.write(plan["message"])
+        reattach_confirmed = st.checkbox(
+            "I understand this moves orphan note content into the selected paper note.",
+            key=f"orphan_note_reattach_confirm_{selected_orphan_id}",
+            disabled=not bool(plan["can_reattach"]),
+        )
+        if st.button(
+            "Reattach orphan note",
+            key=f"orphan_note_reattach_apply_{selected_orphan_id}",
+            disabled=not reattach_confirmed or not bool(plan["can_reattach"]),
+        ):
+            try:
+                result = reattach_orphan_note(selected_orphan_id, selected_target_id, confirm=True)
+            except OrphanRepairError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("library_health_report", None)
+                st.session_state["library_health_repair_success"] = result["message"]
+                st.rerun()
+    with st.expander("Delete orphan note"):
+        st.warning("Delete is permanent. Export first if the content may be needed later.")
+        delete_confirmed = st.checkbox(
+            "I understand this deletes only the orphan note file.",
+            key=f"orphan_note_delete_confirm_{selected_orphan_id}",
+        )
+        if st.button(
+            "Delete orphan note",
+            key=f"orphan_note_delete_apply_{selected_orphan_id}",
+            disabled=not delete_confirmed,
+        ):
+            try:
+                result = delete_orphan_note(selected_orphan_id, confirm=True)
+            except OrphanRepairError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("library_health_report", None)
+                st.session_state["library_health_repair_success"] = result["message"]
+                st.rerun()
 
 
 def _render_orphan_note_block_review(items: list[dict[str, object]]) -> None:
@@ -1073,9 +1307,74 @@ def _render_orphan_note_block_review(items: list[dict[str, object]]) -> None:
             continue
         st.write(f"Blocks for `{item.get('paper_id', '')}`")
         st.dataframe(pd.DataFrame(blocks), width="stretch", hide_index=True)
+    paper_ids = [str(item.get("paper_id", "")) for item in items if item.get("paper_id")]
+    if not paper_ids:
+        return
+    selected_orphan_id = st.selectbox(
+        "Orphan note-block file",
+        options=paper_ids,
+        key="orphan_note_block_selected_id",
+    )
+    if st.button("Export orphan note blocks", key=f"orphan_note_block_export_{selected_orphan_id}"):
+        try:
+            result = export_orphan_note_blocks(selected_orphan_id)
+        except OrphanRepairError as exc:
+            st.error(str(exc))
+        else:
+            st.success(result["message"])
+            st.caption(result["export_path"])
+    target_labels = _indexed_paper_labels()
+    if target_labels:
+        selected_target_id = st.selectbox(
+            "Reattach blocks to paper",
+            options=list(target_labels),
+            format_func=lambda paper_id: target_labels.get(paper_id, paper_id),
+            key=f"orphan_note_block_target_{selected_orphan_id}",
+        )
+        plan = build_orphan_note_block_repair_plan(selected_orphan_id, selected_target_id)
+        st.write(f"Reattach status: `{plan['status']}`")
+        st.write(plan["message"])
+        reattach_confirmed = st.checkbox(
+            "I understand this appends orphan blocks to the selected paper.",
+            key=f"orphan_note_block_reattach_confirm_{selected_orphan_id}",
+            disabled=not bool(plan["can_reattach"]),
+        )
+        if st.button(
+            "Reattach orphan note blocks",
+            key=f"orphan_note_block_reattach_apply_{selected_orphan_id}",
+            disabled=not reattach_confirmed or not bool(plan["can_reattach"]),
+        ):
+            try:
+                result = reattach_orphan_note_blocks(selected_orphan_id, selected_target_id, confirm=True)
+            except OrphanRepairError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("library_health_report", None)
+                st.session_state["library_health_repair_success"] = result["message"]
+                st.rerun()
+    with st.expander("Delete orphan note blocks"):
+        st.warning("Delete is permanent. Export first if these blocks may be needed later.")
+        delete_confirmed = st.checkbox(
+            "I understand this deletes only the orphan note-block file.",
+            key=f"orphan_note_block_delete_confirm_{selected_orphan_id}",
+        )
+        if st.button(
+            "Delete orphan note blocks",
+            key=f"orphan_note_block_delete_apply_{selected_orphan_id}",
+            disabled=not delete_confirmed,
+        ):
+            try:
+                result = delete_orphan_note_blocks(selected_orphan_id, confirm=True)
+            except OrphanRepairError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("library_health_report", None)
+                st.session_state["library_health_repair_success"] = result["message"]
+                st.rerun()
 
 
 def _render_orphan_project_link_repair(items: list[dict[str, object]]) -> None:
+    st.caption(ORPHAN_EXPORT_ACTION)
     st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
     link_ids = [str(item.get("link_id", "")) for item in items if item.get("link_id")]
     if not link_ids:
@@ -1094,8 +1393,63 @@ def _render_orphan_project_link_repair(items: list[dict[str, object]]) -> None:
         format_func=lambda link_id: labels.get(link_id, link_id),
         key="orphan_project_link_selected_id",
     )
+    selected_item = next((item for item in items if str(item.get("link_id", "")) == selected_link_id), {})
+    if st.button("Export orphan project link", key=f"orphan_project_link_export_{selected_link_id}"):
+        try:
+            result = export_orphan_project_link(selected_link_id)
+        except OrphanProjectLinkRepairError as exc:
+            st.error(str(exc))
+        else:
+            st.success(result["message"])
+            st.caption(result["export_path"])
+
+    target_labels = _indexed_paper_labels()
+    if target_labels:
+        selected_target_id = st.selectbox(
+            "Reattach link to paper",
+            options=list(target_labels),
+            format_func=lambda paper_id: target_labels.get(paper_id, paper_id),
+            key=f"orphan_project_link_target_{selected_link_id}",
+        )
+        target_block_id = ""
+        if selected_item.get("target_type") == "note_block":
+            target_block_id = st.text_input(
+                "Target note-block id",
+                key=f"orphan_project_link_target_block_{selected_link_id}",
+            )
+        reattach_plan = build_orphan_project_link_reattach_plan(
+            selected_link_id,
+            selected_target_id,
+            target_block_id=target_block_id,
+        )
+        st.write(f"Reattach status: `{reattach_plan['status']}`")
+        st.write(reattach_plan["message"])
+        reattach_confirmed = st.checkbox(
+            "I understand this updates only the broken project link association.",
+            key=f"orphan_project_link_reattach_confirm_{selected_link_id}",
+            disabled=not bool(reattach_plan["can_reattach"]),
+        )
+        if st.button(
+            "Reattach orphan project link",
+            key=f"orphan_project_link_reattach_apply_{selected_link_id}",
+            disabled=not reattach_confirmed or not bool(reattach_plan["can_reattach"]),
+        ):
+            try:
+                result = reattach_orphan_project_link(
+                    selected_link_id,
+                    selected_target_id,
+                    target_block_id=target_block_id,
+                    confirm=True,
+                )
+            except OrphanProjectLinkRepairError as exc:
+                st.error(str(exc))
+            else:
+                st.session_state.pop("library_health_report", None)
+                st.session_state["library_health_repair_success"] = result["message"]
+                st.rerun()
+
     plan = build_orphan_project_link_removal_plan(selected_link_id)
-    st.write(f"Removal status: `{plan['status']}`")
+    st.write(f"Unlink status: `{plan['status']}`")
     st.write(plan["message"])
     st.code(
         "\n".join(
@@ -1110,17 +1464,17 @@ def _render_orphan_project_link_repair(items: list[dict[str, object]]) -> None:
         )
     )
     remove_confirmed = st.checkbox(
-        "I understand this removes only the project link and leaves papers, PDFs, notes, note blocks, and index rows untouched.",
+        "I understand this unlinks only the project link and leaves papers, PDFs, notes, note blocks, and index rows untouched.",
         key=f"orphan_project_link_remove_confirm_{selected_link_id}",
         disabled=not bool(plan["can_remove"]),
     )
     if st.button(
-        "Remove orphan project link",
+        "Unlink orphan project link",
         key=f"orphan_project_link_remove_apply_{selected_link_id}",
         disabled=not remove_confirmed or not bool(plan["can_remove"]),
     ):
         try:
-            result = remove_orphan_project_link(selected_link_id, confirm=True)
+            result = unlink_orphan_project_link(selected_link_id, confirm=True)
         except OrphanProjectLinkRepairError as exc:
             st.error(str(exc))
         else:
