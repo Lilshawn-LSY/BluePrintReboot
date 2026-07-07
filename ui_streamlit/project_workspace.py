@@ -77,7 +77,7 @@ def render_paper_project_links(record: dict[str, str]) -> None:
             st.write(f"{project_name} - {_display_choice(link['link_type'])}")
             if link["note"]:
                 st.caption(link["note"])
-            _render_unlink_action(link)
+            _render_unlink_action(link, reader_paper_id=paper_id)
     else:
         st.caption("This paper is not linked to a project.")
 
@@ -103,6 +103,7 @@ def render_paper_project_links(record: dict[str, str]) -> None:
             link_type=link_type,
             note=note,
         )
+        open_paper_in_reader(paper_id, st.session_state)
         st.rerun()
 
 
@@ -137,7 +138,7 @@ def render_note_block_project_links(record: dict[str, str], block: dict[str, Any
         for link in links:
             project_name = project_by_id.get(link["project_id"], {}).get("name", link["project_id"])
             st.caption(f"Project: {project_name}")
-            _render_unlink_action(link)
+            _render_unlink_action(link, reader_paper_id=paper_id)
 
     if not projects:
         return
@@ -164,6 +165,7 @@ def render_note_block_project_links(record: dict[str, str], block: dict[str, Any
                 link_type=link_type,
                 note=note,
             )
+            open_paper_in_reader(paper_id, st.session_state)
             st.rerun()
 
 
@@ -412,7 +414,7 @@ def clear_project_link_action_state(session_state: MutableMapping, link_id: str)
     clear_session_keys(session_state, project_link_unlink_confirmation_key(link_id))
 
 
-def _render_unlink_action(link: dict[str, Any]) -> None:
+def _render_unlink_action(link: dict[str, Any], reader_paper_id: str | None = None) -> None:
     key = project_link_unlink_confirmation_key(link["id"])
     if st.button("Unlink", key=f"unlink_project_link_{link['id']}"):
         request_confirmation(st.session_state, key)
@@ -420,9 +422,13 @@ def _render_unlink_action(link: dict[str, Any]) -> None:
     if decision == "confirm":
         delete_project_link(link["id"])
         clear_project_link_action_state(st.session_state, link["id"])
+        if reader_paper_id:
+            open_paper_in_reader(reader_paper_id, st.session_state)
         st.rerun()
     if decision == "cancel":
         clear_session_keys(st.session_state, key)
+        if reader_paper_id:
+            open_paper_in_reader(reader_paper_id, st.session_state)
         st.rerun()
 
 

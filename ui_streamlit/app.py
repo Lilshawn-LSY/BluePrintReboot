@@ -85,6 +85,7 @@ from ui_streamlit.project_workspace import render_paper_project_links, render_pr
 from ui_streamlit.reader_workspace import (
     note_draft_key,
     pending_note_reload_key,
+    preserve_reader_context_for_paper_id,
     queue_note_text_update,
     render_reader_workspace,
 )
@@ -130,6 +131,11 @@ def _latest_record_for_paper(paper_id: str) -> dict[str, str] | None:
     if matches.empty:
         return None
     return {str(key): str(value) for key, value in matches.iloc[0].fillna("").to_dict().items()}
+
+
+def _rerun_paper_detail(paper_id: str) -> None:
+    preserve_reader_context_for_paper_id(paper_id, st.session_state)
+    st.rerun()
 
 
 def _refresh_reading_note_header_after_metadata_apply(paper_id: str) -> None:
@@ -330,7 +336,7 @@ def paper_detail_page() -> None:
             )
             _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
             st.success("Metadata saved.")
-            st.rerun()
+            _rerun_paper_detail(record["paper_id"])
 
     form_values = {
         "title": title,
@@ -400,7 +406,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         if crossref_status.startswith("failed:") or crossref_status == "not attempted; no DOI available":
             st.session_state[doi_less_key] = build_doi_less_metadata_candidate(record)
         if saved or crossref_status.startswith("metadata found"):
-            st.rerun()
+            _rerun_paper_detail(record["paper_id"])
 
     extraction = st.session_state.get(extraction_key)
     enrichment = st.session_state.get(enrichment_key, {})
@@ -442,7 +448,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
                     st.session_state[extraction_key]["saved"] = True
                     st.session_state[extraction_key]["message"] = "Detected DOI was saved to this paper."
                     st.success("Saved detected DOI.")
-                    st.rerun()
+                    _rerun_paper_detail(record["paper_id"])
 
             if st.button("Fetch Crossref metadata for detected DOI"):
                 try:
@@ -452,7 +458,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
                         metadata_profile,
                     )
                     st.success("Crossref metadata found. Review the preview before accepting it.")
-                    st.rerun()
+                    _rerun_paper_detail(record["paper_id"])
                 except CrossrefLookupError as exc:
                     st.warning(str(exc))
                 except Exception:
@@ -512,7 +518,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
             update_paper_metadata(record["paper_id"], {"tags": merged_tags})
             _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
             st.success("Selected suggested tags added.")
-            st.rerun()
+            _rerun_paper_detail(record["paper_id"])
     else:
         st.caption("No new tag suggestions.")
 
@@ -558,7 +564,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
         st.session_state.pop(preview_key, None)
         st.success("Crossref metadata accepted.")
-        st.rerun()
+        _rerun_paper_detail(record["paper_id"])
 
 
 def _render_grouped_tag_suggestions(suggestion_details: list[dict], *, key_prefix: str) -> list[str]:
@@ -705,10 +711,10 @@ def _render_doi_less_metadata_candidate(
         st.session_state.pop(candidate_key, None)
         updated = ", ".join(result["updated_fields"]) if result["updated_fields"] else "none"
         st.success(f"DOI-less metadata applied. Updated fields: {updated}.")
-        st.rerun()
+        _rerun_paper_detail(record["paper_id"])
     if col2.button("Clear DOI-less candidate", key=f"doi_less_clear_{record['paper_id']}"):
         st.session_state.pop(candidate_key, None)
-        st.rerun()
+        _rerun_paper_detail(record["paper_id"])
 
 
 def _now_iso() -> str:
@@ -755,7 +761,7 @@ def _lookup_crossref_by_current_doi(current_doi: str, preview_key: str, record: 
                 profile,
             )
             st.success("Crossref metadata found. Review the preview before accepting it.")
-            st.rerun()
+            _rerun_paper_detail(record["paper_id"])
         except CrossrefLookupError as exc:
             st.warning(str(exc))
         except Exception:

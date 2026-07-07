@@ -62,9 +62,14 @@ from ui_streamlit.ui_helpers import (
 
 STATUS_OPTIONS = ["unread", "reading", "read"]
 READING_PRIORITY_OPTIONS = ["low", "normal", "high"]
-STABLE_HTML_RENDERER = "Stable HTML viewer"
 NATIVE_STREAMLIT_RENDERER = "Native Streamlit PDF viewer"
-PDF_RENDERER_OPTIONS = [STABLE_HTML_RENDERER, NATIVE_STREAMLIT_RENDERER]
+HTML_BASE64_FALLBACK_RENDERER = "Experimental HTML/base64 fallback"
+STABLE_HTML_RENDERER = HTML_BASE64_FALLBACK_RENDERER
+PDF_RENDERER_OPTIONS = [NATIVE_STREAMLIT_RENDERER, HTML_BASE64_FALLBACK_RENDERER]
+LARGE_PDF_SIZE_MB = 25.0
+PDF_VIEWER_HEIGHT = 920
+PDF_VIEWER_IFRAME_HEIGHT = 940
+PAPER_DETAIL_PAGE_NAME = "Paper Detail"
 
 NOTE_BLOCKS = {
     "summary": "## Summary\n\n- \n",
@@ -299,7 +304,24 @@ def save_note_draft(
     else:
         note_path = save_note_text(record, text, notes_dir=notes_dir)
     session_state[note_saved_at_key(record)] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    preserve_reader_context(record, session_state)
     return note_path
+
+
+def preserve_reader_context(record: dict[str, str], session_state: MutableMapping) -> None:
+    preserve_reader_context_for_paper_id(str(record.get("paper_id", "")), session_state)
+
+
+def preserve_reader_context_for_paper_id(paper_id: str, session_state: MutableMapping) -> None:
+    stable_paper_id = str(paper_id or "").strip()
+    if stable_paper_id:
+        session_state["active_paper_id"] = stable_paper_id
+    session_state["current_page"] = PAPER_DETAIL_PAGE_NAME
+
+
+def _rerun_reader(record: dict[str, str]) -> None:
+    preserve_reader_context(record, st.session_state)
+    st.rerun()
 
 
 def pdf_embed_html(pdf_path: Path, height: int = 900) -> str:
@@ -323,7 +345,7 @@ def native_pdf_support_status() -> dict[str, object]:
 
 
 def initial_pdf_render_status(
-    selected_renderer: str = STABLE_HTML_RENDERER,
+    selected_renderer: str = NATIVE_STREAMLIT_RENDERER,
     native_status: dict[str, object] | None = None,
 ) -> dict[str, object]:
     support = native_status if native_status is not None else native_pdf_support_status()
@@ -364,7 +386,46 @@ def mark_pdf_render_native_success(status: dict[str, object]) -> dict[str, objec
     return updated
 
 
+def pdf_large_file_policy(
+    path_status: dict[str, object],
+    *,
+    threshold_mb: float = LARGE_PDF_SIZE_MB,
+) -> dict[str, object]:
+    size_mb = float(path_status.get("size_mb", 0.0) or 0.0)
+    exists = bool(path_status.get("exists", False))
+    is_large = exists and size_mb >= threshold_mb
+    return {
+        "threshold_mb": float(threshold_mb),
+        "size_mb": size_mb,
+        "is_large": is_large,
+        "allow_automatic_html_fallback": exists and not is_large,
+    }
+
+
+def should_render_html_fallback(
+    selected_renderer: str,
+    path_status: dict[str, object],
+    *,
+    confirmed_large_render: bool = False,
+    threshold_mb: float = LARGE_PDF_SIZE_MB,
+) -> bool:
+    if selected_renderer != HTML_BASE64_FALLBACK_RENDERER or not bool(path_status.get("exists", False)):
+        return False
+    policy = pdf_large_file_policy(path_status, threshold_mb=threshold_mb)
+    return bool(policy["allow_automatic_html_fallback"] or confirmed_large_render)
+
+
+def pdf_external_open_reference(pdf_path: Path) -> dict[str, str]:
+    resolved = Path(pdf_path).resolve()
+    try:
+        file_uri = resolved.as_uri()
+    except ValueError:
+        file_uri = ""
+    return {"path": str(resolved), "file_uri": file_uri}
+
+
 def render_reader_workspace(record: dict[str, str]) -> None:
+    preserve_reader_context(record, st.session_state)
     st.subheader("Reader Workspace")
     summary = build_metadata_summary(record)
     st.caption(
@@ -406,12 +467,12 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
     if not st.session_state[toolbar_key]:
         if st.button("Show Toolbar", key=f"show_toolbar_{record['paper_id']}"):
             st.session_state[toolbar_key] = True
-            st.rerun()
+            _rerun_reader(record)
         return
 
     if st.button("Hide Toolbar", key=f"hide_toolbar_{record['paper_id']}"):
         st.session_state[toolbar_key] = False
-        st.rerun()
+        _rerun_reader(record)
 
     for label, block_type in (
         ("Insert Summary", "summary"),
@@ -425,7 +486,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
             key = note_draft_key(record)
             current = load_note_draft(record, st.session_state)
             st.session_state[key] = insert_note_block(current, block_type, record)
-            st.rerun()
+            _rerun_reader(record)
 
     manual_tag = st.text_input("Manual tag", key=f"manual_tag_{record['paper_id']}")
     if st.button("Apply tag", key=f"add_manual_tag_{record['paper_id']}"):
@@ -434,7 +495,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
             update_payload = {"tags": updated_tags}
             update_paper_metadata(record["paper_id"], update_payload)
             st.success("Tag added.")
-            st.rerun()
+            _rerun_reader(record)
         else:
             st.info("No tag added.")
 
@@ -448,7 +509,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
         else:
             clear_session_keys(st.session_state, suggestion_key)
             st.success("PaperTextProfile rebuilt.")
-            st.rerun()
+            _rerun_reader(record)
 
     with st.expander("PaperTextProfile"):
         summary = reader_profile_summary(profile)
@@ -475,7 +536,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
 
     if st.button("Preview tags", key=f"reader_suggest_tags_{record['paper_id']}"):
         st.session_state[suggestion_key] = preview_reader_tag_suggestion_details(record)
-        st.rerun()
+        _rerun_reader(record)
     if suggestion_key in st.session_state:
         suggestion_details = _coerce_reader_suggestion_details(st.session_state.get(suggestion_key, []))
         if suggestion_details:
@@ -495,10 +556,10 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
                 update_paper_metadata(record["paper_id"], {"tags": updated_tags})
                 clear_session_keys(st.session_state, suggestion_key)
                 st.success("Selected suggested tags applied.")
-                st.rerun()
+                _rerun_reader(record)
             if cancel_col.button("Cancel", key=f"reader_cancel_tags_{record['paper_id']}"):
                 clear_session_keys(st.session_state, suggestion_key)
-                st.rerun()
+                _rerun_reader(record)
         else:
             st.info("No new suggested tags.")
             clear_session_keys(st.session_state, suggestion_key)
@@ -514,7 +575,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
     )
     if selected_status != record.get("status", ""):
         update_paper_metadata(record["paper_id"], {"status": selected_status})
-        st.rerun()
+        _rerun_reader(record)
 
     current_priority = record.get("reading_priority", "normal")
     if current_priority not in READING_PRIORITY_OPTIONS:
@@ -527,7 +588,7 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
     )
     if selected_priority != record.get("reading_priority", ""):
         update_paper_metadata(record["paper_id"], {"reading_priority": selected_priority})
-        st.rerun()
+        _rerun_reader(record)
 
 
 def _coerce_reader_suggestion_details(value: object) -> list[dict]:
@@ -635,11 +696,22 @@ def _suggestion_snippet(suggestion: dict) -> str:
 def _render_pdf_viewer(record: dict[str, str]) -> None:
     st.write("PDF")
     status = pdf_path_status(record)
+    renderer_key = f"pdf_renderer_{record['paper_id']}"
+    if st.session_state.get(renderer_key) not in PDF_RENDERER_OPTIONS:
+        st.session_state[renderer_key] = NATIVE_STREAMLIT_RENDERER
     selected_renderer = st.selectbox(
         "PDF renderer",
         PDF_RENDERER_OPTIONS,
         index=0,
-        key=f"pdf_renderer_{record['paper_id']}",
+        key=renderer_key,
+        help=(
+            "Native rendering is the default. Use the experimental HTML/base64 fallback only when "
+            "native rendering is unavailable or unsuitable."
+        ),
+    )
+    st.caption(
+        "Native Streamlit PDF rendering is the default. The HTML/base64 fallback is experimental and may fail "
+        "depending on browser, Streamlit, file size, or local security policy."
     )
     if not status["exists"]:
         render_status = initial_pdf_render_status(selected_renderer)
@@ -648,21 +720,73 @@ def _render_pdf_viewer(record: dict[str, str]) -> None:
         _render_extracted_text_panel(record, status)
         return
 
+    policy = pdf_large_file_policy(status)
+    if policy["is_large"]:
+        st.warning(
+            f"This PDF is {policy['size_mb']:.1f} MB. Large PDFs should use the native viewer or an external "
+            f"PDF reader. The experimental HTML/base64 fallback will not render automatically above "
+            f"{policy['threshold_mb']:.0f} MB."
+        )
+    _render_external_pdf_option(status)
+
     render_status = initial_pdf_render_status(selected_renderer)
     if selected_renderer == NATIVE_STREAMLIT_RENDERER:
-        try:
-            render_status = mark_pdf_render_native_attempt(render_status)
-            st.pdf(str(status["path"]), height=920)
-            render_status = mark_pdf_render_native_success(render_status)
-        except Exception as exc:
-            st.warning("Native PDF viewer failed. Falling back to stable HTML viewer.")
-            render_status = mark_pdf_render_fallback(render_status, exc)
-            components.html(pdf_embed_html(status["path"], height=920), height=940, scrolling=True)
+        if not bool(render_status["native_available"]):
+            st.warning(
+                "Native PDF rendering is unavailable in this environment. Use the external path below, "
+                "or explicitly select the experimental HTML/base64 fallback."
+            )
+        else:
+            try:
+                render_status = mark_pdf_render_native_attempt(render_status)
+                st.pdf(str(status["path"]), height=PDF_VIEWER_HEIGHT)
+                render_status = mark_pdf_render_native_success(render_status)
+            except Exception as exc:
+                render_status = mark_pdf_render_native_attempt(render_status)
+                render_status["native_render_error"] = str(exc)
+                st.warning(
+                    "Native PDF rendering failed. The app did not automatically render the HTML/base64 fallback; "
+                    "select the experimental fallback explicitly if you want to try it."
+                )
     else:
-        render_status = mark_pdf_render_fallback(render_status)
-        components.html(pdf_embed_html(status["path"], height=920), height=940, scrolling=True)
+        st.warning(
+            "Experimental HTML/base64 fallback embeds the entire PDF into the page. It may fail depending on "
+            "browser, Streamlit, file size, or local security policy."
+        )
+        confirmed_large_render = False
+        if policy["is_large"]:
+            confirmed_large_render = st.button(
+                "Render experimental HTML fallback for this large PDF",
+                key=f"render_large_html_fallback_{record['paper_id']}",
+            )
+            if not confirmed_large_render:
+                st.info("HTML/base64 rendering is waiting for explicit confirmation for this large PDF.")
+        if should_render_html_fallback(
+            selected_renderer,
+            status,
+            confirmed_large_render=confirmed_large_render,
+        ):
+            render_status = mark_pdf_render_fallback(render_status)
+            components.html(
+                pdf_embed_html(status["path"], height=PDF_VIEWER_HEIGHT),
+                height=PDF_VIEWER_IFRAME_HEIGHT,
+                scrolling=True,
+            )
     _render_pdf_debug(status, render_status)
     _render_extracted_text_panel(record, status)
+
+
+def _render_external_pdf_option(path_status: dict[str, object]) -> None:
+    reference = pdf_external_open_reference(Path(path_status["path"]))
+    with st.expander("Open PDF externally"):
+        st.caption(
+            "Use this path if the in-app viewer is slow, blocked, or too large for browser rendering. "
+            "Local file links may be blocked by browser security policy."
+        )
+        st.code(reference["path"])
+        if reference["file_uri"]:
+            st.caption("Local file URI, if your browser allows it:")
+            st.code(reference["file_uri"])
 
 
 def _render_pdf_debug(path_status: dict[str, object], render_status: dict[str, object]) -> None:
@@ -689,11 +813,11 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
     if col1.button("Extract full text", key=f"extract_text_{paper_id}"):
         _run_full_text_extraction(record, force=False)
         st.session_state[show_key] = True
-        st.rerun()
+        _rerun_reader(record)
     if col2.button("Re-extract full text", key=f"reextract_text_{paper_id}"):
         _run_full_text_extraction(record, force=True)
         st.session_state[show_key] = True
-        st.rerun()
+        _rerun_reader(record)
     if col3.button("Show extracted text", key=f"show_text_{paper_id}"):
         st.session_state[show_key] = not st.session_state.get(show_key, False)
     cache_delete_key = confirmation_key("delete_text_cache", paper_id)
@@ -708,10 +832,10 @@ def _render_extracted_text_panel(record: dict[str, str], pdf_status: dict[str, o
         clear_text_cache_for_paper(record)
         st.session_state[show_key] = False
         clear_session_keys(st.session_state, cache_delete_key)
-        st.rerun()
+        _rerun_reader(record)
     if cache_decision == "cancel":
         clear_session_keys(st.session_state, cache_delete_key)
-        st.rerun()
+        _rerun_reader(record)
 
     st.caption(
         " | ".join(
@@ -807,7 +931,7 @@ def _render_note_editor(record: dict[str, str]) -> None:
         result = apply_reading_note_template_to_text(st.session_state.get(key, ""), record)
         if result["changed"]:
             queue_note_text_update(record, st.session_state, str(result["text"]), notice=str(result["message"]))
-            st.rerun()
+            _rerun_reader(record)
         st.session_state[template_key] = True
 
     if st.session_state.get(template_key):
@@ -821,17 +945,17 @@ def _render_note_editor(record: dict[str, str]) -> None:
             )
             queue_note_text_update(record, st.session_state, str(result["text"]), notice=str(result["message"]))
             st.session_state.pop(template_key, None)
-            st.rerun()
+            _rerun_reader(record)
         if cancel_col.button("Cancel", key=f"cancel_reading_note_template_{record['paper_id']}"):
             st.session_state.pop(template_key, None)
-            st.rerun()
+            _rerun_reader(record)
 
     if st.button("Save note", key=f"editor_save_note_{record['paper_id']}"):
         save_note_draft(record, st.session_state)
         st.success("Note saved.")
     if st.button("Reload", key=f"editor_reload_note_{record['paper_id']}"):
         st.session_state[pending_note_reload_key(record)] = True
-        st.rerun()
+        _rerun_reader(record)
     saved_at = st.session_state.get(note_saved_at_key(record), "")
     if saved_at:
         st.caption(f"Last saved: {saved_at}")
@@ -1010,7 +1134,7 @@ def _render_external_note_import_preview(
             st.session_state[success_key] = result
             if selected_paper_id == record["paper_id"]:
                 st.session_state[pending_note_reload_key(record)] = True
-            st.rerun()
+            _rerun_reader(record)
 
 
 def _render_note_import_matches(match: dict[str, object]) -> None:
@@ -1113,10 +1237,10 @@ def _render_structured_note_block_card(
         edit_col, append_col, delete_col = st.columns(3)
         if edit_col.button("Edit", key=f"edit_note_block_{paper_id}_{block_id}"):
             st.session_state[edit_key] = block_id
-            st.rerun()
+            _rerun_reader(record)
         if append_col.button("Append to Reading Note", key=f"append_note_block_{paper_id}_{block_id}"):
             st.session_state[pending_note_block_append_key(record)] = render_note_block_as_markdown(block)
-            st.rerun()
+            _rerun_reader(record)
         block_delete_key = confirmation_key("delete_note_block", block_id)
         if delete_col.button("Delete", key=f"delete_note_block_{paper_id}_{block_id}"):
             request_confirmation(st.session_state, block_delete_key)
@@ -1130,10 +1254,10 @@ def _render_structured_note_block_card(
             clear_session_keys(st.session_state, block_delete_key)
             if st.session_state.get(edit_key) == block_id:
                 clear_session_keys(st.session_state, edit_key)
-            st.rerun()
+            _rerun_reader(record)
         if delete_decision == "cancel":
             clear_session_keys(st.session_state, block_delete_key)
-            st.rerun()
+            _rerun_reader(record)
 
         if st.session_state.get(edit_key) == block_id:
             _render_edit_note_block_form(paper_id, block, edit_key)
@@ -1168,6 +1292,7 @@ def _render_edit_note_block_form(
 
     if cancel_edit:
         st.session_state.pop(edit_key, None)
+        preserve_reader_context_for_paper_id(paper_id, st.session_state)
         st.rerun()
     if save_changes:
         update_note_block(
@@ -1184,6 +1309,7 @@ def _render_edit_note_block_form(
             },
         )
         st.session_state.pop(edit_key, None)
+        preserve_reader_context_for_paper_id(paper_id, st.session_state)
         st.rerun()
 
 
@@ -1212,6 +1338,7 @@ def _render_create_note_block_form(paper_id: str) -> None:
             tags=tags,
         )
         st.success("Structured note block added.")
+        preserve_reader_context_for_paper_id(paper_id, st.session_state)
         st.rerun()
 
 

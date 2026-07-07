@@ -1,5 +1,7 @@
 from core.paper_text_profile import PaperTextProfile
 from ui_streamlit.reader_workspace import (
+    HTML_BASE64_FALLBACK_RENDERER,
+    LARGE_PDF_SIZE_MB,
     NATIVE_STREAMLIT_RENDERER,
     STABLE_HTML_RENDERER,
     add_manual_tag,
@@ -12,6 +14,7 @@ from ui_streamlit.reader_workspace import (
     load_note_draft,
     mark_pdf_render_fallback,
     mark_pdf_render_native_attempt,
+    mark_pdf_render_native_success,
     merge_selected_reader_tag_suggestions,
     native_pdf_support_status,
     note_draft_key,
@@ -20,12 +23,17 @@ from ui_streamlit.reader_workspace import (
     pending_note_reload_key,
     pending_note_text_update_key,
     pdf_embed_html,
+    pdf_external_open_reference,
+    pdf_large_file_policy,
     pdf_path_status,
     preview_reader_tag_suggestions,
+    preserve_reader_context,
+    preserve_reader_context_for_paper_id,
     queue_note_text_update,
     reader_profile_summary,
     reader_tag_suggestion_preview_key,
     save_note_draft,
+    should_render_html_fallback,
 )
 from services.tag_book import load_tag_book, suggestion_selection_id
 from storage.note_store import save_note_text
@@ -66,6 +74,27 @@ def test_save_note_draft_writes_current_session_text() -> None:
 
     assert note_path.read_text(encoding="utf-8") == "draft text"
     assert session_state[f"reader_note_saved_at_{record['paper_id']}"]
+    assert session_state["active_paper_id"] == "paper-1"
+    assert session_state["current_page"] == "Paper Detail"
+
+
+def test_preserve_reader_context_keeps_current_paper_active() -> None:
+    session_state = {"active_paper_id": "old-paper", "current_page": "Library", "unrelated": "keep"}
+
+    preserve_reader_context({"paper_id": "paper-1"}, session_state)
+
+    assert session_state["active_paper_id"] == "paper-1"
+    assert session_state["current_page"] == "Paper Detail"
+    assert session_state["unrelated"] == "keep"
+
+
+def test_preserve_reader_context_for_paper_id_sets_paper_detail_page() -> None:
+    session_state = {"current_page": "Project Workspace"}
+
+    preserve_reader_context_for_paper_id("paper-2", session_state)
+
+    assert session_state["active_paper_id"] == "paper-2"
+    assert session_state["current_page"] == "Paper Detail"
 
 
 def test_add_manual_tag_normalizes_and_avoids_duplicates() -> None:
@@ -263,16 +292,27 @@ def test_pdf_embed_html_returns_non_empty_object_for_valid_pdf() -> None:
     assert "application/pdf" in html
 
 
-def test_initial_pdf_render_status_defaults_to_stable_html_viewer() -> None:
+def test_initial_pdf_render_status_defaults_to_native_viewer() -> None:
     status = initial_pdf_render_status(
         native_status={"available": True, "error": ""},
     )
 
-    assert status["selected_renderer"] == STABLE_HTML_RENDERER
+    assert status["selected_renderer"] == NATIVE_STREAMLIT_RENDERER
     assert status["native_available"] is True
     assert status["attempted_methods"] == []
     assert status["final_method"] == ""
     assert status["native_render_error"] == ""
+
+
+def test_pdf_renderer_options_keep_html_fallback_non_default() -> None:
+    assert STABLE_HTML_RENDERER == HTML_BASE64_FALLBACK_RENDERER
+    status = mark_pdf_render_native_success(
+        initial_pdf_render_status(native_status={"available": True, "error": ""})
+    )
+
+    assert status["selected_renderer"] == NATIVE_STREAMLIT_RENDERER
+    assert status["attempted_methods"] == ["st.pdf"]
+    assert status["final_method"] == "st.pdf"
 
 
 def test_mark_pdf_render_fallback_records_error_and_final_method() -> None:
@@ -293,11 +333,15 @@ def test_mark_pdf_render_fallback_records_error_and_final_method() -> None:
 
 def test_mark_pdf_render_fallback_without_native_starts_with_html_object() -> None:
     status = mark_pdf_render_fallback(
-        initial_pdf_render_status(native_status={"available": False, "error": "missing"})
+        initial_pdf_render_status(
+            selected_renderer=HTML_BASE64_FALLBACK_RENDERER,
+            native_status={"available": False, "error": "missing"},
+        )
     )
 
     assert status["native_available"] is False
     assert status["native_availability_error"] == "missing"
+    assert status["selected_renderer"] == HTML_BASE64_FALLBACK_RENDERER
     assert status["attempted_methods"] == ["html-object"]
     assert status["final_method"] == "html-object"
 
@@ -318,9 +362,45 @@ def test_native_pdf_support_status_handles_import_failure(monkeypatch) -> None:
     assert "no streamlit_pdf" in status["error"]
 
 
-def test_native_renderer_is_not_attempted_by_default() -> None:
-    status = mark_pdf_render_fallback(initial_pdf_render_status(native_status={"available": True, "error": ""}))
+def test_native_renderer_is_attempted_by_default() -> None:
+    status = mark_pdf_render_native_attempt(initial_pdf_render_status(native_status={"available": True, "error": ""}))
 
-    assert status["selected_renderer"] == STABLE_HTML_RENDERER
-    assert status["attempted_methods"] == ["html-object"]
-    assert "st.pdf" not in status["attempted_methods"]
+    assert status["selected_renderer"] == NATIVE_STREAMLIT_RENDERER
+    assert status["attempted_methods"] == ["st.pdf"]
+
+
+def test_large_pdf_policy_blocks_automatic_html_base64_rendering() -> None:
+    status = {"exists": True, "size_mb": LARGE_PDF_SIZE_MB + 1}
+
+    policy = pdf_large_file_policy(status)
+
+    assert policy["is_large"] is True
+    assert policy["allow_automatic_html_fallback"] is False
+    assert should_render_html_fallback(HTML_BASE64_FALLBACK_RENDERER, status) is False
+    assert should_render_html_fallback(
+        HTML_BASE64_FALLBACK_RENDERER,
+        status,
+        confirmed_large_render=True,
+    ) is True
+
+
+def test_small_pdf_policy_allows_html_only_after_explicit_fallback_selection() -> None:
+    status = {"exists": True, "size_mb": 1.0}
+
+    policy = pdf_large_file_policy(status)
+
+    assert policy["is_large"] is False
+    assert policy["allow_automatic_html_fallback"] is True
+    assert should_render_html_fallback(NATIVE_STREAMLIT_RENDERER, status) is False
+    assert should_render_html_fallback(HTML_BASE64_FALLBACK_RENDERER, status) is True
+
+
+def test_pdf_external_open_reference_returns_path_and_file_uri() -> None:
+    workspace = make_workspace("reader-external-open-reference")
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\ncontent")
+
+    reference = pdf_external_open_reference(pdf_path)
+
+    assert reference["path"].endswith("paper.pdf")
+    assert reference["file_uri"].startswith("file:///")

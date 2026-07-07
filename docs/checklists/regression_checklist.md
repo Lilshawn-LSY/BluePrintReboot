@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including the `v1.0.16-roadmap-release-evidence-sync` documentation pass. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current `v1.0.15-pdf-profile-extraction-repair` app baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.17-reader-pdf-stabilization`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -55,7 +55,22 @@ Required before and after Codex-assisted release work, including the `v1.0.16-ro
 - [ ] Confirm rejected candidate phrases are non-selectable and remain separated from selectable suggestions.
 - [ ] Confirm generated candidate tags are preview/select-only: leaving them unselected changes nothing; selecting one adds only a paper-local tag and does not promote it into the Tag Book automatically.
 
-## 5. Final Safety
+## 5. v1.0.17 Reader PDF Smoke Checks
+
+- [ ] Open Reader Workspace for a disposable sample PDF and confirm **Native Streamlit PDF viewer** is selected by default.
+- [ ] Confirm the HTML/base64 PDF viewer is labeled as an experimental fallback and is not selected by default.
+- [ ] Select the experimental HTML/base64 fallback for a small disposable PDF and confirm the UI warns that it may fail depending on browser, Streamlit, file size, or security policy.
+- [ ] Open a large disposable PDF above the configured threshold and confirm the Reader shows a large-PDF warning.
+- [ ] With a large PDF selected, confirm the HTML/base64 fallback does not render automatically.
+- [ ] With a large PDF selected, confirm HTML/base64 fallback renders only after explicit confirmation.
+- [ ] Confirm the Reader exposes an external/local path option for opening the PDF outside the in-app viewer.
+- [ ] Save a disposable Reading Note edit and confirm the same paper remains selected in Reader.
+- [ ] Apply a manual or suggested Reader tag and confirm the same paper remains selected in Reader.
+- [ ] Change reading status or priority and confirm the same paper remains selected in Reader.
+- [ ] Link or unlink a paper/project or note-block/project relationship from the Reader context and confirm the app remains on the same Reader paper.
+- [ ] Confirm no tag suggestion logic, PDF profile extraction behavior, metadata extraction behavior, data schema, FastAPI, or frontend architecture changes are introduced by this pass.
+
+## 6. Final Safety
 
 - [ ] Re-run `git status --short`.
 - [ ] Confirm no private user data, local secrets, PDFs, personal notes, runtime index files, caches, backup archives, or exports are staged or committed.

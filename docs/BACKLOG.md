@@ -2,7 +2,7 @@
 
 Last synced: 2026-07-07
 
-This backlog is ordered for the post-v1.0.15 stabilization cycle and the v1.0.16 roadmap/release evidence sync. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered for the post-v1.0.17 Reader stabilization cycle. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
 
 ## Completed Since v1.0.9
 
@@ -15,34 +15,28 @@ These items should not remain in the active Next queue.
 - **v1.0.13 PaperTextProfile minimal cache** - rebuildable profile caches derive from index metadata, cached extracted-text abstract fallback, Reading Notes, and note blocks.
 - **v1.0.14 Tag quality hygiene** - generated candidates are cleaned, scored, rejected when low-quality or duplicate, separated from known canonical suggestions, and kept preview/select-only.
 - **v1.0.15 PDF profile extraction repair** - cached/full extracted PDF text can supply cleaned front-matter title, authors, DOI, abstract, keywords, article type, section headings, warnings, metadata gap-fill, and explicit PDF profile tag sources.
+- **v1.0.16 Roadmap/release evidence sync** - roadmap, backlog, regression checklist, release notes, and README were synced to the implemented v1.0.10 through v1.0.15 state.
+- **v1.0.17 Reader PDF stabilization** - native PDF rendering is the default Reader path, HTML/base64 rendering is an explicit experimental fallback, large PDFs avoid automatic base64 rendering, external path guidance is available, and Reader paper context is preserved across note, tag, status, priority, and Reader project-link actions.
 
 ## Next
 
 These items should be implemented before starting FastAPI or frontend migration.
 
-### 1. Reader PDF stabilization
-
-- Clarify native PDF versus HTML viewer behavior.
-- Keep a reliable fallback when native rendering varies by environment.
-- Add large-PDF warning or explicit render action.
-- Add `Open PDF externally` if safe in the local app context.
-- Hide PDF/extraction diagnostics unless developer/debug mode is enabled.
-
-### 2. Reader state cleanup
+### 1. Reader state cleanup
 
 - Document the note draft state machine.
 - Add tests for unsaved note behavior during metadata refresh.
 - Reduce PDF rerenders where Streamlit allows it.
 - Keep Save/Reload/Insert/Import precedence explicit.
 
-### 3. Library lifecycle repair completion
+### 2. Library lifecycle repair completion
 
 - Decide and implement duplicate merge/remove semantics.
 - Add clearer user-facing outcomes for unindexed duplicate PDFs skipped by scan.
 - Decide how archive should work if `status` remains limited to `unread`, `reading`, and `read`.
 - Add orphan note and note-block reattach/export/delete workflows with explicit confirmation.
 
-### 4. Storage safety polish
+### 3. Storage safety polish
 
 - Make extracted full-text `.txt` cache writes atomic.
 - Consider backup or quarantine behavior for corrupt JSON/text cache files.
@@ -99,12 +93,14 @@ Current state:
 
 - Reader note drafts, pending reloads, pending appends, and import reloads are managed through Streamlit session state.
 - PaperTextProfile rebuild and tag suggestion panels are available from Reader Workspace.
+- Native PDF rendering is the default and HTML/base64 fallback is explicit and guarded for large files.
+- Reader actions preserve the active paper and Paper Detail context across reruns.
 
 Still needed:
 
 - Document the state machine.
 - Add tests for unsaved note behavior during metadata refresh.
-- Reduce PDF rerenders where Streamlit allows it.
+- Continue reducing rerenders where Streamlit allows it.
 
 ### PDF profile extraction
 

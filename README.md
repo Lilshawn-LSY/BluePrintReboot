@@ -8,11 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current documentation sync target: **v1.0.16-roadmap-release-evidence-sync**.
+Current release target: **v1.0.17-reader-pdf-stabilization**.
 
-Implemented app baseline: **v1.0.15-pdf-profile-extraction-repair**.
-
-v1.0.16 is a documentation, validation, and roadmap consistency pass. It does not add product features or change runtime data behavior. v1.0.15 repairs the PDF profile extraction layer so cached/full extracted PDF text can supply cleaned front-matter title, authors, DOI, abstract, keywords, article type, and section headings when external metadata is high-confidence but incomplete. The app preserves the local Tag Book and `PaperTextProfile` architecture; full PDF methods/results extraction, LLM/API tagging, FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
+v1.0.17 makes the native Streamlit PDF viewer the default Reader rendering path, keeps the HTML/base64 PDF viewer as an explicit experimental fallback, adds large-PDF guardrails, and preserves Reader paper context across note, tag, status, and project-link actions. The app preserves the local Tag Book and `PaperTextProfile` architecture; tag suggestion logic, PDF profile extraction, metadata extraction, data schema changes, FastAPI, frontend migration, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -197,6 +195,15 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 
 ## Version History
 
+### v1.0.17-reader-pdf-stabilization
+
+- Makes native Streamlit PDF rendering the default Reader PDF path.
+- Demotes HTML/base64 PDF rendering to an explicit experimental fallback with browser, Streamlit, file-size, and security-policy warnings.
+- Adds a conservative large-PDF warning and blocks automatic large-file HTML/base64 rendering unless explicitly confirmed.
+- Provides an external-open/local-path option for PDFs that are slow, blocked, or too large for in-app rendering.
+- Preserves active Reader paper context across note save, tag apply, status/priority updates, and Reader project-link actions.
+- Does not change tag suggestion logic, PDF profile extraction, metadata extraction, data schemas, FastAPI, or frontend architecture.
+
 ### v1.0.16-roadmap-release-evidence-sync
 
 - Syncs ROADMAP, BACKLOG, regression checklist, release notes, and README against the implemented v1.0.10 through v1.0.15 state.
@@ -376,7 +383,9 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - Backup restore is manual and should be performed while the app is stopped.
 - Crossref depends on internet, TLS certificates, proxy settings, and provider availability.
 - Image-only or scanned PDFs may yield no extracted text because OCR is not included.
-- Native Streamlit PDF rendering can vary by environment; the stable HTML viewer remains the default.
+- Native Streamlit PDF rendering is the default Reader path, but rendering can still vary by environment.
+- The HTML/base64 PDF viewer is an explicit experimental fallback and may fail depending on browser, Streamlit, file size, or local security policy.
+- Large PDFs are warned before rendering; large-file HTML/base64 fallback requires explicit confirmation.
 
 If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:
 
