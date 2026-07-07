@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.17-reader-pdf-stabilization`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.18-19-file-lifecycle-and-orphan-hardening`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF and lifecycle baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -30,11 +30,11 @@ Required before and after Codex-assisted release work, including `v1.0.17-reader
 - [ ] With disposable PDFs, confirm duplicate PDF hash review shows `indexed duplicate` for two indexed records with the same SHA-256.
 - [ ] With a disposable indexed PDF and an unindexed copy, confirm duplicate PDF hash review shows `indexed + unindexed duplicate` and marks the unindexed file "Do not add to index yet; handle later."
 - [ ] With two disposable unindexed copies, confirm duplicate PDF hash review shows `multiple unindexed duplicate`.
-- [ ] Confirm running duplicate PDF hash review does not merge records, delete PDFs, remove index rows, or mutate notes/project links.
-- [ ] With a disposable note file whose stem is not in `paper_index.csv`, confirm orphan note review shows `orphan note file` and preserve/reattach/export guidance.
-- [ ] With a disposable note-block JSON file whose stem is not in `paper_index.csv`, confirm orphan note block review shows `orphan note block file` and does not offer deletion.
+- [ ] Confirm duplicate PDF hash review never merges records or deletes PDFs automatically.
+- [ ] With a disposable note file whose stem is not in `paper_index.csv`, confirm orphan note review shows `orphan note file` with export, reattach, and confirmed delete controls.
+- [ ] With a disposable note-block JSON file whose stem is not in `paper_index.csv`, confirm orphan note block review shows `orphan note block file` with export, reattach, and confirmed delete controls.
 - [ ] With a disposable project link targeting a missing paper or missing note block, confirm orphan project link review shows `orphan project link` with a reason.
-- [ ] Remove one disposable orphan project link only after explicit confirmation and confirm papers, PDFs, notes, note blocks, and index rows are unchanged.
+- [ ] Unlink one disposable orphan project link only after explicit confirmation and confirm papers, PDFs, notes, note blocks, and index rows are unchanged.
 - [ ] Exercise project, project-link, and note-block saves with disposable data and confirm JSON files remain valid after app reload.
 
 ## 4. v1.0.10 through v1.0.15 Focused Checks
@@ -70,7 +70,29 @@ Required before and after Codex-assisted release work, including `v1.0.17-reader
 - [ ] Link or unlink a paper/project or note-block/project relationship from the Reader context and confirm the app remains on the same Reader paper.
 - [ ] Confirm no tag suggestion logic, PDF profile extraction behavior, metadata extraction behavior, data schema, FastAPI, or frontend architecture changes are introduced by this pass.
 
-## 6. Final Safety
+## 6. v1.0.18-v1.0.19 File Lifecycle And Orphan Hardening
+
+- [ ] In Library Health Check, confirm same-hash duplicate groups expose indexed `paper_id`, filename, filepath, status, `pdf_sha256`, note-file count, note-block count, and project-link count where available.
+- [ ] Select **Keep** for a disposable duplicate group and confirm no files or index rows change.
+- [ ] Select **Ignore** for a disposable duplicate group and confirm no files or index rows change; the ignore state is session-only.
+- [ ] For a disposable missing/renamed PDF row with a same-hash replacement under `papers/`, run reconnect and confirm the original `paper_id` remains unchanged while filename, filepath, and `pdf_sha256` update.
+- [ ] Attempt a reconnect to a different SHA-256 replacement and confirm the mismatch is blocked until the explicit mismatch confirmation is selected.
+- [ ] Remove a selected duplicate index row only after confirmation and confirm notes, note blocks, project links, PDFs, and extracted text remain on disk.
+- [ ] After duplicate row removal, rerun Library Health Check and confirm any newly orphaned notes, blocks, or project links surface in the orphan repair sections.
+- [ ] Export a disposable orphan Reading Note and confirm the export file contains recoverable note text.
+- [ ] Reattach a disposable orphan Reading Note to an indexed paper and confirm the note content is preserved in the target note.
+- [ ] Delete a disposable orphan Reading Note only after explicit confirmation.
+- [ ] Export a disposable orphan note-block file and confirm the export file contains recoverable blocks.
+- [ ] Reattach disposable orphan note blocks to an indexed paper and confirm block text, tags, and timestamps are preserved where possible.
+- [ ] Delete a disposable orphan note-block file only after explicit confirmation.
+- [ ] Export a disposable orphan project link and confirm the export contains project, target, paper, link type, note, and reason data.
+- [ ] Reattach a disposable orphan project link to an indexed paper and confirm the link note is preserved.
+- [ ] Unlink a disposable orphan project link only after explicit confirmation and confirm no paper, PDF, note, note-block, or index row is changed.
+- [ ] Create disposable orphan extracted-text `.txt`/`.json` cache files and confirm Library Health Check reports `orphan extracted-text cache`.
+- [ ] Trigger or unit-test extracted-text `.txt` cache replacement and confirm a failed/interrupted replacement preserves the previous cache file.
+- [ ] Confirm destructive repair actions preserve user data by default and require explicit confirmation before removing an index row, note file, note-block file, or project link association.
+
+## 7. Final Safety
 
 - [ ] Re-run `git status --short`.
 - [ ] Confirm no private user data, local secrets, PDFs, personal notes, runtime index files, caches, backup archives, or exports are staged or committed.

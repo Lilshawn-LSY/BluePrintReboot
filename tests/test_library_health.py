@@ -6,11 +6,22 @@ import pandas as pd
 import pytest
 
 from services.library_health import (
+    OrphanRepairError,
     OrphanProjectLinkRepairError,
+    delete_orphan_note,
+    delete_orphan_note_blocks,
+    export_orphan_note,
+    export_orphan_note_blocks,
+    export_orphan_project_link,
+    reattach_orphan_note,
+    reattach_orphan_note_blocks,
+    reattach_orphan_project_link,
     build_orphan_project_link_removal_plan,
     remove_orphan_project_link,
     run_library_health_check,
 )
+from services.file_lifecycle import remove_duplicate_index_row
+from storage.note_block_store import list_note_blocks
 from storage.project_link_store import create_project_link, list_project_links
 from storage.project_store import create_project
 from tests.helpers import make_workspace
@@ -478,3 +489,256 @@ def test_orphan_review_does_not_mutate_notes_note_blocks_pdfs_or_index() -> None
     assert orphan_note.read_text(encoding="utf-8") == before_note
     assert orphan_blocks.read_text(encoding="utf-8") == before_blocks
     assert [link["id"] for link in list_project_links(projects_dir)] == [orphan_link["id"]]
+
+
+def test_health_check_detects_orphan_extracted_text_cache() -> None:
+    paths = _workspace("health-orphan-extracted-text")
+    papers_dir, _notes_dir, _note_blocks_dir, _projects_dir, extracted_text_dir, index_csv = paths
+    pdf_path = papers_dir / "Paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nindexed")
+    (extracted_text_dir / "missing-paper.txt").write_text("cached text", encoding="utf-8")
+    (extracted_text_dir / "missing-paper.json").write_text(json.dumps({"paper_id": "missing-paper"}), encoding="utf-8")
+    pd.DataFrame([_record("paper-1", pdf_path)]).to_csv(index_csv, index=False)
+
+    report = _run_health(paths)
+
+    assert report["orphan_extracted_text"] == [
+        {
+            "classification": "orphan extracted-text cache",
+            "paper_id": "missing-paper",
+            "text_path": str((extracted_text_dir / "missing-paper.txt").resolve()),
+            "metadata_path": str((extracted_text_dir / "missing-paper.json").resolve()),
+            "has_text_file": True,
+            "has_metadata_file": True,
+            "size_bytes": len("cached text") + len(json.dumps({"paper_id": "missing-paper"})),
+            "review_action": "Preserve by default; delete only after explicit cache cleanup confirmation.",
+        }
+    ]
+
+
+def test_reattach_orphan_note_preserves_content_and_requires_confirmation() -> None:
+    paths = _workspace("health-orphan-note-reattach")
+    papers_dir, notes_dir, _note_blocks_dir, _projects_dir, _extracted_text_dir, index_csv = paths
+    pdf_path = papers_dir / "Paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nindexed")
+    target_note = notes_dir / "paper-1.md"
+    orphan_note = notes_dir / "missing-paper.md"
+    target_note.write_text("# Existing note\n", encoding="utf-8")
+    orphan_note.write_text("# Detached note\nimportant content", encoding="utf-8")
+    pd.DataFrame([_record("paper-1", pdf_path)]).to_csv(index_csv, index=False)
+    before_pdf = pdf_path.read_bytes()
+
+    with pytest.raises(OrphanRepairError, match="requires explicit confirmation"):
+        reattach_orphan_note("missing-paper", "paper-1", index_csv=index_csv, notes_dir=notes_dir)
+
+    result = reattach_orphan_note(
+        "missing-paper",
+        "paper-1",
+        index_csv=index_csv,
+        notes_dir=notes_dir,
+        confirm=True,
+    )
+
+    assert result["status"] == "reattached_note"
+    assert not orphan_note.exists()
+    target_text = target_note.read_text(encoding="utf-8")
+    assert "# Existing note" in target_text
+    assert "## Reattached orphan note: missing-paper" in target_text
+    assert "important content" in target_text
+    assert pdf_path.read_bytes() == before_pdf
+
+
+def test_reattach_orphan_note_blocks_preserves_content() -> None:
+    paths = _workspace("health-orphan-blocks-reattach")
+    papers_dir, _notes_dir, note_blocks_dir, _projects_dir, _extracted_text_dir, index_csv = paths
+    pdf_path = papers_dir / "Paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nindexed")
+    orphan_blocks = note_blocks_dir / "missing-paper.json"
+    orphan_blocks.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "block-1",
+                    "paper_id": "missing-paper",
+                    "block_type": "claim",
+                    "title": "Detached claim",
+                    "text": "Preserved block text",
+                    "page": "4",
+                    "figure": "",
+                    "quote": "",
+                    "tags": ["important"],
+                    "created_at": "2026-07-05T00:00:00+00:00",
+                    "updated_at": "2026-07-05T00:00:01+00:00",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    pd.DataFrame([_record("paper-1", pdf_path)]).to_csv(index_csv, index=False)
+
+    result = reattach_orphan_note_blocks(
+        "missing-paper",
+        "paper-1",
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        confirm=True,
+    )
+
+    blocks = list_note_blocks("paper-1", note_blocks_dir)
+    assert result["status"] == "reattached_note_blocks"
+    assert result["reattached_block_count"] == 1
+    assert not orphan_blocks.exists()
+    assert blocks[0]["paper_id"] == "paper-1"
+    assert blocks[0]["title"] == "Detached claim"
+    assert blocks[0]["text"] == "Preserved block text"
+    assert blocks[0]["reattached_from_paper_id"] == "missing-paper"
+
+
+def test_orphan_exports_produce_recoverable_files() -> None:
+    paths = _workspace("health-orphan-export")
+    papers_dir, notes_dir, note_blocks_dir, projects_dir, _extracted_text_dir, index_csv = paths
+    exports_dir = papers_dir.parent / "exports"
+    exports_dir.mkdir()
+    pdf_path = papers_dir / "Paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nindexed")
+    (notes_dir / "missing-paper.md").write_text("# Detached note", encoding="utf-8")
+    (note_blocks_dir / "missing-paper.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": "block-1",
+                    "paper_id": "missing-paper",
+                    "block_type": "summary",
+                    "title": "",
+                    "text": "Detached summary",
+                    "page": "",
+                    "figure": "",
+                    "quote": "",
+                    "tags": [],
+                    "created_at": "2026-07-05T00:00:00+00:00",
+                    "updated_at": "2026-07-05T00:00:01+00:00",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    pd.DataFrame([_record("paper-1", pdf_path)]).to_csv(index_csv, index=False)
+    project = create_project("Live Project", base_dir=projects_dir)
+    orphan_link = create_project_link(project["id"], "paper", "missing-paper", base_dir=projects_dir)
+
+    note_export = export_orphan_note("missing-paper", index_csv=index_csv, notes_dir=notes_dir, exports_dir=exports_dir)
+    block_export = export_orphan_note_blocks(
+        "missing-paper",
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        exports_dir=exports_dir,
+    )
+    link_export = export_orphan_project_link(
+        orphan_link["id"],
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        projects_dir=projects_dir,
+        exports_dir=exports_dir,
+    )
+
+    note_payload = json.loads(Path(note_export["export_path"]).read_text(encoding="utf-8"))
+    block_payload = json.loads(Path(block_export["export_path"]).read_text(encoding="utf-8"))
+    link_payload = json.loads(Path(link_export["export_path"]).read_text(encoding="utf-8"))
+    assert note_payload["note_text"] == "# Detached note"
+    assert block_payload["blocks"][0]["text"] == "Detached summary"
+    assert link_payload["link"]["link_id"] == orphan_link["id"]
+    assert (notes_dir / "missing-paper.md").exists()
+    assert (note_blocks_dir / "missing-paper.json").exists()
+    assert any(link["id"] == orphan_link["id"] for link in list_project_links(projects_dir))
+
+
+def test_reattach_orphan_project_link_preserves_link_note() -> None:
+    paths = _workspace("health-orphan-project-link-reattach")
+    papers_dir, _notes_dir, _note_blocks_dir, projects_dir, _extracted_text_dir, index_csv = paths
+    pdf_path = papers_dir / "Paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nindexed")
+    pd.DataFrame([_record("paper-1", pdf_path)]).to_csv(index_csv, index=False)
+    project = create_project("Live Project", base_dir=projects_dir)
+    orphan_link = create_project_link(
+        project["id"],
+        "paper",
+        "missing-paper",
+        note="keep this context",
+        base_dir=projects_dir,
+    )
+
+    with pytest.raises(OrphanProjectLinkRepairError, match="requires explicit confirmation"):
+        reattach_orphan_project_link(
+            orphan_link["id"],
+            "paper-1",
+            index_csv=index_csv,
+            note_blocks_dir=paths[2],
+            projects_dir=projects_dir,
+        )
+
+    result = reattach_orphan_project_link(
+        orphan_link["id"],
+        "paper-1",
+        index_csv=index_csv,
+        note_blocks_dir=paths[2],
+        projects_dir=projects_dir,
+        confirm=True,
+    )
+
+    links = list_project_links(projects_dir)
+    assert result["status"] == "reattached_project_link"
+    assert links[0]["id"] == orphan_link["id"]
+    assert links[0]["target_id"] == "paper-1"
+    assert links[0]["paper_id"] == "paper-1"
+    assert links[0]["note"] == "keep this context"
+
+
+def test_orphan_delete_requires_confirmation_for_notes_and_blocks() -> None:
+    paths = _workspace("health-orphan-delete-confirmation")
+    papers_dir, notes_dir, note_blocks_dir, _projects_dir, _extracted_text_dir, index_csv = paths
+    pdf_path = papers_dir / "Paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nindexed")
+    orphan_note = notes_dir / "missing-paper.md"
+    orphan_blocks = note_blocks_dir / "missing-paper.json"
+    orphan_note.write_text("# Detached note", encoding="utf-8")
+    orphan_blocks.write_text("[]", encoding="utf-8")
+    pd.DataFrame([_record("paper-1", pdf_path)]).to_csv(index_csv, index=False)
+
+    with pytest.raises(OrphanRepairError, match="requires explicit confirmation"):
+        delete_orphan_note("missing-paper", index_csv=index_csv, notes_dir=notes_dir)
+    with pytest.raises(OrphanRepairError, match="requires explicit confirmation"):
+        delete_orphan_note_blocks("missing-paper", index_csv=index_csv, note_blocks_dir=note_blocks_dir)
+
+    delete_orphan_note("missing-paper", index_csv=index_csv, notes_dir=notes_dir, confirm=True)
+    delete_orphan_note_blocks("missing-paper", index_csv=index_csv, note_blocks_dir=note_blocks_dir, confirm=True)
+
+    assert not orphan_note.exists()
+    assert not orphan_blocks.exists()
+
+
+def test_duplicate_repair_followed_by_orphan_detection() -> None:
+    paths = _workspace("health-duplicate-then-orphan")
+    papers_dir, notes_dir, _note_blocks_dir, projects_dir, _extracted_text_dir, index_csv = paths
+    contents = b"%PDF-1.4\nsame duplicate then orphan"
+    first_pdf = papers_dir / "First.pdf"
+    second_pdf = papers_dir / "Second.pdf"
+    first_pdf.write_bytes(contents)
+    second_pdf.write_bytes(contents)
+    removed_note = notes_dir / "paper-1.md"
+    removed_note.write_text("# Note for removed duplicate row", encoding="utf-8")
+    pd.DataFrame(
+        [
+            _record("paper-1", first_pdf, pdf_sha256=_sha256(contents), note_path=str(removed_note.resolve())),
+            _record("paper-2", second_pdf, pdf_sha256=_sha256(contents)),
+        ]
+    ).to_csv(index_csv, index=False)
+    project = create_project("Live Project", base_dir=projects_dir)
+    create_project_link(project["id"], "paper", "paper-1", base_dir=projects_dir)
+
+    remove_duplicate_index_row("paper-1", index_csv=index_csv, papers_dir=papers_dir, confirm=True)
+    report = _run_health(paths)
+
+    assert any(item["paper_id"] == "paper-1" for item in report["orphan_notes"])
+    assert any(item["paper_id"] == "paper-1" for item in report["orphan_project_links"])
+    assert first_pdf.exists()
+    assert second_pdf.exists()

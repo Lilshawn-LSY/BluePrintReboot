@@ -2,18 +2,23 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 
 from ingest.doi import normalize_doi
 from storage.extracted_text_store import extraction_cache_status, pdf_fingerprint
 from storage.index_store import INDEX_COLUMNS
-from storage.project_link_store import delete_project_link
+from storage.atomic_json import atomic_write_json
+from storage.note_block_store import list_note_blocks, save_note_blocks
+from storage.project_link_store import delete_project_link, list_project_links, save_project_links
 from storage.paths import (
     EXTRACTED_TEXT_DIR,
+    EXPORTS_DIR,
     INDEX_CSV,
     NOTES_DIR,
     NOTE_BLOCKS_DIR,
@@ -24,6 +29,13 @@ from storage.paths import (
 
 ORPHAN_PRESERVE_ACTION = "Preserve for now; reattach manually later or export before deletion."
 ORPHAN_PROJECT_LINK_ACTION = "Remove only this project link after confirmation."
+ORPHAN_EXPORT_ACTION = "Export a recovery copy before reattaching or deleting orphan data."
+
+
+class OrphanRepairError(RuntimeError):
+    def __init__(self, message: str, plan: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.plan = plan
 
 
 class OrphanProjectLinkRepairError(RuntimeError):
@@ -83,6 +95,35 @@ def _load_json_list(path: Path, errors: list[str]) -> list[dict[str, Any]]:
         errors.append(f"{path.name} must contain a JSON list.")
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _atomic_write_text(path: Path, text: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="",
+            dir=path.parent,
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(text)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path and temporary_path.exists():
+            temporary_path.unlink()
+    return path
+
+
+def _export_path(exports_dir: Path, prefix: str, identifier: str) -> Path:
+    safe_identifier = "".join(character if character.isalnum() or character in ("-", "_") else "-" for character in identifier)
+    safe_identifier = safe_identifier.strip("-_") or "orphan"
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return Path(exports_dir) / f"{prefix}_{safe_identifier}_{timestamp}.json"
 
 
 def _pdf_sha256(path: Path, errors: list[str]) -> str:
@@ -293,6 +334,42 @@ def _orphan_project_link_records(
     return records
 
 
+def _orphan_extracted_text_records(
+    extracted_text_dir: Path,
+    paper_ids: set[str],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    if not extracted_text_dir.exists():
+        return []
+    stems = {
+        path.stem
+        for path in extracted_text_dir.glob("*")
+        if path.is_file() and path.suffix.lower() in (".txt", ".json")
+    }
+    records: list[dict[str, Any]] = []
+    for paper_id in sorted(stem for stem in stems if stem not in paper_ids):
+        text_path = extracted_text_dir / f"{paper_id}.txt"
+        metadata_path = extracted_text_dir / f"{paper_id}.json"
+        size_bytes = 0
+        if text_path.exists():
+            size_bytes += _file_size(text_path, errors)
+        if metadata_path.exists():
+            size_bytes += _file_size(metadata_path, errors)
+        records.append(
+            {
+                "classification": "orphan extracted-text cache",
+                "paper_id": paper_id,
+                "text_path": str(text_path.resolve(strict=False)),
+                "metadata_path": str(metadata_path.resolve(strict=False)),
+                "has_text_file": text_path.exists(),
+                "has_metadata_file": metadata_path.exists(),
+                "size_bytes": size_bytes,
+                "review_action": "Preserve by default; delete only after explicit cache cleanup confirmation.",
+            }
+        )
+    return records
+
+
 def _duplicate_pdf_hashes(
     records: list[dict[str, Any]],
     managed_pdfs: list[Path],
@@ -472,6 +549,7 @@ def run_library_health_check(
         project_names=project_names,
         blocks_by_paper=blocks_by_paper,
     )
+    orphan_extracted_text = _orphan_extracted_text_records(extracted_text_dir, paper_ids, errors)
 
     stale_extracted_text: list[dict[str, str]] = []
     for record in records:
@@ -504,6 +582,7 @@ def run_library_health_check(
         "orphan_notes": orphan_notes,
         "orphan_note_blocks": orphan_note_blocks,
         "orphan_project_links": orphan_project_links,
+        "orphan_extracted_text": orphan_extracted_text,
         "stale_extracted_text": stale_extracted_text,
         "noncanonical_filepaths": noncanonical_filepaths,
         "errors": errors,
@@ -606,3 +685,418 @@ def remove_orphan_project_link(
         can_remove=False,
     )
     return result
+
+
+def _indexed_paper_ids(index_csv: Path) -> tuple[set[str], list[str]]:
+    dataframe, errors = _read_index(Path(index_csv))
+    paper_ids = {str(record.get("paper_id", "")) for record in dataframe.to_dict("records") if record.get("paper_id")}
+    return paper_ids, errors
+
+
+def _note_path_for_paper_id(paper_id: str, notes_dir: Path) -> Path:
+    return Path(notes_dir) / f"{paper_id}.md"
+
+
+def _note_blocks_path_for_paper_id(paper_id: str, note_blocks_dir: Path) -> Path:
+    return Path(note_blocks_dir) / f"{paper_id}.json"
+
+
+def build_orphan_note_repair_plan(
+    orphan_paper_id: str,
+    target_paper_id: str = "",
+    *,
+    index_csv: Path = INDEX_CSV,
+    notes_dir: Path = NOTES_DIR,
+) -> dict[str, Any]:
+    paper_ids, errors = _indexed_paper_ids(index_csv)
+    orphan_paper_id = str(orphan_paper_id)
+    target_paper_id = str(target_paper_id)
+    note_path = _note_path_for_paper_id(orphan_paper_id, Path(notes_dir))
+    target_path = _note_path_for_paper_id(target_paper_id, Path(notes_dir)) if target_paper_id else None
+    plan: dict[str, Any] = {
+        "orphan_paper_id": orphan_paper_id,
+        "target_paper_id": target_paper_id,
+        "source_path": str(note_path.resolve(strict=False)),
+        "target_path": str(target_path.resolve(strict=False)) if target_path else "",
+        "status": "invalid",
+        "message": "",
+        "can_reattach": False,
+        "can_delete": False,
+        "errors": errors,
+    }
+    if errors:
+        plan.update(status="diagnostic_error", message="Index diagnostics must be clean before orphan note repair.")
+        return plan
+    if orphan_paper_id in paper_ids:
+        plan.update(status="not_orphan", message="This note belongs to an indexed paper.")
+        return plan
+    if not note_path.exists() or not note_path.is_file():
+        plan.update(status="missing_source", message="Orphan note file was not found.")
+        return plan
+    if target_paper_id and target_paper_id not in paper_ids:
+        plan.update(status="target_missing", message="Target paper_id is not in the index.", can_delete=True)
+        return plan
+    plan.update(
+        status="ready",
+        message="Ready to reattach, export, or delete this orphan note with confirmation.",
+        can_reattach=bool(target_paper_id),
+        can_delete=True,
+    )
+    return plan
+
+
+def export_orphan_note(
+    orphan_paper_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    notes_dir: Path = NOTES_DIR,
+    exports_dir: Path = EXPORTS_DIR,
+) -> dict[str, Any]:
+    plan = build_orphan_note_repair_plan(orphan_paper_id, index_csv=index_csv, notes_dir=notes_dir)
+    if plan["status"] != "ready":
+        raise OrphanRepairError(f"Export is blocked with status {plan['status']}.", plan)
+    note_path = Path(str(plan["source_path"]))
+    export_path = _export_path(Path(exports_dir), "orphan_note", orphan_paper_id)
+    payload = {
+        "kind": "orphan_note",
+        "exported_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "orphan_paper_id": str(orphan_paper_id),
+        "source_path": str(note_path),
+        "note_text": note_path.read_text(encoding="utf-8"),
+    }
+    atomic_write_json(export_path, payload, indent=2, ensure_ascii=False)
+    result = dict(plan)
+    result.update(status="exported", message="Orphan note exported without changing library data.", export_path=str(export_path))
+    return result
+
+
+def reattach_orphan_note(
+    orphan_paper_id: str,
+    target_paper_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    notes_dir: Path = NOTES_DIR,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    plan = build_orphan_note_repair_plan(
+        orphan_paper_id,
+        target_paper_id,
+        index_csv=index_csv,
+        notes_dir=notes_dir,
+    )
+    if not plan["can_reattach"]:
+        raise OrphanRepairError(f"Reattach is blocked with status {plan['status']}.", plan)
+    if not confirm:
+        raise OrphanRepairError("Orphan note reattach requires explicit confirmation.", plan)
+
+    source_path = Path(str(plan["source_path"]))
+    target_path = Path(str(plan["target_path"]))
+    orphan_text = source_path.read_text(encoding="utf-8")
+    if target_path.exists():
+        existing = target_path.read_text(encoding="utf-8").rstrip()
+        marker = f"\n\n---\n\n## Reattached orphan note: {orphan_paper_id}\n\n"
+        target_text = existing + marker + orphan_text.strip() + "\n"
+    else:
+        target_text = orphan_text
+    _atomic_write_text(target_path, target_text)
+    source_path.unlink()
+
+    result = dict(plan)
+    result.update(
+        status="reattached_note",
+        message="Orphan note content reattached to the selected paper. The original orphan file was removed.",
+    )
+    return result
+
+
+def delete_orphan_note(
+    orphan_paper_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    notes_dir: Path = NOTES_DIR,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    plan = build_orphan_note_repair_plan(orphan_paper_id, index_csv=index_csv, notes_dir=notes_dir)
+    if not plan["can_delete"]:
+        raise OrphanRepairError(f"Delete is blocked with status {plan['status']}.", plan)
+    if not confirm:
+        raise OrphanRepairError("Orphan note delete requires explicit confirmation.", plan)
+    Path(str(plan["source_path"])).unlink()
+    result = dict(plan)
+    result.update(status="deleted_note", message="Orphan note file deleted after explicit confirmation.")
+    return result
+
+
+def build_orphan_note_block_repair_plan(
+    orphan_paper_id: str,
+    target_paper_id: str = "",
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+) -> dict[str, Any]:
+    paper_ids, errors = _indexed_paper_ids(index_csv)
+    orphan_paper_id = str(orphan_paper_id)
+    target_paper_id = str(target_paper_id)
+    source_path = _note_blocks_path_for_paper_id(orphan_paper_id, Path(note_blocks_dir))
+    target_path = _note_blocks_path_for_paper_id(target_paper_id, Path(note_blocks_dir)) if target_paper_id else None
+    plan: dict[str, Any] = {
+        "orphan_paper_id": orphan_paper_id,
+        "target_paper_id": target_paper_id,
+        "source_path": str(source_path.resolve(strict=False)),
+        "target_path": str(target_path.resolve(strict=False)) if target_path else "",
+        "status": "invalid",
+        "message": "",
+        "can_reattach": False,
+        "can_delete": False,
+        "errors": errors,
+    }
+    if errors:
+        plan.update(status="diagnostic_error", message="Index diagnostics must be clean before orphan block repair.")
+        return plan
+    if orphan_paper_id in paper_ids:
+        plan.update(status="not_orphan", message="This note-block file belongs to an indexed paper.")
+        return plan
+    if not source_path.exists() or not source_path.is_file():
+        plan.update(status="missing_source", message="Orphan note-block file was not found.")
+        return plan
+    if target_paper_id and target_paper_id not in paper_ids:
+        plan.update(status="target_missing", message="Target paper_id is not in the index.", can_delete=True)
+        return plan
+    plan.update(
+        status="ready",
+        message="Ready to reattach, export, or delete this orphan note-block file with confirmation.",
+        can_reattach=bool(target_paper_id),
+        can_delete=True,
+    )
+    return plan
+
+
+def export_orphan_note_blocks(
+    orphan_paper_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    exports_dir: Path = EXPORTS_DIR,
+) -> dict[str, Any]:
+    plan = build_orphan_note_block_repair_plan(
+        orphan_paper_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+    )
+    if plan["status"] != "ready":
+        raise OrphanRepairError(f"Export is blocked with status {plan['status']}.", plan)
+    source_path = Path(str(plan["source_path"]))
+    export_path = _export_path(Path(exports_dir), "orphan_note_blocks", orphan_paper_id)
+    payload = {
+        "kind": "orphan_note_blocks",
+        "exported_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "orphan_paper_id": str(orphan_paper_id),
+        "source_path": str(source_path),
+        "blocks": json.loads(source_path.read_text(encoding="utf-8")),
+    }
+    atomic_write_json(export_path, payload, indent=2, ensure_ascii=False)
+    result = dict(plan)
+    result.update(status="exported", message="Orphan note blocks exported without changing library data.", export_path=str(export_path))
+    return result
+
+
+def reattach_orphan_note_blocks(
+    orphan_paper_id: str,
+    target_paper_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    plan = build_orphan_note_block_repair_plan(
+        orphan_paper_id,
+        target_paper_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+    )
+    if not plan["can_reattach"]:
+        raise OrphanRepairError(f"Reattach is blocked with status {plan['status']}.", plan)
+    if not confirm:
+        raise OrphanRepairError("Orphan note-block reattach requires explicit confirmation.", plan)
+
+    orphan_blocks = list_note_blocks(str(orphan_paper_id), Path(note_blocks_dir))
+    target_blocks = list_note_blocks(str(target_paper_id), Path(note_blocks_dir))
+    existing_ids = {str(block["id"]) for block in target_blocks}
+    reattached_blocks: list[dict[str, Any]] = []
+    for block in orphan_blocks:
+        updated = dict(block)
+        original_block_id = str(updated["id"])
+        if original_block_id in existing_ids:
+            updated["id"] = str(uuid4())
+            updated["reattached_from_block_id"] = original_block_id
+        updated["paper_id"] = str(target_paper_id)
+        updated["reattached_from_paper_id"] = str(orphan_paper_id)
+        existing_ids.add(str(updated["id"]))
+        reattached_blocks.append(updated)
+
+    save_note_blocks(str(target_paper_id), [*target_blocks, *reattached_blocks], Path(note_blocks_dir))
+    Path(str(plan["source_path"])).unlink()
+    result = dict(plan)
+    result.update(
+        status="reattached_note_blocks",
+        message="Orphan note blocks reattached to the selected paper. The original orphan file was removed.",
+        reattached_block_count=len(reattached_blocks),
+    )
+    return result
+
+
+def delete_orphan_note_blocks(
+    orphan_paper_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    plan = build_orphan_note_block_repair_plan(
+        orphan_paper_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+    )
+    if not plan["can_delete"]:
+        raise OrphanRepairError(f"Delete is blocked with status {plan['status']}.", plan)
+    if not confirm:
+        raise OrphanRepairError("Orphan note-block delete requires explicit confirmation.", plan)
+    Path(str(plan["source_path"])).unlink()
+    result = dict(plan)
+    result.update(status="deleted_note_blocks", message="Orphan note-block file deleted after explicit confirmation.")
+    return result
+
+
+def export_orphan_project_link(
+    link_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    projects_dir: Path = PROJECTS_DIR,
+    exports_dir: Path = EXPORTS_DIR,
+) -> dict[str, Any]:
+    plan = build_orphan_project_link_removal_plan(
+        link_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        projects_dir=projects_dir,
+    )
+    if plan["status"] != "ready":
+        raise OrphanProjectLinkRepairError(f"Export is blocked with status {plan['status']}.", plan)
+    export_path = _export_path(Path(exports_dir), "orphan_project_link", link_id)
+    payload = {
+        "kind": "orphan_project_link",
+        "exported_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        "link": {key: value for key, value in plan.items() if key not in {"errors", "can_remove"}},
+    }
+    atomic_write_json(export_path, payload, indent=2, ensure_ascii=False)
+    result = dict(plan)
+    result.update(status="exported", message="Orphan project link exported without changing library data.", export_path=str(export_path))
+    return result
+
+
+def build_orphan_project_link_reattach_plan(
+    link_id: str,
+    target_paper_id: str,
+    *,
+    target_block_id: str = "",
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    projects_dir: Path = PROJECTS_DIR,
+) -> dict[str, Any]:
+    removal_plan = build_orphan_project_link_removal_plan(
+        link_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        projects_dir=projects_dir,
+    )
+    plan = dict(removal_plan)
+    plan.update(
+        target_paper_id=str(target_paper_id),
+        target_block_id=str(target_block_id),
+        can_reattach=False,
+    )
+    if removal_plan["status"] != "ready":
+        plan.update(message=f"Reattach is blocked with status {removal_plan['status']}.")
+        return plan
+
+    paper_ids, errors = _indexed_paper_ids(index_csv)
+    if errors:
+        plan.update(status="diagnostic_error", message="Index diagnostics must be clean before link reattach.")
+        return plan
+    if str(target_paper_id) not in paper_ids:
+        plan.update(status="target_missing", message="Target paper_id is not in the index.")
+        return plan
+    if plan.get("target_type") == "note_block":
+        if not target_block_id:
+            plan.update(status="target_block_required", message="A target note-block id is required.")
+            return plan
+        block_ids = {str(block["id"]) for block in list_note_blocks(str(target_paper_id), Path(note_blocks_dir))}
+        if str(target_block_id) not in block_ids:
+            plan.update(status="target_block_missing", message="Target note-block id was not found.")
+            return plan
+    plan.update(status="ready", message="Ready to reattach this orphan project link.", can_reattach=True)
+    return plan
+
+
+def reattach_orphan_project_link(
+    link_id: str,
+    target_paper_id: str,
+    *,
+    target_block_id: str = "",
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    projects_dir: Path = PROJECTS_DIR,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    plan = build_orphan_project_link_reattach_plan(
+        link_id,
+        target_paper_id,
+        target_block_id=target_block_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        projects_dir=projects_dir,
+    )
+    if not plan["can_reattach"]:
+        raise OrphanProjectLinkRepairError(f"Reattach is blocked with status {plan['status']}.", plan)
+    if not confirm:
+        raise OrphanProjectLinkRepairError("Orphan project link reattach requires explicit confirmation.", plan)
+
+    links = list_project_links(Path(projects_dir))
+    updated_links: list[dict[str, Any]] = []
+    found = False
+    for link in links:
+        if str(link["id"]) != str(link_id):
+            updated_links.append(link)
+            continue
+        found = True
+        updated = dict(link)
+        updated["paper_id"] = str(target_paper_id)
+        if updated["target_type"] == "paper":
+            updated["target_id"] = str(target_paper_id)
+        elif updated["target_type"] == "note_block":
+            updated["target_id"] = str(target_block_id)
+        updated_links.append(updated)
+    if not found:
+        raise OrphanProjectLinkRepairError("Project link was not found during reattach.", plan)
+    save_project_links(updated_links, Path(projects_dir))
+    result = dict(plan)
+    result.update(status="reattached_project_link", message="Orphan project link reattached to the selected paper.")
+    return result
+
+
+def unlink_orphan_project_link(
+    link_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    note_blocks_dir: Path = NOTE_BLOCKS_DIR,
+    projects_dir: Path = PROJECTS_DIR,
+    confirm: bool = False,
+) -> dict[str, Any]:
+    return remove_orphan_project_link(
+        link_id,
+        index_csv=index_csv,
+        note_blocks_dir=note_blocks_dir,
+        projects_dir=projects_dir,
+        confirm=confirm,
+    )

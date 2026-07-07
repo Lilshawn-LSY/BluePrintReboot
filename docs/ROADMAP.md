@@ -2,11 +2,11 @@
 
 Last synced: 2026-07-07
 
-This roadmap reflects the GitHub `main` branch at `v1.0.17-reader-pdf-stabilization`. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI, frontend migration, packaging, external ontology integration, and AI-assisted features remain deferred until the Streamlit foundation is more predictable.
+This roadmap reflects the GitHub `main` branch at `v1.0.19-orphan-repair-and-storage-hardening`. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI, frontend migration, packaging, external ontology integration, and AI-assisted features remain deferred until the Streamlit foundation is more predictable.
 
 ## Current Status Snapshot
 
-Implemented through v1.0.17:
+Implemented through v1.0.19:
 
 - v1.0.10 added Windows developer bootstrap scripts: `scripts/dev_setup.ps1`, `scripts/dev_check.ps1`, `scripts/run_app.ps1`, and `start_blueprint.bat`.
 - v1.0.11 split cheap local scanning from explicit DOI/Crossref enrichment, preserved existing accepted metadata during scan, and blocked duplicate external note imports unless force re-import is explicitly selected.
@@ -16,14 +16,16 @@ Implemented through v1.0.17:
 - v1.0.15 repaired PDF profile extraction from cached/full extracted text: cleaned front matter, title, authors, DOI, abstract, keywords, article type, section headings, extraction warnings, metadata gap-fill for incomplete Crossref previews, and explicit `pdf_abstract`, `pdf_keywords`, and `pdf_section_headings` tag suggestion sources.
 - v1.0.16 synced roadmap, backlog, checklist, release notes, and README evidence without changing app behavior.
 - v1.0.17 made native Streamlit PDF rendering the default Reader path, demoted HTML/base64 rendering to explicit experimental fallback, added large-PDF guardrails and external path guidance, and preserved Reader paper context across note, tag, status, priority, and Reader project-link actions.
+- v1.0.18 added read-only file lifecycle diagnosis, same-hash duplicate keep/reconnect/ignore/remove controls, duplicate reconnect that preserves `paper_id`, confirmed duplicate index-row removal, and regression coverage proving same-hash rows are not auto-merged.
+- v1.0.19 added orphan extracted-text cache detection, export/reattach/delete workflows for orphan notes and note blocks, export/reattach/unlink workflows for orphan project links, and atomic extracted-text `.txt` cache writes.
 - Earlier v1.0.x safety work remains in place: `pdf_sha256` support, missing-PDF reconnect/remove, same-hash duplicate review, orphan record review, confirmed orphan project-link removal, atomic JSON writes, backup snapshot, and release-readiness documentation.
 
 Partial or incomplete:
 
 - `paper_id` is still generated from the relative file path. Content hash supports repair/reconnect, but it is not the primary identity.
-- Same-hash duplicate handling remains review-oriented. Full duplicate merge/remove policy is still deferred.
-- Orphan note and note-block handling remains review-only. Reattach/export/delete workflows are not implemented for those files.
-- Atomic persistence covers key JSON metadata and CSV replacement, but extracted full-text `.txt` cache writes are still direct writes.
+- Same-hash duplicate handling is explicit and conservative. Automatic merge remains intentionally deferred.
+- Orphan note, note-block, and project-link repair is available through explicit repair workflows. Automatic deletion remains intentionally deferred.
+- Atomic persistence covers key JSON metadata, CSV replacement, and extracted full-text `.txt` cache writes.
 - Reader Workspace still has Streamlit rerun limitations around note editing, metadata refresh, and some browser-dependent PDF rendering behavior.
 - Native PDF viewing is now the default. The HTML/base64 viewer is explicit experimental fallback only and is guarded for large PDFs.
 - Tag suggestions are deterministic and evidence-bearing, but generated candidates are not automatically promoted to the Tag Book. Candidate promotion remains a deliberate user governance action.
@@ -35,7 +37,7 @@ Partial or incomplete:
 | Gate | Status | Meaning | Required to close |
 |---|---|---|---|
 | G0: Baseline validation | Active | Smoke check, pytest, environment details, and manual checklist evidence must be recorded before release handoff. | Run `.\scripts\dev_check.ps1`, record Python, Streamlit, and platform evidence, and keep runtime/user data out of Git. |
-| G1: Library lifecycle safety | Partial | Missing/reconnect, duplicate review, orphan review, and atomic JSON writes are in place. | Add clearer duplicate merge/remove policy, orphan note/block reattach/export/delete options, and atomic text-cache writes. |
+| G1: Library lifecycle safety | Mostly closed | Missing/reconnect, duplicate-row policy, orphan repair, atomic JSON writes, and atomic extracted-text writes are in place. | Decide archive semantics, corrupt-cache quarantine, and whether unindexed duplicate PDFs need additional non-destructive outcomes beyond keep/ignore/reconnect. |
 | G2: Setup friction | Closed | Scripted setup/check/run flow exists for Windows. | Keep README and scripts aligned when dependencies or launch behavior change. |
 | G3: Scan/enrich separation | Closed | Scan discovers PDFs and fingerprints; DOI/Crossref work is explicit. | Keep scan cheap and add regression coverage when scanner behavior changes. |
 | G4: Reader stability | Partial | Native-default PDF rendering and Reader context preservation are in place, but note draft and metadata refresh boundaries still need hardening. | Document note draft state, add metadata-refresh tests with unsaved drafts, and continue reducing Streamlit rerun side effects. |
@@ -56,15 +58,15 @@ Target behavior:
 - Keep Save/Reload/Insert/Import precedence explicit.
 - Verify tag/status changes do not discard unsaved note edits.
 
-### 2. Library lifecycle repair completion
+### 2. Library lifecycle edge-case polish
 
-Goal: finish repair policies that are currently review-only.
+Goal: keep lifecycle repair conservative while clarifying remaining edge cases.
 
 Target behavior:
 
-- Decide duplicate PDF merge/remove semantics.
+- Keep duplicate PDF auto-merge out of scope unless a future design explicitly proves it is safe.
 - Add safer outcomes for unindexed same-hash duplicates.
-- Add orphan note and note-block reattach/export/delete workflows with explicit confirmation.
+- Decide how archive should work if `status` remains limited to `unread`, `reading`, and `read`.
 - Keep notes, note blocks, project links, PDFs, and index rows protected unless the user confirms a specific action.
 
 ### 3. Storage safety polish
@@ -73,7 +75,6 @@ Goal: make cache/state failures easier to recover from.
 
 Target behavior:
 
-- Make extracted full-text `.txt` cache writes atomic.
 - Consider backup or quarantine behavior for corrupt JSON/text cache files.
 - Surface corrupt cache/state files in Library Health Check.
 

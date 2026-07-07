@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.17-reader-pdf-stabilization**.
+Current release target: **v1.0.19-orphan-repair-and-storage-hardening**.
 
-v1.0.17 makes the native Streamlit PDF viewer the default Reader rendering path, keeps the HTML/base64 PDF viewer as an explicit experimental fallback, adds large-PDF guardrails, and preserves Reader paper context across note, tag, status, and project-link actions. The app preserves the local Tag Book and `PaperTextProfile` architecture; tag suggestion logic, PDF profile extraction, metadata extraction, data schema changes, FastAPI, frontend migration, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
+v1.0.18 and v1.0.19 harden file lifecycle maintenance: same-hash duplicate rows now have explicit keep/reconnect/ignore/remove controls, orphan notes, note blocks, and project links can be exported or repaired through confirmation-gated workflows, orphan extracted-text caches are surfaced, and extracted-text `.txt` cache writes use atomic replacement. The app preserves the local Tag Book, `PaperTextProfile`, and Reader PDF architecture; automatic duplicate merging, automatic deletion, data schema changes, FastAPI, frontend migration, packaging, external ontologies, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -122,7 +122,7 @@ Settings is organized into four sections:
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
 
-Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, noncanonical paths, and stale extracted-text caches. Duplicate PDF hashes are shown as review-only groups with `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Unindexed duplicate PDFs are marked "Do not add to index yet; handle later." Orphan note files and note block files are review-only and marked to preserve for now, reattach manually later, or export before deletion. Orphan project links can be explicitly removed without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
+Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, orphan extracted-text caches, noncanonical paths, and stale extracted-text caches. Duplicate PDF hash groups show `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Duplicate rows can be explicitly kept, reconnected to an unindexed same-hash PDF, ignored for the current session, or removed from `paper_index.csv` after confirmation; none of these actions auto-merge or delete PDFs, notes, note blocks, project links, or extracted text. Orphan note files and note block files can be exported, reattached to an indexed paper, or deleted only after explicit confirmation. Orphan project links can be exported, reattached, or unlinked without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
 
 `BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used. Inbox PDFs are candidates only; the app uses an explicit preview/confirm workflow to copy one selected PDF into `papers/` and leaves the source untouched.
 
@@ -194,6 +194,22 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.19-orphan-repair-and-storage-hardening
+
+- Detects orphan extracted-text cache files whose `paper_id` no longer exists in the index.
+- Adds export, reattach, and confirmed delete workflows for orphan Reading Note files and structured note-block files.
+- Adds export, reattach, and unlink wording for orphan project links while preserving link notes where possible.
+- Writes extracted-text `.txt` cache files through same-directory temporary files, flush/fsync, and atomic replacement.
+- Preserves notes, note blocks, project links, PDFs, extracted text, and runtime user data by default; destructive repair actions require confirmation.
+
+### v1.0.18-file-lifecycle-duplicate-policy
+
+- Adds a read-only file lifecycle diagnosis layer for missing indexed PDFs, unindexed PDFs, same-hash duplicate candidates, duplicate rows, and likely reconnect candidates.
+- Adds explicit same-hash duplicate actions in Library Health Check: keep, reconnect, ignore, and confirmed index-row removal.
+- Reconnect preserves the selected `paper_id` and updates only file identity fields.
+- Duplicate index-row removal deletes only the selected row after confirmation and warns that orphan records may remain for the orphan repair workflow.
+- Keeps same-hash duplicate import behavior conservative; no automatic merge is performed.
 
 ### v1.0.17-reader-pdf-stabilization
 
@@ -386,6 +402,8 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - Native Streamlit PDF rendering is the default Reader path, but rendering can still vary by environment.
 - The HTML/base64 PDF viewer is an explicit experimental fallback and may fail depending on browser, Streamlit, file size, or local security policy.
 - Large PDFs are warned before rendering; large-file HTML/base64 fallback requires explicit confirmation.
+- Same-hash duplicate rows are never auto-merged; users must choose keep, reconnect, ignore, or confirmed index-row removal.
+- Orphan repair can reattach/export/unlink/delete supported records, but archive lifecycle and corrupt-cache quarantine remain deferred.
 
 If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:
 

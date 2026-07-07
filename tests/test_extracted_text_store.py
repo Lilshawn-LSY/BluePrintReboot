@@ -48,6 +48,31 @@ def test_save_and_load_cached_extracted_text() -> None:
     assert load_cached_extracted_text("paper-1", cache_dir) == "full text"
 
 
+def test_save_extracted_text_replaces_atomically() -> None:
+    cache_dir = make_workspace("text-cache-atomic-success")
+    save_extracted_text("paper-1", "old text", cache_dir)
+
+    save_extracted_text("paper-1", "new text", cache_dir)
+
+    assert load_cached_extracted_text("paper-1", cache_dir) == "new text"
+
+
+def test_failed_extracted_text_atomic_replace_preserves_existing_cache() -> None:
+    cache_dir = make_workspace("text-cache-atomic-failure")
+    save_extracted_text("paper-1", "old text", cache_dir)
+
+    def fail_replace(_source, _target) -> None:
+        raise OSError("simulated replace failure")
+
+    try:
+        save_extracted_text("paper-1", "new text", cache_dir, replace_file=fail_replace)
+    except OSError:
+        pass
+
+    assert load_cached_extracted_text("paper-1", cache_dir) == "old text"
+    assert sorted(path.name for path in cache_dir.iterdir()) == ["paper-1.txt"]
+
+
 def test_save_and_load_extraction_metadata() -> None:
     cache_dir = make_workspace("text-cache-metadata")
     result = FullTextExtractionResult(

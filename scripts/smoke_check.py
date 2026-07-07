@@ -52,6 +52,7 @@ KEY_MODULES = (
     "storage.atomic_json",
     "storage.index_store",
     "services.backup_snapshot",
+    "services.file_lifecycle",
     "services.library_health",
     "services.metadata_fallback",
     "services.missing_pdf_repair",
