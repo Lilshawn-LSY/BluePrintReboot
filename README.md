@@ -8,9 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.15-pdf-profile-extraction-repair**.
+Current documentation sync target: **v1.0.16-roadmap-release-evidence-sync**.
 
-v1.0.15 repairs the PDF profile extraction layer so cached/full extracted PDF text can supply cleaned front-matter title, authors, DOI, abstract, keywords, article type, and section headings when external metadata is high-confidence but incomplete. The app preserves the local Tag Book and `PaperTextProfile` architecture; full PDF methods/results extraction, LLM/API tagging, FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
+Implemented app baseline: **v1.0.15-pdf-profile-extraction-repair**.
+
+v1.0.16 is a documentation, validation, and roadmap consistency pass. It does not add product features or change runtime data behavior. v1.0.15 repairs the PDF profile extraction layer so cached/full extracted PDF text can supply cleaned front-matter title, authors, DOI, abstract, keywords, article type, and section headings when external metadata is high-confidence but incomplete. The app preserves the local Tag Book and `PaperTextProfile` architecture; full PDF methods/results extraction, LLM/API tagging, FastAPI, frontend migration, PDF viewer changes, paper_id lifecycle changes, packaging, external ontologies, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -131,7 +133,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual in v1.0.15. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -194,6 +196,12 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.16-roadmap-release-evidence-sync
+
+- Syncs ROADMAP, BACKLOG, regression checklist, release notes, and README against the implemented v1.0.10 through v1.0.15 state.
+- Records validation expectations and automated evidence for the current `main` branch.
+- Adds no product features, runtime migrations, paper/library data changes, or app version bump.
 
 ### v1.0.15-pdf-profile-extraction-repair
 
