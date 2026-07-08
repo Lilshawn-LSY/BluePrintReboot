@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZipFile
 
+from config.contact import APP_VERSION
 from services.backup_snapshot import create_backup_snapshot
 from tests.helpers import make_workspace
 
@@ -77,9 +78,12 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
     assert "config/tag_book/candidate_patterns.json" in names
     assert ".streamlit/config.toml" in names
     assert "papers/Paper.pdf" not in names
-    assert manifest["app_version"] == "1.0.19"
+    assert manifest["app_version"] == APP_VERSION
     assert manifest["snapshot_type"] == "light"
     assert manifest["includes_pdfs"] is False
+    assert manifest["policy"]["purpose"] == "Backup private local library data. Source code remains in GitHub."
+    assert manifest["policy"]["extracted_text_cache"]["included"] is False
+    assert "data/extracted_text/" in manifest["policy"]["excluded_by_default"]
     assert manifest["counts"]["index_rows"] == 1
     assert manifest["counts"]["projects"] == 1
     assert manifest["counts"]["project_links"] == 1
@@ -113,8 +117,15 @@ def test_snapshot_excludes_ignored_directories() -> None:
         workspace / ".venv" / "secret.txt",
         workspace / ".pytest_cache" / "cache.txt",
         workspace / ".git" / "config",
+        workspace / "node_modules" / "package-cache.txt",
+        workspace / ".cache" / "package-cache.txt",
         workspace / "notes" / "__pycache__" / "note.md",
         workspace / "data" / "projects" / ".venv" / "nested.json",
+        workspace / "data" / "extracted_text" / "paper-1.txt",
+        workspace / "data" / "extracted_text" / "paper-1.json",
+        workspace / "data" / "paper_profiles" / "paper-1.json",
+        workspace / "notes" / "debug.log",
+        workspace / ".streamlit" / "secrets.toml",
     ]
     for path in ignored_files:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,5 +142,10 @@ def test_snapshot_excludes_ignored_directories() -> None:
     assert not any(
         ignored in name.split("/")
         for name in names
-        for ignored in (".venv", ".pytest_cache", ".git", "__pycache__")
+        for ignored in (".venv", ".pytest_cache", ".git", "__pycache__", "node_modules", ".cache")
     )
+    assert "data/extracted_text/paper-1.txt" not in names
+    assert "data/extracted_text/paper-1.json" not in names
+    assert "data/paper_profiles/paper-1.json" not in names
+    assert "notes/debug.log" not in names
+    assert ".streamlit/secrets.toml" not in names

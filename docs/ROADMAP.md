@@ -1,12 +1,12 @@
 # BluePrintReboot Roadmap
 
-Last synced: 2026-07-07
+Last synced: 2026-07-08
 
-This roadmap reflects the GitHub `main` branch at `v1.0.19-orphan-repair-and-storage-hardening`. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI, frontend migration, packaging, external ontology integration, and AI-assisted features remain deferred until the Streamlit foundation is more predictable.
+This roadmap reflects the `v1.0.20-safety-release-foundation` target. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI, frontend migration, packaging, external ontology integration, and AI-assisted features remain deferred until the Streamlit foundation is more predictable.
 
 ## Current Status Snapshot
 
-Implemented through v1.0.19:
+Implemented through v1.0.20:
 
 - v1.0.10 added Windows developer bootstrap scripts: `scripts/dev_setup.ps1`, `scripts/dev_check.ps1`, `scripts/run_app.ps1`, and `start_blueprint.bat`.
 - v1.0.11 split cheap local scanning from explicit DOI/Crossref enrichment, preserved existing accepted metadata during scan, and blocked duplicate external note imports unless force re-import is explicitly selected.
@@ -18,6 +18,7 @@ Implemented through v1.0.19:
 - v1.0.17 made native Streamlit PDF rendering the default Reader path, demoted HTML/base64 rendering to explicit experimental fallback, added large-PDF guardrails and external path guidance, and preserved Reader paper context across note, tag, status, priority, and Reader project-link actions.
 - v1.0.18 added read-only file lifecycle diagnosis, same-hash duplicate keep/reconnect/ignore/remove controls, duplicate reconnect that preserves `paper_id`, confirmed duplicate index-row removal, and regression coverage proving same-hash rows are not auto-merged.
 - v1.0.19 added orphan extracted-text cache detection, export/reattach/delete workflows for orphan notes and note blocks, export/reattach/unlink workflows for orphan project links, and atomic extracted-text `.txt` cache writes.
+- v1.0.20 added typed corrupt JSON handling, action-oriented Health Check guidance, explicit backup snapshot inclusion/exclusion policy, clearer Streamlit safety feedback, and focused safety regression tests.
 - Earlier v1.0.x safety work remains in place: `pdf_sha256` support, missing-PDF reconnect/remove, same-hash duplicate review, orphan record review, confirmed orphan project-link removal, atomic JSON writes, backup snapshot, and release-readiness documentation.
 
 Partial or incomplete:

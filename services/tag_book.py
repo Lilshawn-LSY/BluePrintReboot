@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-from storage.atomic_json import atomic_write_json
+from storage.atomic_json import atomic_write_json, read_json_file
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -1135,10 +1134,7 @@ def _alias_values_for_validation(record: dict[str, Any]) -> list[str]:
 
 
 def _read_json(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return default
-    with path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+    return read_json_file(path, default=default, store_name=f"Tag Book JSON file {path.name}")
 
 
 def _load_method_lexicon(path: Path) -> list[dict[str, Any]]:

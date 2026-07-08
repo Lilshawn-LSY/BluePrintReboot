@@ -13,7 +13,13 @@ import pandas as pd
 from ingest.doi import normalize_doi
 from storage.extracted_text_store import extraction_cache_status, pdf_fingerprint
 from storage.index_store import INDEX_COLUMNS
-from storage.atomic_json import atomic_write_json
+from storage.atomic_json import (
+    JsonStoreError,
+    atomic_write_json,
+    json_store_issue,
+    read_json_file,
+    require_json_list,
+)
 from storage.note_block_store import list_note_blocks, save_note_blocks
 from storage.project_link_store import delete_project_link, list_project_links, save_project_links
 from storage.paths import (
@@ -30,6 +36,99 @@ from storage.paths import (
 ORPHAN_PRESERVE_ACTION = "Preserve for now; reattach manually later or export before deletion."
 ORPHAN_PROJECT_LINK_ACTION = "Remove only this project link after confirmation."
 ORPHAN_EXPORT_ACTION = "Export a recovery copy before reattaching or deleting orphan data."
+
+ISSUE_GUIDANCE: dict[str, dict[str, str]] = {
+    "missing_pdfs": {
+        "severity": "error",
+        "category": "file identity",
+        "meaning": "The index points to a PDF path that is missing or unreadable.",
+        "next_action": "Reconnect the record to the intended PDF under papers/ or remove only the index row after confirming related notes and links.",
+    },
+    "unindexed_pdfs": {
+        "severity": "review",
+        "category": "file identity",
+        "meaning": "A PDF exists under papers/ but does not have a paper_index.csv row.",
+        "next_action": "Run the local scan when you are ready to add it, or leave it untouched if it is intentionally staged.",
+    },
+    "duplicate_filenames": {
+        "severity": "review",
+        "category": "metadata",
+        "meaning": "Multiple index rows use the same filename text.",
+        "next_action": "Review the rows before moving files or running filename hygiene.",
+    },
+    "duplicate_pdf_hashes": {
+        "severity": "warning",
+        "category": "file identity",
+        "meaning": "The same PDF content appears in more than one indexed or unindexed location.",
+        "next_action": "Choose keep, reconnect, ignore, or confirmed index-row removal; the app does not auto-merge duplicates.",
+    },
+    "duplicate_dois": {
+        "severity": "review",
+        "category": "metadata",
+        "meaning": "Multiple records normalize to the same DOI.",
+        "next_action": "Review metadata and paper identity before editing or removing rows.",
+    },
+    "missing_metadata": {
+        "severity": "review",
+        "category": "metadata",
+        "meaning": "Some records are missing title, author, or year fields.",
+        "next_action": "Fill fields manually or use Metadata Assist before relying on filenames, tags, or release evidence.",
+    },
+    "orphan_notes": {
+        "severity": "warning",
+        "category": "user data",
+        "meaning": "A Reading Note file no longer matches an indexed paper_id.",
+        "next_action": "Preserve it, export it, or reattach it to an indexed paper before considering confirmed deletion.",
+    },
+    "orphan_note_blocks": {
+        "severity": "warning",
+        "category": "user data",
+        "meaning": "A structured note-block JSON file no longer matches an indexed paper_id.",
+        "next_action": "Export or reattach blocks before using confirmed deletion.",
+    },
+    "orphan_project_links": {
+        "severity": "warning",
+        "category": "project links",
+        "meaning": "A project link points to a missing project, paper, or note block.",
+        "next_action": "Export, reattach, or unlink the broken link; papers and notes remain untouched.",
+    },
+    "orphan_extracted_text": {
+        "severity": "review",
+        "category": "cache",
+        "meaning": "Extracted-text cache files exist for paper_ids that are no longer indexed.",
+        "next_action": "Preserve by default; delete only through an explicit cache cleanup decision.",
+    },
+    "stale_extracted_text": {
+        "severity": "review",
+        "category": "cache",
+        "meaning": "A cached extracted-text file was built from a different PDF hash than the current PDF.",
+        "next_action": "Rebuild extracted text when you next need full-text evidence for that paper.",
+    },
+    "noncanonical_filepaths": {
+        "severity": "warning",
+        "category": "file identity",
+        "meaning": "An indexed PDF path is outside the managed papers/ directory.",
+        "next_action": "Move or reconnect the PDF into papers/ before backup or restore work.",
+    },
+    "corrupt_json": {
+        "severity": "error",
+        "category": "storage",
+        "meaning": "A local JSON store could not be parsed or has the wrong top-level shape.",
+        "next_action": "Do not overwrite the file. Restore from backup or repair a copy manually, then rerun Health Check.",
+    },
+    "backup_snapshot_warnings": {
+        "severity": "warning",
+        "category": "backup",
+        "meaning": "Backup snapshot coverage may be missing or stale.",
+        "next_action": "Create a light or full backup snapshot before risky maintenance or moving computers.",
+    },
+    "errors": {
+        "severity": "error",
+        "category": "diagnostic",
+        "meaning": "A health diagnostic could not read or inspect a local file.",
+        "next_action": "Review the details, fix file access or corruption, and rerun Health Check before repair actions.",
+    },
+}
 
 
 class OrphanRepairError(RuntimeError):
@@ -83,18 +182,124 @@ def _pdf_files(papers_dir: Path) -> list[Path]:
     )
 
 
-def _load_json_list(path: Path, errors: list[str]) -> list[dict[str, Any]]:
+def _remember_json_issue(
+    issues: dict[str, dict[str, str]],
+    error: JsonStoreError,
+    *,
+    severity: str = "error",
+) -> None:
+    record = json_store_issue(error, severity=severity)
+    record["classification"] = "corrupt json" if error.__class__.__name__ == "CorruptJsonError" else "invalid json store"
+    issues.setdefault(record["path"], record)
+
+
+def _load_json_list(
+    path: Path,
+    errors: list[str],
+    corrupt_json: dict[str, dict[str, str]] | None = None,
+    *,
+    store_name: str = "JSON file",
+) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+        value = require_json_list(
+            read_json_file(path, store_name=store_name),
+            path,
+            store_name=store_name,
+        )
+    except JsonStoreError as exc:
+        if corrupt_json is not None:
+            _remember_json_issue(corrupt_json, exc)
         errors.append(f"{path.name} could not be read: {exc}")
         return []
-    if not isinstance(value, list):
-        errors.append(f"{path.name} must contain a JSON list.")
-        return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _health_json_files(
+    *,
+    index_csv: Path,
+    note_blocks_dir: Path,
+    projects_dir: Path,
+    extracted_text_dir: Path,
+) -> list[Path]:
+    data_dir = Path(index_csv).parent
+    config_dir = data_dir.parent / "config"
+    candidates: list[Path] = [
+        projects_dir / "projects.json",
+        projects_dir / "project_links.json",
+        data_dir / "note_imports.json",
+        config_dir / "tag_rules.json",
+        config_dir / "canonical_tags.json",
+        config_dir / "settings.json",
+        data_dir / "settings.json",
+    ]
+    for directory in (
+        note_blocks_dir,
+        extracted_text_dir,
+        data_dir / "paper_profiles",
+        config_dir / "tag_book",
+    ):
+        if directory.exists() and directory.is_dir():
+            candidates.extend(sorted(directory.glob("*.json"), key=lambda item: item.as_posix().lower()))
+    unique: dict[str, Path] = {}
+    for path in candidates:
+        if path.exists() and path.is_file():
+            unique[_path_key(path)] = path
+    return sorted(unique.values(), key=lambda item: item.as_posix().lower())
+
+
+def _scan_corrupt_json(
+    paths: list[Path],
+    issues: dict[str, dict[str, str]],
+) -> None:
+    for path in paths:
+        try:
+            read_json_file(path, store_name="App-owned JSON file")
+        except JsonStoreError as exc:
+            _remember_json_issue(issues, exc)
+
+
+def _backup_snapshot_warnings(exports_dir: Path) -> list[dict[str, str]]:
+    if not exports_dir.exists() or not exports_dir.is_dir():
+        return [
+            {
+                "severity": "warning",
+                "category": "backup",
+                "path": str(exports_dir.resolve(strict=False)),
+                "issue": "No exports directory was found for backup snapshots.",
+                "suggested_action": "Create a backup snapshot before maintenance or moving this library.",
+            }
+        ]
+    snapshots = sorted(exports_dir.glob("blueprint_snapshot_*.zip"), key=lambda item: item.stat().st_mtime, reverse=True)
+    if not snapshots:
+        return [
+            {
+                "severity": "warning",
+                "category": "backup",
+                "path": str(exports_dir.resolve(strict=False)),
+                "issue": "No backup snapshots were found in exports/.",
+                "suggested_action": "Create a light or full backup snapshot before risky maintenance or moving computers.",
+            }
+        ]
+    latest = snapshots[0]
+    return [
+        {
+            "severity": "info",
+            "category": "backup",
+            "path": str(latest.resolve(strict=False)),
+            "issue": "Latest backup snapshot found.",
+            "suggested_action": "Verify this snapshot is recent enough before moving or repairing library data.",
+        }
+    ]
+
+
+def _active_issue_guidance(issue_sections: dict[str, list[Any]]) -> dict[str, dict[str, str]]:
+    return {
+        key: ISSUE_GUIDANCE[key]
+        for key, items in issue_sections.items()
+        if items and key in ISSUE_GUIDANCE
+    }
 
 
 def _atomic_write_text(path: Path, text: str) -> Path:
@@ -183,6 +388,7 @@ def _note_block_summary(block: dict[str, Any]) -> dict[str, str]:
 def _note_blocks_by_paper(
     note_blocks_dir: Path,
     errors: list[str],
+    corrupt_json: dict[str, dict[str, str]] | None = None,
 ) -> tuple[dict[str, set[str]], dict[str, int], dict[str, list[dict[str, str]]]]:
     block_ids_by_paper: dict[str, set[str]] = {}
     block_counts_by_paper: dict[str, int] = {}
@@ -190,7 +396,7 @@ def _note_blocks_by_paper(
     if not note_blocks_dir.exists():
         return block_ids_by_paper, block_counts_by_paper, block_details_by_paper
     for path in note_blocks_dir.glob("*.json"):
-        blocks = _load_json_list(path, errors)
+        blocks = _load_json_list(path, errors, corrupt_json, store_name="Note block file")
         block_ids_by_paper[path.stem] = {str(block.get("id", "")) for block in blocks if block.get("id")}
         block_counts_by_paper[path.stem] = len(blocks)
         block_details_by_paper[path.stem] = [_note_block_summary(block) for block in blocks]
@@ -456,6 +662,7 @@ def run_library_health_check(
     note_blocks_dir: Path = NOTE_BLOCKS_DIR,
     projects_dir: Path = PROJECTS_DIR,
     extracted_text_dir: Path = EXTRACTED_TEXT_DIR,
+    exports_dir: Path | None = None,
 ) -> dict[str, Any]:
     index_csv = Path(index_csv)
     papers_dir = _absolute(papers_dir)
@@ -463,7 +670,9 @@ def run_library_health_check(
     note_blocks_dir = Path(note_blocks_dir)
     projects_dir = Path(projects_dir)
     extracted_text_dir = Path(extracted_text_dir)
+    exports_dir = Path(exports_dir) if exports_dir is not None else index_csv.parent.parent / "exports"
     dataframe, errors = _read_index(index_csv)
+    corrupt_json_by_path: dict[str, dict[str, str]] = {}
     records = dataframe.to_dict("records")
     paper_ids = {str(record.get("paper_id", "")) for record in records if record.get("paper_id")}
 
@@ -486,9 +695,23 @@ def run_library_health_check(
             noncanonical_filepaths.append(item)
 
     managed_pdfs = _pdf_files(papers_dir)
-    projects = _load_json_list(projects_dir / "projects.json", errors)
-    project_links = _load_json_list(projects_dir / "project_links.json", errors)
-    blocks_by_paper, note_block_counts, note_block_details = _note_blocks_by_paper(note_blocks_dir, errors)
+    projects = _load_json_list(
+        projects_dir / "projects.json",
+        errors,
+        corrupt_json_by_path,
+        store_name="Projects file",
+    )
+    project_links = _load_json_list(
+        projects_dir / "project_links.json",
+        errors,
+        corrupt_json_by_path,
+        store_name="Project links file",
+    )
+    blocks_by_paper, note_block_counts, note_block_details = _note_blocks_by_paper(
+        note_blocks_dir,
+        errors,
+        corrupt_json_by_path,
+    )
     project_link_counts = _project_link_counts(project_links)
     unindexed_pdfs = [str(path) for path in managed_pdfs if _path_key(path) not in indexed_paths]
     duplicate_pdf_hashes = _duplicate_pdf_hashes(
@@ -550,6 +773,17 @@ def run_library_health_check(
         blocks_by_paper=blocks_by_paper,
     )
     orphan_extracted_text = _orphan_extracted_text_records(extracted_text_dir, paper_ids, errors)
+    _scan_corrupt_json(
+        _health_json_files(
+            index_csv=index_csv,
+            note_blocks_dir=note_blocks_dir,
+            projects_dir=projects_dir,
+            extracted_text_dir=extracted_text_dir,
+        ),
+        corrupt_json_by_path,
+    )
+    corrupt_json = sorted(corrupt_json_by_path.values(), key=lambda item: item["path"])
+    backup_snapshot_warnings = _backup_snapshot_warnings(exports_dir)
 
     stale_extracted_text: list[dict[str, str]] = []
     for record in records:
@@ -585,9 +819,15 @@ def run_library_health_check(
         "orphan_extracted_text": orphan_extracted_text,
         "stale_extracted_text": stale_extracted_text,
         "noncanonical_filepaths": noncanonical_filepaths,
+        "corrupt_json": corrupt_json,
+        "backup_snapshot_warnings": backup_snapshot_warnings,
         "errors": errors,
     }
-    issue_count = sum(len(items) for items in issue_sections.values())
+    issue_count = sum(
+        len(items)
+        for key, items in issue_sections.items()
+        if key != "backup_snapshot_warnings" or any(item.get("severity") != "info" for item in items)
+    )
     return {
         "checked_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "healthy": issue_count == 0,
@@ -596,6 +836,7 @@ def run_library_health_check(
             "managed_pdfs": len(managed_pdfs),
             "issue_count": issue_count,
         },
+        "issue_guidance": _active_issue_guidance(issue_sections),
         **issue_sections,
     }
 

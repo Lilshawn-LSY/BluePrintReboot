@@ -1,4 +1,5 @@
 ﻿from scripts.smoke_check import PROJECT_ROOT, check_manifest_contract, check_required_paths, main
+from config.contact import APP_VERSION
 from tests.helpers import make_workspace
 
 
@@ -21,7 +22,7 @@ def test_backup_manifest_contract_passes() -> None:
     result = check_manifest_contract(PROJECT_ROOT)
 
     assert result.status == "pass"
-    assert "1.0.19" in result.detail
+    assert APP_VERSION in result.detail
 
 
 def test_smoke_check_main_succeeds(capsys) -> None:

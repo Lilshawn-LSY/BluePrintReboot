@@ -1,8 +1,8 @@
 # BluePrintReboot Backlog
 
-Last synced: 2026-07-07
+Last synced: 2026-07-08
 
-This backlog is ordered for the post-v1.0.19 file lifecycle and orphan hardening cycle. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered after the v1.0.20 safety release foundation. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
 
 ## Completed Since v1.0.9
 
@@ -19,6 +19,7 @@ These items should not remain in the active Next queue.
 - **v1.0.17 Reader PDF stabilization** - native PDF rendering is the default Reader path, HTML/base64 rendering is an explicit experimental fallback, large PDFs avoid automatic base64 rendering, external path guidance is available, and Reader paper context is preserved across note, tag, status, priority, and Reader project-link actions.
 - **v1.0.18 File lifecycle duplicate policy** - read-only lifecycle diagnosis, same-hash duplicate keep/reconnect/ignore/remove controls, `paper_id`-preserving duplicate reconnect, confirmed duplicate index-row removal, and no-auto-merge regression coverage are implemented.
 - **v1.0.19 Orphan repair and storage hardening** - orphan extracted-text cache detection, orphan note/note-block export/reattach/delete, orphan project-link export/reattach/unlink, and atomic extracted-text `.txt` cache writes are implemented.
+- **v1.0.20 Safety release foundation** - typed corrupt JSON handling, action-oriented Health Check guidance, explicit backup snapshot policy, clearer Streamlit safety feedback, release hygiene docs, and focused safety regression tests are implemented.
 
 ## Next
 

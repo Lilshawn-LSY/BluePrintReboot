@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -10,7 +9,7 @@ from core.paper_text_profile import (
     paper_text_profile_from_dict,
     paper_text_profile_to_dict,
 )
-from storage.atomic_json import atomic_write_json
+from storage.atomic_json import JsonStoreError, atomic_write_json, read_json_file
 from storage.paths import PAPER_PROFILES_DIR
 
 
@@ -27,8 +26,8 @@ def load_profile(paper_id: str, profile_dir: Path = PAPER_PROFILES_DIR) -> Paper
     if not path.exists():
         return None
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        payload = read_json_file(path, store_name="Paper text profile cache")
+    except JsonStoreError:
         return None
     if not isinstance(payload, Mapping):
         return None

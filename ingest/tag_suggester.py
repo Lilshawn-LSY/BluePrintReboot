@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -13,6 +12,7 @@ from services.tag_book import (
     tag_book_to_registry,
     tag_book_to_rulebook,
 )
+from storage.atomic_json import read_json_file
 
 
 DEFAULT_RULE_PATH = Path(__file__).resolve().parents[1] / "config" / "tag_rules.json"
@@ -63,8 +63,7 @@ def load_tag_rules(path: str | Path | None = None) -> dict[str, dict[str, Any]]:
     if path is None or _same_path(rule_path, DEFAULT_RULE_PATH):
         return tag_book_to_rulebook(load_tag_book())
 
-    with rule_path.open("r", encoding="utf-8") as file:
-        raw_rules = json.load(file)
+    raw_rules = read_json_file(rule_path, store_name="Tag rule file")
 
     rules: dict[str, dict[str, Any]] = {}
     for raw_tag, raw_rule in raw_rules.items():
@@ -87,8 +86,7 @@ def load_canonical_tags(path: str | Path | None = None) -> dict[str, dict[str, A
     if path is None or _same_path(registry_path, DEFAULT_CANONICAL_TAG_PATH):
         return tag_book_to_registry(load_tag_book())
 
-    with registry_path.open("r", encoding="utf-8") as file:
-        raw_registry = json.load(file)
+    raw_registry = read_json_file(registry_path, store_name="Canonical tag registry")
 
     if not isinstance(raw_registry, dict):
         raise ValueError("Canonical tag registry must be a JSON object.")

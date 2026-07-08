@@ -1,5 +1,6 @@
 ﻿import pytest
 
+from storage.atomic_json import CorruptJsonError
 from storage.project_link_store import (
     create_project_link,
     delete_links_for_project,
@@ -32,6 +33,21 @@ def test_missing_project_links_file_returns_empty_list() -> None:
 
     assert list_project_links(base_dir) == []
     assert not project_links_path(base_dir).exists()
+
+
+def test_corrupt_project_links_file_raises_typed_error_and_preserves_file() -> None:
+    base_dir = make_workspace("project-links-corrupt")
+    path = project_links_path(base_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not valid json", encoding="utf-8")
+    before = path.read_text(encoding="utf-8")
+
+    with pytest.raises(CorruptJsonError) as error:
+        list_project_links(base_dir)
+
+    assert error.value.path == path
+    assert "Project links file is invalid JSON" in error.value.summary
+    assert path.read_text(encoding="utf-8") == before
 
 
 def test_create_paper_link_writes_valid_schema() -> None:

@@ -141,6 +141,7 @@ def check_manifest_contract(project_root: Path) -> SmokeCheckResult:
             "app_version",
             "snapshot_type",
             "includes_pdfs",
+            "policy",
             "included_files",
             "counts",
         }
@@ -157,6 +158,8 @@ def check_manifest_contract(project_root: Path) -> SmokeCheckResult:
             raise ValueError("manifest top-level keys are incomplete")
         if not required_counts <= set(manifest["counts"]):
             raise ValueError("manifest count keys are incomplete")
+        if "excluded_by_default" not in manifest["policy"]:
+            raise ValueError("manifest policy is incomplete")
         if manifest["app_version"] != APP_VERSION:
             raise ValueError("manifest app version does not match the runtime version")
     except Exception as exc:

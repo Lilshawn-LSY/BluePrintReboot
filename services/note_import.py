@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import zipfile
 from datetime import datetime, timezone
@@ -24,7 +23,7 @@ from services.reading_note_template import (
     get_canonical_reading_note_template,
     reading_note_template_file_text,
 )
-from storage.atomic_json import atomic_write_json
+from storage.atomic_json import atomic_write_json, read_json_file, require_json_list
 from storage.note_block_store import create_note_block
 from storage.note_store import load_note_text, save_note_text
 from storage.paths import NOTE_BLOCKS_DIR, NOTE_IMPORTS_JSON, NOTES_DIR
@@ -288,12 +287,11 @@ def load_note_import_log(log_path: Path = NOTE_IMPORTS_JSON) -> list[dict[str, A
     path = Path(log_path)
     if not path.exists():
         return []
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(value, list):
-        return []
+    value = require_json_list(
+        read_json_file(path, store_name="Note import log"),
+        path,
+        store_name="Note import log",
+    )
     return [entry for entry in value if isinstance(entry, dict)]
 
 

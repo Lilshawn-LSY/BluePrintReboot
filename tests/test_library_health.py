@@ -103,6 +103,57 @@ def test_health_check_detects_unindexed_pdf() -> None:
     assert report["unindexed_pdfs"] == [str(unindexed.resolve())]
 
 
+def test_health_check_surfaces_corrupt_json_with_recovery_action() -> None:
+    paths = _workspace("health-corrupt-json")
+    papers_dir, _notes_dir, note_blocks_dir, _projects_dir, _extracted_text_dir, index_csv = paths
+    pdf_path = papers_dir / "Paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nindexed")
+    corrupt_path = note_blocks_dir / "paper-1.json"
+    corrupt_path.write_text("{not valid json", encoding="utf-8")
+    before = corrupt_path.read_text(encoding="utf-8")
+    pd.DataFrame([_record("paper-1", pdf_path)]).to_csv(index_csv, index=False)
+
+    report = _run_health(paths)
+
+    assert report["healthy"] is False
+    assert report["corrupt_json"] == [
+        {
+            "severity": "error",
+            "category": "storage",
+            "path": str(corrupt_path.resolve()),
+            "issue": "Note block file is invalid JSON",
+            "suggested_action": (
+                "Do not overwrite this file. Restore it from a known-good backup snapshot or make a copy "
+                "and repair the JSON manually before using related write actions."
+            ),
+            "classification": "corrupt json",
+        }
+    ]
+    assert report["issue_guidance"]["corrupt_json"]["next_action"].startswith("Do not overwrite")
+    assert corrupt_path.read_text(encoding="utf-8") == before
+
+
+def test_health_check_surfaces_missing_backup_snapshot_concern() -> None:
+    paths = _workspace("health-backup-warning")
+    index_csv = paths[-1]
+    pd.DataFrame(columns=["paper_id", "filename", "filepath", "title", "authors", "year", "doi"]).to_csv(
+        index_csv, index=False
+    )
+
+    report = _run_health(paths)
+
+    assert report["backup_snapshot_warnings"] == [
+        {
+            "severity": "warning",
+            "category": "backup",
+            "path": str((index_csv.parent.parent / "exports").resolve()),
+            "issue": "No exports directory was found for backup snapshots.",
+            "suggested_action": "Create a backup snapshot before maintenance or moving this library.",
+        }
+    ]
+    assert report["issue_guidance"]["backup_snapshot_warnings"]["category"] == "backup"
+
+
 def test_health_check_detects_normalized_duplicate_doi() -> None:
     paths = _workspace("health-duplicate-doi")
     papers_dir, *_, index_csv = paths

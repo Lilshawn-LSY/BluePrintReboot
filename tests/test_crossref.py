@@ -3,6 +3,7 @@
 import pytest
 import requests
 
+from config.contact import APP_VERSION
 from ingest.crossref import (
     CrossrefLookupError,
     check_crossref_connectivity,
@@ -90,7 +91,7 @@ def test_crossref_headers_use_blueprint_user_agent(monkeypatch) -> None:
 
     headers = crossref_headers()
 
-    assert headers["User-Agent"] == "BluePrintReboot/1.0.19 (mailto:researcher@example.edu)"
+    assert headers["User-Agent"] == f"BluePrintReboot/{APP_VERSION} (mailto:researcher@example.edu)"
     assert headers["Accept"] == "application/json"
 
 
@@ -106,7 +107,7 @@ def test_fetch_crossref_uses_polite_url_headers_and_timeout(monkeypatch) -> None
         "https://api.crossref.org/works/10.1234%2Fabc?mailto=researcher@example.edu",
         headers={
             "Accept": "application/json",
-            "User-Agent": "BluePrintReboot/1.0.19 (mailto:researcher@example.edu)",
+            "User-Agent": f"BluePrintReboot/{APP_VERSION} (mailto:researcher@example.edu)",
         },
         timeout=3.5,
     )
