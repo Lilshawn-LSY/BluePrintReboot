@@ -6,7 +6,7 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from ingest.scanner import compute_pdf_sha256
+from ingest.scanner import pdf_sha256_with_metadata
 from storage.index_store import load_index, save_index
 from storage.paths import INDEX_CSV, PAPERS_DIR
 
@@ -89,12 +89,15 @@ def _candidate_for_pdf(
     expected_hash = _text(record.get("pdf_sha256", ""))
     resolved = _absolute(pdf_path)
     try:
-        selected_hash = compute_pdf_sha256(resolved)
+        selected_metadata = pdf_sha256_with_metadata(resolved)
+        selected_hash = selected_metadata["pdf_sha256"]
     except OSError as exc:
         return {
             "path": str(resolved),
             "filename": resolved.name,
             "pdf_sha256": "",
+            "pdf_size_bytes": "0",
+            "pdf_modified_at": "",
             "expected_pdf_sha256": expected_hash,
             "status": "unreadable",
             "message": f"Could not read PDF hash: {exc}",
@@ -109,6 +112,8 @@ def _candidate_for_pdf(
             "path": str(resolved),
             "filename": resolved.name,
             "pdf_sha256": selected_hash,
+            "pdf_size_bytes": selected_metadata["pdf_size_bytes"],
+            "pdf_modified_at": selected_metadata["pdf_modified_at"],
             "expected_pdf_sha256": expected_hash,
             "status": "already_indexed",
             "message": f"This PDF is already indexed as {indexed_paper_id}; duplicate repair is deferred.",
@@ -134,6 +139,8 @@ def _candidate_for_pdf(
         "path": str(resolved),
         "filename": resolved.name,
         "pdf_sha256": selected_hash,
+        "pdf_size_bytes": selected_metadata["pdf_size_bytes"],
+        "pdf_modified_at": selected_metadata["pdf_modified_at"],
         "expected_pdf_sha256": expected_hash,
         "status": status,
         "message": message,
@@ -186,6 +193,8 @@ def build_reconnect_plan(
         "target_path": str(target_path),
         "target_filename": target_path.name,
         "target_pdf_sha256": "",
+        "target_pdf_size_bytes": "0",
+        "target_pdf_modified_at": "",
         "status": "invalid",
         "message": "",
         "can_reconnect": False,
@@ -214,6 +223,8 @@ def build_reconnect_plan(
     candidate = _candidate_for_pdf(record, target_path, _indexed_paths(dataframe))
     base_plan.update(
         target_pdf_sha256=candidate["pdf_sha256"],
+        target_pdf_size_bytes=candidate.get("pdf_size_bytes", "0"),
+        target_pdf_modified_at=candidate.get("pdf_modified_at", ""),
         status=candidate["status"],
         message=candidate["message"],
         can_reconnect=candidate["can_reconnect"],
@@ -244,6 +255,8 @@ def reconnect_missing_pdf(
     dataframe.loc[row_mask, "filename"] = str(plan["target_filename"])
     dataframe.loc[row_mask, "filepath"] = str(plan["target_path"])
     dataframe.loc[row_mask, "pdf_sha256"] = str(plan["target_pdf_sha256"])
+    dataframe.loc[row_mask, "pdf_size_bytes"] = str(plan.get("target_pdf_size_bytes", "0"))
+    dataframe.loc[row_mask, "pdf_modified_at"] = str(plan.get("target_pdf_modified_at", ""))
     save_index(dataframe, index_csv)
 
     result = dict(plan)

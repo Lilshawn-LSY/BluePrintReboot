@@ -1,5 +1,6 @@
 ﻿import hashlib
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -51,6 +52,62 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     assert len(second) == 1
     assert load_index(index_csv).iloc[0]["filename"] == "Paper.pdf"
     assert load_index(index_csv).iloc[0]["pdf_sha256"] == _sha256(contents)
+    assert load_index(index_csv).iloc[0]["pdf_size_bytes"] == str(len(contents))
+    assert load_index(index_csv).iloc[0]["pdf_modified_at"]
+
+
+def test_update_index_from_scan_reuses_cached_hash_when_signature_unchanged(monkeypatch) -> None:
+    workspace = make_workspace("index-hash-cache-reuse")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    contents = b"%PDF-1.4\ncached hash"
+    pdf_path = papers_dir / "Cached.pdf"
+    pdf_path.write_bytes(contents)
+    update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    def fail_hash(path: Path) -> str:
+        raise AssertionError("unchanged PDF should reuse cached hash metadata")
+
+    monkeypatch.setattr("ingest.scanner.compute_pdf_sha256", fail_hash)
+    rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert len(rescanned) == 1
+    assert rescanned.iloc[0]["pdf_sha256"] == _sha256(contents)
+
+
+def test_update_index_from_scan_recomputes_hash_when_signature_changes(monkeypatch) -> None:
+    workspace = make_workspace("index-hash-cache-recompute")
+    data_dir = workspace / "data"
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = data_dir / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    original = b"%PDF-1.4\noriginal hash"
+    replacement = b"%PDF-1.4\nreplacement hash bytes"
+    pdf_path = papers_dir / "Changed.pdf"
+    pdf_path.write_bytes(original)
+    update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    original_stat = pdf_path.stat()
+    pdf_path.write_bytes(replacement)
+    os.utime(pdf_path, (original_stat.st_atime + 5, original_stat.st_mtime + 5))
+    calls: list[Path] = []
+
+    def tracking_hash(path: Path) -> str:
+        calls.append(Path(path))
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+    monkeypatch.setattr("ingest.scanner.compute_pdf_sha256", tracking_hash)
+    rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert [path.resolve() for path in calls] == [pdf_path.resolve()]
+    row = rescanned.iloc[0]
+    assert row["pdf_sha256"] == _sha256(replacement)
+    assert row["pdf_size_bytes"] == str(len(replacement))
 
 
 def test_update_index_from_scan_does_not_auto_detect_doi(monkeypatch) -> None:

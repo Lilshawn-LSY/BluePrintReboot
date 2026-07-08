@@ -5,10 +5,12 @@ from ui_streamlit.reader_workspace import (
     NATIVE_STREAMLIT_RENDERER,
     STABLE_HTML_RENDERER,
     add_manual_tag,
+    apply_pending_note_header_refresh,
     apply_pending_note_actions,
     append_markdown_snapshot,
     build_reader_tag_suggestion_record,
     citation_block,
+    has_unsaved_note_changes,
     initial_pdf_render_status,
     insert_note_block,
     load_note_draft,
@@ -17,8 +19,10 @@ from ui_streamlit.reader_workspace import (
     mark_pdf_render_native_success,
     merge_selected_reader_tag_suggestions,
     native_pdf_support_status,
+    note_baseline_key,
     note_draft_key,
     pending_note_block_append_key,
+    pending_note_header_refresh_key,
     pending_note_notice_key,
     pending_note_reload_key,
     pending_note_text_update_key,
@@ -29,12 +33,14 @@ from ui_streamlit.reader_workspace import (
     preview_reader_tag_suggestions,
     preserve_reader_context,
     preserve_reader_context_for_paper_id,
+    queue_note_header_refresh,
     queue_note_text_update,
     reader_profile_summary,
     reader_tag_suggestion_preview_key,
     save_note_draft,
     should_render_html_fallback,
 )
+from services.reading_note_template import refresh_reading_note_header
 from services.tag_book import load_tag_book, suggestion_selection_id
 from storage.note_store import save_note_text
 from tests.helpers import make_workspace
@@ -63,6 +69,7 @@ def test_load_note_draft_uses_default_template_when_missing() -> None:
     assert "first_author: Curie Marie" in draft
     assert "## Key Claims" in draft
     assert session_state[note_draft_key(record)] == draft
+    assert session_state[note_baseline_key(record)] == draft
 
 
 def test_save_note_draft_writes_current_session_text() -> None:
@@ -73,6 +80,7 @@ def test_save_note_draft_writes_current_session_text() -> None:
     note_path = save_note_draft(record, session_state, notes_dir=notes_dir)
 
     assert note_path.read_text(encoding="utf-8") == "draft text"
+    assert session_state[note_baseline_key(record)] == "draft text"
     assert session_state[f"reader_note_saved_at_{record['paper_id']}"]
     assert session_state["active_paper_id"] == "paper-1"
     assert session_state["current_page"] == "Paper Detail"
@@ -225,7 +233,7 @@ def test_queued_note_text_update_applies_before_pending_append_and_clears_key() 
     assert session_state[pending_note_notice_key(record)] == "Draft updated."
 
 
-def test_apply_pending_reload_happens_before_pending_append() -> None:
+def test_pending_reload_is_skipped_when_unsaved_draft_exists() -> None:
     notes_dir = make_workspace("reader-pending-reload")
     record = {"paper_id": "paper-1", "title": "Reader Paper"}
     save_note_text(record, "Saved note", notes_dir=notes_dir)
@@ -233,15 +241,115 @@ def test_apply_pending_reload_happens_before_pending_append() -> None:
     append_key = pending_note_block_append_key(record)
     session_state = {
         note_draft_key(record): "Unsaved draft",
+        note_baseline_key(record): "Saved note",
         reload_key: True,
         append_key: "### Claim: Snapshot\n",
     }
 
     draft = apply_pending_note_actions(record, session_state, notes_dir=notes_dir)
 
-    assert draft == "Saved note\n\n### Claim: Snapshot\n"
+    assert draft == "Unsaved draft\n\n### Claim: Snapshot\n"
     assert reload_key not in session_state
     assert append_key not in session_state
+    assert session_state[pending_note_notice_key(record)] == "Reload skipped; unsaved changes kept."
+
+
+def test_pending_reload_updates_clean_draft() -> None:
+    notes_dir = make_workspace("reader-pending-reload-clean")
+    record = {"paper_id": "paper-1", "title": "Reader Paper"}
+    save_note_text(record, "Saved note", notes_dir=notes_dir)
+    reload_key = pending_note_reload_key(record)
+    session_state = {
+        note_draft_key(record): "Old saved note",
+        note_baseline_key(record): "Old saved note",
+        reload_key: True,
+    }
+
+    draft = apply_pending_note_actions(record, session_state, notes_dir=notes_dir)
+
+    assert draft == "Saved note"
+    assert session_state[note_baseline_key(record)] == "Saved note"
+    assert session_state[pending_note_notice_key(record)] == "Note reloaded."
+    assert reload_key not in session_state
+
+
+def test_metadata_header_refresh_waits_when_draft_has_unsaved_changes() -> None:
+    notes_dir = make_workspace("reader-header-refresh-unsaved")
+    old_record = {
+        "paper_id": "paper-1",
+        "title": "Old Title",
+        "authors": "Old Author",
+        "year": "2024",
+        "tags": "old-tag",
+    }
+    updated_record = {**old_record, "title": "New Title", "tags": "new-tag"}
+    session_state = {}
+    baseline = load_note_draft(old_record, session_state, notes_dir=notes_dir)
+    unsaved = baseline.rstrip() + "\n\nUser note\n"
+    session_state[note_draft_key(old_record)] = unsaved
+    refreshed = refresh_reading_note_header(unsaved, updated_record)
+    queue_note_header_refresh(
+        updated_record,
+        session_state,
+        str(refreshed["text"]),
+        notice="Header refresh available; unsaved changes kept.",
+    )
+
+    draft = apply_pending_note_actions(updated_record, session_state, notes_dir=notes_dir)
+
+    assert draft == unsaved
+    assert session_state[pending_note_header_refresh_key(updated_record)]
+    assert session_state[pending_note_notice_key(updated_record)] == "Header refresh available; unsaved changes kept."
+    assert has_unsaved_note_changes(updated_record, session_state) is True
+
+
+def test_explicit_header_refresh_preserves_unsaved_body_and_keeps_draft_dirty() -> None:
+    notes_dir = make_workspace("reader-header-refresh-apply")
+    old_record = {"paper_id": "paper-1", "title": "Old Title", "authors": "Old Author", "year": "2024"}
+    updated_record = {**old_record, "title": "New Title", "authors": "New Author"}
+    session_state = {}
+    baseline = load_note_draft(old_record, session_state, notes_dir=notes_dir)
+    unsaved = baseline.rstrip() + "\n\nUser note\n"
+    session_state[note_draft_key(old_record)] = unsaved
+    refreshed = refresh_reading_note_header(unsaved, updated_record)
+    queue_note_header_refresh(updated_record, session_state, str(refreshed["text"]))
+    session_state[note_draft_key(old_record)] = unsaved.rstrip() + "\nLater note\n"
+
+    applied = apply_pending_note_header_refresh(updated_record, session_state)
+
+    assert applied is True
+    draft = session_state[note_draft_key(updated_record)]
+    assert "title: New Title" in draft
+    assert "first_author: New Author" in draft
+    assert "User note" in draft
+    assert "Later note" in draft
+    assert pending_note_header_refresh_key(updated_record) not in session_state
+    assert session_state[note_baseline_key(updated_record)] == baseline
+    assert has_unsaved_note_changes(updated_record, session_state) is True
+
+
+def test_clean_draft_header_refresh_updates_baseline_after_metadata_change() -> None:
+    notes_dir = make_workspace("reader-header-refresh-clean")
+    old_record = {"paper_id": "paper-1", "title": "Old Title", "authors": "Old Author", "year": "2024"}
+    updated_record = {**old_record, "title": "New Title"}
+    session_state = {}
+    baseline = load_note_draft(old_record, session_state, notes_dir=notes_dir)
+    refreshed = refresh_reading_note_header(baseline, updated_record)
+    queue_note_header_refresh(
+        updated_record,
+        session_state,
+        str(refreshed["text"]),
+        notice="Header refreshed.",
+        saved_to_file=True,
+    )
+
+    draft = apply_pending_note_actions(updated_record, session_state, notes_dir=notes_dir)
+
+    assert "title: New Title" in draft
+    assert pending_note_header_refresh_key(updated_record) not in session_state
+    assert session_state[note_baseline_key(updated_record)] == draft
+    assert session_state[pending_note_notice_key(updated_record)] == "Header refreshed."
+    assert has_unsaved_note_changes(updated_record, session_state) is False
 
 
 def test_citation_block_uses_available_metadata() -> None:

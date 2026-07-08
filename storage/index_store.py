@@ -9,7 +9,13 @@ from pathlib import Path
 import pandas as pd
 
 from ingest.doi import normalize_doi
-from ingest.scanner import compute_pdf_sha256, extract_doi_metadata_from_pdf, scan_papers
+from ingest.scanner import (
+    PDF_HASH_METADATA_FIELDS,
+    extract_doi_metadata_from_pdf,
+    pdf_hash_metadata_key,
+    pdf_sha256_with_metadata,
+    scan_papers,
+)
 from storage.paths import INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
 
 
@@ -18,6 +24,8 @@ INDEX_COLUMNS = [
     "filename",
     "filepath",
     "pdf_sha256",
+    "pdf_size_bytes",
+    "pdf_modified_at",
     "title",
     "authors",
     "year",
@@ -56,6 +64,8 @@ DEFAULT_VALUES = {
     "doi_source": "",
     "extraction_source": "",
     "extraction_checked_at": "",
+    "pdf_size_bytes": "",
+    "pdf_modified_at": "",
     "metadata_source": "",
     "metadata_confidence": "",
     "metadata_checked_at": "",
@@ -111,6 +121,8 @@ SYSTEM_COLUMNS = [
     "filename",
     "filepath",
     "pdf_sha256",
+    "pdf_size_bytes",
+    "pdf_modified_at",
     "note_path",
     "added_at",
     "updated_at",
@@ -173,18 +185,19 @@ def _record_pdf_path(row: pd.Series, papers_dir: Path) -> Path | None:
 
 def backfill_pdf_sha256(df: pd.DataFrame, papers_dir: Path) -> pd.DataFrame:
     backfilled = df.copy().fillna("")
-    if "pdf_sha256" not in backfilled.columns:
-        backfilled["pdf_sha256"] = ""
+    for column in PDF_HASH_METADATA_FIELDS:
+        if column not in backfilled.columns:
+            backfilled[column] = ""
     for index, row in backfilled.iterrows():
-        if str(backfilled.at[index, "pdf_sha256"]).strip():
-            continue
         pdf_path = _record_pdf_path(row, Path(papers_dir))
         if pdf_path is None or not pdf_path.exists() or not pdf_path.is_file():
             continue
         try:
-            backfilled.at[index, "pdf_sha256"] = compute_pdf_sha256(pdf_path)
+            hash_metadata = pdf_sha256_with_metadata(pdf_path, row.to_dict())
         except OSError:
             continue
+        for column in PDF_HASH_METADATA_FIELDS:
+            backfilled.at[index, column] = hash_metadata[column]
     return backfilled
 
 
@@ -235,13 +248,17 @@ def update_index_from_scan(
     notes_dir: Path = NOTES_DIR,
 ) -> pd.DataFrame:
     df = load_index(index_csv, papers_dir=papers_dir)
-    scanned = scan_papers(papers_dir=papers_dir, notes_dir=notes_dir)
     existing_records = df.to_dict("records")
     existing_by_path = {
-        os.path.normcase(os.path.abspath(str(record.get("filepath", "")))): record
+        pdf_hash_metadata_key(str(record.get("filepath", ""))): record
         for record in existing_records
         if str(record.get("filepath", "")).strip()
     }
+    scanned = scan_papers(
+        papers_dir=papers_dir,
+        notes_dir=notes_dir,
+        hash_metadata_by_path=existing_by_path,
+    )
     existing_by_hash: dict[str, list[dict[str, str]]] = {}
     for record in existing_records:
         digest = str(record.get("pdf_sha256", "")).strip()
@@ -253,7 +270,7 @@ def update_index_from_scan(
     unmatched: list[dict[str, str]] = []
     claimed_existing_ids: set[str] = set()
     for record in scanned:
-        existing = existing_by_path.get(os.path.normcase(os.path.abspath(record["filepath"])))
+        existing = existing_by_path.get(pdf_hash_metadata_key(record["filepath"]))
         if existing is not None:
             record["paper_id"] = str(existing.get("paper_id", ""))
             record["note_path"] = str(existing.get("note_path", ""))
@@ -287,7 +304,7 @@ def update_index_from_scan(
     for paper_id, record in scanned_by_id.items():
         if paper_id in existing_ids:
             row_mask = df["paper_id"] == paper_id
-            for column in ("filename", "filepath", "pdf_sha256", "note_path"):
+            for column in ("filename", "filepath", "pdf_sha256", "pdf_size_bytes", "pdf_modified_at", "note_path"):
                 df.loc[row_mask, column] = record[column]
             if (df.loc[row_mask, "title"] == "").any():
                 df.loc[row_mask, "title"] = record["title"]

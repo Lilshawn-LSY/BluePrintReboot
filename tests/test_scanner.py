@@ -57,6 +57,8 @@ def test_scan_papers_returns_pdf_records() -> None:
     assert record["reading_priority"] == "normal"
     assert record["doi_source"] == ""
     assert record["pdf_sha256"] == hashlib.sha256(contents).hexdigest()
+    assert record["pdf_size_bytes"] == str(len(contents))
+    assert record["pdf_modified_at"]
     assert record["extraction_source"] == ""
     assert record["extraction_checked_at"] == ""
     assert record["metadata_source"] == ""

@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from ingest.scanner import compute_pdf_sha256
+from ingest.scanner import pdf_sha256_with_metadata
 from storage.index_store import INDEX_COLUMNS, load_index, save_index
 from storage.paths import INDEX_CSV, PAPERS_DIR
 
@@ -73,11 +73,15 @@ def _read_index(index_csv: Path) -> pd.DataFrame:
     return dataframe
 
 
-def _safe_pdf_sha256(path: Path) -> str:
+def _safe_pdf_hash_metadata(path: Path, metadata: Mapping[str, object] | None = None) -> dict[str, str]:
     try:
-        return compute_pdf_sha256(path)
+        return pdf_sha256_with_metadata(path, metadata)
     except OSError:
-        return ""
+        return {"pdf_sha256": "", "pdf_size_bytes": "0", "pdf_modified_at": ""}
+
+
+def _safe_pdf_sha256(path: Path, metadata: Mapping[str, object] | None = None) -> str:
+    return _safe_pdf_hash_metadata(path, metadata)["pdf_sha256"]
 
 
 def _single_record(dataframe: pd.DataFrame, paper_id: str) -> dict[str, Any]:
@@ -102,8 +106,8 @@ def _indexed_hash_counts(dataframe: pd.DataFrame, papers_dir: Path) -> dict[str,
     for record in dataframe.to_dict("records"):
         digest = _text(record.get("pdf_sha256", ""))
         record_path = _record_path(record, papers_dir)
-        if not digest and record_path.exists() and record_path.is_file():
-            digest = _safe_pdf_sha256(record_path)
+        if record_path.exists() and record_path.is_file():
+            digest = _safe_pdf_sha256(record_path, record)
         if digest:
             counts[digest] = counts.get(digest, 0) + 1
     return counts
@@ -142,8 +146,8 @@ def diagnose_file_lifecycle(
     for record in records:
         record_path = _record_path(record, papers_dir)
         digest = _text(record.get("pdf_sha256", ""))
-        if not digest and record_path.exists() and record_path.is_file():
-            digest = _safe_pdf_sha256(record_path)
+        if record_path.exists() and record_path.is_file():
+            digest = _safe_pdf_sha256(record_path, record)
         indexed_item = {
             "paper_id": _text(record.get("paper_id", "")),
             "filename": _text(record.get("filename", "")),
@@ -203,8 +207,8 @@ def build_duplicate_reconnect_plan(
     current_path = _record_path(record, papers_dir).resolve(strict=False)
     target_path = _absolute(target_pdf)
     current_hash = _text(record.get("pdf_sha256", ""))
-    if not current_hash and current_path.exists() and current_path.is_file():
-        current_hash = _safe_pdf_sha256(current_path)
+    if current_path.exists() and current_path.is_file():
+        current_hash = _safe_pdf_sha256(current_path, record)
 
     plan: dict[str, Any] = {
         "paper_id": str(paper_id),
@@ -214,11 +218,13 @@ def build_duplicate_reconnect_plan(
         "target_filename": target_path.name,
         "target_path": str(target_path),
         "target_pdf_sha256": "",
+        "target_pdf_size_bytes": "0",
+        "target_pdf_modified_at": "",
         "status": "invalid",
         "message": "",
         "can_reconnect": False,
         "requires_hash_mismatch_confirmation": False,
-        "updates": "filename, filepath, pdf_sha256, updated_at",
+        "updates": "filename, filepath, pdf_sha256, pdf_size_bytes, pdf_modified_at, updated_at",
         "preserves": "paper_id, notes, note blocks, project links, PDFs, extracted text",
     }
     if not _is_within(target_path, papers_dir):
@@ -240,7 +246,11 @@ def build_duplicate_reconnect_plan(
         )
         return plan
 
-    target_hash = compute_pdf_sha256(target_path)
+    target_metadata = _safe_pdf_hash_metadata(target_path)
+    target_hash = target_metadata["pdf_sha256"]
+    if not target_hash:
+        plan.update(status="target_unreadable", message="The selected PDF could not be hashed.")
+        return plan
     requires_mismatch = bool(current_hash and target_hash != current_hash)
     status = "hash_mismatch" if requires_mismatch else "hash_match"
     message = (
@@ -254,6 +264,8 @@ def build_duplicate_reconnect_plan(
 
     plan.update(
         target_pdf_sha256=target_hash,
+        target_pdf_size_bytes=target_metadata["pdf_size_bytes"],
+        target_pdf_modified_at=target_metadata["pdf_modified_at"],
         status=status,
         message=message,
         can_reconnect=True,
@@ -289,6 +301,8 @@ def reconnect_duplicate_pdf(
     dataframe.loc[row_mask, "filename"] = str(plan["target_filename"])
     dataframe.loc[row_mask, "filepath"] = str(plan["target_path"])
     dataframe.loc[row_mask, "pdf_sha256"] = str(plan["target_pdf_sha256"])
+    dataframe.loc[row_mask, "pdf_size_bytes"] = str(plan.get("target_pdf_size_bytes", "0"))
+    dataframe.loc[row_mask, "pdf_modified_at"] = str(plan.get("target_pdf_modified_at", ""))
     dataframe.loc[row_mask, "updated_at"] = _now_iso()
     save_index(dataframe, index_csv)
 
@@ -312,8 +326,8 @@ def build_duplicate_remove_plan(
     record = _single_record(dataframe, paper_id)
     record_path = _record_path(record, papers_dir)
     digest = _text(record.get("pdf_sha256", ""))
-    if not digest and record_path.exists() and record_path.is_file():
-        digest = _safe_pdf_sha256(record_path)
+    if record_path.exists() and record_path.is_file():
+        digest = _safe_pdf_sha256(record_path, record)
     counts = _indexed_hash_counts(dataframe, papers_dir)
     duplicate_count = counts.get(digest, 0) if digest else 0
     can_remove = duplicate_count > 1

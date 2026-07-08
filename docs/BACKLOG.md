@@ -2,7 +2,7 @@
 
 Last synced: 2026-07-08
 
-This backlog is ordered after the v1.0.20 safety release foundation. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered after the v1.0.21 reader performance polish. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
 
 ## Completed Since v1.0.9
 
@@ -20,15 +20,15 @@ These items should not remain in the active Next queue.
 - **v1.0.18 File lifecycle duplicate policy** - read-only lifecycle diagnosis, same-hash duplicate keep/reconnect/ignore/remove controls, `paper_id`-preserving duplicate reconnect, confirmed duplicate index-row removal, and no-auto-merge regression coverage are implemented.
 - **v1.0.19 Orphan repair and storage hardening** - orphan extracted-text cache detection, orphan note/note-block export/reattach/delete, orphan project-link export/reattach/unlink, and atomic extracted-text `.txt` cache writes are implemented.
 - **v1.0.20 Safety release foundation** - typed corrupt JSON handling, action-oriented Health Check guidance, explicit backup snapshot policy, clearer Streamlit safety feedback, release hygiene docs, and focused safety regression tests are implemented.
+- **v1.0.21 Reader performance polish** - conservative hash metadata reuse, Reader draft baselines, safe reload, pending metadata header refresh, and concise Reader/scan feedback are implemented.
 
 ## Next
 
 These items should be implemented before starting FastAPI or frontend migration.
 
-### 1. Reader state cleanup
+### 1. Reader polish
 
-- Document the note draft state machine.
-- Add tests for unsaved note behavior during metadata refresh.
+- Continue documenting note draft state as Reader behavior evolves.
 - Reduce PDF rerenders where Streamlit allows it.
 - Keep Save/Reload/Insert/Import precedence explicit.
 

@@ -34,7 +34,7 @@ from services.note_import import (
     match_note_import_to_papers,
     parse_external_note_file,
 )
-from services.reading_note_template import apply_reading_note_template_to_text
+from services.reading_note_template import apply_reading_note_template_to_text, refresh_reading_note_header
 from services.paper_text_profile_builder import build_and_save_paper_text_profile
 from storage.extracted_text_store import (
     extraction_cache_status,
@@ -154,6 +154,10 @@ def note_saved_at_key(record: dict[str, str]) -> str:
     return f"reader_note_saved_at_{record['paper_id']}"
 
 
+def note_baseline_key(record: dict[str, str]) -> str:
+    return f"reader_note_baseline_{record['paper_id']}"
+
+
 def structured_note_edit_key(record: dict[str, str]) -> str:
     return f"structured_note_edit_id_{record['paper_id']}"
 
@@ -168,6 +172,10 @@ def pending_note_reload_key(record: dict[str, str]) -> str:
 
 def pending_note_text_update_key(record: dict[str, str]) -> str:
     return f"pending_note_text_update_{record['paper_id']}"
+
+
+def pending_note_header_refresh_key(record: dict[str, str]) -> str:
+    return f"pending_note_header_refresh_{record['paper_id']}"
 
 
 def pending_note_notice_key(record: dict[str, str]) -> str:
@@ -251,6 +259,53 @@ def queue_note_text_update(
         session_state[pending_note_notice_key(record)] = notice
 
 
+def queue_note_header_refresh(
+    record: dict[str, str],
+    session_state: MutableMapping,
+    text: str,
+    *,
+    notice: str = "Header refreshed.",
+    saved_to_file: bool = False,
+) -> None:
+    session_state[pending_note_header_refresh_key(record)] = {
+        "text": str(text),
+        "notice": notice,
+        "saved_to_file": bool(saved_to_file),
+    }
+
+
+def has_unsaved_note_changes(record: dict[str, str], session_state: MutableMapping) -> bool:
+    key = note_draft_key(record)
+    baseline_key = note_baseline_key(record)
+    if key not in session_state:
+        return False
+    return str(session_state.get(key, "")) != str(session_state.get(baseline_key, ""))
+
+
+def apply_pending_note_header_refresh(record: dict[str, str], session_state: MutableMapping) -> bool:
+    pending = session_state.pop(pending_note_header_refresh_key(record), None)
+    if not pending:
+        return False
+    if isinstance(pending, dict):
+        text = str(pending.get("text", ""))
+        notice = str(pending.get("notice", "") or "Header refreshed.")
+        saved_to_file = bool(pending.get("saved_to_file", False))
+    else:
+        text = str(pending)
+        notice = "Header refreshed."
+        saved_to_file = False
+    current_draft = str(session_state.get(note_draft_key(record), ""))
+    if current_draft:
+        refreshed = refresh_reading_note_header(current_draft, record)
+        text = str(refreshed["text"])
+    session_state[note_draft_key(record)] = text
+    if saved_to_file:
+        session_state[note_baseline_key(record)] = text
+    if notice:
+        session_state[pending_note_notice_key(record)] = notice
+    return True
+
+
 def apply_pending_note_actions(
     record: dict[str, str],
     session_state: MutableMapping,
@@ -260,11 +315,24 @@ def apply_pending_note_actions(
     draft = load_note_draft(record, session_state, notes_dir=notes_dir)
 
     if session_state.pop(pending_note_reload_key(record), False):
-        if notes_dir is None:
-            draft = load_note_text(record)
+        if has_unsaved_note_changes(record, session_state):
+            session_state[pending_note_notice_key(record)] = "Reload skipped; unsaved changes kept."
         else:
-            draft = load_note_text(record, notes_dir=notes_dir)
-        session_state[key] = draft
+            if notes_dir is None:
+                draft = load_note_text(record)
+            else:
+                draft = load_note_text(record, notes_dir=notes_dir)
+            session_state[key] = draft
+            session_state[note_baseline_key(record)] = draft
+            session_state[pending_note_notice_key(record)] = "Note reloaded."
+
+    pending_header = session_state.get(pending_note_header_refresh_key(record))
+    if pending_header:
+        saved_to_file = bool(pending_header.get("saved_to_file", False)) if isinstance(pending_header, dict) else False
+        if has_unsaved_note_changes(record, session_state) or not saved_to_file:
+            session_state[pending_note_notice_key(record)] = "Header refresh available; unsaved changes kept."
+        elif apply_pending_note_header_refresh(record, session_state):
+            draft = str(session_state[key])
 
     pending_text_update = session_state.pop(pending_note_text_update_key(record), None)
     if pending_text_update is not None:
@@ -285,11 +353,19 @@ def load_note_draft(
     notes_dir: Path | None = None,
 ) -> str:
     key = note_draft_key(record)
+    baseline_key = note_baseline_key(record)
     if key not in session_state:
         if notes_dir is None:
-            session_state[key] = load_note_text(record)
+            loaded_text = load_note_text(record)
         else:
-            session_state[key] = load_note_text(record, notes_dir=notes_dir)
+            loaded_text = load_note_text(record, notes_dir=notes_dir)
+        session_state[key] = loaded_text
+        session_state[baseline_key] = loaded_text
+    elif baseline_key not in session_state:
+        if notes_dir is None:
+            session_state[baseline_key] = load_note_text(record)
+        else:
+            session_state[baseline_key] = load_note_text(record, notes_dir=notes_dir)
     return str(session_state[key])
 
 
@@ -303,6 +379,7 @@ def save_note_draft(
         note_path = save_note_text(record, text)
     else:
         note_path = save_note_text(record, text, notes_dir=notes_dir)
+    session_state[note_baseline_key(record)] = text
     session_state[note_saved_at_key(record)] = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     preserve_reader_context(record, session_state)
     return note_path
@@ -910,6 +987,15 @@ def _run_full_text_extraction(record: dict[str, str], force: bool = False) -> No
     extract_text_for_paper(record, force=force)
 
 
+def _render_note_notice(notice: str) -> None:
+    if not notice:
+        return
+    if "skipped" in notice.lower() or "available" in notice.lower():
+        st.warning(notice)
+        return
+    st.success(notice)
+
+
 def _render_note_editor(record: dict[str, str]) -> None:
     st.write("Reading Note")
     st.caption(
@@ -919,8 +1005,13 @@ def _render_note_editor(record: dict[str, str]) -> None:
     key = note_draft_key(record)
     apply_pending_note_actions(record, st.session_state)
     notice = str(st.session_state.pop(pending_note_notice_key(record), "") or "")
-    if notice:
-        st.success(notice)
+    _render_note_notice(notice)
+    if st.session_state.get(pending_note_header_refresh_key(record)):
+        if "available" not in notice.lower():
+            st.warning("Header refresh available.")
+        if st.button("Apply header refresh", key=f"editor_apply_header_refresh_{record['paper_id']}"):
+            apply_pending_note_header_refresh(record, st.session_state)
+            _rerun_reader(record)
     st.text_area(
         "Paper Reading Note",
         height=860,

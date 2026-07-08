@@ -1,5 +1,19 @@
 # Release Checklist
 
+## v1.0.21-reader-performance-polish
+
+- [ ] Working tree is clean before release preparation begins.
+- [ ] Confirm `.gitignore` still excludes runtime data: `data/`, `papers/`, `notes/`, `exports/`, `.venv/`, and caches.
+- [ ] `python scripts\smoke_check.py` passes.
+- [ ] `python -m pytest -q` passes.
+- [ ] Repeated scan of unchanged indexed PDFs reuses stored hash metadata.
+- [ ] Changed PDF size or modified time triggers a SHA-256 recompute.
+- [ ] Reader note save, reload, skipped reload, and metadata header refresh feedback are smoke-tested.
+- [ ] Metadata changes with an unsaved Reader draft do not overwrite draft body text.
+- [ ] Duplicate and missing PDF repair remains explicit, deterministic, and confirmation-gated.
+- [ ] Release notes include Reader UX changes, hash-performance changes, Streamlit feedback, validation commands, known limitations, and deferred items.
+- [ ] Release tag is created and pushed only after explicit approval.
+
 ## v1.0.20-safety-release-foundation
 
 - [ ] Working tree is clean before release preparation begins.
