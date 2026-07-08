@@ -104,10 +104,11 @@ from storage.note_store import refresh_note_header
 from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
 from ui_streamlit.project_workspace import render_paper_project_links, render_project_workspace
 from ui_streamlit.reader_workspace import (
+    has_unsaved_note_changes,
     note_draft_key,
     pending_note_reload_key,
     preserve_reader_context_for_paper_id,
-    queue_note_text_update,
+    queue_note_header_refresh,
     render_reader_workspace,
 )
 from ui_streamlit.tag_manager import render_tag_manager_page
@@ -164,19 +165,30 @@ def _refresh_reading_note_header_after_metadata_apply(paper_id: str) -> None:
     if not updated_record:
         return
 
-    file_result = refresh_note_header(updated_record)
     draft_key = note_draft_key(updated_record)
     if draft_key in st.session_state:
         draft_result = refresh_reading_note_header(str(st.session_state.get(draft_key, "")), updated_record)
         if draft_result["changed"]:
-            queue_note_text_update(
+            if has_unsaved_note_changes(updated_record, st.session_state):
+                queue_note_header_refresh(
+                    updated_record,
+                    st.session_state,
+                    str(draft_result["text"]),
+                    notice="Header refresh available; unsaved changes kept.",
+                    saved_to_file=False,
+                )
+                return
+            refresh_note_header(updated_record)
+            queue_note_header_refresh(
                 updated_record,
                 st.session_state,
                 str(draft_result["text"]),
-                notice=str(draft_result["message"]),
+                notice="Header refreshed.",
+                saved_to_file=True,
             )
         return
 
+    file_result = refresh_note_header(updated_record)
     if file_result["changed"]:
         st.session_state[pending_note_reload_key(updated_record)] = True
 
@@ -187,8 +199,10 @@ def _scan_button(key: str) -> None:
         key=key,
         help="Fast local file/index sync; metadata enrichment runs separately.",
     ):
-        update_index_from_scan()
-        st.success("Paper index updated from local PDFs.")
+        with st.status("Scanning local PDFs...", expanded=False) as status:
+            update_index_from_scan()
+            status.update(label="Paper index updated.", state="complete")
+        st.success("Paper index updated.")
         st.rerun()
 
 
@@ -1589,11 +1603,11 @@ def _render_missing_pdf_repair(items: list[dict[str, object]]) -> None:
                 "I understand this replacement PDF has a different SHA-256.",
                 key=f"missing_pdf_hash_mismatch_confirm_{selected_paper_id}",
             )
-        reconnect_confirmed = st.checkbox(
-            "I understand reconnect updates only filename, filepath, and pdf_sha256.",
-            key=f"missing_pdf_reconnect_confirm_{selected_paper_id}",
-            disabled=not bool(plan["can_reconnect"]),
-        )
+            reconnect_confirmed = st.checkbox(
+                "I understand reconnect updates only file identity fields.",
+                key=f"missing_pdf_reconnect_confirm_{selected_paper_id}",
+                disabled=not bool(plan["can_reconnect"]),
+            )
         if st.button(
             "Reconnect PDF",
             key=f"missing_pdf_reconnect_apply_{selected_paper_id}",
@@ -1663,7 +1677,9 @@ def _render_pdf_inbox() -> None:
     st.caption(f"Resolved inbox: {inbox_path or 'not configured'}")
 
     if st.button("Scan inbox", key="pdf_inbox_scan"):
-        st.session_state["pdf_inbox_scan_result"] = scan_pdf_inbox(inbox_path)
+        with st.status("Scanning inbox PDFs...", expanded=False) as status:
+            st.session_state["pdf_inbox_scan_result"] = scan_pdf_inbox(inbox_path)
+            status.update(label="Inbox scan complete.", state="complete")
         st.session_state.pop("pdf_inbox_preview", None)
         st.session_state["pdf_inbox_confirm"] = False
 
@@ -1718,7 +1734,9 @@ def _render_pdf_inbox() -> None:
         disabled=not confirmation or not bool(preview["can_import"]),
     ):
         try:
-            result = import_pdf_from_inbox(selected_source, inbox_path)
+            with st.status("Importing PDF...", expanded=False) as status:
+                result = import_pdf_from_inbox(selected_source, inbox_path)
+                status.update(label="PDF imported.", state="complete")
         except PDFInboxError as exc:
             st.error(str(exc))
             if exc.plan:

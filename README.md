@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.20-safety-release-foundation**.
+Current release target: **v1.0.21-reader-performance-polish**.
 
-v1.0.20 strengthens the safety foundation around app-owned JSON stores, Health Check reporting, backup snapshot policy, and release validation. Corrupt JSON is surfaced with recovery-safe guidance, source-ish JSON writes continue to use atomic replacement, backup manifests now state inclusion and exclusion policy, and repair actions remain explicit and confirmation-gated. The app preserves the local Tag Book, `PaperTextProfile`, Reader PDF architecture, Reader note UX, and hash-performance behavior; automatic duplicate merging, automatic deletion, data schema changes, FastAPI, frontend migration, packaging, external ontologies, and unrelated UI redesigns remain deferred.
+v1.0.21 polishes Reader note draft behavior, local hash-performance paths, and concise Streamlit feedback. PDF scans and maintenance workflows reuse stored SHA-256 metadata when path, size, and modified time show the file is unchanged; changed files are rehashed. Reader note reloads and metadata header refreshes no longer silently overwrite unsaved draft text. The app preserves the v1.0.20 storage safety foundation, corrupt JSON handling, backup snapshot policy, Health Check guidance, local Tag Book, `PaperTextProfile`, and existing Streamlit Reader architecture; automatic duplicate merging, automatic deletion, FastAPI, frontend migration, PDF.js replacement, cloud sync, external ontologies, and LLM/API features remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -72,11 +72,11 @@ The main loop is:
 
 Current support includes:
 
-- Fast recursive PDF/index sync from the canonical `papers/` directory without default metadata enrichment.
+- Fast recursive PDF/index sync from the canonical `papers/` directory without default metadata enrichment, with conservative hash reuse for unchanged indexed PDFs.
 - Stable paper identities and a local CSV metadata index.
 - Search and filtering by metadata, status, priority, and tags.
 - Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, and tags.
-- Reading Note headers refresh from accepted paper metadata while preserving existing note body sections.
+- Reading Note headers refresh from accepted paper metadata while preserving existing note body sections and unsaved draft text.
 - Structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
 - BluePrint Reading Note template download and confirmed local import into the Reading Note and structured note blocks, with duplicate source imports blocked unless explicitly forced.
 - Full-text extraction with MarkItDown when available and `pypdf` fallback.
@@ -122,7 +122,7 @@ Settings is organized into four sections:
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
 
-Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, corrupt or invalid JSON stores, backup snapshot concerns, orphan extracted-text caches, noncanonical paths, and stale extracted-text caches. Each reported section includes severity, meaning, and recommended next action. Duplicate PDF hash groups show `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Duplicate rows can be explicitly kept, reconnected to an unindexed same-hash PDF, ignored for the current session, or removed from `paper_index.csv` after confirmation; none of these actions auto-merge or delete PDFs, notes, note blocks, project links, or extracted text. Orphan note files and note block files can be exported, reattached to an indexed paper, or deleted only after explicit confirmation. Orphan project links can be exported, reattached, or unlinked without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
+Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, corrupt or invalid JSON stores, backup snapshot concerns, orphan extracted-text caches, noncanonical paths, and stale extracted-text caches. Each reported section includes severity, meaning, and recommended next action. Duplicate PDF hash groups show `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Indexed PDFs reuse current hash metadata when size and modified time are unchanged; unindexed duplicate candidates are hashed deterministically when needed. Duplicate rows can be explicitly kept, reconnected to an unindexed same-hash PDF, ignored for the current session, or removed from `paper_index.csv` after confirmation; none of these actions auto-merge or delete PDFs, notes, note blocks, project links, or extracted text. Orphan note files and note block files can be exported, reattached to an indexed paper, or deleted only after explicit confirmation. Orphan project links can be exported, reattached, or unlinked without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
 
 `BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used. Inbox PDFs are candidates only; the app uses an explicit preview/confirm workflow to copy one selected PDF into `papers/` and leaves the source untouched.
 
@@ -153,6 +153,7 @@ Foundation release documents:
 - [Mandatory regression checklist](docs/checklists/regression_checklist.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
+- [v1.0.21 reader performance polish release notes](docs/release_notes/v1.0.21.md)
 - [v1.0.20 safety release notes](docs/release_notes/v1.0.20.md)
 - [v1.0.0-foundation release-note draft](docs/release_notes/v1.0_draft.md)
 
@@ -195,6 +196,14 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.21-reader-performance-polish
+
+- Reuses cached PDF SHA-256 metadata when path, size, and modified time show an indexed PDF is unchanged.
+- Rehashes changed files and keeps duplicate/missing PDF detection deterministic and confirmation-gated.
+- Adds Reader draft baselines so reload and metadata header refresh cannot silently overwrite unsaved note text.
+- Adds short Streamlit feedback for note save/reload/header refresh and scan-related operations.
+- Updates release docs and tests for the v1.0.21 Reader/hash polish without changing the Streamlit architecture.
 
 ### v1.0.20-safety-release-foundation
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from ingest.scanner import pdf_sha256_with_metadata
 from ingest.text_extractor import FullTextExtractionResult
 from storage.atomic_json import JsonStoreError, atomic_write_json, read_json_file
 from storage.paths import EXTRACTED_TEXT_DIR
@@ -63,13 +63,13 @@ def build_preserved_cache_failure_metadata(
             "recovery_attempted_methods": result.attempted_methods,
             "recovery_errors": result.errors,
             "recovery_error": _extraction_result_error(result),
-            "recovery_pdf_sha256": pdf_fingerprint(pdf_path)["pdf_sha256"],
+            "recovery_pdf_sha256": pdf_fingerprint(pdf_path, metadata)["pdf_sha256"],
         }
     )
     return preserved_metadata
 
 
-def pdf_fingerprint(pdf_path: str | Path) -> dict[str, Any]:
+def pdf_fingerprint(pdf_path: str | Path, cached_metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     path = Path(pdf_path)
     if not path.exists() or not path.is_file():
         return {
@@ -77,20 +77,12 @@ def pdf_fingerprint(pdf_path: str | Path) -> dict[str, Any]:
             "pdf_modified_at": "",
             "pdf_sha256": "",
         }
-    stat = path.stat()
+    fingerprint = pdf_sha256_with_metadata(path, cached_metadata)
     return {
-        "pdf_size_bytes": stat.st_size,
-        "pdf_modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).replace(microsecond=0).isoformat(),
-        "pdf_sha256": _sha256_file(path),
+        "pdf_size_bytes": int(fingerprint["pdf_size_bytes"] or 0),
+        "pdf_modified_at": fingerprint["pdf_modified_at"],
+        "pdf_sha256": fingerprint["pdf_sha256"],
     }
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as file:
-        for chunk in iter(lambda: file.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _atomic_write_text(
@@ -199,7 +191,7 @@ def extraction_cache_status(
     current_pdf_sha256 = ""
     is_stale = False
     if pdf_path is not None:
-        current_pdf_sha256 = str(pdf_fingerprint(pdf_path)["pdf_sha256"])
+        current_pdf_sha256 = str(pdf_fingerprint(pdf_path, metadata)["pdf_sha256"])
         is_stale = _hashes_show_stale(
             has_reusable_text_cache,
             current_pdf_sha256,
@@ -250,8 +242,9 @@ def is_extraction_cache_stale(
     if not has_reusable_extracted_text_cache(paper_id, cache_dir):
         return False
 
-    current_pdf_sha256 = str(pdf_fingerprint(pdf_path)["pdf_sha256"])
-    cached_pdf_sha256 = str(load_extraction_metadata(paper_id, cache_dir).get("pdf_sha256") or "")
+    metadata = load_extraction_metadata(paper_id, cache_dir)
+    current_pdf_sha256 = str(pdf_fingerprint(pdf_path, metadata)["pdf_sha256"])
+    cached_pdf_sha256 = str(metadata.get("pdf_sha256") or "")
     return _hashes_show_stale(True, current_pdf_sha256, cached_pdf_sha256)
 
 

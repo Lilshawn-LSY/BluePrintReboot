@@ -331,9 +331,9 @@ def _export_path(exports_dir: Path, prefix: str, identifier: str) -> Path:
     return Path(exports_dir) / f"{prefix}_{safe_identifier}_{timestamp}.json"
 
 
-def _pdf_sha256(path: Path, errors: list[str]) -> str:
+def _pdf_sha256(path: Path, errors: list[str], metadata: dict[str, Any] | None = None) -> str:
     try:
-        return str(pdf_fingerprint(path).get("pdf_sha256") or "")
+        return str(pdf_fingerprint(path, metadata).get("pdf_sha256") or "")
     except OSError as exc:
         errors.append(f"PDF hash check failed for {path}: {exc}")
         return ""
@@ -591,8 +591,8 @@ def _duplicate_pdf_hashes(
         filepath = str(record.get("filepath", "")).strip()
         resolved = _absolute(filepath) if filepath else None
         digest = str(record.get("pdf_sha256", "")).strip()
-        if not digest and resolved is not None and resolved.exists() and resolved.is_file():
-            digest = _pdf_sha256(resolved, errors)
+        if resolved is not None and resolved.exists() and resolved.is_file():
+            digest = _pdf_sha256(resolved, errors, record)
         if not digest:
             continue
         paper_id = str(record.get("paper_id", ""))

@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.20-safety-release-foundation`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.21-reader-performance-polish`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -101,7 +101,17 @@ Required before and after Codex-assisted release work, including `v1.0.20-safety
 - [ ] Confirm extracted-text and paper-profile caches are excluded from the snapshot and documented as regenerable.
 - [ ] Confirm backup errors and health errors show concise main messages with developer details in expanders.
 
-## 8. Final Safety
+## 8. v1.0.21 Reader And Hash Performance Polish
+
+- [ ] Re-run a scan with unchanged disposable PDFs and confirm existing rows are preserved without duplicate rows.
+- [ ] Modify a disposable PDF and confirm the stored SHA-256, size, and modified time update after scan.
+- [ ] With an unsaved Reader note draft, click **Reload** and confirm the draft text is kept and reload is skipped.
+- [ ] Save a disposable Reader note and confirm the saved baseline can be reloaded.
+- [ ] With an unsaved Reader note draft, edit metadata and confirm a header refresh is offered without overwriting the body text.
+- [ ] Apply the pending header refresh explicitly and confirm user note body text remains.
+- [ ] Confirm duplicate/missing PDF repair remains previewed, deterministic, and confirmation-gated.
+
+## 9. Final Safety
 
 - [ ] Re-run `git status --short`.
 - [ ] Confirm no private user data, local secrets, PDFs, personal notes, runtime index files, caches, backup archives, or exports are staged or committed.
