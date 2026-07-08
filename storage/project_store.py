@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from storage.atomic_json import atomic_write_json
+from storage.atomic_json import atomic_write_json, read_json_file, require_json_list
 from storage.paths import PROJECTS_DIR
 
 
@@ -23,12 +22,11 @@ def list_projects(base_dir: Path = PROJECTS_DIR) -> list[dict[str, Any]]:
     path = projects_path(base_dir)
     if not path.exists():
         return []
-    try:
-        stored_projects = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Projects file is invalid JSON: {path}") from exc
-    if not isinstance(stored_projects, list):
-        raise ValueError(f"Projects file must contain a list: {path}")
+    stored_projects = require_json_list(
+        read_json_file(path, store_name="Projects file"),
+        path,
+        store_name="Projects file",
+    )
     return [_normalize_project(project) for project in stored_projects]
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -9,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ingest.text_extractor import FullTextExtractionResult
-from storage.atomic_json import atomic_write_json
+from storage.atomic_json import JsonStoreError, atomic_write_json, read_json_file
 from storage.paths import EXTRACTED_TEXT_DIR
 
 
@@ -155,13 +154,28 @@ def load_extraction_metadata(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR
     if not path.exists():
         return {}
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
+        value = read_json_file(path, store_name="Extraction metadata")
+    except JsonStoreError as exc:
         return {
             "paper_id": paper_id,
             "status": "metadata_error",
-            "errors": ["Extraction metadata JSON is invalid."],
+            "metadata_corrupt": True,
+            "metadata_path": str(path.resolve(strict=False)),
+            "metadata_issue": exc.summary,
+            "metadata_suggested_action": exc.suggested_action,
+            "errors": [exc.summary],
         }
+    if not isinstance(value, dict):
+        return {
+            "paper_id": paper_id,
+            "status": "metadata_error",
+            "metadata_corrupt": True,
+            "metadata_path": str(path.resolve(strict=False)),
+            "metadata_issue": "Extraction metadata must contain a JSON object",
+            "metadata_suggested_action": "Do not overwrite this file. Rebuild the extracted-text cache only after preserving or removing the invalid metadata file.",
+            "errors": ["Extraction metadata must contain a JSON object."],
+        }
+    return value
 
 
 def extraction_cache_status(

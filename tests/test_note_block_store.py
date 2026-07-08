@@ -2,6 +2,7 @@
 
 import pytest
 
+from storage.atomic_json import CorruptJsonError
 from storage.note_block_store import (
     ALLOWED_BLOCK_TYPES,
     create_note_block,
@@ -36,6 +37,21 @@ def test_missing_note_block_file_returns_empty_list() -> None:
 
     assert list_note_blocks("paper-1", base_dir) == []
     assert not note_blocks_path("paper-1", base_dir).exists()
+
+
+def test_corrupt_note_block_file_raises_typed_error_and_preserves_file() -> None:
+    base_dir = make_workspace("note-block-corrupt")
+    path = note_blocks_path("paper-1", base_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not valid json", encoding="utf-8")
+    before = path.read_text(encoding="utf-8")
+
+    with pytest.raises(CorruptJsonError) as error:
+        list_note_blocks("paper-1", base_dir)
+
+    assert error.value.path == path
+    assert "Note block file is invalid JSON" in error.value.summary
+    assert path.read_text(encoding="utf-8") == before
 
 
 def test_create_note_block_writes_valid_schema() -> None:

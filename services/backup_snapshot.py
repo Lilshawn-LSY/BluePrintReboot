@@ -12,7 +12,19 @@ from config.contact import APP_VERSION
 from storage.paths import EXPORTS_DIR, PROJECT_ROOT
 
 
-IGNORED_NAMES = {".git", ".pytest_cache", ".venv", "__pycache__", "venv"}
+IGNORED_NAMES = {
+    ".cache",
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    "venv",
+}
+IGNORED_FILE_NAMES = {"secrets.toml"}
+IGNORED_SUFFIXES = {".log", ".tmp"}
 TAG_CONFIG_FILES = (
     "config/tag_rules.json",
     "config/canonical_tags.json",
@@ -24,6 +36,32 @@ TAG_CONFIG_FILES = (
 )
 LOCAL_SETTING_FILES = (".streamlit/config.toml", "config/settings.json", "data/settings.json")
 LOCAL_LIBRARY_FILES = ("data/note_imports.json",)
+SNAPSHOT_INCLUDED_BY_DEFAULT = (
+    "data/paper_index.csv",
+    "data/projects/",
+    "data/note_blocks/",
+    "data/note_imports.json",
+    "notes/",
+    "config/tag_rules.json",
+    "config/canonical_tags.json",
+    "config/tag_book/",
+    ".streamlit/config.toml",
+)
+SNAPSHOT_EXCLUDED_BY_DEFAULT = (
+    ".git/",
+    ".venv/",
+    "venv/",
+    "__pycache__/",
+    ".pytest_cache/",
+    ".cache/",
+    "node_modules/",
+    "exports/",
+    "data/extracted_text/",
+    "data/paper_profiles/",
+    ".streamlit/secrets.toml",
+    "*.log",
+    "*.tmp",
+)
 
 
 def _timestamp(value: datetime | None = None) -> datetime:
@@ -39,7 +77,12 @@ def _is_ignored(path: Path, project_root: Path) -> bool:
         path.resolve().relative_to(project_root.resolve())
     except ValueError:
         return True
-    return any(part in IGNORED_NAMES for part in relative.parts) or path.name == ".gitkeep"
+    return (
+        any(part in IGNORED_NAMES for part in relative.parts)
+        or path.name in IGNORED_FILE_NAMES
+        or path.name == ".gitkeep"
+        or path.suffix.lower() in IGNORED_SUFFIXES
+    )
 
 
 def _files_under(directory: Path, project_root: Path, *, pdf_only: bool = False) -> list[Path]:
@@ -126,6 +169,17 @@ def build_snapshot_manifest(
         "app_version": APP_VERSION,
         "snapshot_type": "full" if include_pdfs else "light",
         "includes_pdfs": include_pdfs,
+        "policy": {
+            "purpose": "Backup private local library data. Source code remains in GitHub.",
+            "included_by_default": list(SNAPSHOT_INCLUDED_BY_DEFAULT),
+            "extra_when_full": ["papers/**/*.pdf"],
+            "excluded_by_default": list(SNAPSHOT_EXCLUDED_BY_DEFAULT),
+            "extracted_text_cache": {
+                "included": False,
+                "reason": "Extracted text and paper profile caches are regenerable and excluded from conservative snapshots.",
+            },
+            "restore": "Manual restore only; create or inspect backups before repair actions.",
+        },
         "included_files": included_files,
         "counts": {
             "included_files": len(included_files),

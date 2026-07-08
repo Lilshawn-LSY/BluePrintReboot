@@ -91,6 +91,7 @@ from services.pdf_inbox import (
 )
 from services.reading_note_template import refresh_reading_note_header
 from services.paper_text_profile_builder import build_paper_text_profile
+from storage.atomic_json import JsonStoreError
 from storage.index_store import (
     INDEX_COLUMNS,
     accept_crossref_metadata,
@@ -917,6 +918,10 @@ def render_backup_settings() -> None:
         "Create a timestamped ZIP under exports/. Light snapshots contain library metadata and notes; "
         "full snapshots also contain every managed PDF under papers/."
     )
+    st.caption(
+        "Source code belongs in GitHub. Backup snapshots are for private local library data. "
+        "Extracted-text and paper-profile caches are intentionally excluded because they are regenerable."
+    )
     snapshot_mode = st.radio(
         "Snapshot type",
         options=("Light - metadata and notes", "Full - metadata, notes, and PDFs"),
@@ -937,10 +942,14 @@ def render_backup_settings() -> None:
         disabled=include_pdfs and not full_confirmation,
     ):
         try:
-            with st.spinner("Creating backup snapshot..."):
+            with st.status("Creating backup snapshot...", expanded=False) as status:
                 st.session_state["backup_snapshot_result"] = create_backup_snapshot(include_pdfs=include_pdfs)
-        except Exception:
+                status.update(label="Backup snapshot created.", state="complete")
+        except Exception as exc:
             st.error("The backup snapshot could not be created. Check file access and available disk space.")
+            with st.expander("Backup error details"):
+                st.write(f"Exception: `{exc.__class__.__name__}`")
+                st.write(str(exc))
 
     snapshot_result = st.session_state.get("backup_snapshot_result")
     if snapshot_result:
@@ -950,6 +959,11 @@ def render_backup_settings() -> None:
             f"{manifest['snapshot_type'].title()} snapshot | "
             f"{manifest['counts']['included_files']} files | {manifest['counts']['pdfs']} PDFs"
         )
+        with st.expander("Snapshot policy"):
+            policy = manifest.get("policy", {})
+            st.write(policy.get("purpose", ""))
+            st.write("Excluded by default:")
+            st.code("\n".join(policy.get("excluded_by_default", [])))
     st.caption(f"Restore is manual in v{APP_VERSION}; creating a snapshot never changes library data.")
 
 
@@ -957,14 +971,26 @@ def _render_library_health_check() -> None:
     st.subheader("Library Health Check")
     st.write(
         "Run read-only checks for missing or unindexed PDFs, duplicate identities, incomplete metadata, "
-        "orphaned records, and stale extracted text."
+        "orphaned records, corrupt JSON stores, backup coverage, and stale extracted text."
     )
     if st.button("Run library health check", key="run_library_health_check"):
         try:
-            with st.spinner("Checking library health..."):
+            with st.status("Checking library health...", expanded=False) as status:
                 st.session_state["library_health_report"] = run_library_health_check()
-        except Exception:
+                status.update(label="Library health check complete.", state="complete")
+            st.success("Library health check complete.")
+        except JsonStoreError as exc:
+            st.error("A local JSON file could not be read. No library data was changed.")
+            st.warning(exc.suggested_action)
+            with st.expander("JSON error details"):
+                st.write(f"Path: `{exc.path}`")
+                st.write(f"Issue: {exc.summary}")
+                st.write(f"Exception: `{exc.__class__.__name__}`")
+        except Exception as exc:
             st.error("The library health check could not finish. Check access to local library files.")
+            with st.expander("Health check error details"):
+                st.write(f"Exception: `{exc.__class__.__name__}`")
+                st.write(str(exc))
 
     success_message = st.session_state.pop("library_health_repair_success", "")
     if success_message:
@@ -995,6 +1021,8 @@ def _render_library_health_check() -> None:
         ("Orphan extracted text caches", "orphan_extracted_text"),
         ("Stale extracted text", "stale_extracted_text"),
         ("Noncanonical PDF paths", "noncanonical_filepaths"),
+        ("Corrupt or invalid JSON stores", "corrupt_json"),
+        ("Backup snapshot concerns", "backup_snapshot_warnings"),
         ("Diagnostic errors", "errors"),
     )
     for title, key in sections:
@@ -1002,6 +1030,7 @@ def _render_library_health_check() -> None:
         if not items:
             continue
         with st.expander(f"{title} ({len(items)})"):
+            _render_health_issue_guidance(report, key)
             if key == "missing_pdfs":
                 _render_missing_pdf_repair(items)
             elif key == "duplicate_pdf_hashes":
@@ -1016,6 +1045,17 @@ def _render_library_health_check() -> None:
                 st.dataframe(pd.DataFrame(items), width="stretch", hide_index=True)
             else:
                 st.dataframe(pd.DataFrame({"path_or_message": items}), width="stretch", hide_index=True)
+
+
+def _render_health_issue_guidance(report: dict[str, object], key: str) -> None:
+    guidance = dict(report.get("issue_guidance", {}).get(key, {})) if isinstance(report.get("issue_guidance"), dict) else {}
+    if not guidance:
+        return
+    severity = str(guidance.get("severity", "review")).title()
+    category = str(guidance.get("category", "health"))
+    st.write(f"**{severity} - {category}**")
+    st.write(str(guidance.get("meaning", "")))
+    st.info(str(guidance.get("next_action", "")))
 
 
 def _duplicate_pdf_hash_rows(group: dict[str, object]) -> list[dict[str, object]]:
@@ -1783,7 +1823,15 @@ def run() -> None:
         st.session_state["current_page"] = nav_choice
         st.rerun()
 
-    pages[st.session_state["current_page"]]()
+    try:
+        pages[st.session_state["current_page"]]()
+    except JsonStoreError as exc:
+        st.error("A local JSON store could not be read. No changes were made.")
+        st.warning(exc.suggested_action)
+        with st.expander("Storage error details"):
+            st.write(f"Path: `{exc.path}`")
+            st.write(f"Issue: {exc.summary}")
+            st.write(f"Exception: `{exc.__class__.__name__}`")
 
 
 def navigation_pages() -> dict[str, Callable[[], None]]:

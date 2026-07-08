@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from storage.atomic_json import atomic_write_json
+from storage.atomic_json import atomic_write_json, read_json_file, require_json_list
 from storage.paths import NOTE_BLOCKS_DIR
 
 
@@ -30,12 +29,11 @@ def list_note_blocks(paper_id: str, base_dir: Path = NOTE_BLOCKS_DIR) -> list[di
     path = note_blocks_path(paper_id, base_dir)
     if not path.exists():
         return []
-    try:
-        stored_blocks = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"Note block file is invalid JSON: {path}") from exc
-    if not isinstance(stored_blocks, list):
-        raise ValueError(f"Note block file must contain a list: {path}")
+    stored_blocks = require_json_list(
+        read_json_file(path, store_name="Note block file"),
+        path,
+        store_name="Note block file",
+    )
     return [_normalize_block(paper_id, block) for block in stored_blocks]
 
 

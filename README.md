@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.19-orphan-repair-and-storage-hardening**.
+Current release target: **v1.0.20-safety-release-foundation**.
 
-v1.0.18 and v1.0.19 harden file lifecycle maintenance: same-hash duplicate rows now have explicit keep/reconnect/ignore/remove controls, orphan notes, note blocks, and project links can be exported or repaired through confirmation-gated workflows, orphan extracted-text caches are surfaced, and extracted-text `.txt` cache writes use atomic replacement. The app preserves the local Tag Book, `PaperTextProfile`, and Reader PDF architecture; automatic duplicate merging, automatic deletion, data schema changes, FastAPI, frontend migration, packaging, external ontologies, and unrelated UI redesigns remain deferred.
+v1.0.20 strengthens the safety foundation around app-owned JSON stores, Health Check reporting, backup snapshot policy, and release validation. Corrupt JSON is surfaced with recovery-safe guidance, source-ish JSON writes continue to use atomic replacement, backup manifests now state inclusion and exclusion policy, and repair actions remain explicit and confirmation-gated. The app preserves the local Tag Book, `PaperTextProfile`, Reader PDF architecture, Reader note UX, and hash-performance behavior; automatic duplicate merging, automatic deletion, data schema changes, FastAPI, frontend migration, packaging, external ontologies, and unrelated UI redesigns remain deferred.
 
 The app remains intentionally local-first and single-user:
 
@@ -122,7 +122,7 @@ Settings is organized into four sections:
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
 
-Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, orphan extracted-text caches, noncanonical paths, and stale extracted-text caches. Duplicate PDF hash groups show `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Duplicate rows can be explicitly kept, reconnected to an unindexed same-hash PDF, ignored for the current session, or removed from `paper_index.csv` after confirmation; none of these actions auto-merge or delete PDFs, notes, note blocks, project links, or extracted text. Orphan note files and note block files can be exported, reattached to an indexed paper, or deleted only after explicit confirmation. Orphan project links can be exported, reattached, or unlinked without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
+Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, corrupt or invalid JSON stores, backup snapshot concerns, orphan extracted-text caches, noncanonical paths, and stale extracted-text caches. Each reported section includes severity, meaning, and recommended next action. Duplicate PDF hash groups show `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Duplicate rows can be explicitly kept, reconnected to an unindexed same-hash PDF, ignored for the current session, or removed from `paper_index.csv` after confirmation; none of these actions auto-merge or delete PDFs, notes, note blocks, project links, or extracted text. Orphan note files and note block files can be exported, reattached to an indexed paper, or deleted only after explicit confirmation. Orphan project links can be exported, reattached, or unlinked without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
 
 `BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used. Inbox PDFs are candidates only; the app uses an explicit preview/confirm workflow to copy one selected PDF into `papers/` and leaves the source untouched.
 
@@ -131,7 +131,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, and counts. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, counts, and snapshot policy. Source code, `.git`, virtual environments, package caches, secrets, logs, temporary files, and regenerable caches such as `data/extracted_text/` and `data/paper_profiles/` are excluded by default. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -153,6 +153,7 @@ Foundation release documents:
 - [Mandatory regression checklist](docs/checklists/regression_checklist.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
+- [v1.0.20 safety release notes](docs/release_notes/v1.0.20.md)
 - [v1.0.0-foundation release-note draft](docs/release_notes/v1.0_draft.md)
 
 Before Codex-assisted changes, run the baseline validation command and note the result:
@@ -194,6 +195,15 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.20-safety-release-foundation
+
+- Adds typed corrupt/invalid JSON store errors and shared JSON read helpers for app-owned JSON persistence.
+- Keeps source-ish JSON writes on same-directory temp-file, flush/fsync, and atomic replacement paths.
+- Surfaces corrupt JSON, backup snapshot concerns, severity, meaning, and next action in Library Health Check.
+- Makes Backup Snapshot manifests explicit about included library data, excluded source/runtime/cache files, and intentionally excluded regenerable extracted-text/profile caches.
+- Adds clearer Streamlit status, success, warning, error, and details-expander feedback around backup and health operations.
+- Updates release docs and tests for the v1.0.20 safety foundation without changing Reader note UX or hash-performance behavior.
 
 ### v1.0.19-orphan-repair-and-storage-hardening
 
@@ -403,7 +413,8 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - The HTML/base64 PDF viewer is an explicit experimental fallback and may fail depending on browser, Streamlit, file size, or local security policy.
 - Large PDFs are warned before rendering; large-file HTML/base64 fallback requires explicit confirmation.
 - Same-hash duplicate rows are never auto-merged; users must choose keep, reconnect, ignore, or confirmed index-row removal.
-- Orphan repair can reattach/export/unlink/delete supported records, but archive lifecycle and corrupt-cache quarantine remain deferred.
+- Orphan repair can reattach/export/unlink/delete supported records, but archive lifecycle and automatic corrupt-cache quarantine remain deferred.
+- Extracted-text and paper-profile caches are excluded from backup snapshots by default because they are regenerable.
 
 If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:
 

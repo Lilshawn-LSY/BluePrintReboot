@@ -22,6 +22,7 @@ from services.reading_note_template import (
     refresh_reading_note_header,
     render_reading_note_template,
 )
+from storage.atomic_json import CorruptJsonError
 from storage.index_store import save_index
 from storage.note_block_store import list_note_blocks
 from storage.note_store import load_note_text, save_note_text
@@ -304,6 +305,21 @@ def test_duplicate_import_detection() -> None:
 
     assert has_duplicate_note_import("paper-1", parsed["source_sha256"], log_path=log_path) is True
     assert has_duplicate_note_import("paper-2", parsed["source_sha256"], log_path=log_path) is False
+
+
+def test_corrupt_note_import_log_raises_typed_error_and_preserves_file() -> None:
+    workspace = make_workspace("note-import-corrupt-log")
+    log_path = workspace / "data" / "note_imports.json"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("{not valid json", encoding="utf-8")
+    before = log_path.read_text(encoding="utf-8")
+
+    with pytest.raises(CorruptJsonError) as error:
+        load_note_import_log(log_path)
+
+    assert error.value.path == log_path
+    assert "Note import log is invalid JSON" in error.value.summary
+    assert log_path.read_text(encoding="utf-8") == before
 
 
 def test_duplicate_import_is_blocked_by_default() -> None:

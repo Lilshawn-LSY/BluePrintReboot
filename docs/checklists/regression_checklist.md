@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.18-19-file-lifecycle-and-orphan-hardening`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF and lifecycle baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.20-safety-release-foundation`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -92,7 +92,16 @@ Required before and after Codex-assisted release work, including `v1.0.18-19-fil
 - [ ] Trigger or unit-test extracted-text `.txt` cache replacement and confirm a failed/interrupted replacement preserves the previous cache file.
 - [ ] Confirm destructive repair actions preserve user data by default and require explicit confirmation before removing an index row, note file, note-block file, or project link association.
 
-## 7. Final Safety
+## 7. v1.0.20 Storage, Health, And Backup Safety
+
+- [ ] In a disposable workspace, corrupt one app-owned JSON file and confirm Health Check reports the affected path, issue, and recovery-safe action.
+- [ ] Confirm corrupt JSON is not deleted, overwritten, or auto-repaired by running Health Check.
+- [ ] Confirm Health Check issue sections show severity/category, meaning, and recommended next action.
+- [ ] Create a light Backup Snapshot and inspect `manifest.json` for included files, excluded policy, checksums, counts, and app version.
+- [ ] Confirm extracted-text and paper-profile caches are excluded from the snapshot and documented as regenerable.
+- [ ] Confirm backup errors and health errors show concise main messages with developer details in expanders.
+
+## 8. Final Safety
 
 - [ ] Re-run `git status --short`.
 - [ ] Confirm no private user data, local secrets, PDFs, personal notes, runtime index files, caches, backup archives, or exports are staged or committed.

@@ -97,6 +97,24 @@ def test_save_and_load_extraction_metadata() -> None:
     assert loaded["pdf_sha256"] == ""
 
 
+def test_corrupt_extraction_metadata_returns_safe_non_reusable_status() -> None:
+    cache_dir = make_workspace("text-cache-corrupt-metadata")
+    path = extraction_metadata_path("paper-1", cache_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{not valid json", encoding="utf-8")
+
+    metadata = load_extraction_metadata("paper-1", cache_dir)
+    status = extraction_cache_status("paper-1", cache_dir)
+
+    assert metadata["status"] == "metadata_error"
+    assert metadata["metadata_corrupt"] is True
+    assert metadata["metadata_path"] == str(path.resolve())
+    assert "invalid JSON" in metadata["metadata_issue"]
+    assert "Do not overwrite" in metadata["metadata_suggested_action"]
+    assert status["has_reusable_text_cache"] is False
+    assert status["status"] == "metadata_error"
+
+
 def test_extraction_cache_status_and_clear() -> None:
     cache_dir = make_workspace("text-cache-status")
     save_extracted_text("paper-1", "full text", cache_dir)
