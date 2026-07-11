@@ -258,7 +258,7 @@ def test_save_note_blocks_replace_failure_preserves_existing_file_and_cleans_tem
     def fail_replace(source, target):
         raise OSError("replace failed")
 
-    monkeypatch.setattr("storage.atomic_json.os.replace", fail_replace)
+    monkeypatch.setattr("storage.atomic_text.os.replace", fail_replace)
 
     with pytest.raises(OSError, match="replace failed"):
         save_note_blocks("paper-1", [{**block, "text": "Updated"}], base_dir=base_dir)

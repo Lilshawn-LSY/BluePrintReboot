@@ -21,8 +21,8 @@ def test_atomic_write_json_flushes_fsyncs_and_replaces_from_same_directory(monke
         assert source_path.parent.resolve() == destination_path.parent.resolve()
         original_replace(source_path, destination_path)
 
-    monkeypatch.setattr("storage.atomic_json.os.fsync", lambda fileno: fsync_calls.append(fileno))
-    monkeypatch.setattr("storage.atomic_json.os.replace", spy_replace)
+    monkeypatch.setattr("storage.atomic_text.os.fsync", lambda fileno: fsync_calls.append(fileno))
+    monkeypatch.setattr("storage.atomic_text.os.replace", spy_replace)
 
     atomic_write_json(target, {"answer": 42}, indent=2, ensure_ascii=False, trailing_newline=True)
 

@@ -1,5 +1,18 @@
 # Release Checklist
 
+## v1.0.22-note-durability-and-validation-closure
+
+- [x] Baseline `dev_check.ps1` recorded: smoke 46 passed/0 warnings/0 failed; pytest 356 passed.
+- [x] Reading Note creation, save, and header refresh use shared same-directory atomic UTF-8 writes.
+- [x] Replacement-failure tests prove old note bytes survive and temporary files are removed.
+- [x] Existing-note creation remains non-overwriting, and Reader save baselines remain unchanged.
+- [x] Read-only snapshot verification checks manifest policy, safe paths, presence, size, SHA-256, and counts using disposable ZIP fixtures.
+- [x] Final `dev_check.ps1` result is recorded in v1.0.22 release notes.
+- [x] Reader save/reload/pending-header-refresh manual smoke is completed and recorded, or clearly marked not performed.
+- [x] Backup create plus read-only verifier smoke is completed and recorded.
+- [x] Git status confirms no runtime/user data, PDFs, notes, exports, caches, or secrets are included.
+- [ ] Release tag is created and pushed only after explicit approval.
+
 ## v1.0.21-reader-performance-polish
 
 - [ ] Working tree is clean before release preparation begins.

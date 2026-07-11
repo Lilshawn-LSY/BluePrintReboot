@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.21-reader-performance-polish`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.22-note-durability-and-validation-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -113,6 +113,8 @@ Required before and after Codex-assisted release work, including `v1.0.21-reader
 
 ## 9. Final Safety
 
+- [ ] Create a disposable Backup Snapshot and run `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>`; confirm it passes without extracting files.
+- [ ] Confirm Reading Note creation, explicit save, and metadata-header refresh use atomic replacement and preserve the old file on simulated replacement failure.
 - [ ] Re-run `git status --short`.
 - [ ] Confirm no private user data, local secrets, PDFs, personal notes, runtime index files, caches, backup archives, or exports are staged or committed.
 - [ ] Record the smoke-check summary, pytest result, platform, Python version, and Streamlit version in the release notes or release handoff.

@@ -4,7 +4,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 from config.contact import APP_VERSION
-from services.backup_snapshot import create_backup_snapshot
+from services.backup_snapshot import create_backup_snapshot, verify_backup_snapshot
 from tests.helpers import make_workspace
 
 
@@ -149,3 +149,82 @@ def test_snapshot_excludes_ignored_directories() -> None:
     assert "data/paper_profiles/paper-1.json" not in names
     assert "notes/debug.log" not in names
     assert ".streamlit/secrets.toml" not in names
+
+
+def test_snapshot_verifier_accepts_created_snapshot_without_extracting() -> None:
+    workspace = _seed_workspace("backup-verify-success")
+    result = create_backup_snapshot(
+        project_root=workspace,
+        exports_dir=workspace / "exports",
+        include_pdfs=True,
+    )
+
+    verification = verify_backup_snapshot(result["snapshot_path"])
+
+    assert verification["valid"] is True
+    assert verification["errors"] == []
+    assert verification["checked_files"] == result["manifest"]["counts"]["included_files"]
+    assert not (workspace / "restored").exists()
+
+
+def test_snapshot_verifier_rejects_unsafe_missing_and_unlisted_paths() -> None:
+    workspace = make_workspace("backup-verify-paths")
+    snapshot_path = workspace / "unsafe.zip"
+    manifest = {
+        "snapshot_type": "light",
+        "includes_pdfs": False,
+        "included_files": [
+            {"path": "../outside.txt", "size_bytes": 1, "sha256": "0" * 64},
+            {"path": "notes/missing.md", "size_bytes": 1, "sha256": "0" * 64},
+        ],
+        "counts": {
+            "included_files": 2,
+            "index_rows": 0,
+            "projects": 0,
+            "project_links": 0,
+            "notes": 1,
+            "note_block_files": 0,
+            "pdfs": 0,
+        },
+    }
+    with ZipFile(snapshot_path, "w") as archive:
+        archive.writestr("manifest.json", json.dumps(manifest))
+        archive.writestr("notes/unlisted.md", "extra")
+
+    verification = verify_backup_snapshot(snapshot_path)
+
+    assert verification["valid"] is False
+    assert any("unsafe" in error for error in verification["errors"])
+    assert any("missing" in error for error in verification["errors"])
+    assert any("unlisted" in error for error in verification["errors"])
+
+
+def test_snapshot_verifier_rejects_content_and_count_mismatches() -> None:
+    workspace = _seed_workspace("backup-verify-content")
+    created = create_backup_snapshot(
+        project_root=workspace,
+        exports_dir=workspace / "exports",
+        include_pdfs=False,
+    )
+    source_path = Path(created["snapshot_path"])
+    broken_path = workspace / "broken.zip"
+    with ZipFile(source_path) as source:
+        manifest = json.loads(source.read("manifest.json"))
+        members = {name: source.read(name) for name in source.namelist() if name != "manifest.json"}
+    manifest["snapshot_type"] = "full"
+    manifest["counts"]["notes"] = 99
+    note_entry = next(item for item in manifest["included_files"] if item["path"].startswith("notes/"))
+    note_entry["size_bytes"] += 1
+    note_entry["sha256"] = "0" * 64
+    with ZipFile(broken_path, "w") as archive:
+        for name, content in members.items():
+            archive.writestr(name, content)
+        archive.writestr("manifest.json", json.dumps(manifest))
+
+    verification = verify_backup_snapshot(broken_path)
+
+    assert verification["valid"] is False
+    assert any("snapshot_type and includes_pdfs" in error for error in verification["errors"])
+    assert any("size_bytes mismatch" in error for error in verification["errors"])
+    assert any("sha256 mismatch" in error for error in verification["errors"])
+    assert any("counts.notes mismatch" in error for error in verification["errors"])
