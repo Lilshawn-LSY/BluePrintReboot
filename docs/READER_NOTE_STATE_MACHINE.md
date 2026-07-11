@@ -36,3 +36,20 @@ On each Reader rerun, pending events are handled once in this order:
 4. Markdown or structured-block append.
 
 Consumed event keys are removed, making reruns idempotent. A dirty draft is replaced only after explicit discard confirmation. Save, Keep, and Discard clear obsolete destructive reload state.
+
+## Reader Action and Rerun Contract
+
+Streamlit performs a full script pass for ordinary widget interaction. "No explicit rerun" means the action relies on that current framework pass and does not call `st.rerun()` a second time.
+
+| Action class | Examples | Explicit rerun contract |
+|---|---|---|
+| Draft-local | Toolbar note-block insertion | None when the note editor renders later in the same pass. |
+| Draft-local with queued transition | Template insertion, block append, Reload/Keep/Discard, header refresh | One intentional rerun so the authoritative pending transition is consumed before redisplay. |
+| Persistent note | Explicit Save | None; write atomically and show feedback in the current pass. External import retains one rerun because it changes disk text after the editor rendered. |
+| Persistent paper metadata | Manual/suggested tags; combined status/priority Apply | One intentional rerun after a successful write to reload the record and metadata header safely. Unchanged status/priority submits do not write or explicitly rerun. |
+| Read-only diagnostic/cache | Tag preview, profile display/rebuild, renderer selection, extracted-text display | Preview/profile actions use the current pass. Extract/re-extract retains one rerun because cache status was computed before the action. Renderer selection has no application-triggered rerun, although Streamlit reruns the script. |
+| Destructive or confirmation-gated | Extracted-cache delete, structured-block delete | One intentional rerun after confirm/cancel to remove stale confirmation UI and reload affected data. |
+| Structured-block persistence | Edit/create block | One intentional rerun after save/create because the list/form was rendered from the old disk state. Opening Edit uses the current pass. |
+| Navigation/project links | Active-paper navigation and project-link changes | Preserve `active_paper_id`, `current_page`, and all paper-scoped note state; existing intentional reruns remain where the updated record/link UI must be reloaded. |
+
+Avoidable explicit reruns removed in v1.0.24: toolbar draft insertion, PaperTextProfile rebuild, tag preview, and opening a structured-block edit form. The former separate status and priority write/rerun paths were replaced by one form-backed Apply action and at most one intentional reload.

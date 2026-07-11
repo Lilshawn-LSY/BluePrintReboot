@@ -1,5 +1,18 @@
 # Release Checklist
 
+## v1.0.24-reader-validation-and-parity-closure
+
+- [x] Clean v1.0.23 baseline recorded: smoke 46 passed/0 warnings/0 failed; pytest 374 passed.
+- [x] Status and priority persist through one explicit Apply action; unchanged settings produce no write payload.
+- [x] Safe redundant explicit reruns are removed and retained reruns are classified/documented.
+- [x] Paper-scoped note state and renderer keys have focused automated coverage.
+- [x] Reader frontend parity checklist covers Must preserve, May redesign, and Intentionally deferred behavior.
+- [x] Final `dev_check.ps1` evidence is recorded in v1.0.24 release notes.
+- [x] Codex disposable checks and not-performed browser checks are clearly separated.
+- [ ] User-performed Streamlit manual Reader smoke is recorded; G4 remains conditional until this passes.
+- [x] Git status confirms no runtime/user data, PDFs, notes, exports, caches, or secrets are included.
+- [ ] Release tag or checkpoint commit occurs only after explicit instruction.
+
 ## v1.0.23-reader-state-machine-closure
 
 - [x] Clean v1.0.22 baseline recorded: smoke 46 passed/0 warnings/0 failed; pytest 362 passed.

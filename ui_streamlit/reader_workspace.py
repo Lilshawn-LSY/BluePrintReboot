@@ -153,6 +153,29 @@ def build_metadata_summary(record: dict[str, str]) -> dict[str, str]:
     }
 
 
+def build_reader_settings_update(
+    record: dict[str, str],
+    selected_status: str,
+    selected_priority: str,
+) -> dict[str, str]:
+    update: dict[str, str] = {}
+    if selected_status in STATUS_OPTIONS and selected_status != str(record.get("status", "")):
+        update["status"] = selected_status
+    if selected_priority in READING_PRIORITY_OPTIONS and selected_priority != str(
+        record.get("reading_priority", "")
+    ):
+        update["reading_priority"] = selected_priority
+    return update
+
+
+def pdf_renderer_key(record: dict[str, str]) -> str:
+    return f"pdf_renderer_{record['paper_id']}"
+
+
+def reader_settings_notice_key(record: dict[str, str]) -> str:
+    return f"reader_settings_notice_{record['paper_id']}"
+
+
 def pdf_path_status(record: dict[str, str]) -> dict[str, object]:
     pdf_path = Path(str(record.get("filepath", "")))
     exists = bool(record.get("filepath")) and pdf_path.exists() and pdf_path.is_file()
@@ -586,7 +609,6 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
             key = note_draft_key(record)
             current = load_note_draft(record, st.session_state)
             st.session_state[key] = insert_note_block(current, block_type, record)
-            _rerun_reader(record)
 
     manual_tag = st.text_input("Manual tag", key=f"manual_tag_{record['paper_id']}")
     if st.button("Apply tag", key=f"add_manual_tag_{record['paper_id']}"):
@@ -609,7 +631,6 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
         else:
             clear_session_keys(st.session_state, suggestion_key)
             st.success("PaperTextProfile rebuilt.")
-            _rerun_reader(record)
 
     with st.expander("PaperTextProfile"):
         summary = reader_profile_summary(profile)
@@ -636,7 +657,6 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
 
     if st.button("Preview tags", key=f"reader_suggest_tags_{record['paper_id']}"):
         st.session_state[suggestion_key] = preview_reader_tag_suggestion_details(record)
-        _rerun_reader(record)
     if suggestion_key in st.session_state:
         suggestion_details = _coerce_reader_suggestion_details(st.session_state.get(suggestion_key, []))
         if suggestion_details:
@@ -664,31 +684,37 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
             st.info("No new suggested tags.")
             clear_session_keys(st.session_state, suggestion_key)
 
+    settings_notice = str(st.session_state.pop(reader_settings_notice_key(record), "") or "")
+    if settings_notice:
+        st.success(settings_notice)
     current_status = record.get("status", "unread")
     if current_status not in STATUS_OPTIONS:
         current_status = "unread"
-    selected_status = st.selectbox(
-        "Reading status",
-        STATUS_OPTIONS,
-        index=STATUS_OPTIONS.index(current_status),
-        key=f"reader_status_{record['paper_id']}",
-    )
-    if selected_status != record.get("status", ""):
-        update_paper_metadata(record["paper_id"], {"status": selected_status})
-        _rerun_reader(record)
-
     current_priority = record.get("reading_priority", "normal")
     if current_priority not in READING_PRIORITY_OPTIONS:
         current_priority = "normal"
-    selected_priority = st.selectbox(
-        "Reading priority",
-        READING_PRIORITY_OPTIONS,
-        index=READING_PRIORITY_OPTIONS.index(current_priority),
-        key=f"reader_priority_{record['paper_id']}",
-    )
-    if selected_priority != record.get("reading_priority", ""):
-        update_paper_metadata(record["paper_id"], {"reading_priority": selected_priority})
-        _rerun_reader(record)
+    with st.form(key=f"reader_settings_form_{record['paper_id']}"):
+        selected_status = st.selectbox(
+            "Reading status",
+            STATUS_OPTIONS,
+            index=STATUS_OPTIONS.index(current_status),
+            key=f"reader_status_{record['paper_id']}",
+        )
+        selected_priority = st.selectbox(
+            "Reading priority",
+            READING_PRIORITY_OPTIONS,
+            index=READING_PRIORITY_OPTIONS.index(current_priority),
+            key=f"reader_priority_{record['paper_id']}",
+        )
+        apply_settings = st.form_submit_button("Apply reading settings")
+    if apply_settings:
+        update_payload = build_reader_settings_update(record, selected_status, selected_priority)
+        if update_payload:
+            update_paper_metadata(record["paper_id"], update_payload)
+            st.session_state[reader_settings_notice_key(record)] = "Reading settings updated."
+            _rerun_reader(record)
+        else:
+            st.info("Reading settings unchanged.")
 
 
 def _coerce_reader_suggestion_details(value: object) -> list[dict]:
@@ -796,7 +822,7 @@ def _suggestion_snippet(suggestion: dict) -> str:
 def _render_pdf_viewer(record: dict[str, str]) -> None:
     st.write("PDF")
     status = pdf_path_status(record)
-    renderer_key = f"pdf_renderer_{record['paper_id']}"
+    renderer_key = pdf_renderer_key(record)
     if st.session_state.get(renderer_key) not in PDF_RENDERER_OPTIONS:
         st.session_state[renderer_key] = NATIVE_STREAMLIT_RENDERER
     selected_renderer = st.selectbox(
@@ -1368,7 +1394,6 @@ def _render_structured_note_block_card(
         edit_col, append_col, delete_col = st.columns(3)
         if edit_col.button("Edit", key=f"edit_note_block_{paper_id}_{block_id}"):
             st.session_state[edit_key] = block_id
-            _rerun_reader(record)
         if append_col.button("Append to Reading Note", key=f"append_note_block_{paper_id}_{block_id}"):
             st.session_state[pending_note_block_append_key(record)] = render_note_block_as_markdown(block)
             _rerun_reader(record)

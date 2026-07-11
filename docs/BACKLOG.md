@@ -2,7 +2,7 @@
 
 Last synced: 2026-07-11
 
-This backlog is ordered after the v1.0.23 Reader state-machine closure. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered after the v1.0.24 Reader validation and parity closure. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
 
 ## Completed Since v1.0.9
 
@@ -23,6 +23,7 @@ These items should not remain in the active Next queue.
 - **v1.0.21 Reader performance polish** - conservative hash metadata reuse, Reader draft baselines, safe reload, pending metadata header refresh, and concise Reader/scan feedback are implemented.
 - **v1.0.22 Note durability and validation closure** - shared atomic Reading Note writes, replacement-failure regression coverage, existing unsaved metadata-refresh coverage, and read-only backup snapshot verification are implemented.
 - **v1.0.23 Reader state-machine closure** - per-paper transition helpers, visible state, explicit dirty-reload Keep/Discard decisions, event precedence, idempotence, and newer-edit protection are implemented and documented.
+- **v1.0.24 Reader validation and parity closure** - combined status/priority Apply, safe rerun reduction, Reader action/rerun classification, automated parity evidence, and a future frontend parity checklist are implemented.
 
 ## Next
 
@@ -30,8 +31,9 @@ These items should be implemented before starting FastAPI or frontend migration.
 
 ### 1. Reader polish
 
-- Reduce PDF rerenders where Streamlit allows it.
-- Keep the documented Save/Reload/Insert/Import precedence aligned with future Reader changes.
+- Record user-performed Streamlit manual smoke for the v1.0.24 Reader checklist.
+- Accept remaining full-script/PDF rerenders until a future frontend/PDF.js vertical slice.
+- Keep the documented action/rerun and Save/Reload/Insert/Import contracts aligned with future changes.
 
 ### 2. Library lifecycle edge-case polish
 
@@ -100,10 +102,12 @@ Current state:
 - Native PDF rendering is the default and HTML/base64 fallback is explicit and guarded for large files.
 - Reader actions preserve the active paper and Paper Detail context across reruns.
 - Clean/dirty state, reload decisions, header refresh, queued replacement, and append precedence are implemented in Streamlit-free helpers and documented.
+- Safe application-triggered reruns are reduced; status/priority share one explicit Apply action; frontend parity requirements are documented.
 
 Still needed:
 
-- Continue reducing rerenders where Streamlit allows it.
+- Complete and record user-performed Streamlit manual smoke before closing G4.
+- Treat remaining PDF rerenders as accepted Streamlit behavior until the future frontend/PDF.js slice.
 
 ### PDF profile extraction
 
@@ -123,6 +127,7 @@ Still needed:
 
 ### Tag governance polish
 
+- Freeze tag-governance and tag-quality expansion during the v1.0.24-v1.0.25 stabilization sequence.
 - Keep generated candidates preview/select-only.
 - Improve documentation for candidate promotion versus paper-local tag selection.
 - Add more corpus fixtures for rejected candidate examples and source attribution.
@@ -136,7 +141,7 @@ Still needed:
 
 ### FastAPI read-only backend
 
-Defer until the Streamlit foundation closes the lifecycle, Reader, and storage-safety gates.
+Defer implementation until v1.0.25 lifecycle/recovery closure and user-performed Reader manual validation are complete.
 
 Initial eventual endpoints:
 

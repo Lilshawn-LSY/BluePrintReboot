@@ -8,6 +8,7 @@ from ui_streamlit.reader_workspace import (
     apply_pending_note_header_refresh,
     apply_pending_note_actions,
     append_markdown_snapshot,
+    build_reader_settings_update,
     build_reader_tag_suggestion_record,
     citation_block,
     has_unsaved_note_changes,
@@ -31,12 +32,14 @@ from ui_streamlit.reader_workspace import (
     pdf_external_open_reference,
     pdf_large_file_policy,
     pdf_path_status,
+    pdf_renderer_key,
     preview_reader_tag_suggestions,
     preserve_reader_context,
     preserve_reader_context_for_paper_id,
     queue_note_header_refresh,
     queue_note_text_update,
     reader_profile_summary,
+    reader_settings_notice_key,
     reader_tag_suggestion_preview_key,
     save_note_draft,
     should_render_html_fallback,
@@ -129,6 +132,36 @@ def test_add_manual_tag_normalizes_and_avoids_duplicates() -> None:
     )
     assert add_manual_tag("existing-tag", " New   Tag ") == "existing-tag, new-tag"
     assert add_manual_tag("existing-tag", "   ") == "existing-tag"
+
+
+def test_reader_settings_update_combines_changed_status_and_priority() -> None:
+    record = {
+        "paper_id": "paper-1",
+        "status": "unread",
+        "reading_priority": "normal",
+    }
+
+    update = build_reader_settings_update(record, "reading", "high")
+
+    assert update == {"status": "reading", "reading_priority": "high"}
+    assert record == {
+        "paper_id": "paper-1",
+        "status": "unread",
+        "reading_priority": "normal",
+    }
+
+
+def test_reader_settings_update_omits_unchanged_or_invalid_values() -> None:
+    record = {"paper_id": "paper-1", "status": "reading", "reading_priority": "high"}
+
+    assert build_reader_settings_update(record, "reading", "high") == {}
+    assert build_reader_settings_update(record, "invalid", "invalid") == {}
+
+
+def test_pdf_renderer_key_is_stable_and_isolated_by_paper() -> None:
+    assert pdf_renderer_key({"paper_id": "paper-1"}) == "pdf_renderer_paper-1"
+    assert pdf_renderer_key({"paper_id": "paper-2"}) == "pdf_renderer_paper-2"
+    assert reader_settings_notice_key({"paper_id": "paper-1"}) == "reader_settings_notice_paper-1"
 
 
 def test_reader_tag_suggestions_are_previewed_without_mutating_record() -> None:

@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.23-reader-state-machine-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.24-reader-validation-and-parity-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -120,7 +120,27 @@ Required before and after Codex-assisted release work, including `v1.0.23-reader
 - [ ] Confirm tag, status, priority, profile, and project-link reruns preserve the active paper's dirty draft.
 - [ ] Confirm no Reader action autosaves an unsaved draft.
 
-## 10. Final Safety
+## 10. v1.0.24 User-Performed Reader Validation
+
+Record tester, date, browser, and result for each item. Leave unchecked when not performed.
+
+- [ ] Initial disk load shows Saved.
+- [ ] Editing the note shows Unsaved changes; explicit Save returns it to Saved.
+- [ ] Dirty Reload preserves the exact draft and presents Keep/Discard choices.
+- [ ] Keep draft preserves the exact unsaved text.
+- [ ] Discard changes and reload restores disk text and updates the baseline.
+- [ ] Metadata-header refresh preserves the latest body; a dirty refreshed draft remains dirty until Save.
+- [ ] Paper A and Paper B drafts remain isolated when switching papers.
+- [ ] Tag, reading settings Apply, toolbar, project-link, profile, and structured-block actions preserve the active paper draft.
+- [ ] Browser refresh and application restart restore only explicitly saved text.
+- [ ] Reading status and priority update together only after **Apply reading settings**; unchanged Apply performs no write.
+- [ ] PDF renderer selection remains stable for each paper.
+- [ ] PDF viewing remains usable after Reader actions; any full rerender is recorded as accepted Streamlit behavior.
+- [ ] Missing-PDF and large-PDF guidance remain clear and non-destructive.
+
+Manual evidence: tester __________ date __________ browser __________ result __________
+
+## 11. Final Safety
 
 - [ ] Create a disposable Backup Snapshot and run `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>`; confirm it passes without extracting files.
 - [ ] Confirm Reading Note creation, explicit save, and metadata-header refresh use atomic replacement and preserve the old file on simulated replacement failure.
