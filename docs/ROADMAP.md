@@ -1,12 +1,12 @@
 # BluePrintReboot Roadmap
 
-Last synced: 2026-07-08
+Last synced: 2026-07-11
 
-This roadmap reflects the `v1.0.21-reader-performance-polish` target. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI, frontend migration, packaging, external ontology integration, and AI-assisted features remain deferred until the Streamlit foundation is more predictable.
+This roadmap reflects the `v1.0.22-note-durability-and-validation-closure` target. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI, frontend migration, packaging, external ontology integration, and AI-assisted features remain deferred until the Streamlit foundation is more predictable.
 
 ## Current Status Snapshot
 
-Implemented through v1.0.21:
+Implemented through v1.0.22:
 
 - v1.0.10 added Windows developer bootstrap scripts: `scripts/dev_setup.ps1`, `scripts/dev_check.ps1`, `scripts/run_app.ps1`, and `start_blueprint.bat`.
 - v1.0.11 split cheap local scanning from explicit DOI/Crossref enrichment, preserved existing accepted metadata during scan, and blocked duplicate external note imports unless force re-import is explicitly selected.
@@ -20,6 +20,7 @@ Implemented through v1.0.21:
 - v1.0.19 added orphan extracted-text cache detection, export/reattach/delete workflows for orphan notes and note blocks, export/reattach/unlink workflows for orphan project links, and atomic extracted-text `.txt` cache writes.
 - v1.0.20 added typed corrupt JSON handling, action-oriented Health Check guidance, explicit backup snapshot inclusion/exclusion policy, clearer Streamlit safety feedback, and focused safety regression tests.
 - v1.0.21 added conservative PDF hash metadata reuse, Reader note draft baselines, non-destructive metadata header refresh for unsaved drafts, and concise Streamlit feedback around Reader and scan actions.
+- v1.0.22 added shared atomic Reading Note writes, failure-safety coverage, and read-only backup snapshot verification without changing note format, draft-save behavior, or restore policy.
 - Earlier v1.0.x safety work remains in place: `pdf_sha256` support, missing-PDF reconnect/remove, same-hash duplicate review, orphan record review, confirmed orphan project-link removal, atomic JSON writes, backup snapshot, and release-readiness documentation.
 
 Partial or incomplete:
@@ -27,7 +28,7 @@ Partial or incomplete:
 - `paper_id` is still generated from the relative file path. Content hash supports repair/reconnect, but it is not the primary identity.
 - Same-hash duplicate handling is explicit and conservative. Automatic merge remains intentionally deferred.
 - Orphan note, note-block, and project-link repair is available through explicit repair workflows. Automatic deletion remains intentionally deferred.
-- Atomic persistence covers key JSON metadata, CSV replacement, and extracted full-text `.txt` cache writes.
+- Atomic persistence covers key JSON metadata, CSV replacement, extracted full-text `.txt` cache writes, and Reading Note creation/save/header refresh.
 - Reader Workspace still has Streamlit rerun limitations, but note reload and metadata header refresh now preserve unsaved draft text.
 - Native PDF viewing is now the default. The HTML/base64 viewer is explicit experimental fallback only and is guarded for large PDFs.
 - Tag suggestions are deterministic and evidence-bearing, but generated candidates are not automatically promoted to the Tag Book. Candidate promotion remains a deliberate user governance action.

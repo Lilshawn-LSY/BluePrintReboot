@@ -1,8 +1,8 @@
 # BluePrintReboot Backlog
 
-Last synced: 2026-07-08
+Last synced: 2026-07-11
 
-This backlog is ordered after the v1.0.21 reader performance polish. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered after the v1.0.22 note durability and validation closure. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
 
 ## Completed Since v1.0.9
 
@@ -21,6 +21,7 @@ These items should not remain in the active Next queue.
 - **v1.0.19 Orphan repair and storage hardening** - orphan extracted-text cache detection, orphan note/note-block export/reattach/delete, orphan project-link export/reattach/unlink, and atomic extracted-text `.txt` cache writes are implemented.
 - **v1.0.20 Safety release foundation** - typed corrupt JSON handling, action-oriented Health Check guidance, explicit backup snapshot policy, clearer Streamlit safety feedback, release hygiene docs, and focused safety regression tests are implemented.
 - **v1.0.21 Reader performance polish** - conservative hash metadata reuse, Reader draft baselines, safe reload, pending metadata header refresh, and concise Reader/scan feedback are implemented.
+- **v1.0.22 Note durability and validation closure** - shared atomic Reading Note writes, replacement-failure regression coverage, existing unsaved metadata-refresh coverage, and read-only backup snapshot verification are implemented.
 
 ## Next
 
@@ -83,6 +84,7 @@ Current state:
 - Key JSON writes use atomic temp-file + fsync + replace.
 - `paper_index.csv` already uses atomic CSV replacement.
 - Extracted full-text `.txt` cache writes use atomic temp-file + fsync + replace.
+- Reading Note creation, explicit save, and metadata-header refresh use the shared atomic text writer.
 
 Still needed:
 
@@ -101,7 +103,6 @@ Current state:
 Still needed:
 
 - Document the state machine.
-- Add tests for unsaved note behavior during metadata refresh.
 - Continue reducing rerenders where Streamlit allows it.
 
 ### PDF profile extraction
@@ -130,7 +131,7 @@ Still needed:
 ### Backup/restore polish
 
 - Decide whether extracted text cache should remain excluded or become optional.
-- Add restore dry-run documentation or tooling.
+- Consider whether a future release should add guided restore after the read-only verifier; automated restore remains deferred.
 - Keep GitHub code and Drive/private user data separation strict.
 
 ### FastAPI read-only backend

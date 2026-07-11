@@ -36,7 +36,7 @@ REQUIRED_FILES = (
     "docs/checklists/v1.0_smoke_test.md",
     "docs/checklists/regression_checklist.md",
     "docs/checklists/new_pc_restore_checklist.md",
-    "docs/release_notes/v1.0.21.md",
+    "docs/release_notes/v1.0.22.md",
     "docs/release_notes/v1.0_draft.md",
 )
 REQUIRED_DIRECTORIES = ("data", "papers", "notes", "exports")

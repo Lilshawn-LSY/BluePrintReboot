@@ -170,7 +170,7 @@ def test_save_projects_replace_failure_preserves_existing_file_and_cleans_temp(m
     def fail_replace(source, target):
         raise OSError("replace failed")
 
-    monkeypatch.setattr("storage.atomic_json.os.replace", fail_replace)
+    monkeypatch.setattr("storage.atomic_text.os.replace", fail_replace)
 
     with pytest.raises(OSError, match="replace failed"):
         save_projects([{**project, "name": "Updated"}], base_dir=base_dir)

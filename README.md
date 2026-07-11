@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.21-reader-performance-polish**.
+Current release target: **v1.0.22-note-durability-and-validation-closure**.
 
-v1.0.21 polishes Reader note draft behavior, local hash-performance paths, and concise Streamlit feedback. PDF scans and maintenance workflows reuse stored SHA-256 metadata when path, size, and modified time show the file is unchanged; changed files are rehashed. Reader note reloads and metadata header refreshes no longer silently overwrite unsaved draft text. The app preserves the v1.0.20 storage safety foundation, corrupt JSON handling, backup snapshot policy, Health Check guidance, local Tag Book, `PaperTextProfile`, and existing Streamlit Reader architecture; automatic duplicate merging, automatic deletion, FastAPI, frontend migration, PDF.js replacement, cloud sync, external ontologies, and LLM/API features remain deferred.
+v1.0.22 closes the remaining Reading Note durability gap: note creation, explicit save, and metadata-header refresh now use shared same-directory atomic UTF-8 writes with flush, fsync, and replacement cleanup. Backup snapshots can be verified read-only for manifest coherence, safe paths, archived file presence, byte sizes, SHA-256 values, and internal counts. Reader drafts remain explicit-save only, restore remains manual, and the local-first single-user architecture is unchanged.
 
 The app remains intentionally local-first and single-user:
 
@@ -131,7 +131,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, counts, and snapshot policy. Source code, `.git`, virtual environments, package caches, secrets, logs, temporary files, and regenerable caches such as `data/extracted_text/` and `data/paper_profiles/` are excluded by default. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, counts, and snapshot policy. Verify a snapshot in place with `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>` before restoring; verification never extracts files or modifies runtime data. Source code, `.git`, virtual environments, package caches, secrets, logs, temporary files, and regenerable caches such as `data/extracted_text/` and `data/paper_profiles/` are excluded by default. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -153,6 +153,7 @@ Foundation release documents:
 - [Mandatory regression checklist](docs/checklists/regression_checklist.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
+- [v1.0.22 note durability and validation release notes](docs/release_notes/v1.0.22.md)
 - [v1.0.21 reader performance polish release notes](docs/release_notes/v1.0.21.md)
 - [v1.0.20 safety release notes](docs/release_notes/v1.0.20.md)
 - [v1.0.0-foundation release-note draft](docs/release_notes/v1.0_draft.md)
@@ -196,6 +197,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.22-note-durability-and-validation-closure
+
+- Routes Reading Note creation, save, and header refresh through the shared atomic text writer without changing filenames or Markdown format.
+- Preserves existing note bytes and removes temporary files when replacement fails.
+- Adds a read-only snapshot verifier and disposable ZIP regression coverage.
+- Keeps Reader drafts explicit-save, `paper_id` semantics unchanged, and restore manual.
 
 ### v1.0.21-reader-performance-polish
 

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
+
+from storage.atomic_text import atomic_write_text
 
 
 DEFAULT_JSON_RECOVERY_ACTION = (
@@ -53,25 +53,7 @@ def atomic_write_json(
     if trailing_newline:
         text += "\n"
 
-    target.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="",
-            dir=target.parent,
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            temporary.write(text)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-        os.replace(temporary_path, target)
-    finally:
-        if temporary_path and temporary_path.exists():
-            temporary_path.unlink()
-    return target
+    return atomic_write_text(target, text)
 
 
 def read_json_file(

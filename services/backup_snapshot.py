@@ -4,9 +4,9 @@ import csv
 import hashlib
 import json
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
 from config.contact import APP_VERSION
 from storage.paths import EXPORTS_DIR, PROJECT_ROOT
@@ -235,5 +235,149 @@ def create_backup_snapshot(
         raise
     return {
         "snapshot_path": str(snapshot_path),
+        "manifest": manifest,
+    }
+
+
+def _safe_snapshot_member_path(value: Any) -> bool:
+    if not isinstance(value, str) or not value or "\\" in value:
+        return False
+    path = PurePosixPath(value)
+    return (
+        not path.is_absolute()
+        and path.as_posix() == value
+        and all(part not in ("", ".", "..") for part in path.parts)
+        and ":" not in path.parts[0]
+    )
+
+
+def _json_list_count_bytes(content: bytes) -> int | None:
+    try:
+        value = json.loads(content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return len(value) if isinstance(value, list) else None
+
+
+def _csv_row_count_bytes(content: bytes) -> int | None:
+    try:
+        lines = content.decode("utf-8-sig").splitlines()
+        return sum(1 for _ in csv.DictReader(lines))
+    except (UnicodeDecodeError, csv.Error):
+        return None
+
+
+def verify_backup_snapshot(snapshot_path: str | Path) -> dict[str, Any]:
+    """Verify a snapshot in place without extracting or modifying library data."""
+    path = Path(snapshot_path)
+    errors: list[str] = []
+    manifest: dict[str, Any] | None = None
+    checked_files = 0
+    try:
+        with ZipFile(path, mode="r") as archive:
+            names = archive.namelist()
+            name_set = set(names)
+            if len(names) != len(name_set):
+                errors.append("Archive contains duplicate member paths.")
+            for name in names:
+                if not _safe_snapshot_member_path(name):
+                    errors.append(f"Archive member path is unsafe: {name!r}.")
+            if "manifest.json" not in name_set:
+                errors.append("manifest.json is missing from the archive root.")
+            else:
+                try:
+                    loaded_manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    errors.append(f"manifest.json is not valid UTF-8 JSON: {exc}.")
+                else:
+                    if isinstance(loaded_manifest, dict):
+                        manifest = loaded_manifest
+                    else:
+                        errors.append("manifest.json must contain a JSON object.")
+
+            if manifest is not None:
+                snapshot_type = manifest.get("snapshot_type")
+                includes_pdfs = manifest.get("includes_pdfs")
+                if snapshot_type not in ("light", "full"):
+                    errors.append("snapshot_type must be 'light' or 'full'.")
+                if type(includes_pdfs) is not bool:
+                    errors.append("includes_pdfs must be a boolean.")
+                elif snapshot_type in ("light", "full") and (snapshot_type == "full") != includes_pdfs:
+                    errors.append("snapshot_type and includes_pdfs are inconsistent.")
+
+                entries = manifest.get("included_files")
+                if not isinstance(entries, list):
+                    errors.append("included_files must be a list.")
+                    entries = []
+                listed_paths: list[str] = []
+                content_by_path: dict[str, bytes] = {}
+                for index, entry in enumerate(entries):
+                    if not isinstance(entry, dict):
+                        errors.append(f"included_files[{index}] must be an object.")
+                        continue
+                    member_path = entry.get("path")
+                    if not _safe_snapshot_member_path(member_path):
+                        errors.append(f"Included file path is unsafe at index {index}: {member_path!r}.")
+                        continue
+                    listed_paths.append(member_path)
+                    if member_path not in name_set:
+                        errors.append(f"Listed file is missing from the archive: {member_path}.")
+                        continue
+                    content = archive.read(member_path)
+                    content_by_path[member_path] = content
+                    checked_files += 1
+                    size_bytes = entry.get("size_bytes")
+                    if type(size_bytes) is not int or size_bytes < 0:
+                        errors.append(f"Invalid size_bytes for {member_path}.")
+                    elif size_bytes != len(content):
+                        errors.append(f"size_bytes mismatch for {member_path}.")
+                    expected_sha256 = entry.get("sha256")
+                    actual_sha256 = hashlib.sha256(content).hexdigest()
+                    if not isinstance(expected_sha256, str) or expected_sha256.lower() != actual_sha256:
+                        errors.append(f"sha256 mismatch for {member_path}.")
+
+                if len(listed_paths) != len(set(listed_paths)):
+                    errors.append("included_files contains duplicate paths.")
+                unlisted = name_set - {"manifest.json", *listed_paths}
+                if unlisted:
+                    errors.append(f"Archive contains unlisted files: {', '.join(sorted(unlisted))}.")
+                if includes_pdfs is False and any(item.startswith("papers/") for item in listed_paths):
+                    errors.append("A light snapshot must not list files under papers/.")
+
+                computed_counts: dict[str, int | None] = {
+                    "included_files": len(entries),
+                    "index_rows": _csv_row_count_bytes(content_by_path["data/paper_index.csv"])
+                    if "data/paper_index.csv" in content_by_path
+                    else 0,
+                    "projects": _json_list_count_bytes(content_by_path["data/projects/projects.json"])
+                    if "data/projects/projects.json" in content_by_path
+                    else 0,
+                    "project_links": _json_list_count_bytes(content_by_path["data/projects/project_links.json"])
+                    if "data/projects/project_links.json" in content_by_path
+                    else 0,
+                    "notes": sum(item.startswith("notes/") for item in listed_paths),
+                    "note_block_files": sum(item.startswith("data/note_blocks/") for item in listed_paths),
+                    "pdfs": sum(item.startswith("papers/") for item in listed_paths),
+                }
+                counts = manifest.get("counts")
+                if not isinstance(counts, dict):
+                    errors.append("counts must be an object.")
+                else:
+                    for count_name, expected_count in computed_counts.items():
+                        actual_count = counts.get(count_name)
+                        if expected_count is None:
+                            errors.append(f"Could not validate {count_name} from its archived file.")
+                        elif type(actual_count) is not int or actual_count != expected_count:
+                            errors.append(
+                                f"counts.{count_name} mismatch: expected {expected_count}, found {actual_count!r}."
+                            )
+    except (OSError, BadZipFile) as exc:
+        errors.append(f"Snapshot archive could not be read: {exc}.")
+
+    return {
+        "valid": not errors,
+        "snapshot_path": str(path),
+        "checked_files": checked_files,
+        "errors": errors,
         "manifest": manifest,
     }

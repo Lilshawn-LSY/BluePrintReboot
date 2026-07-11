@@ -1,6 +1,6 @@
 # Fresh Clone and New-PC Restore Checklist
 
-This checklist is intentionally manual and non-destructive. BluePrintReboot v1.0.0-foundation does not provide automated restore.
+This checklist is intentionally manual and non-destructive. BluePrintReboot provides read-only snapshot verification, not automated restore.
 
 ## A. Prepare the Old Computer
 
@@ -14,6 +14,7 @@ This checklist is intentionally manual and non-destructive. BluePrintReboot v1.0
 ## B. Inspect the Snapshot
 
 - [ ] Open the ZIP as an archive; do not extract it over the active old library.
+- [ ] Run `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>` and confirm it passes without extracting any file.
 - [ ] Confirm `manifest.json` exists at the archive root.
 - [ ] Confirm expected index, project, note, note-block, and tag files are listed.
 - [ ] For a full snapshot, confirm managed PDFs are listed under `papers/`.
@@ -39,11 +40,8 @@ Open PowerShell and run:
 ```powershell
 git clone <repository-url> BluePrintReboot
 cd BluePrintReboot
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python scripts/smoke_check.py
+.\scripts\dev_setup.ps1
+.\scripts\dev_check.ps1
 ```
 
 - [ ] Confirm the smoke check reports zero failures.
@@ -67,7 +65,7 @@ python -m pip install -r requirements-optional.txt
 ## E. Verify the Restored Library
 
 ```powershell
-streamlit run app.py
+.\scripts\run_app.ps1
 ```
 
 - [ ] Select **Scan papers** once.
@@ -82,6 +80,6 @@ streamlit run app.py
 ## F. Completion
 
 - [ ] Resolve unexpected missing, unindexed, orphaned, duplicate, or noncanonical records.
-- [ ] Re-run `python scripts/smoke_check.py` and `python -m pytest` if this is a development machine.
+- [ ] Re-run `.\scripts\dev_check.ps1` if this is a development machine.
 - [ ] Keep the original snapshot until normal daily use is verified.
 - [ ] Create a new snapshot on the new computer after verification.
