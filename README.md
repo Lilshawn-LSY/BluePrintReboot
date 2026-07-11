@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.22-note-durability-and-validation-closure**.
+Current release target: **v1.0.23-reader-state-machine-closure**.
 
-v1.0.22 closes the remaining Reading Note durability gap: note creation, explicit save, and metadata-header refresh now use shared same-directory atomic UTF-8 writes with flush, fsync, and replacement cleanup. Backup snapshots can be verified read-only for manifest coherence, safe paths, archived file presence, byte sizes, SHA-256 values, and internal counts. Reader drafts remain explicit-save only, restore remains manual, and the local-first single-user architecture is unchanged.
+v1.0.23 makes Reading Note transitions explicit and paper-scoped. The editor shows Saved, Unsaved changes, and Header refresh pending status; dirty Reload offers Keep draft or an explicit Discard changes and reload decision. Pending replacement/append operations are ordered and idempotent, newer edits are protected, and explicit Save remains the only draft-to-disk path.
 
 The app remains intentionally local-first and single-user:
 
@@ -77,6 +77,7 @@ Current support includes:
 - Search and filtering by metadata, status, priority, and tags.
 - Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, and tags.
 - Reading Note headers refresh from accepted paper metadata while preserving existing note body sections and unsaved draft text.
+- Reader note state follows a documented per-paper transition contract; dirty reload never replaces a draft without explicit discard confirmation.
 - Structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
 - BluePrint Reading Note template download and confirmed local import into the Reading Note and structured note blocks, with duplicate source imports blocked unless explicitly forced.
 - Full-text extraction with MarkItDown when available and `pypdf` fallback.
@@ -151,8 +152,10 @@ Foundation release documents:
 - [Development workflow](docs/DEV_WORKFLOW.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Mandatory regression checklist](docs/checklists/regression_checklist.md)
+- [Reader note state machine](docs/READER_NOTE_STATE_MACHINE.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
+- [v1.0.23 Reader state-machine release notes](docs/release_notes/v1.0.23.md)
 - [v1.0.22 note durability and validation release notes](docs/release_notes/v1.0.22.md)
 - [v1.0.21 reader performance polish release notes](docs/release_notes/v1.0.21.md)
 - [v1.0.20 safety release notes](docs/release_notes/v1.0.20.md)
@@ -197,6 +200,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.23-reader-state-machine-closure
+
+- Defines paper-scoped Saved, Unsaved changes, header-pending, and discard-confirmation states outside Streamlit rendering.
+- Adds explicit Keep draft and Discard changes and reload choices for dirty Reload.
+- Makes pending transitions idempotent and documents reload/header/replacement/append precedence.
+- Keeps explicit Save, atomic note writes, note format, and `paper_id` semantics unchanged.
 
 ### v1.0.22-note-durability-and-validation-closure
 
