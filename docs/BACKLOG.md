@@ -2,7 +2,7 @@
 
 Last synced: 2026-07-11
 
-This backlog is ordered after the v1.0.22 note durability and validation closure. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered after the v1.0.23 Reader state-machine closure. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
 
 ## Completed Since v1.0.9
 
@@ -22,6 +22,7 @@ These items should not remain in the active Next queue.
 - **v1.0.20 Safety release foundation** - typed corrupt JSON handling, action-oriented Health Check guidance, explicit backup snapshot policy, clearer Streamlit safety feedback, release hygiene docs, and focused safety regression tests are implemented.
 - **v1.0.21 Reader performance polish** - conservative hash metadata reuse, Reader draft baselines, safe reload, pending metadata header refresh, and concise Reader/scan feedback are implemented.
 - **v1.0.22 Note durability and validation closure** - shared atomic Reading Note writes, replacement-failure regression coverage, existing unsaved metadata-refresh coverage, and read-only backup snapshot verification are implemented.
+- **v1.0.23 Reader state-machine closure** - per-paper transition helpers, visible state, explicit dirty-reload Keep/Discard decisions, event precedence, idempotence, and newer-edit protection are implemented and documented.
 
 ## Next
 
@@ -29,9 +30,8 @@ These items should be implemented before starting FastAPI or frontend migration.
 
 ### 1. Reader polish
 
-- Continue documenting note draft state as Reader behavior evolves.
 - Reduce PDF rerenders where Streamlit allows it.
-- Keep Save/Reload/Insert/Import precedence explicit.
+- Keep the documented Save/Reload/Insert/Import precedence aligned with future Reader changes.
 
 ### 2. Library lifecycle edge-case polish
 
@@ -99,10 +99,10 @@ Current state:
 - PaperTextProfile rebuild and tag suggestion panels are available from Reader Workspace.
 - Native PDF rendering is the default and HTML/base64 fallback is explicit and guarded for large files.
 - Reader actions preserve the active paper and Paper Detail context across reruns.
+- Clean/dirty state, reload decisions, header refresh, queued replacement, and append precedence are implemented in Streamlit-free helpers and documented.
 
 Still needed:
 
-- Document the state machine.
 - Continue reducing rerenders where Streamlit allows it.
 
 ### PDF profile extraction

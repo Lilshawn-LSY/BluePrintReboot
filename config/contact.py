@@ -3,7 +3,7 @@
 import os
 
 
-APP_VERSION = "1.0.22"
+APP_VERSION = "1.0.23"
 DEFAULT_CONTACT_EMAIL = "pplee0300@snu.ac.kr"
 
 

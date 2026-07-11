@@ -1,6 +1,6 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.22-note-durability-and-validation-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.23-reader-state-machine-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
 
 ## 1. Fresh Runtime
 
@@ -105,13 +105,22 @@ Required before and after Codex-assisted release work, including `v1.0.22-note-d
 
 - [ ] Re-run a scan with unchanged disposable PDFs and confirm existing rows are preserved without duplicate rows.
 - [ ] Modify a disposable PDF and confirm the stored SHA-256, size, and modified time update after scan.
-- [ ] With an unsaved Reader note draft, click **Reload** and confirm the draft text is kept and reload is skipped.
+- [ ] With an unsaved Reader note draft, click **Reload** and confirm the exact draft is kept and Keep/Discard choices appear.
 - [ ] Save a disposable Reader note and confirm the saved baseline can be reloaded.
 - [ ] With an unsaved Reader note draft, edit metadata and confirm a header refresh is offered without overwriting the body text.
 - [ ] Apply the pending header refresh explicitly and confirm user note body text remains.
 - [ ] Confirm duplicate/missing PDF repair remains previewed, deterministic, and confirmation-gated.
 
-## 9. Final Safety
+## 9. v1.0.23 Reader Note State Machine
+
+- [ ] Confirm the editor shows Saved for a clean draft and Unsaved changes after editing.
+- [ ] Confirm Header refresh pending is visible when metadata refresh awaits explicit application.
+- [ ] Choose Keep draft after dirty Reload and confirm the exact draft remains with no pending destructive action.
+- [ ] Choose Discard changes and reload after dirty Reload and confirm disk text becomes both draft and baseline.
+- [ ] Confirm tag, status, priority, profile, and project-link reruns preserve the active paper's dirty draft.
+- [ ] Confirm no Reader action autosaves an unsaved draft.
+
+## 10. Final Safety
 
 - [ ] Create a disposable Backup Snapshot and run `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>`; confirm it passes without extracting files.
 - [ ] Confirm Reading Note creation, explicit save, and metadata-header refresh use atomic replacement and preserve the old file on simulated replacement failure.

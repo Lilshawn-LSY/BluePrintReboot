@@ -1,5 +1,18 @@
 # Release Checklist
 
+## v1.0.23-reader-state-machine-closure
+
+- [x] Clean v1.0.22 baseline recorded: smoke 46 passed/0 warnings/0 failed; pytest 362 passed.
+- [x] Reader note states, events, invariants, and transition precedence are documented.
+- [x] Dirty Reload preserves the exact draft and offers Keep draft / Discard changes and reload.
+- [x] Header refresh preserves the latest dirty body and does not mark later edits saved.
+- [x] Whole-draft replacement precedes append, protects newer edits, and pending events are idempotent.
+- [x] Paper-scoped state and non-note rerun preservation have automated coverage.
+- [x] Final `dev_check.ps1` result is recorded in v1.0.23 release notes.
+- [x] Streamlit manual smoke is performed or clearly recorded as not performed.
+- [x] Git status confirms no runtime/user data, PDFs, notes, exports, caches, or secrets are included.
+- [ ] Release tag is created and pushed only after explicit approval.
+
 ## v1.0.22-note-durability-and-validation-closure
 
 - [x] Baseline `dev_check.ps1` recorded: smoke 46 passed/0 warnings/0 failed; pytest 356 passed.
