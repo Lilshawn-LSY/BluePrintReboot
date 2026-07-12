@@ -48,6 +48,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.0.26.md",
     "docs/release_notes/v1.1.0.md",
     "docs/release_notes/v1.1.1.md",
+    "docs/release_notes/v1.1.2.md",
     "scripts/run_api.ps1",
     "docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md",
     "docs/release_notes/v1.0_draft.md",

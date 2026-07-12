@@ -36,6 +36,11 @@ def paper_item(
 def paper_detail(paper_id: str, title: str, *, archived: object = False) -> dict[str, object]:
     return {
         **paper_item(paper_id, title, archived=archived),
+        "authors": ["Example Author", "Second, Author"],
+        "journal": "Journal of API Contracts",
+        "abstract": "Complete abstract.\n\nA second paragraph is preserved.",
+        "keywords": ["paper APIs", "metadata"],
+        "arxiv_id": "2501.12345",
         "filename": f"{paper_id}.pdf",
         "relative_pdf_path": f"papers/{paper_id}.pdf",
         "doi": "10.1000/example",
@@ -177,6 +182,11 @@ def test_active_and_archived_paper_details_are_directly_retrievable() -> None:
 
     assert active.status_code == archived.status_code == 200
     assert active.json()["lifecycle_state"] == "active"
+    assert active.json()["authors"] == ["Example Author", "Second, Author"]
+    assert active.json()["journal"] == "Journal of API Contracts"
+    assert active.json()["abstract"] == "Complete abstract.\n\nA second paragraph is preserved."
+    assert active.json()["keywords"] == ["paper APIs", "metadata"]
+    assert active.json()["arxiv_id"] == "2501.12345"
     assert archived.json()["archived"] is True
     assert archived.json()["lifecycle_state"] == "archived"
 
@@ -196,6 +206,22 @@ def test_detail_matches_schema_without_internal_storage_fields() -> None:
     assert parsed.paper_id == "paper"
     assert not {"filepath", "pdf_sha256", "metadata_source"} & set(response.json())
     assert not parsed.relative_pdf_path.startswith(("/", "C:"))
+
+
+def test_missing_rich_metadata_and_missing_pdf_remain_successful() -> None:
+    source = paper_detail("missing", "Missing Metadata")
+    for field in ("authors", "journal", "abstract", "keywords", "arxiv_id"):
+        source.pop(field)
+    source["missing_pdf"] = True
+    source["relative_pdf_path"] = ""
+
+    response = client_for([], {"missing": source}).get("/papers/missing")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["authors"] == [] and body["keywords"] == []
+    assert body["journal"] == body["abstract"] == body["arxiv_id"] == ""
+    assert body["missing_pdf"] is True and body["relative_pdf_path"] == ""
 
 
 def test_storage_failure_is_not_converted_to_false_404(monkeypatch) -> None:
@@ -220,6 +246,37 @@ def test_adapter_normalizes_complete_domain_item() -> None:
     assert adapted.archived is True
     assert adapted.year == "2024"
     assert adapted.tags == ["one", "two"]
+
+
+def test_adapter_normalizes_complete_rich_detail_and_preserves_abstract() -> None:
+    source = paper_detail("paper", "Paper Title")
+    source.update(
+        {
+            "authors": " Alpha Author ; Beta, Author ",
+            "journal": " Journal Name ",
+            "abstract": "  First paragraph.\n\nSecond paragraph.  ",
+            "keywords": " single-cell RNA, deep learning ",
+            "arxiv_id": " 2501.12345 ",
+        }
+    )
+
+    adapted = adapt_paper_detail(source)
+
+    assert adapted.authors == ["Alpha Author", "Beta, Author"]
+    assert adapted.journal == "Journal Name"
+    assert adapted.abstract == "First paragraph.\n\nSecond paragraph."
+    assert adapted.keywords == ["single-cell RNA", "deep learning"]
+    assert adapted.arxiv_id == "2501.12345"
+
+
+def test_adapter_rich_metadata_defaults_and_nan_are_safe() -> None:
+    source = paper_detail("paper", "Paper Title")
+    source.update({"authors": None, "journal": float("nan"), "abstract": None, "keywords": float("nan"), "arxiv_id": None})
+
+    adapted = adapt_paper_detail(source)
+
+    assert adapted.authors == [] and adapted.keywords == []
+    assert adapted.journal == adapted.abstract == adapted.arxiv_id == ""
 
 
 def test_adapter_normalizes_missing_optional_metadata_and_archive_default() -> None:
@@ -258,6 +315,14 @@ def test_adapter_rejects_unsafe_absolute_detail_path() -> None:
         adapt_paper_detail(source)
 
 
+def test_collection_items_remain_lightweight_without_rich_metadata(papers) -> None:
+    response = client_for(papers).get("/papers", params={"archive_status": "all"})
+
+    assert response.status_code == 200
+    rich_fields = {"authors", "journal", "abstract", "keywords", "arxiv_id"}
+    assert all(not rich_fields & set(item) for item in response.json()["items"])
+
+
 def test_openapi_documents_paper_contracts_pagination_enum_and_404() -> None:
     schema = create_app().openapi()
     paths = schema["paths"]
@@ -275,3 +340,13 @@ def test_openapi_documents_paper_contracts_pagination_enum_and_404() -> None:
     enum_ref = archive_schema.get("$ref") or archive_schema["allOf"][0]["$ref"]
     enum_name = enum_ref.rsplit("/", 1)[-1]
     assert schema["components"]["schemas"][enum_name]["enum"] == ["active", "archived", "all"]
+    detail_schema = schema["components"]["schemas"]["PaperDetail"]
+    list_schema = schema["components"]["schemas"]["PaperListItem"]
+    rich_fields = {"authors", "journal", "abstract", "keywords", "arxiv_id"}
+    assert rich_fields <= set(detail_schema["properties"])
+    assert not rich_fields & set(list_schema["properties"])
+    assert detail_schema["properties"]["authors"]["items"]["type"] == "string"
+    assert detail_schema["properties"]["authors"]["type"] == "array"
+    assert detail_schema["properties"]["keywords"]["type"] == "array"
+    assert all(detail_schema["properties"][field]["type"] == "string" for field in ("journal", "abstract", "arxiv_id"))
+    assert rich_fields <= set(detail_schema["example"])

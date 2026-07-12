@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 from pathlib import Path
 from typing import Any, Mapping, TypedDict
 
@@ -57,6 +58,11 @@ class PaperListItem(TypedDict):
 
 
 class PaperDetail(PaperListItem):
+    authors: list[str]
+    journal: str
+    abstract: str
+    keywords: list[str]
+    arxiv_id: str
     filename: str
     relative_pdf_path: str
     doi: str
@@ -90,6 +96,22 @@ def _first_author(record: Mapping[str, Any]) -> str:
 
 def _tags(value: object) -> list[str]:
     return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def _metadata_text(value: object) -> str:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    return str(value).strip()
+
+
+def _authors(value: object) -> list[str]:
+    source = value if isinstance(value, (list, tuple)) else _metadata_text(value).split(";")
+    return [author for item in source if (author := _metadata_text(item))]
+
+
+def _keywords(value: object) -> list[str]:
+    source = value if isinstance(value, (list, tuple)) else _metadata_text(value).split(",")
+    return [keyword for item in source if (keyword := _metadata_text(item))]
 
 
 def _safe_pdf(record: Mapping[str, Any], root: Path, papers_dir: Path) -> tuple[Path | None, str]:
@@ -250,6 +272,11 @@ def build_paper_detail(
     }
     return {
         **base,
+        "authors": _authors(record.get("authors")),
+        "journal": _metadata_text(record.get("journal")),
+        "abstract": _metadata_text(record.get("abstract")),
+        "keywords": _keywords(record.get("keywords")),
+        "arxiv_id": reading_note_header_values(record)["arxiv_id"],
         "filename": str(record.get("filename", "") or ""),
         "relative_pdf_path": relative_pdf_path,
         "doi": str(record.get("doi", "") or ""),

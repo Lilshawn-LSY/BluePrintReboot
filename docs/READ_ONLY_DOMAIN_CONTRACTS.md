@@ -39,3 +39,19 @@ Collection ordering follows the established domain rule: case-insensitive title 
 The HTTP mapper normalizes strings, years, tags, and booleans, rejects missing paper identity/title, strips path components from filenames, rejects unsafe absolute/traversal PDF paths, and allowlists every response field. It never receives or returns an arbitrary CSV row.
 
 The frozen domain detail currently provides DOI, safe PDF/lifecycle state, project-link summaries, and note/cache/profile availability. Journal, abstract, keywords, and arXiv identifiers remain outside the v1.1.1 API rather than being read directly from storage; they require a deliberate future domain-contract extension.
+
+## Extended in v1.1.2
+
+`PaperDetail` now also contains `authors: list[str]`, `journal: str`, `abstract: str`, `keywords: list[str]`, and `arxiv_id: str`. `PaperListItem` is unchanged, so `GET /papers` remains a lightweight collection contract while `GET /papers/{paper_id}` carries rich citation metadata.
+
+Canonical sources and precedence are:
+
+| Public field | Canonical source | Normalization |
+|---|---|---|
+| `authors` | `paper_index.csv` `authors` column | Existing semicolon serialization becomes an ordered list; whitespace and empty entries are removed, and commas inside names are preserved. |
+| `journal` | `paper_index.csv` `journal` column | Outer whitespace is removed; missing/None/NaN becomes `""`. |
+| `abstract` | `paper_index.csv` `abstract` column | The complete stored value is preserved with outer whitespace removed; no summarization or truncation. |
+| `keywords` | `paper_index.csv` `keywords` column | Existing comma serialization becomes an ordered list; whitespace and empty entries are removed. |
+| `arxiv_id` | Existing Reading Note identity rule | A normalized explicit `arxiv_id` wins when present; otherwise the first identifier detected deterministically from stored DOI, filename, title, abstract, and keywords is used. |
+
+Older indexes need no migration during reads: the read-only index snapshot supplies safe defaults for absent canonical columns. PaperTextProfile is a derived cache and is not a fallback for this contract. API reads do not call Crossref, OpenAlex, arXiv, PDF extraction, or any other network/enrichment path, and they do not parse extracted full text.

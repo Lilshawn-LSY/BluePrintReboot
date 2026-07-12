@@ -78,6 +78,11 @@ class PaperDetail(PaperListItem):
                 "archived": False,
                 "missing_pdf": False,
                 "health": [],
+                "authors": ["Example Author", "Second Author"],
+                "journal": "Journal of Reproducible Research",
+                "abstract": "A complete stored abstract is returned without summarization or truncation.",
+                "keywords": ["reproducibility", "research methods"],
+                "arxiv_id": "2501.12345",
                 "filename": "example.pdf",
                 "relative_pdf_path": "papers/example.pdf",
                 "doi": "10.1000/example",
@@ -91,6 +96,11 @@ class PaperDetail(PaperListItem):
         },
     )
 
+    authors: list[str] = Field(description="Ordered authors from the canonical index authors field.")
+    journal: str
+    abstract: str = Field(description="Complete stored abstract, or an empty string when unknown.")
+    keywords: list[str] = Field(description="Ordered keywords from the canonical index keywords field.")
+    arxiv_id: str = Field(description="Canonical or deterministically detected arXiv identifier, without network lookup.")
     filename: str
     relative_pdf_path: str = Field(description="Workspace-relative PDF path; never an absolute local path.")
     doi: str
