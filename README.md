@@ -2,15 +2,15 @@
 
 ## What is BluePrintReboot?
 
-BluePrintReboot is a local-first research paper library built with Streamlit. It keeps PDFs, metadata, BluePrint Reading Notes, structured note blocks, project links, tags, and extracted text on the local machine.
+BluePrintReboot is a local-first research workspace with an established Streamlit interface, a read-only FastAPI layer, and a new desktop-first web application shell. It keeps PDFs, metadata, BluePrint Reading Notes, structured note blocks, project links, tags, and extracted text on the local machine.
 
 The canonical managed PDF directory is `papers/`. Paper identity is the stable `paper_id` stored in `data/paper_index.csv`; Reading Notes, note blocks, project links, and extracted-text caches remain attached to that identity even when a PDF filename changes.
 
 ## Current Status
 
-Current release target: **v1.1.2-rich-paper-metadata**.
+Current release target: **v1.2.0-frontend-application-shell**.
 
-v1.1.2 extends paper detail with ordered authors, journal, complete stored abstract, ordered keywords, and arXiv identity. The collection contract remains lightweight and unchanged. Streamlit remains the primary interface and retains all existing reading, navigation, and library-management behavior.
+v1.2.0 adds a calm, dense, desktop-first web shell with Dashboard, Library, Papers, Paper Detail, Projects, Tags, and Settings routes. Health, library status, and paper routes use the existing read-only API through one typed client. Streamlit remains the primary interface for write actions, Reader Workspace, PDF rendering, and maintenance workflows.
 
 The app remains intentionally local-first and single-user:
 
@@ -56,6 +56,19 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 `GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), and `archive_status` (`active`, `archived`, or `all`; default `active`). Results are ordered by case-insensitive title and then stable `paper_id`.
 
 The equivalent direct command is `python -m uvicorn api.main:app --host 127.0.0.1 --port 8000` when the repository environment is active.
+
+## Frontend Application Shell
+
+The frontend lives in `frontend/` and requires Node.js 22.13 or newer. Start FastAPI first, then launch the shell in a second PowerShell window:
+
+```powershell
+.\scripts\run_api.ps1
+.\scripts\run_frontend.ps1
+```
+
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The same-origin frontend bridge connects to FastAPI at `http://127.0.0.1:8000` by default. Copy `frontend/.env.example` to `frontend/.env.local` only when that address needs to change.
+
+Dashboard, Library, Papers, and Paper Detail use real read-only API contracts with explicit loading, empty, error, and unavailable states. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
 
 For optional MarkItDown PDF support:
 
@@ -186,6 +199,7 @@ Foundation release documents:
 - [v1.1.0 FastAPI read-only foundation release notes](docs/release_notes/v1.1.0.md)
 - [v1.1.1 Paper API release notes](docs/release_notes/v1.1.1.md)
 - [v1.1.2 Rich Paper Metadata release notes](docs/release_notes/v1.1.2.md)
+- [v1.2.0 Frontend Application Shell release notes](docs/release_notes/v1.2.0.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -223,6 +237,7 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 
 - `app.py` - Streamlit entry point.
 - `ui_streamlit/` - application pages and workspace UI.
+- `frontend/` - Vinext/Next.js TypeScript application shell, shared components, design tokens, and typed API client.
 - `ingest/` - scanning, DOI, Crossref, tagging, and text-extraction helpers.
 - `services/` - inbox import, filename hygiene, backup, health checks, and workflow orchestration.
 - `storage/` - index, notes, note blocks, projects, links, and extracted-text caches.
@@ -236,6 +251,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.2.0-frontend-application-shell
+
+- Adds one persistent desktop research-workstation shell across seven routes.
+- Integrates the four existing read-only API endpoints through a centralized typed client and same-origin local bridge.
+- Adds shared async feedback, table, metadata, toolbar, status, navigation, and placeholder components with centralized design tokens.
+- Preserves Streamlit unchanged as the primary interface for all write and Reader workflows.
 
 ### v1.1.2-rich-paper-metadata
 

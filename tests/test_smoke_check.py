@@ -2,6 +2,7 @@ from config.contact import APP_VERSION
 from scripts.smoke_check import (
     PROJECT_ROOT,
     check_api_contract,
+    check_frontend_contract,
     check_manifest_contract,
     check_required_paths,
     main,
@@ -36,6 +37,13 @@ def test_api_application_contract_passes_without_starting_server() -> None:
 
     assert result.status == "pass"
     assert APP_VERSION in result.detail
+
+
+def test_frontend_application_contract_passes_without_starting_server() -> None:
+    result = check_frontend_contract(PROJECT_ROOT)
+
+    assert result.status == "pass"
+    assert "v1.2.0" in result.detail
 
 
 def test_smoke_check_main_succeeds(capsys) -> None:

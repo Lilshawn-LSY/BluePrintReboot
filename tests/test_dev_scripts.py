@@ -14,6 +14,7 @@ def test_windows_dev_script_files_exist() -> None:
         "scripts/dev_check.ps1",
         "scripts/run_app.ps1",
         "scripts/run_api.ps1",
+        "scripts/run_frontend.ps1",
         "scripts/restore_check.py",
         "start_blueprint.bat",
     ):
@@ -46,6 +47,15 @@ def test_run_api_launches_local_read_only_entrypoint() -> None:
     assert "$Port" in script
 
 
+def test_run_frontend_launches_local_application_shell() -> None:
+    script = read_script("scripts/run_frontend.ps1")
+
+    assert "frontend" in script
+    assert "npm" in script
+    assert "127.0.0.1" in script
+    assert "$Port" in script
+
+
 def test_dev_setup_uses_venv_and_requirements() -> None:
     script = read_script("scripts/dev_setup.ps1")
 
@@ -64,6 +74,7 @@ def test_bootstrap_scripts_do_not_contain_obviously_dangerous_commands() -> None
             "scripts/dev_check.ps1",
             "scripts/run_app.ps1",
             "scripts/run_api.ps1",
+            "scripts/run_frontend.ps1",
             "start_blueprint.bat",
         )
     ).lower()

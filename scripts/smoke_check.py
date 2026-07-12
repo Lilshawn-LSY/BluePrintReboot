@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import os
 import sys
 from dataclasses import dataclass
@@ -49,7 +50,21 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.1.0.md",
     "docs/release_notes/v1.1.1.md",
     "docs/release_notes/v1.1.2.md",
+    "docs/release_notes/v1.2.0.md",
     "scripts/run_api.ps1",
+    "scripts/run_frontend.ps1",
+    "frontend/package.json",
+    "frontend/app/layout.tsx",
+    "frontend/app/globals.css",
+    "frontend/app/components/AppShell.tsx",
+    "frontend/app/lib/api/client.ts",
+    "frontend/app/dashboard/page.tsx",
+    "frontend/app/library/page.tsx",
+    "frontend/app/papers/page.tsx",
+    "frontend/app/papers/[paperId]/page.tsx",
+    "frontend/app/projects/page.tsx",
+    "frontend/app/tags/page.tsx",
+    "frontend/app/settings/page.tsx",
     "docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md",
     "docs/release_notes/v1.0_draft.md",
 )
@@ -207,6 +222,26 @@ def check_api_contract() -> SmokeCheckResult:
     return SmokeCheckResult("api:application-contract", "pass", f"four GET routes for {APP_VERSION}")
 
 
+def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
+    try:
+        frontend_root = Path(project_root) / "frontend"
+        package = json.loads((frontend_root / "package.json").read_text(encoding="utf-8"))
+        if package.get("version") != "1.2.0":
+            raise ValueError("frontend package version is not 1.2.0")
+        if package.get("name") != "blueprint-reboot-frontend":
+            raise ValueError("frontend package name is unexpected")
+        shell = (frontend_root / "app/components/AppShell.tsx").read_text(encoding="utf-8")
+        api_client = (frontend_root / "app/lib/api/client.ts").read_text(encoding="utf-8")
+        if "SidebarNavigation" not in shell or "main-content" not in shell:
+            raise ValueError("frontend application shell is incomplete")
+        for method in ("getHealth", "getLibraryStatus", "getPapers", "getPaper"):
+            if method not in api_client:
+                raise ValueError(f"frontend API client is missing {method}")
+    except Exception as exc:
+        return SmokeCheckResult("frontend:application-contract", "fail", str(exc))
+    return SmokeCheckResult("frontend:application-contract", "pass", "seven routes share the v1.2.0 shell")
+
+
 def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]:
     project_root = Path(project_root).resolve()
     return [
@@ -215,6 +250,7 @@ def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]
         *check_module_imports(),
         check_manifest_contract(project_root),
         check_api_contract(),
+        check_frontend_contract(project_root),
     ]
 
 
