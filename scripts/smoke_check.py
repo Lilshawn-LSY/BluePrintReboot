@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 REQUIRED_FILES = (
     "app.py",
     "api/__init__.py",
+    "api/adapters.py",
     "api/dependencies.py",
     "api/main.py",
     "api/routes.py",
@@ -46,6 +47,7 @@ REQUIRED_FILES = (
     "docs/checklists/new_pc_restore_checklist.md",
     "docs/release_notes/v1.0.26.md",
     "docs/release_notes/v1.1.0.md",
+    "docs/release_notes/v1.1.1.md",
     "scripts/run_api.ps1",
     "docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md",
     "docs/release_notes/v1.0_draft.md",
@@ -195,13 +197,13 @@ def check_api_contract() -> SmokeCheckResult:
         if app.version != APP_VERSION:
             raise ValueError("API version does not match the runtime version")
         paths = app.openapi().get("paths", {})
-        if set(paths) != {"/health", "/library/status"}:
+        if set(paths) != {"/health", "/library/status", "/papers", "/papers/{paper_id}"}:
             raise ValueError("API application paths do not match the read-only foundation")
         if any(set(operations) != {"get"} for operations in paths.values()):
             raise ValueError("API application routes are not GET-only")
     except Exception as exc:
         return SmokeCheckResult("api:application-contract", "fail", str(exc))
-    return SmokeCheckResult("api:application-contract", "pass", f"two GET routes for {APP_VERSION}")
+    return SmokeCheckResult("api:application-contract", "pass", f"four GET routes for {APP_VERSION}")
 
 
 def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]:

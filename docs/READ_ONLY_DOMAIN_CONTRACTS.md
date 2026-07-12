@@ -23,4 +23,19 @@ The initial local read-only API implements exactly:
 
 Both routes use strict Pydantic response schemas with undeclared fields forbidden. A genuine builder/storage failure becomes a generic HTTP 503 response without exception, path, environment, contact, or configuration details.
 
-Paper lists, paper detail, Reader snapshots, PDF serving, notes, tags, projects, write actions, CORS, authentication, caching, background work, databases, and frontend work remain deferred.
+At v1.1.0, paper lists, paper detail, Reader snapshots, PDF serving, notes, tags, projects, write actions, CORS, authentication, caching, background work, databases, and frontend work remained deferred.
+
+## Implemented in v1.1.1
+
+The Paper API adapts the frozen `PaperListItem` and `PaperDetail` builders through explicit strict Pydantic models:
+
+| Route | Contract | Behavior |
+|---|---|---|
+| `GET /papers` | `PaginatedPaperList` containing `PaperListItem` values | Defaults to active papers, supports `active`/`archived`/`all`, and paginates with `limit`, `offset`, `total`, and `has_more`. |
+| `GET /papers/{paper_id}` | `PaperDetail` | Returns active or archived detail by stable ID; unknown IDs return a structured 404. |
+
+Collection ordering follows the established domain rule: case-insensitive title ascending, then `paper_id` ascending. Archive state comes only from the existing `is_archived` lifecycle field; absent archive values remain active, and reading `status` stays independent.
+
+The HTTP mapper normalizes strings, years, tags, and booleans, rejects missing paper identity/title, strips path components from filenames, rejects unsafe absolute/traversal PDF paths, and allowlists every response field. It never receives or returns an arbitrary CSV row.
+
+The frozen domain detail currently provides DOI, safe PDF/lifecycle state, project-link summaries, and note/cache/profile availability. Journal, abstract, keywords, and arXiv identifiers remain outside the v1.1.1 API rather than being read directly from storage; they require a deliberate future domain-contract extension.

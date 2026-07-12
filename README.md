@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.1.0-fastapi-readonly-foundation**.
+Current release target: **v1.1.1-paper-api**.
 
-v1.1.0 adds a small read-only FastAPI adapter for health and library status. Streamlit remains the primary interface and retains all existing reading, navigation, and library-management behavior.
+v1.1.1 adds deterministic, paginated paper collection and safe paper-detail routes to the read-only FastAPI adapter. Streamlit remains the primary interface and retains all existing reading, navigation, and library-management behavior.
 
 The app remains intentionally local-first and single-user:
 
@@ -50,6 +50,10 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - API documentation: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - Health summary: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 - Library status: [http://127.0.0.1:8000/library/status](http://127.0.0.1:8000/library/status)
+- Active paper collection: [http://127.0.0.1:8000/papers](http://127.0.0.1:8000/papers)
+- Paper detail: `http://127.0.0.1:8000/papers/{paper_id}`
+
+`GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), and `archive_status` (`active`, `archived`, or `all`; default `active`). Results are ordered by case-insensitive title and then stable `paper_id`.
 
 The equivalent direct command is `python -m uvicorn api.main:app --host 127.0.0.1 --port 8000` when the repository environment is active.
 
@@ -180,6 +184,7 @@ Foundation release documents:
 - [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
 - [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
 - [v1.1.0 FastAPI read-only foundation release notes](docs/release_notes/v1.1.0.md)
+- [v1.1.1 Paper API release notes](docs/release_notes/v1.1.1.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -230,6 +235,12 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.1.1-paper-api
+
+- Adds paginated `GET /papers` with explicit archive filtering and deterministic ordering.
+- Adds `GET /papers/{paper_id}` for active and archived paper detail.
+- Maps frozen domain read models into strict public schemas without exposing raw CSV records or absolute paths.
 
 ### v1.1.0-fastapi-readonly-foundation
 
