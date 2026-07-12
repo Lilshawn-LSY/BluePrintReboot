@@ -18,6 +18,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 REQUIRED_FILES = (
     "app.py",
+    "api/__init__.py",
+    "api/dependencies.py",
+    "api/main.py",
+    "api/routes.py",
+    "api/schemas.py",
     "requirements.txt",
     "README.md",
     "docs/BLUEPRINT_PRINCIPLES.md",
@@ -40,11 +45,14 @@ REQUIRED_FILES = (
     "docs/checklists/regression_checklist.md",
     "docs/checklists/new_pc_restore_checklist.md",
     "docs/release_notes/v1.0.26.md",
+    "docs/release_notes/v1.1.0.md",
+    "scripts/run_api.ps1",
     "docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md",
     "docs/release_notes/v1.0_draft.md",
 )
 REQUIRED_DIRECTORIES = ("data", "papers", "notes", "exports")
 REQUIRED_DEPENDENCIES = {
+    "fastapi": "fastapi",
     "pandas": "pandas",
     "streamlit": "streamlit",
     "requests": "requests",
@@ -53,6 +61,7 @@ REQUIRED_DEPENDENCIES = {
     "pypdf": "pypdf",
 }
 KEY_MODULES = (
+    "api.main",
     "ui_streamlit.app",
     "storage.atomic_json",
     "storage.index_store",
@@ -175,6 +184,26 @@ def check_manifest_contract(project_root: Path) -> SmokeCheckResult:
     return SmokeCheckResult("backup:manifest-contract", "pass", f"schema valid for {APP_VERSION}")
 
 
+def check_api_contract() -> SmokeCheckResult:
+    try:
+        from api.main import app
+        from config.contact import APP_VERSION
+        from fastapi import FastAPI
+
+        if not isinstance(app, FastAPI):
+            raise TypeError("api.main:app is not a FastAPI application")
+        if app.version != APP_VERSION:
+            raise ValueError("API version does not match the runtime version")
+        paths = app.openapi().get("paths", {})
+        if set(paths) != {"/health", "/library/status"}:
+            raise ValueError("API application paths do not match the read-only foundation")
+        if any(set(operations) != {"get"} for operations in paths.values()):
+            raise ValueError("API application routes are not GET-only")
+    except Exception as exc:
+        return SmokeCheckResult("api:application-contract", "fail", str(exc))
+    return SmokeCheckResult("api:application-contract", "pass", f"two GET routes for {APP_VERSION}")
+
+
 def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]:
     project_root = Path(project_root).resolve()
     return [
@@ -182,6 +211,7 @@ def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]
         *check_dependencies(),
         *check_module_imports(),
         check_manifest_contract(project_root),
+        check_api_contract(),
     ]
 
 

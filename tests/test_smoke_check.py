@@ -1,5 +1,11 @@
-﻿from scripts.smoke_check import PROJECT_ROOT, check_manifest_contract, check_required_paths, main
 from config.contact import APP_VERSION
+from scripts.smoke_check import (
+    PROJECT_ROOT,
+    check_api_contract,
+    check_manifest_contract,
+    check_required_paths,
+    main,
+)
 from tests.helpers import make_workspace
 
 
@@ -20,6 +26,13 @@ def test_missing_fresh_clone_paths_fail_without_being_created() -> None:
 
 def test_backup_manifest_contract_passes() -> None:
     result = check_manifest_contract(PROJECT_ROOT)
+
+    assert result.status == "pass"
+    assert APP_VERSION in result.detail
+
+
+def test_api_application_contract_passes_without_starting_server() -> None:
+    result = check_api_contract()
 
     assert result.status == "pass"
     assert APP_VERSION in result.detail

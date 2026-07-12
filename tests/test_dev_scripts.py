@@ -13,6 +13,7 @@ def test_windows_dev_script_files_exist() -> None:
         "scripts/dev_setup.ps1",
         "scripts/dev_check.ps1",
         "scripts/run_app.ps1",
+        "scripts/run_api.ps1",
         "scripts/restore_check.py",
         "start_blueprint.bat",
     ):
@@ -35,6 +36,16 @@ def test_run_app_launches_streamlit_entrypoint_with_port() -> None:
     assert "--server.port" in script
 
 
+def test_run_api_launches_local_read_only_entrypoint() -> None:
+    script = read_script("scripts/run_api.ps1")
+
+    assert ".venv" in script
+    assert "api.main:app" in script
+    assert "127.0.0.1" in script
+    assert "uvicorn" in script
+    assert "$Port" in script
+
+
 def test_dev_setup_uses_venv_and_requirements() -> None:
     script = read_script("scripts/dev_setup.ps1")
 
@@ -52,6 +63,7 @@ def test_bootstrap_scripts_do_not_contain_obviously_dangerous_commands() -> None
             "scripts/dev_setup.ps1",
             "scripts/dev_check.ps1",
             "scripts/run_app.ps1",
+            "scripts/run_api.ps1",
             "start_blueprint.bat",
         )
     ).lower()

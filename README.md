@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.26-streamlit-finalization-api-contract-freeze**.
+Current release target: **v1.1.0-fastapi-readonly-foundation**.
 
-v1.0.26 is the final Streamlit correctness and architecture-boundary release before migration. It fixes Reader tag/Reading-Note header divergence, consolidates canonical metadata mutation, freezes five read-only domain contracts, and adds read-only disposable restore readiness checks. The user reported Sections A-H manual validation passed, including Save convergence and accepted navigation discard; G4 is closed. It adds no FastAPI route or frontend code.
+v1.1.0 adds a small read-only FastAPI adapter for health and library status. Streamlit remains the primary interface and retains all existing reading, navigation, and library-management behavior.
 
 The app remains intentionally local-first and single-user:
 
@@ -34,6 +34,24 @@ cd BluePrintReboot
 After setup, `start_blueprint.bat` is available as a convenience launcher from File Explorer or Command Prompt. It starts the existing `.venv` app; it does not run setup automatically.
 
 Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the app. Open **Library** to choose a paper and continue in **Paper Detail** or **Reader Workspace**.
+
+## Read-Only Local API
+
+Streamlit remains the primary BluePrintReboot interface. The FastAPI service is a separate, local-only, read-only adapter: it exposes current health and library counts but provides no paper content or mutation operations.
+
+Start it from Windows PowerShell:
+
+```powershell
+.\scripts\run_api.ps1
+```
+
+The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The local endpoints are:
+
+- API documentation: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- Health summary: [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
+- Library status: [http://127.0.0.1:8000/library/status](http://127.0.0.1:8000/library/status)
+
+The equivalent direct command is `python -m uvicorn api.main:app --host 127.0.0.1 --port 8000` when the repository environment is active.
 
 For optional MarkItDown PDF support:
 
@@ -161,6 +179,7 @@ Foundation release documents:
 - [Reader frontend parity checklist](docs/READER_FRONTEND_PARITY_CHECKLIST.md)
 - [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
 - [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
+- [v1.1.0 FastAPI read-only foundation release notes](docs/release_notes/v1.1.0.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -211,6 +230,12 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.1.0-fastapi-readonly-foundation
+
+- Adds a dedicated FastAPI application factory and module-level application.
+- Implements only `GET /health` and `GET /library/status` using the frozen read-model builders.
+- Keeps Streamlit as the primary interface and adds no write API or paper/Reader routes.
 
 ### v1.0.26-streamlit-finalization-api-contract-freeze
 
