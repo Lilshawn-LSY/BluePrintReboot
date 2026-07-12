@@ -11,8 +11,11 @@ from ui_streamlit.reader_note_state import (
     pending_note_block_append_key,
     pending_note_discard_reload_key,
     pending_note_reload_key,
+    pending_note_save_result_key,
     pending_note_text_update_key,
     queue_note_text_replacement,
+    queue_note_save_result,
+    consume_pending_note_save_result,
     request_note_reload,
     resolve_note_reload,
 )
@@ -63,6 +66,22 @@ def test_dirty_reload_request_keeps_draft_and_requires_confirmation() -> None:
     assert state[note_draft_key("paper-1")] == "exact unsaved draft"
     assert state[pending_note_discard_reload_key("paper-1")] is True
     assert pending_note_reload_key("paper-1") not in state
+
+
+def test_pending_save_result_is_paper_scoped() -> None:
+    state = {
+        note_draft_key("paper-a"): "dirty a",
+        note_baseline_key("paper-a"): "saved a",
+        note_draft_key("paper-b"): "dirty b",
+        note_baseline_key("paper-b"): "saved b",
+    }
+    queue_note_save_result("paper-a", state, "canonical saved a", "now")
+
+    assert consume_pending_note_save_result("paper-b", state) is False
+    assert state[note_draft_key("paper-b")] == "dirty b"
+    assert pending_note_save_result_key("paper-a") in state
+    assert consume_pending_note_save_result("paper-a", state) is True
+    assert state[note_draft_key("paper-a")] == state[note_baseline_key("paper-a")] == "canonical saved a"
 
 
 def test_discard_confirmation_loads_disk_text_and_updates_baseline() -> None:

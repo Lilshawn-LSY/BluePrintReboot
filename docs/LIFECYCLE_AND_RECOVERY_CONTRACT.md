@@ -15,3 +15,5 @@ Quarantine is a reversible cache operation, not deletion. It requires confirmati
 Archive is an orthogonal metadata visibility state (`is_archived`, `archived_at`). It never changes `paper_id`, reading status or priority, paths, PDF bytes, notes, blocks, links, or caches, and never moves a file. Archived papers remain diagnosable and can be explicitly viewed, opened, and unarchived.
 
 Exact duplicate ignores are atomic, reversible lifecycle decisions bound to both workspace-relative PDF path and SHA-256. A path or content change makes the decision inapplicable. Keep-for-review has no persistent effect. Automatic merge, file deletion, `paper_id` mutation, and automatic reconnect of healthy records remain out of scope.
+
+Public read contracts expose only workspace-safe relative paths and stable counts/states. They never serialize `Path`, pandas, Streamlit session state, exceptions, secrets, recovery-copy absolute paths, or other private machine paths. Lifecycle behavior is frozen by the frontend parity checklist; destructive actions remain confirmation-gated in every future adapter.

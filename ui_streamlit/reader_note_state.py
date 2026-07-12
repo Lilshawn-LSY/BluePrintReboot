@@ -2,46 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Callable, MutableMapping
-
-
-def _key(kind: str, paper_id: str) -> str:
-    return f"{kind}_{paper_id}"
-
-
-def note_draft_key(paper_id: str) -> str:
-    return _key("reader_note_draft", paper_id)
-
-
-def note_baseline_key(paper_id: str) -> str:
-    return _key("reader_note_baseline", paper_id)
-
-
-def note_saved_at_key(paper_id: str) -> str:
-    return _key("reader_note_saved_at", paper_id)
-
-
-def pending_note_reload_key(paper_id: str) -> str:
-    return _key("pending_note_reload", paper_id)
-
-
-def pending_note_discard_reload_key(paper_id: str) -> str:
-    return _key("pending_note_discard_reload", paper_id)
-
-
-def pending_note_text_update_key(paper_id: str) -> str:
-    return _key("pending_note_text_update", paper_id)
-
-
-def pending_note_header_refresh_key(paper_id: str) -> str:
-    return _key("pending_note_header_refresh", paper_id)
-
-
-def pending_note_block_append_key(paper_id: str) -> str:
-    return _key("pending_note_block_append", paper_id)
-
-
-def pending_note_notice_key(paper_id: str) -> str:
-    return _key("pending_note_notice", paper_id)
+from services.reader_state_keys import (
+    note_baseline_key,
+    note_draft_key,
+    note_saved_at_key,
+    pending_note_block_append_key,
+    pending_note_discard_reload_key,
+    pending_note_header_refresh_key,
+    pending_note_notice_key,
+    pending_note_reload_key,
+    pending_note_save_notice_key,
+    pending_note_save_result_key,
+    pending_note_text_update_key,
+)
 
 
 @dataclass(frozen=True)
@@ -72,6 +45,7 @@ def derive_reader_note_state(paper_id: str, session_state: MutableMapping) -> Re
 
 
 def initialize_reader_note_state(paper_id: str, session_state: MutableMapping, disk_text: str) -> str:
+    consume_pending_note_save_result(paper_id, session_state)
     draft_key = note_draft_key(paper_id)
     baseline_key = note_baseline_key(paper_id)
     if draft_key not in session_state:
@@ -82,11 +56,44 @@ def initialize_reader_note_state(paper_id: str, session_state: MutableMapping, d
     return str(session_state[draft_key])
 
 
+def queue_note_save_result(
+    paper_id: str,
+    session_state: MutableMapping,
+    saved_text: str,
+    saved_at: str,
+    *,
+    notice: str = "Note saved.",
+) -> None:
+    session_state[pending_note_save_result_key(paper_id)] = {
+        "text": str(saved_text),
+        "saved_at": str(saved_at),
+    }
+    session_state[pending_note_save_notice_key(paper_id)] = str(notice)
+
+
+def consume_pending_note_save_result(paper_id: str, session_state: MutableMapping) -> bool:
+    pending = session_state.pop(pending_note_save_result_key(paper_id), None)
+    if not isinstance(pending, dict):
+        return False
+    saved_text = str(pending.get("text", ""))
+    session_state[note_draft_key(paper_id)] = saved_text
+    session_state[note_baseline_key(paper_id)] = saved_text
+    session_state[note_saved_at_key(paper_id)] = str(pending.get("saved_at", ""))
+    session_state.pop(pending_note_discard_reload_key(paper_id), None)
+    session_state.pop(pending_note_reload_key(paper_id), None)
+    session_state.pop(pending_note_header_refresh_key(paper_id), None)
+    notice = str(session_state.pop(pending_note_save_notice_key(paper_id), "") or "")
+    if notice:
+        session_state[pending_note_notice_key(paper_id)] = notice
+    return True
+
+
 def mark_reader_note_saved(paper_id: str, session_state: MutableMapping, saved_at: str) -> None:
     session_state[note_baseline_key(paper_id)] = str(session_state.get(note_draft_key(paper_id), ""))
     session_state[note_saved_at_key(paper_id)] = str(saved_at)
     session_state.pop(pending_note_discard_reload_key(paper_id), None)
     session_state.pop(pending_note_reload_key(paper_id), None)
+    session_state.pop(pending_note_header_refresh_key(paper_id), None)
 
 
 def request_note_reload(paper_id: str, session_state: MutableMapping) -> str:

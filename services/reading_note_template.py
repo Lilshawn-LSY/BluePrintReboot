@@ -198,6 +198,11 @@ def _header_values_for_record(paper_record: Mapping[str, str] | None = None) -> 
     }
 
 
+def reading_note_header_values(paper_record: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Return the canonical public header values without reading or writing a note."""
+    return _header_values_for_record(paper_record)
+
+
 def _first_section_start(text: str) -> int:
     match = re.search(r"(?m)^##\s+", text)
     return match.start() if match else -1
