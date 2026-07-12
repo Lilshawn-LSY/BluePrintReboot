@@ -1,5 +1,18 @@
 # Release Checklist
 
+## v1.0.25-lifecycle-and-recovery-closure
+
+- [x] Required v1.0.24 checkpoint, branch, clean tree, version, and documents verified.
+- [x] Baseline recorded: smoke 48 passed/0 warnings/0 failed; pytest 377 passed.
+- [x] Lifecycle/recovery contract documents critical state, rebuildable cache, and application configuration policy.
+- [x] Recovery copies preserve and verify bytes; quarantine/restore are contained, explicit, and non-overwriting.
+- [x] Exact duplicate decisions are atomic, reversible, path/SHA-bound, and included in snapshots.
+- [x] Archive is orthogonal metadata visibility and preserves PDFs, IDs, notes, blocks, links, cache, status, and priority.
+- [x] Focused validation passed (85 tests); final smoke passed 49/0/0 and pytest passed 396.
+- [ ] User performs and records the Streamlit lifecycle validation; G1 remains conditional until then.
+- [ ] User-performed v1.0.24 Reader validation remains open; G4 is conditional.
+- [ ] Release tag or checkpoint commit occurs only after explicit instruction.
+
 ## v1.0.24-reader-validation-and-parity-closure
 
 - [x] Clean v1.0.23 baseline recorded: smoke 46 passed/0 warnings/0 failed; pytest 374 passed.

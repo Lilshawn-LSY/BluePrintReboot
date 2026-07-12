@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from storage.extracted_text_store import extraction_cache_status, pdf_fingerprin
 from storage.index_store import INDEX_COLUMNS
 from storage.atomic_json import (
     JsonStoreError,
+    JsonShapeError,
     atomic_write_json,
     json_store_issue,
     read_json_file,
@@ -30,7 +32,10 @@ from storage.paths import (
     NOTE_BLOCKS_DIR,
     PAPERS_DIR,
     PROJECTS_DIR,
+    PAPER_PROFILES_DIR,
+    LIFECYCLE_DECISIONS_JSON,
 )
+from services.lifecycle_decisions import is_exact_duplicate_ignored
 
 
 ORPHAN_PRESERVE_ACTION = "Preserve for now; reattach manually later or export before deletion."
@@ -190,7 +195,115 @@ def _remember_json_issue(
 ) -> None:
     record = json_store_issue(error, severity=severity)
     record["classification"] = "corrupt json" if error.__class__.__name__ == "CorruptJsonError" else "invalid json store"
+    record["detected_error_type"] = error.__class__.__name__
     issues.setdefault(record["path"], record)
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _storage_class(path: Path, *, root: Path, extracted_text_dir: Path, paper_profiles_dir: Path) -> tuple[str, bool]:
+    if _is_within(path, extracted_text_dir) or _is_within(path, paper_profiles_dir):
+        return "rebuildable cache", True
+    if _is_within(path, root / "config") or path.name == "settings.json":
+        return "application configuration", False
+    return "critical user state", False
+
+
+def _structured_storage_issue(
+    path: Path,
+    *,
+    root: Path,
+    extracted_text_dir: Path,
+    paper_profiles_dir: Path,
+    classification: str,
+    error_type: str,
+    issue: str,
+) -> dict[str, Any]:
+    resolved = path.resolve(strict=False)
+    storage_class, rebuildable = _storage_class(
+        resolved, root=root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir
+    )
+    try:
+        relative = resolved.relative_to(root.resolve(strict=False)).as_posix()
+    except ValueError:
+        relative = ""
+    try:
+        stat = resolved.stat()
+        size_bytes = stat.st_size
+        modified_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc).replace(microsecond=0).isoformat()
+    except OSError:
+        size_bytes, modified_at = 0, ""
+    try:
+        sha256 = _file_sha256(resolved)
+    except OSError:
+        sha256 = ""
+    actions = ["export recovery copy", "manual repair"]
+    if rebuildable:
+        actions = ["export recovery copy", "quarantine", "rebuild later", "restore"]
+    return {
+        "severity": "error",
+        "category": "storage",
+        "classification": classification,
+        "storage_class": storage_class,
+        "path": str(resolved),
+        "workspace_relative_path": relative,
+        "size_bytes": size_bytes,
+        "modified_at": modified_at,
+        "sha256": sha256,
+        "detected_error_type": error_type,
+        "issue": issue,
+        "rebuildable": rebuildable,
+        "allowed_recovery_actions": actions,
+        "suggested_action": (
+            "Export a recovery copy first, then explicitly quarantine and rebuild this cache."
+            if rebuildable
+            else "Export a recovery copy and repair or restore manually. Do not overwrite the corrupt bytes."
+        ),
+    }
+
+
+def _diagnose_cache_storage(
+    *,
+    root: Path,
+    extracted_text_dir: Path,
+    paper_profiles_dir: Path,
+) -> list[dict[str, Any]]:
+    issues: list[dict[str, Any]] = []
+    if extracted_text_dir.is_dir():
+        stems = {path.stem for path in extracted_text_dir.glob("*.txt")} | {path.stem for path in extracted_text_dir.glob("*.json")}
+        for stem in sorted(stems):
+            text_path = extracted_text_dir / f"{stem}.txt"
+            metadata_path = extracted_text_dir / f"{stem}.json"
+            if text_path.exists():
+                try:
+                    text_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError) as exc:
+                    issues.append(_structured_storage_issue(text_path, root=root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir, classification="corrupt extracted-text cache", error_type=exc.__class__.__name__, issue="Extracted-text cache is unreadable or is not valid UTF-8."))
+            if text_path.exists() != metadata_path.exists():
+                present = text_path if text_path.exists() else metadata_path
+                issues.append(_structured_storage_issue(present, root=root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir, classification="inconsistent extracted-text cache pair", error_type="MissingCachePair", issue="Extracted-text cache text and metadata files are inconsistent."))
+            if metadata_path.exists():
+                try:
+                    value = read_json_file(metadata_path, store_name="Extraction metadata")
+                    if not isinstance(value, dict):
+                        raise TypeError("Extraction metadata must be an object")
+                except (JsonStoreError, TypeError) as exc:
+                    issues.append(_structured_storage_issue(metadata_path, root=root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir, classification="corrupt extracted-text metadata", error_type=exc.__class__.__name__, issue=str(getattr(exc, "summary", exc))))
+    if paper_profiles_dir.is_dir():
+        for path in sorted(paper_profiles_dir.glob("*.json")):
+            try:
+                value = read_json_file(path, store_name="PaperTextProfile cache")
+                if not isinstance(value, dict):
+                    raise TypeError("PaperTextProfile cache must be an object")
+            except (JsonStoreError, TypeError) as exc:
+                issues.append(_structured_storage_issue(path, root=root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir, classification="corrupt PaperTextProfile cache", error_type=exc.__class__.__name__, issue=str(getattr(exc, "summary", exc))))
+    return issues
 
 
 def _load_json_list(
@@ -233,6 +346,7 @@ def _health_json_files(
         config_dir / "canonical_tags.json",
         config_dir / "settings.json",
         data_dir / "settings.json",
+        data_dir / "lifecycle_decisions.json",
     ]
     for directory in (
         note_blocks_dir,
@@ -255,7 +369,16 @@ def _scan_corrupt_json(
 ) -> None:
     for path in paths:
         try:
-            read_json_file(path, store_name="App-owned JSON file")
+            value = read_json_file(path, store_name="App-owned JSON file")
+            list_store = (
+                path.name in {"projects.json", "project_links.json", "note_imports.json", "lifecycle_decisions.json"}
+                or path.parent.name == "note_blocks"
+            )
+            object_store = path.parent.name in {"extracted_text", "paper_profiles"}
+            if list_store and not isinstance(value, list):
+                raise JsonShapeError(path, "App-owned JSON file must contain a JSON list")
+            if object_store and not isinstance(value, dict):
+                raise JsonShapeError(path, "App-owned cache JSON must contain a JSON object")
         except JsonStoreError as exc:
             _remember_json_issue(issues, exc)
 
@@ -585,7 +708,9 @@ def _duplicate_pdf_hashes(
     notes_dir: Path,
     note_block_counts: dict[str, int],
     project_link_counts: dict[str, int],
-) -> list[dict[str, Any]]:
+    workspace_root: Path,
+    lifecycle_decisions_json: Path,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     items_by_hash: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for record in records:
         filepath = str(record.get("filepath", "")).strip()
@@ -612,11 +737,19 @@ def _duplicate_pdf_hashes(
             }
         )
 
+    ignored_duplicates: list[dict[str, Any]] = []
     for path in managed_pdfs:
         if _path_key(path) in indexed_paths:
             continue
         digest = _pdf_sha256(path, errors)
         if not digest:
+            continue
+        try:
+            ignored = is_exact_duplicate_ignored(path, digest, decision_path=lifecycle_decisions_json, workspace_root=workspace_root)
+        except JsonStoreError:
+            ignored = False
+        if ignored:
+            ignored_duplicates.append({"classification": "ignored exact duplicate", "filepath": str(path), "workspace_relative_path": path.resolve().relative_to(workspace_root.resolve()).as_posix(), "pdf_sha256": digest, "size_bytes": _file_size(path, errors), "modified_at": _file_modified_at(path, errors)})
             continue
         group = items_by_hash.setdefault(digest, {"indexed_records": [], "unindexed_files": []})
         group["unindexed_files"].append(
@@ -651,7 +784,7 @@ def _duplicate_pdf_hashes(
             str(item["classification"]),
             str(item["pdf_sha256"]),
         ),
-    )
+    ), ignored_duplicates
 
 
 def run_library_health_check(
@@ -662,6 +795,9 @@ def run_library_health_check(
     note_blocks_dir: Path = NOTE_BLOCKS_DIR,
     projects_dir: Path = PROJECTS_DIR,
     extracted_text_dir: Path = EXTRACTED_TEXT_DIR,
+    paper_profiles_dir: Path | None = None,
+    lifecycle_decisions_json: Path | None = None,
+    quarantine_dir: Path | None = None,
     exports_dir: Path | None = None,
 ) -> dict[str, Any]:
     index_csv = Path(index_csv)
@@ -670,7 +806,14 @@ def run_library_health_check(
     note_blocks_dir = Path(note_blocks_dir)
     projects_dir = Path(projects_dir)
     extracted_text_dir = Path(extracted_text_dir)
+    workspace_root = index_csv.parent.parent.resolve(strict=False)
+    paper_profiles_dir = Path(paper_profiles_dir) if paper_profiles_dir is not None else index_csv.parent / "paper_profiles"
+    lifecycle_decisions_json = Path(lifecycle_decisions_json) if lifecycle_decisions_json is not None else index_csv.parent / "lifecycle_decisions.json"
+    quarantine_dir = Path(quarantine_dir) if quarantine_dir is not None else index_csv.parent / "quarantine"
     exports_dir = Path(exports_dir) if exports_dir is not None else index_csv.parent.parent / "exports"
+    for diagnostic_root in (papers_dir, notes_dir, note_blocks_dir, projects_dir, extracted_text_dir, paper_profiles_dir, lifecycle_decisions_json, quarantine_dir, exports_dir):
+        if not _is_within(diagnostic_root, workspace_root):
+            raise ValueError(f"Health Check path is outside the BluePrintReboot workspace: {diagnostic_root}")
     dataframe, errors = _read_index(index_csv)
     corrupt_json_by_path: dict[str, dict[str, str]] = {}
     records = dataframe.to_dict("records")
@@ -714,7 +857,7 @@ def run_library_health_check(
     )
     project_link_counts = _project_link_counts(project_links)
     unindexed_pdfs = [str(path) for path in managed_pdfs if _path_key(path) not in indexed_paths]
-    duplicate_pdf_hashes = _duplicate_pdf_hashes(
+    duplicate_pdf_hashes, ignored_duplicates = _duplicate_pdf_hashes(
         records,
         managed_pdfs,
         indexed_paths,
@@ -722,7 +865,11 @@ def run_library_health_check(
         notes_dir=notes_dir,
         note_block_counts=note_block_counts,
         project_link_counts=project_link_counts,
+        workspace_root=workspace_root,
+        lifecycle_decisions_json=lifecycle_decisions_json,
     )
+    ignored_paths = {_path_key(item["filepath"]) for item in ignored_duplicates}
+    unindexed_pdfs = [path for path in unindexed_pdfs if _path_key(path) not in ignored_paths]
 
     filenames: dict[str, list[dict[str, str]]] = {}
     dois: dict[str, list[dict[str, str]]] = {}
@@ -782,8 +929,24 @@ def run_library_health_check(
         ),
         corrupt_json_by_path,
     )
-    corrupt_json = sorted(corrupt_json_by_path.values(), key=lambda item: item["path"])
+    corrupt_json: list[dict[str, Any]] = []
+    for item in corrupt_json_by_path.values():
+        path = Path(item["path"])
+        corrupt_json.append(_structured_storage_issue(path, root=workspace_root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir, classification=str(item.get("classification", "corrupt JSON")), error_type=str(item.get("detected_error_type", "JsonStoreError")), issue=str(item.get("issue", "Invalid JSON store"))))
+    cache_issues = _diagnose_cache_storage(root=workspace_root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir)
+    cache_paths = {item["path"] for item in cache_issues}
+    corrupt_json = sorted([item for item in corrupt_json if item["path"] not in cache_paths] + cache_issues, key=lambda item: (item["path"], item["classification"]))
     backup_snapshot_warnings = _backup_snapshot_warnings(exports_dir)
+    quarantined_caches: list[dict[str, Any]] = []
+    if quarantine_dir.is_dir():
+        for manifest_path in sorted(quarantine_dir.glob("*.manifest.json")):
+            try:
+                manifest = read_json_file(manifest_path, store_name="Quarantine manifest")
+            except JsonStoreError as exc:
+                errors.append(f"Quarantine manifest could not be read: {exc}")
+                continue
+            if isinstance(manifest, dict):
+                quarantined_caches.append({"classification": "quarantined cache", "manifest_path": str(manifest_path.resolve()), "original_path": str(manifest.get("original_path", "")), "copy_path": str(manifest.get("copy_path", "")), "storage_class": str(manifest.get("storage_class", "")), "sha256": str(manifest.get("sha256", ""))})
 
     stale_extracted_text: list[dict[str, str]] = []
     for record in records:
@@ -811,6 +974,8 @@ def run_library_health_check(
         "unindexed_pdfs": unindexed_pdfs,
         "duplicate_filenames": duplicate_filenames,
         "duplicate_pdf_hashes": duplicate_pdf_hashes,
+        "ignored_duplicates": ignored_duplicates,
+        "quarantined_caches": quarantined_caches,
         "duplicate_dois": duplicate_dois,
         "missing_metadata": missing_metadata,
         "orphan_notes": orphan_notes,
@@ -826,7 +991,7 @@ def run_library_health_check(
     issue_count = sum(
         len(items)
         for key, items in issue_sections.items()
-        if key != "backup_snapshot_warnings" or any(item.get("severity") != "info" for item in items)
+        if key not in ("ignored_duplicates", "quarantined_caches") and (key != "backup_snapshot_warnings" or any(item.get("severity") != "info" for item in items))
     )
     return {
         "checked_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),

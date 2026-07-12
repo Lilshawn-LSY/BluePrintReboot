@@ -35,12 +35,13 @@ TAG_CONFIG_FILES = (
     "config/tag_book/candidate_patterns.json",
 )
 LOCAL_SETTING_FILES = (".streamlit/config.toml", "config/settings.json", "data/settings.json")
-LOCAL_LIBRARY_FILES = ("data/note_imports.json",)
+LOCAL_LIBRARY_FILES = ("data/note_imports.json", "data/lifecycle_decisions.json")
 SNAPSHOT_INCLUDED_BY_DEFAULT = (
     "data/paper_index.csv",
     "data/projects/",
     "data/note_blocks/",
     "data/note_imports.json",
+    "data/lifecycle_decisions.json",
     "notes/",
     "config/tag_rules.json",
     "config/canonical_tags.json",

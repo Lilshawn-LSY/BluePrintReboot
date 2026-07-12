@@ -14,6 +14,9 @@ PROJECTS_JSON = PROJECTS_DIR / "projects.json"
 PROJECT_LINKS_JSON = PROJECTS_DIR / "project_links.json"
 INDEX_CSV = DATA_DIR / "paper_index.csv"
 NOTE_IMPORTS_JSON = DATA_DIR / "note_imports.json"
+LIFECYCLE_DECISIONS_JSON = DATA_DIR / "lifecycle_decisions.json"
+RECOVERY_DIR = EXPORTS_DIR / "recovery"
+QUARANTINE_DIR = DATA_DIR / "quarantine"
 
 
 def ensure_workspace_dirs() -> None:

@@ -1,8 +1,8 @@
 # BluePrintReboot Backlog
 
-Last synced: 2026-07-11
+Last synced: 2026-07-12
 
-This backlog is ordered after the v1.0.24 Reader validation and parity closure. It intentionally prioritizes reliability, documentation, and validation over FastAPI/frontend expansion.
+This backlog is ordered after the v1.0.25 lifecycle and recovery implementation. It prioritizes manual gate evidence before FastAPI/frontend work.
 
 ## Completed Since v1.0.9
 
@@ -24,6 +24,7 @@ These items should not remain in the active Next queue.
 - **v1.0.22 Note durability and validation closure** - shared atomic Reading Note writes, replacement-failure regression coverage, existing unsaved metadata-refresh coverage, and read-only backup snapshot verification are implemented.
 - **v1.0.23 Reader state-machine closure** - per-paper transition helpers, visible state, explicit dirty-reload Keep/Discard decisions, event precedence, idempotence, and newer-edit protection are implemented and documented.
 - **v1.0.24 Reader validation and parity closure** - combined status/priority Apply, safe rerun reduction, Reader action/rerun classification, automated parity evidence, and a future frontend parity checklist are implemented.
+- **v1.0.25 Lifecycle and recovery closure** - structured app-owned corruption diagnosis, verified recovery-copy/quarantine/restore, exact reversible duplicate decisions, metadata-only archive, backup coverage, and pure read summaries are implemented.
 
 ## Next
 
@@ -35,16 +36,14 @@ These items should be implemented before starting FastAPI or frontend migration.
 - Accept remaining full-script/PDF rerenders until a future frontend/PDF.js vertical slice.
 - Keep the documented action/rerun and Save/Reload/Insert/Import contracts aligned with future changes.
 
-### 2. Library lifecycle edge-case polish
+### 2. Library lifecycle validation
 
-- Keep automatic duplicate merge deferred unless a future design proves it is safe.
-- Add clearer user-facing outcomes for unindexed duplicate PDFs skipped by scan.
-- Decide how archive should work if `status` remains limited to `unread`, `reading`, and `read`.
+- Perform the manual recovery-copy, quarantine, restore, ignore/unignore, archive/unarchive, and archived-open Streamlit workflow.
+- Keep automatic duplicate merge and duplicate-file deletion deferred.
 
 ### 3. Storage safety polish
 
-- Consider backup or quarantine behavior for corrupt JSON/text cache files.
-- Surface corrupt cache/state files in Library Health Check.
+- Keep critical user state manual-repair-only and cache quarantine explicit.
 
 ## Partial Completion Items
 

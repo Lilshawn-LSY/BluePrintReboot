@@ -1,12 +1,12 @@
 # BluePrintReboot Roadmap
 
-Last synced: 2026-07-11
+Last synced: 2026-07-12
 
-This roadmap reflects the `v1.0.24-reader-validation-and-parity-closure` target. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI and frontend implementation remain out of scope while v1.0.25 lifecycle/recovery closure is pending.
+This roadmap reflects the `v1.0.25-lifecycle-and-recovery-closure` target. BluePrintReboot remains local-first, single-user, and Streamlit-based. FastAPI and frontend implementation remain out of scope.
 
 ## Current Status Snapshot
 
-Implemented through v1.0.24:
+Implemented through v1.0.25:
 
 - v1.0.10 added Windows developer bootstrap scripts: `scripts/dev_setup.ps1`, `scripts/dev_check.ps1`, `scripts/run_app.ps1`, and `start_blueprint.bat`.
 - v1.0.11 split cheap local scanning from explicit DOI/Crossref enrichment, preserved existing accepted metadata during scan, and blocked duplicate external note imports unless force re-import is explicitly selected.
@@ -23,6 +23,7 @@ Implemented through v1.0.24:
 - v1.0.22 added shared atomic Reading Note writes, failure-safety coverage, and read-only backup snapshot verification without changing note format, draft-save behavior, or restore policy.
 - v1.0.23 added a paper-scoped Reader note state contract, visible state, explicit dirty-reload Keep/Discard decisions, idempotent pending operations, and documented transition precedence.
 - v1.0.24 combined status/priority Apply, removed safe redundant explicit reruns, documented Reader action/rerun behavior, and defined the minimum future frontend parity contract.
+- v1.0.25 added structured corruption diagnosis, verified recovery-copy/quarantine/restore, exact fingerprint-bound duplicate decisions, reversible metadata archive, and response-ready lifecycle summaries.
 - Earlier v1.0.x safety work remains in place: `pdf_sha256` support, missing-PDF reconnect/remove, same-hash duplicate review, orphan record review, confirmed orphan project-link removal, atomic JSON writes, backup snapshot, and release-readiness documentation.
 
 Partial or incomplete:
@@ -42,12 +43,12 @@ Partial or incomplete:
 | Gate | Status | Meaning | Required to close |
 |---|---|---|---|
 | G0: Baseline validation | Active | Smoke check, pytest, environment details, and manual checklist evidence must be recorded before release handoff. | Run `.\scripts\dev_check.ps1`, record Python, Streamlit, and platform evidence, and keep runtime/user data out of Git. |
-| G1: Library lifecycle safety | Mostly closed | Missing/reconnect, duplicate-row policy, orphan repair, atomic JSON writes, and atomic extracted-text writes are in place. | Decide archive semantics, corrupt-cache quarantine, and whether unindexed duplicate PDFs need additional non-destructive outcomes beyond keep/ignore/reconnect. |
+| G1: Library lifecycle safety | Conditional | Archive, corruption diagnosis, recovery copy, cache quarantine/restore, exact duplicate decisions, orphan repair, and atomic writes are implemented conservatively. | Complete and record manual Streamlit lifecycle validation. |
 | G2: Setup friction | Closed | Scripted setup/check/run flow exists for Windows. | Keep README and scripts aligned when dependencies or launch behavior change. |
 | G3: Scan/enrich separation | Closed | Scan discovers PDFs and fingerprints; DOI/Crossref work is explicit, with cached hash metadata reuse for unchanged indexed PDFs. | Keep scan cheap and add regression coverage when scanner behavior changes. |
 | G4: Reader stability | Conditional | Automated state/parity coverage, combined settings Apply, safe rerun reduction, explicit note state, confirmed dirty reload, and non-destructive header refresh are in place. | User must complete and record the v1.0.24 Streamlit manual smoke. Remaining PDF rerenders are accepted until the frontend/PDF.js slice. |
 | G5: Deterministic tag quality | Frozen | Tag Book v2, method lexicon candidates, candidate hygiene, profile sources, and preview-only generated candidates are implemented. | Do not expand tag governance or quality during the current stabilization sequence. |
-| G6: FastAPI readiness | No | Reader parity is documented, but manual Reader evidence and v1.0.25 lifecycle/recovery closure remain. | Wait until G1/G4 are closed or explicitly accepted after v1.0.25. |
+| G6: FastAPI readiness | No | Stable read semantics exist, but G1 manual lifecycle and G4 Reader evidence remain open. | Wait until G1/G4 are closed or explicitly accepted. |
 | G7: Frontend readiness | No | Streamlit stabilization and read-only API boundaries are not complete. | Wait until the read-only API boundary and Reader parity requirements are clear. |
 
 ## Next Implementation Queue

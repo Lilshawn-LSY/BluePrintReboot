@@ -36,6 +36,8 @@ INDEX_COLUMNS = [
     "tags",
     "status",
     "reading_priority",
+    "is_archived",
+    "archived_at",
     "doi_source",
     "extraction_source",
     "extraction_checked_at",
@@ -61,6 +63,8 @@ DEFAULT_VALUES = {
     "tags": "",
     "status": "unread",
     "reading_priority": "normal",
+    "is_archived": "false",
+    "archived_at": "",
     "doi_source": "",
     "extraction_source": "",
     "extraction_checked_at": "",
@@ -387,6 +391,27 @@ def enrich_paper_doi_from_pdf(
 
 def update_paper_status(paper_id: str, status: str, index_csv: Path = INDEX_CSV) -> pd.DataFrame:
     return update_paper_metadata(paper_id, {"status": status}, index_csv)
+
+
+def set_paper_archived(paper_id: str, archived: bool, index_csv: Path = INDEX_CSV) -> pd.DataFrame:
+    df = load_index(index_csv)
+    row_mask = df["paper_id"] == paper_id
+    if not row_mask.any():
+        return df
+    df.loc[row_mask, "is_archived"] = "true" if archived else "false"
+    df.loc[row_mask, "archived_at"] = _now_iso() if archived else ""
+    df.loc[row_mask, "updated_at"] = _now_iso()
+    save_index(df, index_csv)
+    return load_index(index_csv)
+
+
+def filter_archived(df: pd.DataFrame, *, include_archived: bool = False, archived_only: bool = False) -> pd.DataFrame:
+    values = df.get("is_archived", pd.Series("false", index=df.index)).astype(str).str.lower() == "true"
+    if archived_only:
+        return df[values].copy()
+    if include_archived:
+        return df.copy()
+    return df[~values].copy()
 
 
 def update_paper_metadata(

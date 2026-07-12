@@ -1,6 +1,15 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.24-reader-validation-and-parity-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.25-lifecycle-and-recovery-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
+
+## v1.0.25 Manual Lifecycle Validation
+
+- [ ] Export a corrupt critical-state recovery copy and confirm the original bytes remain unchanged and no quarantine action is offered.
+- [ ] Export and explicitly quarantine a disposable corrupt cache; confirm no empty cache is recreated.
+- [ ] Restore the verified quarantine copy, then confirm a destination conflict refuses overwrite.
+- [ ] Ignore one unindexed same-hash duplicate, confirm it moves to informational records, then Unignore it.
+- [ ] Archive and unarchive a disposable paper; confirm status, priority, `paper_id`, PDF path/bytes, note, blocks, links, and caches do not change.
+- [ ] Confirm archived papers are hidden by default, explicitly viewable/openable, and still included in Health Check.
 
 ## 1. Fresh Runtime
 
