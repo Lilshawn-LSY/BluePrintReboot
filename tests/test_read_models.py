@@ -4,6 +4,9 @@ from pathlib import Path
 import pandas as pd
 
 from services.library_read_model import (
+    _authors,
+    _keywords,
+    _metadata_text,
     build_health_summary,
     build_library_status,
     build_paper_detail,
@@ -17,6 +20,12 @@ from tests.helpers import make_workspace
 HEALTH_KEYS = {"overall_state", "blocking_issues", "warning_count", "corrupt_critical_state_count", "quarantine_count", "missing_pdf_count", "duplicate_review_count"}
 STATUS_KEYS = {"active_count", "archived_count", "missing_count", "duplicate_count", "corrupt_count", "quarantine_count", "degraded", "workspace_warnings"}
 LIST_KEYS = {"paper_id", "title", "first_author", "year", "status", "priority", "tags", "archived", "missing_pdf", "health"}
+DETAIL_ONLY_KEYS = {
+    "authors", "journal", "abstract", "keywords", "arxiv_id", "filename",
+    "relative_pdf_path", "doi", "project_links", "note_available",
+    "extracted_text_available", "profile_available", "lifecycle_state",
+    "recoverable_warnings",
+}
 
 
 def _fixture(name: str):
@@ -34,14 +43,14 @@ def _fixture(name: str):
         path.mkdir(parents=True)
     (projects / "project_links.json").write_text("[]", encoding="utf-8")
     (projects / "projects.json").write_text("[]", encoding="utf-8")
-    complete_pdf = papers / "complete.pdf"
+    complete_pdf = papers / "complete_2501.12345v2.pdf"
     archived_pdf = papers / "archived.pdf"
     complete_pdf.write_bytes(b"complete pdf")
     archived_pdf.write_bytes(b"archived pdf")
     records = [
-        {"paper_id": "complete", "filename": complete_pdf.name, "filepath": str(complete_pdf.resolve()), "title": "Complete Paper", "authors": "Alpha Author; Beta Author", "year": "2025", "doi": "10.1/example", "tags": "one, two", "status": "reading", "reading_priority": "high", "is_archived": "false"},
+        {"paper_id": "complete", "filename": complete_pdf.name, "filepath": str(complete_pdf.resolve()), "title": "Complete Paper", "authors": " Alpha Author ; Beta, Author ", "year": "2025", "journal": " Journal of Complete Research ", "doi": "10.1/example", "abstract": "  Complete abstract.\nSecond paragraph.  ", "keywords": "single-cell RNA, deep learning", "tags": "one, two", "status": "reading", "reading_priority": "high", "is_archived": "false"},
         {"paper_id": "doi-less", "filename": "missing.pdf", "filepath": str((papers / "missing.pdf").resolve()), "title": "DOI-less Paper", "authors": "", "year": "", "doi": "", "tags": "", "status": "unread", "reading_priority": "normal", "is_archived": "false"},
-        {"paper_id": "archived", "filename": archived_pdf.name, "filepath": str(archived_pdf.resolve()), "title": "Archived Paper", "authors": "Archive Author", "year": "2020", "doi": "", "tags": "old", "status": "read", "reading_priority": "low", "is_archived": "true", "archived_at": "2026-01-01T00:00:00+00:00"},
+        {"paper_id": "archived", "filename": archived_pdf.name, "filepath": str(archived_pdf.resolve()), "title": "Archived Paper", "authors": "Archive Author", "year": "2020", "journal": "Archive Journal", "doi": "", "abstract": "Archived abstract", "keywords": "history", "arxiv_id": "arXiv:2301.00001v2", "tags": "old", "status": "read", "reading_priority": "low", "is_archived": "true", "archived_at": "2026-01-01T00:00:00+00:00"},
     ]
     index = data / "paper_index.csv"
     pd.DataFrame(records).to_csv(index, index=False)
@@ -97,16 +106,73 @@ def test_paper_detail_and_reader_snapshot_use_safe_relative_paths_and_defaults()
     missing = build_paper_detail("doi-less", index_csv=paths["index_csv"], health_report=report, **detail_kwargs)
     reader = build_reader_snapshot("complete", index_csv=paths["index_csv"], notes_dir=paths["notes_dir"], health_report=report, **{key: value for key, value in detail_kwargs.items() if key != "notes_dir"})
     absent_reader = build_reader_snapshot("doi-less", index_csv=paths["index_csv"], notes_dir=paths["notes_dir"], health_report=report, **{key: value for key, value in detail_kwargs.items() if key != "notes_dir"})
-    assert detail and detail["relative_pdf_path"] == "papers/complete.pdf"
+    assert detail and detail["relative_pdf_path"] == "papers/complete_2501.12345v2.pdf"
+    assert set(detail) == LIST_KEYS | DETAIL_ONLY_KEYS
+    assert detail["authors"] == ["Alpha Author", "Beta, Author"]
+    assert detail["journal"] == "Journal of Complete Research"
+    assert detail["abstract"] == "Complete abstract.\nSecond paragraph."
+    assert detail["keywords"] == ["single-cell RNA", "deep learning"]
+    assert detail["arxiv_id"] == "2501.12345"
     assert detail["note_available"] is True
     assert detail["extracted_text_available"] is True
     assert detail["profile_available"] is True
     assert missing and missing["doi"] == "" and missing["note_available"] is False
+    assert missing["authors"] == [] and missing["journal"] == ""
+    assert missing["abstract"] == "" and missing["keywords"] == [] and missing["arxiv_id"] == ""
     assert missing["extracted_text_available"] is False and missing["profile_available"] is False
     assert reader and reader["pdf_state"] == "available" and "Saved body" in reader["saved_note_content"]
     assert absent_reader and absent_reader["saved_note_available"] is False and absent_reader["unavailable_reason"]
     encoded = json.dumps({"detail": detail, "reader": reader, "missing": missing, "absent_reader": absent_reader})
     assert str(root.resolve()) not in encoded
+
+
+def test_rich_metadata_normalizers_handle_lists_empty_none_and_nan() -> None:
+    assert _authors([" Alpha Author ", "", "Beta, Author"]) == ["Alpha Author", "Beta, Author"]
+    assert _authors(("First", " Second ")) == ["First", "Second"]
+    assert _authors("Family, Given; Second Author") == ["Family, Given", "Second Author"]
+    assert _keywords([" single-cell RNA ", "", "deep learning"]) == ["single-cell RNA", "deep learning"]
+    assert _keywords("legitimate phrase, another phrase") == ["legitimate phrase", "another phrase"]
+    assert _metadata_text(None) == ""
+    assert _metadata_text(float("nan")) == ""
+    assert _authors(float("nan")) == []
+    assert _keywords(float("nan")) == []
+
+
+def test_archived_and_missing_pdf_details_keep_rich_metadata_without_network(monkeypatch) -> None:
+    _root, paths, report = _fixture("read-rich-no-network")
+
+    def forbidden_network(*_args, **_kwargs):
+        raise AssertionError("read models must not perform network enrichment")
+
+    monkeypatch.setattr("services.metadata_fallback.requests.get", forbidden_network)
+    detail_kwargs = {key: paths[key] for key in ("workspace_root", "papers_dir", "notes_dir", "extracted_text_dir", "profile_dir", "projects_dir")}
+    archived = build_paper_detail("archived", index_csv=paths["index_csv"], health_report=report, **detail_kwargs)
+    missing = build_paper_detail("doi-less", index_csv=paths["index_csv"], health_report=report, **detail_kwargs)
+
+    assert archived and archived["archived"] is True and archived["journal"] == "Archive Journal"
+    assert archived["authors"] == ["Archive Author"] and archived["keywords"] == ["history"]
+    assert archived["arxiv_id"] == "2301.00001"
+    assert missing and missing["missing_pdf"] is True
+    assert missing["authors"] == [] and missing["abstract"] == "" and missing["keywords"] == []
+
+
+def test_legacy_index_without_rich_metadata_columns_remains_readable() -> None:
+    root, paths, report = _fixture("read-rich-legacy-columns")
+    legacy_index = root / "data" / "legacy.csv"
+    pd.DataFrame(
+        [{"paper_id": "legacy", "filename": "missing.pdf", "title": "Legacy Paper"}]
+    ).to_csv(legacy_index, index=False)
+
+    detail = build_paper_detail(
+        "legacy",
+        index_csv=legacy_index,
+        health_report=report,
+        **{key: paths[key] for key in ("workspace_root", "papers_dir", "notes_dir", "extracted_text_dir", "profile_dir", "projects_dir")},
+    )
+
+    assert detail and detail["title"] == "Legacy Paper" and detail["missing_pdf"] is True
+    assert detail["authors"] == [] and detail["keywords"] == []
+    assert detail["journal"] == detail["abstract"] == detail["arxiv_id"] == ""
 
 
 def test_corrupt_degraded_contract_and_read_construction_do_not_mutate_files() -> None:

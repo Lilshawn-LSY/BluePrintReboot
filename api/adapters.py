@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
@@ -19,6 +20,8 @@ def _required_identity(value: object, field_name: str) -> str:
 
 
 def _text(value: object) -> str:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
     return str(value or "").strip()
 
 
@@ -45,8 +48,13 @@ def _boolean(value: object, field_name: str) -> bool:
 
 
 def _string_list(value: object) -> list[str]:
-    source = value if isinstance(value, (list, tuple)) else str(value or "").split(",")
-    return [normalized for item in source if (normalized := str(item or "").strip())]
+    source = value if isinstance(value, (list, tuple)) else _text(value).split(",")
+    return [normalized for item in source if (normalized := _text(item))]
+
+
+def _author_list(value: object) -> list[str]:
+    source = value if isinstance(value, (list, tuple)) else _text(value).split(";")
+    return [normalized for item in source if (normalized := _text(item))]
 
 
 def _safe_filename(value: object) -> str:
@@ -95,6 +103,11 @@ def adapt_paper_detail(source: Mapping[str, Any]) -> PaperDetail:
     ]
     return PaperDetail(
         **base.model_dump(),
+        authors=_author_list(source.get("authors")),
+        journal=_text(source.get("journal")),
+        abstract=_text(source.get("abstract")),
+        keywords=_string_list(source.get("keywords")),
+        arxiv_id=_text(source.get("arxiv_id")),
         filename=_safe_filename(source.get("filename")),
         relative_pdf_path=_safe_relative_path(source.get("relative_pdf_path")),
         doi=_text(source.get("doi")),

@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.1.1-paper-api**.
+Current release target: **v1.1.2-rich-paper-metadata**.
 
-v1.1.1 adds deterministic, paginated paper collection and safe paper-detail routes to the read-only FastAPI adapter. Streamlit remains the primary interface and retains all existing reading, navigation, and library-management behavior.
+v1.1.2 extends paper detail with ordered authors, journal, complete stored abstract, ordered keywords, and arXiv identity. The collection contract remains lightweight and unchanged. Streamlit remains the primary interface and retains all existing reading, navigation, and library-management behavior.
 
 The app remains intentionally local-first and single-user:
 
@@ -185,6 +185,7 @@ Foundation release documents:
 - [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
 - [v1.1.0 FastAPI read-only foundation release notes](docs/release_notes/v1.1.0.md)
 - [v1.1.1 Paper API release notes](docs/release_notes/v1.1.1.md)
+- [v1.1.2 Rich Paper Metadata release notes](docs/release_notes/v1.1.2.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -235,6 +236,12 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.1.2-rich-paper-metadata
+
+- Extends domain and API `PaperDetail` with authors, journal, abstract, keywords, and arXiv ID.
+- Keeps `GET /papers` lightweight and preserves v1.1.1 pagination, archive filtering, and ordering.
+- Uses canonical stored index metadata and deterministic local arXiv detection without runtime enrichment or network access.
 
 ### v1.1.1-paper-api
 
