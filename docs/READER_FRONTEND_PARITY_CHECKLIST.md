@@ -1,44 +1,36 @@
 # Reader Frontend Parity Checklist
 
-This is the minimum contract a future FastAPI/frontend Reader vertical slice must reproduce. It is a parity gate, not authorization to start that migration in v1.0.24.
+This is the acceptance contract for a future frontend adapter. v1.0.26 freezes behavior; it does not authorize FastAPI, React, Next.js, or PDF.js implementation.
 
-## Must Preserve
+## Reader invariants
 
-- [ ] Stable `paper_id` identity and active-paper navigation across Reader actions.
-- [ ] Local PDF visibility, native/default viewing behavior, explicit experimental fallback, missing-PDF messaging, external-path guidance, and large-PDF warnings/confirmation.
-- [ ] Reading Note disk load using the existing filename and Markdown format.
-- [ ] Explicit Save only; no autosave or silent write of an unsaved draft.
-- [ ] Saved versus Unsaved changes state derived from draft and baseline.
-- [ ] Dirty Reload with explicit Keep draft and Discard changes and reload decisions.
-- [ ] Metadata-header refresh that preserves the latest body and keeps dirty drafts dirty until Save.
-- [ ] Paper-scoped draft, baseline, pending-event, notice, and PDF-renderer isolation.
-- [ ] Combined reading status and priority editing with deliberate persistence.
-- [ ] Paper-local and canonical tag behavior without automatic promotion or retagging.
-- [ ] Paper/project links and note-block/project links, including confirmation requirements.
-- [ ] Structured note-block create, edit, delete, filter, and one-way append-to-Reading-Note behavior.
-- [ ] External note import preview, explicit confirmation, duplicate-source guard, and optional structured-block creation.
-- [ ] `PaperTextProfile`, extracted-text status/content, rebuild/extract controls, stale-cache warnings, and degraded extraction presentation.
-- [ ] Clear success, warning, error, confirmation, missing-file, and degraded-state feedback.
-- [ ] Local-first paths and privacy: no upload, cloud sync, background service, or inspection outside user-selected/local managed data.
-- [ ] Browser refresh or process restart restores only explicitly saved note text; unsaved in-memory drafts are not represented as durable.
+- [ ] Save is always explicit. Metadata changes never save dirty body text.
+- [x] Draft, baseline, and pending operations survive metadata-triggered reruns only while the same paper remains active.
+- [ ] Keep draft preserves exact unsaved content; Discard changes and reload restores the last persisted note.
+- [ ] Canonical title/author/year/DOI/tag changes converge with the Reading Note header. Clean notes refresh atomically; dirty drafts keep their body, remain dirty, and receive a pending non-destructive header refresh. Explicit Save writes the latest canonical header and body, then applies saved widget/baseline state only during the next pre-widget initialization.
+- [x] Switching papers discards the previous paper's unsaved draft without writing it; returning loads its last explicitly saved note. Browser refresh and process restart do the same. No persistent per-paper draft store or navigation confirmation is required.
+- [ ] Archived papers remain explicitly viewable in Reader without moving or deleting PDFs.
+- [ ] Missing/large/external PDF guidance, active-paper isolation, project links, structured blocks, imports, extraction/profile state, and confirmation feedback remain equivalent.
+- [ ] Streamlit may rerun and rerender the PDF after widget interaction. Avoidable application-triggered reruns stay removed; deeper renderer isolation is deferred to PDF.js.
 
-## May Redesign
+## Lifecycle invariants
 
-- [ ] Layout, toolbar placement, responsive columns, typography, and visual hierarchy.
-- [ ] PDF renderer implementation, provided native/fallback/missing/large-file behavior remains equivalent.
-- [ ] Editor component and state container, provided explicit-save and destructive-reload invariants remain testable.
-- [ ] Feedback components, dialogs, and confirmation presentation.
-- [ ] How status, priority, tags, projects, blocks, profile, and extracted text are grouped or navigated.
-- [ ] API boundaries and payload shapes after parity tests exist and local storage semantics remain authoritative.
+- [ ] No automatic duplicate merge or PDF deletion.
+- [ ] Missing-PDF reconnect preserves `paper_id` and linked user state.
+- [ ] Archive is reversible metadata-only visibility, orthogonal to reading status.
+- [ ] Critical corrupt state is never silently reset, deleted, or replaced with an empty store.
+- [ ] Only rebuildable caches may be explicitly quarantined, and only after a verified exact-byte recovery copy.
+- [ ] Restore verifies retained bytes and refuses destination conflicts.
+- [ ] Every action that removes an active file or record requires explicit confirmation.
 
-## Intentionally Deferred
+## May redesign
 
-- FastAPI implementation and write endpoints.
-- React, Next.js, PDF.js, custom PDF annotations, iframe messaging, or a new Streamlit component.
-- Cloud sync, multi-user accounts, background processes, SQLite/database migration, OCR, external ontology, or LLM/API features.
-- Autosave, automatic duplicate merge/deletion, archive semantics, corrupt-cache quarantine, or Tag Book expansion.
-- Changes to `paper_id`, note filenames/Markdown, storage formats, or atomic persistence.
+Layout, components, state container, dialogs, feedback presentation, and PDF renderer may change when the invariants above have adapter-level parity tests. Public read contracts may be exposed unchanged through future read-only endpoints.
 
-## Manual Parity Evidence Required
+## Deferred
 
-Before G4 can close, a user must record the current Streamlit manual smoke baseline for Save/Unsaved/Reload Keep/Discard/header refresh, paper isolation, non-note actions, browser refresh/application restart, and PDF usability after Reader actions. Automated tests and Codex disposable checks do not substitute for browser-level user validation.
+Write APIs, autosave, annotations, cloud/multi-user features, database migration, OCR, semantic/LLM tagging, `paper_id` redesign, note-format changes, automatic duplicate operations, and installer packaging remain out of scope.
+
+## Validation gate
+
+The user reported v1.0.26 manual validation Sections A through H passed. The prior `StreamlitAPIException` is fixed, Save convergence passed, and paper-navigation discard was explicitly accepted. G4 is closed after this contract alignment.

@@ -223,6 +223,14 @@ def load_index(index_csv: Path = INDEX_CSV, papers_dir: Path | None = None) -> p
     return backfilled
 
 
+def read_index_snapshot(index_csv: Path = INDEX_CSV) -> pd.DataFrame:
+    """Read and normalize an index in memory without creating, backfilling, or saving it."""
+    path = Path(index_csv)
+    if not path.is_file():
+        return empty_index()
+    return migrate_index_dataframe(pd.read_csv(path, dtype=str).fillna(""))
+
+
 def save_index(df: pd.DataFrame, index_csv: Path = INDEX_CSV) -> None:
     index_csv = Path(index_csv)
     index_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -327,65 +335,57 @@ def enrich_paper_doi_from_pdf(
     papers_dir: Path | None = None,
     overwrite_existing: bool = False,
 ) -> dict[str, str | bool]:
+    diagnosis = detect_paper_doi_from_pdf(
+        paper_id,
+        index_csv=index_csv,
+        papers_dir=papers_dir,
+        overwrite_existing=overwrite_existing,
+    )
+    if diagnosis["status"] in {"missing_paper", "existing_doi", "missing_pdf"}:
+        return diagnosis
+    checked_at = _now_iso()
+    df = load_index(index_csv, papers_dir=papers_dir)
+    row_mask = df["paper_id"] == paper_id
+    df.loc[row_mask, "extraction_source"] = diagnosis["source"]
+    df.loc[row_mask, "extraction_checked_at"] = checked_at
+    detected_doi = str(diagnosis["doi"])
+    if detected_doi:
+        df.loc[row_mask, "doi"] = detected_doi
+        df.loc[row_mask, "doi_source"] = diagnosis["source"]
+    df.loc[row_mask, "updated_at"] = checked_at
+    save_index(df, index_csv)
+    return diagnosis
+
+
+def detect_paper_doi_from_pdf(
+    paper_id: str,
+    *,
+    index_csv: Path = INDEX_CSV,
+    papers_dir: Path | None = None,
+    overwrite_existing: bool = False,
+) -> dict[str, str | bool]:
     df = load_index(index_csv, papers_dir=papers_dir)
     row_mask = df["paper_id"] == paper_id
     if not row_mask.any():
-        return {
-            "paper_id": paper_id,
-            "doi": "",
-            "source": "none",
-            "saved": False,
-            "status": "missing_paper",
-            "message": "Paper was not found in the index.",
-        }
-
+        return {"paper_id": paper_id, "doi": "", "source": "none", "saved": False, "status": "missing_paper", "message": "Paper was not found in the index."}
     record = df[row_mask].iloc[0]
     current_doi = normalize_doi(str(record.get("doi", "") or ""))
     if current_doi and not overwrite_existing:
-        return {
-            "paper_id": paper_id,
-            "doi": current_doi,
-            "source": str(record.get("doi_source", "") or "existing"),
-            "saved": False,
-            "status": "existing_doi",
-            "message": "Existing DOI used; PDF extraction was not needed.",
-        }
-
+        return {"paper_id": paper_id, "doi": current_doi, "source": str(record.get("doi_source", "") or "existing"), "saved": False, "status": "existing_doi", "message": "Existing DOI used; PDF extraction was not needed."}
     inferred_papers_dir = papers_dir or _infer_papers_dir(index_csv)
     pdf_path = _record_pdf_path(record, inferred_papers_dir)
     if pdf_path is None or not pdf_path.exists() or not pdf_path.is_file():
-        return {
-            "paper_id": paper_id,
-            "doi": "",
-            "source": "none",
-            "saved": False,
-            "status": "missing_pdf",
-            "message": "PDF file was not found; DOI extraction was not attempted.",
-        }
-
+        return {"paper_id": paper_id, "doi": "", "source": "none", "saved": False, "status": "missing_pdf", "message": "PDF file was not found; DOI extraction was not attempted."}
     extraction = extract_doi_metadata_from_pdf(pdf_path)
-    checked_at = _now_iso()
-    df.loc[row_mask, "extraction_source"] = extraction.source
-    df.loc[row_mask, "extraction_checked_at"] = checked_at
-    saved = False
-    status = "doi_not_found"
-    message = "No DOI detected. You can paste one manually."
     detected_doi = normalize_doi(extraction.doi)
-    if detected_doi:
-        df.loc[row_mask, "doi"] = detected_doi
-        df.loc[row_mask, "doi_source"] = extraction.source
-        saved = True
-        status = "doi_saved"
-        message = "Detected DOI was saved to this paper."
-    df.loc[row_mask, "updated_at"] = checked_at
-    save_index(df, index_csv)
+    saved = bool(detected_doi)
     return {
         "paper_id": paper_id,
         "doi": detected_doi,
         "source": extraction.source,
         "saved": saved,
-        "status": status,
-        "message": message,
+        "status": "doi_saved" if saved else "doi_not_found",
+        "message": "Detected DOI was saved to this paper." if saved else "No DOI detected. You can paste one manually.",
     }
 
 

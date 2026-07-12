@@ -32,6 +32,10 @@ git push
 
 After review, merge to `main`, then tag the release only when Shawn explicitly approves the release.
 
+## Canonical Clean-PC Setup and Restore Rehearsal
+
+Use exactly the setup order in `docs/checklists/new_pc_restore_checklist.md`: clone, `dev_setup.ps1`, then `dev_check.ps1`. Verify snapshots in place. Before any disposable extraction, run `scripts/restore_check.py` against an existing empty directory outside the active repository. The helper is read-only; extraction and the real clean-PC rehearsal remain manual.
+
 ## Manual Streamlit Check
 
 Before release, open the Streamlit app and verify:

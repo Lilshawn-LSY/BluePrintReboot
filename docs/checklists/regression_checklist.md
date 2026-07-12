@@ -1,15 +1,30 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.25-lifecycle-and-recovery-closure`. Use a disposable or non-sensitive workspace for manual checks. This checklist locks the current Reader/PDF, lifecycle, storage-safety, and backup baseline; it does not approve unrelated product behavior.
+Required before and after Codex-assisted release work, including `v1.0.26-streamlit-finalization-api-contract-freeze`. Use a disposable or non-sensitive workspace for manual checks.
+
+## v1.0.26 Focused Manual Validation
+
+The user reported Sections A through H passed. The prior `StreamlitAPIException` is fixed, Save convergence passed, and navigation discard is accepted.
+
+- [x] Manual tag on a saved note updates index, Reader metadata, and Reading Note header.
+- [x] Selected suggested tag on a saved note does the same.
+- [x] Manual tag and suggested tag on a dirty draft preserve the exact unsaved body, keep the draft dirty, and never write it before Save.
+- [x] Same-paper metadata reruns preserve the dirty draft; switching papers discards it without writing, and returning reloads the saved note.
+- [x] Save after pending metadata refresh persists the latest canonical header and latest body without a widget-state exception.
+- [x] Browser refresh and application restart restore only explicitly saved content.
+- [x] Edit metadata and Metadata Assist still converge canonical note headers.
+- [x] Active paper selection and PDF viewing remain usable; Streamlit full rerenders are accepted behavior.
+
+Manual evidence: user-reported Sections A-H passed; detailed tester/date/browser fields not supplied in repository.
 
 ## v1.0.25 Manual Lifecycle Validation
 
-- [ ] Export a corrupt critical-state recovery copy and confirm the original bytes remain unchanged and no quarantine action is offered.
-- [ ] Export and explicitly quarantine a disposable corrupt cache; confirm no empty cache is recreated.
-- [ ] Restore the verified quarantine copy, then confirm a destination conflict refuses overwrite.
-- [ ] Ignore one unindexed same-hash duplicate, confirm it moves to informational records, then Unignore it.
-- [ ] Archive and unarchive a disposable paper; confirm status, priority, `paper_id`, PDF path/bytes, note, blocks, links, and caches do not change.
-- [ ] Confirm archived papers are hidden by default, explicitly viewable/openable, and still included in Health Check.
+- [x] Export a corrupt critical-state recovery copy and confirm the original bytes remain unchanged and no quarantine action is offered.
+- [x] Export and explicitly quarantine a disposable corrupt cache; confirm no empty cache is recreated.
+- [x] Restore the verified quarantine copy, then confirm a destination conflict refuses overwrite.
+- [x] Ignore one unindexed same-hash duplicate, confirm it moves to informational records, then Unignore it.
+- [x] Archive and unarchive a disposable paper; confirm status, priority, `paper_id`, PDF path/bytes, note, blocks, links, and caches do not change.
+- [x] Confirm archived papers are hidden by default, explicitly viewable/openable, and still included in Health Check.
 
 ## 1. Fresh Runtime
 
@@ -131,23 +146,23 @@ Required before and after Codex-assisted release work, including `v1.0.25-lifecy
 
 ## 10. v1.0.24 User-Performed Reader Validation
 
-Record tester, date, browser, and result for each item. Leave unchecked when not performed.
+Completion was reported by the user before v1.0.26 work. Detailed tester/date/browser fields were not supplied in this repository.
 
-- [ ] Initial disk load shows Saved.
-- [ ] Editing the note shows Unsaved changes; explicit Save returns it to Saved.
-- [ ] Dirty Reload preserves the exact draft and presents Keep/Discard choices.
-- [ ] Keep draft preserves the exact unsaved text.
-- [ ] Discard changes and reload restores disk text and updates the baseline.
-- [ ] Metadata-header refresh preserves the latest body; a dirty refreshed draft remains dirty until Save.
-- [ ] Paper A and Paper B drafts remain isolated when switching papers.
-- [ ] Tag, reading settings Apply, toolbar, project-link, profile, and structured-block actions preserve the active paper draft.
-- [ ] Browser refresh and application restart restore only explicitly saved text.
-- [ ] Reading status and priority update together only after **Apply reading settings**; unchanged Apply performs no write.
-- [ ] PDF renderer selection remains stable for each paper.
-- [ ] PDF viewing remains usable after Reader actions; any full rerender is recorded as accepted Streamlit behavior.
-- [ ] Missing-PDF and large-PDF guidance remain clear and non-destructive.
+- [x] Initial disk load shows Saved.
+- [x] Editing the note shows Unsaved changes; explicit Save returns it to Saved.
+- [x] Dirty Reload preserves the exact draft and presents Keep/Discard choices.
+- [x] Keep draft preserves the exact unsaved text.
+- [x] Discard changes and reload restores disk text and updates the baseline.
+- [x] Metadata-header refresh preserves the latest body; a dirty refreshed draft remains dirty until Save.
+- [x] Same-paper reruns preserve the active draft; switching papers discards the previous unsaved draft and returning reloads saved disk text.
+- [x] Tag, reading settings Apply, toolbar, project-link, profile, and structured-block actions preserve the active paper draft.
+- [x] Browser refresh and application restart restore only explicitly saved text.
+- [x] Reading status and priority update together only after **Apply reading settings**; unchanged Apply performs no write.
+- [x] PDF renderer selection remains stable for each paper.
+- [x] PDF viewing remains usable after Reader actions; any full rerender is recorded as accepted Streamlit behavior.
+- [x] Missing-PDF and large-PDF guidance remain clear and non-destructive.
 
-Manual evidence: tester __________ date __________ browser __________ result __________
+Manual evidence: user-reported complete before v1.0.26; detailed fields not supplied in repository.
 
 ## 11. Final Safety
 

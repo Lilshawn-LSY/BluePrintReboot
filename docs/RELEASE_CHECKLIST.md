@@ -1,5 +1,18 @@
 # Release Checklist
 
+## v1.0.26-streamlit-finalization-api-contract-freeze
+
+- [x] Clean v1.0.25 baseline recorded: smoke 49 passed/0 warnings/0 failed; pytest 396 passed.
+- [x] Reader manual/suggested tags use the shared metadata coordinator and converge with Reading Note headers.
+- [x] Dirty drafts remain unsaved, paper-scoped, and dirty through metadata refresh; explicit Save converges header and body.
+- [x] Edit metadata, DOI, DOI-less, selected tags, and Crossref acceptance use the shared coordinator.
+- [x] Five JSON-safe, non-mutating read contracts are frozen without API routes.
+- [x] Snapshot/disposable-target readiness validation is read-only and rejects unsafe or non-empty targets.
+- [x] Prior v1.0.24 Reader and v1.0.25 lifecycle manual completion is recorded from the user's report.
+- [x] Focused architecture validation passed 145; focused Reader Save/navigation validation passed 64; final smoke passed 53/0/0; pytest passed 417; serialization and repository-data audit passed.
+- [x] User reported focused v1.0.26 manual validation Sections A-H passed; Save convergence and paper-navigation discard are accepted; G4 is closed.
+- [ ] Commit, push, merge, tag, and release occur only after explicit instruction.
+
 ## v1.0.25-lifecycle-and-recovery-closure
 
 - [x] Required v1.0.24 checkpoint, branch, clean tree, version, and documents verified.
@@ -9,8 +22,8 @@
 - [x] Exact duplicate decisions are atomic, reversible, path/SHA-bound, and included in snapshots.
 - [x] Archive is orthogonal metadata visibility and preserves PDFs, IDs, notes, blocks, links, cache, status, and priority.
 - [x] Focused validation passed (85 tests); final smoke passed 49/0/0 and pytest passed 396.
-- [ ] User performs and records the Streamlit lifecycle validation; G1 remains conditional until then.
-- [ ] User-performed v1.0.24 Reader validation remains open; G4 is conditional.
+- [x] User reported the v1.0.25 Streamlit lifecycle validation completed before v1.0.26 work.
+- [x] User reported the v1.0.24 Reader validation completed before v1.0.26 work.
 - [ ] Release tag or checkpoint commit occurs only after explicit instruction.
 
 ## v1.0.24-reader-validation-and-parity-closure
@@ -22,7 +35,7 @@
 - [x] Reader frontend parity checklist covers Must preserve, May redesign, and Intentionally deferred behavior.
 - [x] Final `dev_check.ps1` evidence is recorded in v1.0.24 release notes.
 - [x] Codex disposable checks and not-performed browser checks are clearly separated.
-- [ ] User-performed Streamlit manual Reader smoke is recorded; G4 remains conditional until this passes.
+- [x] User-reported Streamlit manual Reader smoke completion is recorded by the v1.0.26 request.
 - [x] Git status confirms no runtime/user data, PDFs, notes, exports, caches, or secrets are included.
 - [ ] Release tag or checkpoint commit occurs only after explicit instruction.
 

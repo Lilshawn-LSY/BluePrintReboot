@@ -35,12 +35,14 @@ from services.note_import import (
     parse_external_note_file,
 )
 from services.reading_note_template import apply_reading_note_template_to_text, refresh_reading_note_header
+from services.paper_metadata_mutation import apply_paper_metadata_change
+from services.reader_state_keys import activate_reader_paper
 from services.paper_text_profile_builder import build_and_save_paper_text_profile
 from storage.extracted_text_store import (
     extraction_cache_status,
     load_cached_extracted_text,
 )
-from storage.index_store import load_index, update_paper_metadata
+from storage.index_store import load_index
 from storage.note_block_store import (
     ALLOWED_BLOCK_TYPES,
     create_note_block,
@@ -55,9 +57,9 @@ from ui_streamlit.project_workspace import render_note_block_project_links, rend
 from ui_streamlit.reader_note_state import (
     apply_queued_content_updates,
     apply_queued_reload,
+    consume_pending_note_save_result,
     derive_reader_note_state,
     initialize_reader_note_state,
-    mark_reader_note_saved,
     note_baseline_key as state_note_baseline_key,
     note_draft_key as state_note_draft_key,
     note_saved_at_key as state_note_saved_at_key,
@@ -68,6 +70,7 @@ from ui_streamlit.reader_note_state import (
     pending_note_reload_key as state_pending_note_reload_key,
     pending_note_text_update_key as state_pending_note_text_update_key,
     queue_note_text_replacement,
+    queue_note_save_result,
     request_note_reload,
     resolve_note_reload,
 )
@@ -373,6 +376,7 @@ def apply_pending_note_actions(
     session_state: MutableMapping,
     notes_dir: Path | None = None,
 ) -> str:
+    consume_pending_note_save_result(record["paper_id"], session_state)
     key = note_draft_key(record)
     draft = load_note_draft(record, session_state, notes_dir=notes_dir)
 
@@ -421,12 +425,15 @@ def save_note_draft(
     notes_dir: Path | None = None,
 ) -> Path:
     text = str(session_state.get(note_draft_key(record), ""))
+    refreshed = refresh_reading_note_header(text, record)
+    if refreshed["changed"]:
+        text = str(refreshed["text"])
     if notes_dir is None:
         note_path = save_note_text(record, text)
     else:
         note_path = save_note_text(record, text, notes_dir=notes_dir)
     saved_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-    mark_reader_note_saved(record["paper_id"], session_state, saved_at)
+    queue_note_save_result(record["paper_id"], session_state, text, saved_at)
     preserve_reader_context(record, session_state)
     return note_path
 
@@ -436,10 +443,7 @@ def preserve_reader_context(record: dict[str, str], session_state: MutableMappin
 
 
 def preserve_reader_context_for_paper_id(paper_id: str, session_state: MutableMapping) -> None:
-    stable_paper_id = str(paper_id or "").strip()
-    if stable_paper_id:
-        session_state["active_paper_id"] = stable_paper_id
-    session_state["current_page"] = PAPER_DETAIL_PAGE_NAME
+    activate_reader_paper(paper_id, session_state, page_name=PAPER_DETAIL_PAGE_NAME)
 
 
 def _rerun_reader(record: dict[str, str]) -> None:
@@ -614,9 +618,13 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
     if st.button("Apply tag", key=f"add_manual_tag_{record['paper_id']}"):
         updated_tags = add_manual_tag(str(record.get("tags", "")), manual_tag)
         if updated_tags != str(record.get("tags", "")):
-            update_payload = {"tags": updated_tags}
-            update_paper_metadata(record["paper_id"], update_payload)
-            st.success("Tag added.")
+            result = apply_paper_metadata_change(record["paper_id"], {"tags": updated_tags}, session_state=st.session_state)
+            if not result.ok:
+                st.error("Tag index update failed." if not result.index_updated else "Tag saved, but Reading Note synchronization failed.")
+                if result.errors:
+                    st.caption(result.errors[0])
+                return
+            st.success("Tag added; Reading Note metadata synchronization queued or applied.")
             _rerun_reader(record)
         else:
             st.info("No tag added.")
@@ -673,7 +681,12 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
                     suggestion_details,
                     selected_ids,
                 )
-                update_paper_metadata(record["paper_id"], {"tags": updated_tags})
+                result = apply_paper_metadata_change(record["paper_id"], {"tags": updated_tags}, session_state=st.session_state)
+                if not result.ok:
+                    st.error("Suggested tags could not be fully synchronized.")
+                    if result.errors:
+                        st.caption(result.errors[0])
+                    return
                 clear_session_keys(st.session_state, suggestion_key)
                 st.success("Selected suggested tags applied.")
                 _rerun_reader(record)
@@ -710,7 +723,10 @@ def _render_toolbar(record: dict[str, str], toolbar_key: str) -> None:
     if apply_settings:
         update_payload = build_reader_settings_update(record, selected_status, selected_priority)
         if update_payload:
-            update_paper_metadata(record["paper_id"], update_payload)
+            result = apply_paper_metadata_change(record["paper_id"], update_payload, session_state=st.session_state)
+            if not result.ok:
+                st.error("Reading settings could not be saved.")
+                return
             st.session_state[reader_settings_notice_key(record)] = "Reading settings updated."
             _rerun_reader(record)
         else:
@@ -1051,6 +1067,10 @@ def _render_note_editor(record: dict[str, str]) -> None:
         "Reading Note is the main paper note. Structured blocks are separate retrieval cards created "
         "from imported or manually added content."
     )
+    st.caption(
+        "Unsaved note changes survive reruns for this active paper, but are discarded when you switch papers, "
+        "refresh the browser, or restart the app."
+    )
     key = note_draft_key(record)
     apply_pending_note_actions(record, st.session_state)
     notice = str(st.session_state.pop(pending_note_notice_key(record), "") or "")
@@ -1096,8 +1116,15 @@ def _render_note_editor(record: dict[str, str]) -> None:
             _rerun_reader(record)
 
     if st.button("Save note", key=f"editor_save_note_{record['paper_id']}"):
-        save_note_draft(record, st.session_state)
-        st.success("Note saved.")
+        try:
+            save_note_draft(record, st.session_state)
+        except (OSError, ValueError) as exc:
+            st.error("Reading Note could not be saved. The draft remains unsaved.")
+            with st.expander("Save error details"):
+                st.write(f"Exception: `{exc.__class__.__name__}`")
+                st.write(str(exc))
+        else:
+            _rerun_reader(record)
     if st.button("Reload", key=f"editor_reload_note_{record['paper_id']}"):
         request_reader_note_reload(record, st.session_state)
         _rerun_reader(record)

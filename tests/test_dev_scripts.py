@@ -13,6 +13,7 @@ def test_windows_dev_script_files_exist() -> None:
         "scripts/dev_setup.ps1",
         "scripts/dev_check.ps1",
         "scripts/run_app.ps1",
+        "scripts/restore_check.py",
         "start_blueprint.bat",
     ):
         assert (PROJECT_ROOT / relative_path).is_file()
@@ -39,6 +40,9 @@ def test_dev_setup_uses_venv_and_requirements() -> None:
 
     assert ".venv" in script
     assert "requirements.txt" in script
+    assert '$ErrorActionPreference = "Stop"' in script
+    assert "Python was not found" in script
+    assert "requirements.txt was not found" in script
 
 
 def test_bootstrap_scripts_do_not_contain_obviously_dangerous_commands() -> None:

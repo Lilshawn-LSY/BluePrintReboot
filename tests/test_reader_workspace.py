@@ -1,3 +1,5 @@
+import pytest
+
 from core.paper_text_profile import PaperTextProfile
 from ui_streamlit.reader_workspace import (
     HTML_BASE64_FALLBACK_RENDERER,
@@ -45,6 +47,7 @@ from ui_streamlit.reader_workspace import (
     should_render_html_fallback,
 )
 from services.reading_note_template import refresh_reading_note_header
+from services.reader_state_keys import pending_note_save_notice_key, pending_note_save_result_key
 from services.tag_book import load_tag_book, suggestion_selection_id
 from storage.note_store import save_note_text
 from tests.helpers import make_workspace
@@ -84,10 +87,39 @@ def test_save_note_draft_writes_current_session_text() -> None:
     note_path = save_note_draft(record, session_state, notes_dir=notes_dir)
 
     assert note_path.read_text(encoding="utf-8") == "draft text"
-    assert session_state[note_baseline_key(record)] == "draft text"
-    assert session_state[f"reader_note_saved_at_{record['paper_id']}"]
+    assert note_baseline_key(record) not in session_state
+    assert session_state[pending_note_save_result_key(record["paper_id"])]["text"] == "draft text"
+    assert session_state[pending_note_save_notice_key(record["paper_id"])] == "Note saved."
     assert session_state["active_paper_id"] == "paper-1"
     assert session_state["current_page"] == "Paper Detail"
+
+    apply_pending_note_actions(record, session_state, notes_dir=notes_dir)
+
+    assert session_state[note_draft_key(record)] == "draft text"
+    assert session_state[note_baseline_key(record)] == "draft text"
+    assert session_state[f"reader_note_saved_at_{record['paper_id']}"]
+    assert pending_note_save_result_key(record["paper_id"]) not in session_state
+
+
+def test_failed_save_queues_no_success_or_clean_transition(monkeypatch) -> None:
+    notes_dir = make_workspace("reader-note-save-failure")
+    record = {"paper_id": "paper-1", "title": "Reader Paper"}
+    session_state = {
+        note_draft_key(record): "unsaved draft",
+        note_baseline_key(record): "saved baseline",
+    }
+    monkeypatch.setattr(
+        "ui_streamlit.reader_workspace.save_note_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("disk failed")),
+    )
+
+    with pytest.raises(OSError, match="disk failed"):
+        save_note_draft(record, session_state, notes_dir=notes_dir)
+
+    assert session_state[note_draft_key(record)] == "unsaved draft"
+    assert session_state[note_baseline_key(record)] == "saved baseline"
+    assert pending_note_save_result_key(record["paper_id"]) not in session_state
+    assert pending_note_save_notice_key(record["paper_id"]) not in session_state
 
 
 def test_preserve_reader_context_keeps_current_paper_active() -> None:
@@ -124,6 +156,35 @@ def test_preserve_reader_context_for_paper_id_sets_paper_detail_page() -> None:
 
     assert session_state["active_paper_id"] == "paper-2"
     assert session_state["current_page"] == "Paper Detail"
+
+
+def test_paper_navigation_discards_unsaved_draft_and_reloads_persisted_note() -> None:
+    notes_dir = make_workspace("reader-navigation-discard")
+    paper_a = {"paper_id": "paper-a", "title": "Paper A"}
+    paper_b = {"paper_id": "paper-b", "title": "Paper B"}
+    saved_a = "# BluePrint Reading Note\n\npaper_id: paper-a\n\n## Raw Notes\n\nSaved A\n"
+    saved_b = "# BluePrint Reading Note\n\npaper_id: paper-b\n\n## Raw Notes\n\nSaved B\n"
+    save_note_text(paper_a, saved_a, notes_dir=notes_dir)
+    save_note_text(paper_b, saved_b, notes_dir=notes_dir)
+    session_state = {"active_paper_id": "paper-a", "current_page": "Paper Detail"}
+    load_note_draft(paper_a, session_state, notes_dir=notes_dir)
+    unsaved_marker = "UNSAVED-A-MARKER"
+    session_state[note_draft_key(paper_a)] = f"{saved_a}\n{unsaved_marker}\n"
+
+    preserve_reader_context_for_paper_id("paper-b", session_state)
+    loaded_b = load_note_draft(paper_b, session_state, notes_dir=notes_dir)
+
+    assert loaded_b == saved_b
+    assert unsaved_marker not in (notes_dir / "paper-a.md").read_text(encoding="utf-8")
+    assert (notes_dir / "paper-b.md").read_text(encoding="utf-8") == saved_b
+
+    preserve_reader_context_for_paper_id("paper-a", session_state)
+    reloaded_a = load_note_draft(paper_a, session_state, notes_dir=notes_dir)
+
+    assert reloaded_a == saved_a
+    assert unsaved_marker not in reloaded_a
+    assert (notes_dir / "paper-a.md").read_text(encoding="utf-8") == saved_a
+    assert (notes_dir / "paper-b.md").read_text(encoding="utf-8") == saved_b
 
 
 def test_add_manual_tag_normalizes_and_avoids_duplicates() -> None:

@@ -67,11 +67,12 @@ from services.library_health import (
     unlink_orphan_project_link,
 )
 from services.metadata_fallback import (
-    apply_metadata_candidate_to_index,
     build_doi_less_metadata_candidate,
     build_metadata_candidate_update,
     fill_metadata_gaps_from_pdf_profile,
 )
+from services.paper_metadata_mutation import apply_paper_metadata_change
+from services.reader_state_keys import activate_reader_paper
 from services.missing_pdf_repair import (
     MissingPDFRepairError,
     build_reconnect_plan,
@@ -92,28 +93,21 @@ from services.pdf_inbox import (
     import_pdf_from_inbox,
     scan_pdf_inbox,
 )
-from services.reading_note_template import refresh_reading_note_header
 from services.paper_text_profile_builder import build_paper_text_profile
 from storage.atomic_json import JsonStoreError
 from storage.index_store import (
     INDEX_COLUMNS,
-    accept_crossref_metadata,
-    enrich_paper_doi_from_pdf,
+    CROSSREF_ACCEPT_COLUMNS,
+    detect_paper_doi_from_pdf,
     load_index,
     filter_archived,
     set_paper_archived,
     update_index_from_scan,
-    update_paper_metadata,
 )
-from storage.note_store import refresh_note_header
 from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, PROJECT_ROOT, RECOVERY_DIR, QUARANTINE_DIR, LIFECYCLE_DECISIONS_JSON, ensure_workspace_dirs
 from ui_streamlit.project_workspace import render_paper_project_links, render_project_workspace
 from ui_streamlit.reader_workspace import (
-    has_unsaved_note_changes,
-    note_draft_key,
-    pending_note_reload_key,
     preserve_reader_context_for_paper_id,
-    queue_note_header_refresh,
     render_reader_workspace,
 )
 from ui_streamlit.tag_manager import render_tag_manager_page
@@ -150,52 +144,18 @@ def _selected_record(df: pd.DataFrame) -> dict[str, str] | None:
     return matches.iloc[0].to_dict()
 
 
-def _latest_record_for_paper(paper_id: str) -> dict[str, str] | None:
-    df = load_index()
-    if df.empty or "paper_id" not in df.columns:
-        return None
-    matches = df[df["paper_id"] == paper_id]
-    if matches.empty:
-        return None
-    return {str(key): str(value) for key, value in matches.iloc[0].fillna("").to_dict().items()}
-
-
 def _rerun_paper_detail(paper_id: str) -> None:
     preserve_reader_context_for_paper_id(paper_id, st.session_state)
     st.rerun()
 
 
-def _refresh_reading_note_header_after_metadata_apply(paper_id: str) -> None:
-    updated_record = _latest_record_for_paper(paper_id)
-    if not updated_record:
-        return
-
-    draft_key = note_draft_key(updated_record)
-    if draft_key in st.session_state:
-        draft_result = refresh_reading_note_header(str(st.session_state.get(draft_key, "")), updated_record)
-        if draft_result["changed"]:
-            if has_unsaved_note_changes(updated_record, st.session_state):
-                queue_note_header_refresh(
-                    updated_record,
-                    st.session_state,
-                    str(draft_result["text"]),
-                    notice="Header refresh available; unsaved changes kept.",
-                    saved_to_file=False,
-                )
-                return
-            refresh_note_header(updated_record)
-            queue_note_header_refresh(
-                updated_record,
-                st.session_state,
-                str(draft_result["text"]),
-                notice="Header refreshed.",
-                saved_to_file=True,
-            )
-        return
-
-    file_result = refresh_note_header(updated_record)
-    if file_result["changed"]:
-        st.session_state[pending_note_reload_key(updated_record)] = True
+def _apply_metadata_change(paper_id: str, changes: dict[str, object]):
+    result = apply_paper_metadata_change(paper_id, changes, session_state=st.session_state)
+    if not result.ok:
+        st.error("Metadata index update failed." if not result.index_updated else "Metadata saved, but Reading Note synchronization failed.")
+        if result.errors:
+            st.caption(result.errors[0])
+    return result
 
 
 def _scan_button(key: str) -> None:
@@ -296,8 +256,7 @@ def library_page() -> None:
     )
 
     if st.button("Open"):
-        st.session_state["active_paper_id"] = selected
-        st.session_state["current_page"] = "Paper Detail"
+        activate_reader_paper(selected, st.session_state)
         st.rerun()
 
 
@@ -368,7 +327,7 @@ def paper_detail_page() -> None:
             save_metadata = st.form_submit_button("Save")
 
         if save_metadata:
-            update_paper_metadata(
+            result = _apply_metadata_change(
                 record["paper_id"],
                 {
                     "title": title,
@@ -383,9 +342,9 @@ def paper_detail_page() -> None:
                     "reading_priority": reading_priority,
                 },
             )
-            _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-            st.success("Metadata saved.")
-            _rerun_paper_detail(record["paper_id"])
+            if result.ok:
+                st.success("Metadata saved and Reading Note metadata synchronized.")
+                _rerun_paper_detail(record["paper_id"])
 
     form_values = {
         "title": title,
@@ -416,13 +375,22 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
 
     if st.button("Enrich Metadata", type="primary"):
         normalized_current_doi = normalize_doi(current_doi)
-        doi_result = enrich_paper_doi_from_pdf(record["paper_id"])
+        doi_result = detect_paper_doi_from_pdf(record["paper_id"])
         detected_doi = str(doi_result.get("doi", ""))
         extraction_source = str(doi_result.get("source", "none"))
-        saved = bool(doi_result.get("saved", False))
+        saved = False
         message = str(doi_result.get("message", ""))
-        if saved:
-            _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
+        if str(doi_result.get("status", "")) not in {"missing_paper", "existing_doi", "missing_pdf"}:
+            detection_changes: dict[str, object] = {
+                "extraction_source": extraction_source,
+                "extraction_checked_at": _now_iso(),
+            }
+            if detected_doi:
+                detection_changes.update({"doi": detected_doi, "doi_source": extraction_source})
+            mutation = _apply_metadata_change(record["paper_id"], detection_changes)
+            saved = bool(detected_doi and mutation.ok)
+            if detected_doi and not mutation.ok:
+                message = "Detected DOI could not be saved."
 
         st.session_state[extraction_key] = {
             "doi": detected_doi,
@@ -484,7 +452,7 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
             normalized_current_doi = normalize_doi(current_doi)
             if normalized_current_doi and detected_doi != normalized_current_doi:
                 if st.button("Apply detected DOI"):
-                    update_paper_metadata(
+                    mutation = _apply_metadata_change(
                         record["paper_id"],
                         {
                             "doi": detected_doi,
@@ -493,11 +461,11 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
                             "extraction_checked_at": _now_iso(),
                         },
                     )
-                    _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-                    st.session_state[extraction_key]["saved"] = True
-                    st.session_state[extraction_key]["message"] = "Detected DOI was saved to this paper."
-                    st.success("Saved detected DOI.")
-                    _rerun_paper_detail(record["paper_id"])
+                    if mutation.ok:
+                        st.session_state[extraction_key]["saved"] = True
+                        st.session_state[extraction_key]["message"] = "Detected DOI was saved to this paper."
+                        st.success("Saved detected DOI.")
+                        _rerun_paper_detail(record["paper_id"])
 
             if st.button("Fetch Crossref metadata for detected DOI"):
                 try:
@@ -564,10 +532,10 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         if st.button("Apply selected suggested tags", disabled=not selected_suggestion_ids):
             selected_tags = selected_suggestion_tag_values(suggestion_details, selected_suggestion_ids)
             merged_tags = merge_tags(record.get("tags", ""), selected_tags)
-            update_paper_metadata(record["paper_id"], {"tags": merged_tags})
-            _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-            st.success("Selected suggested tags added.")
-            _rerun_paper_detail(record["paper_id"])
+            mutation = _apply_metadata_change(record["paper_id"], {"tags": merged_tags})
+            if mutation.ok:
+                st.success("Selected suggested tags added and Reading Note metadata synchronized.")
+                _rerun_paper_detail(record["paper_id"])
     else:
         st.caption("No new tag suggestions.")
 
@@ -609,11 +577,14 @@ def metadata_assist_section(record: dict[str, str], form_values: dict | None = N
         hide_index=True,
     )
     if st.button("Apply Crossref metadata"):
-        accept_crossref_metadata(record["paper_id"], preview)
-        _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-        st.session_state.pop(preview_key, None)
-        st.success("Crossref metadata accepted.")
-        _rerun_paper_detail(record["paper_id"])
+        changes = {field: preview[field] for field in CROSSREF_ACCEPT_COLUMNS if str(preview.get(field, "")).strip()}
+        if "doi" in changes:
+            changes["doi_source"] = str(preview.get("doi_source", "") or "crossref")
+        mutation = _apply_metadata_change(record["paper_id"], changes)
+        if mutation.ok:
+            st.session_state.pop(preview_key, None)
+            st.success("Crossref metadata accepted and Reading Note metadata synchronized.")
+            _rerun_paper_detail(record["paper_id"])
 
 
 def _render_grouped_tag_suggestions(suggestion_details: list[dict], *, key_prefix: str) -> list[str]:
@@ -755,12 +726,12 @@ def _render_doi_less_metadata_candidate(
         key=f"doi_less_apply_{record['paper_id']}",
         disabled=not bool(plan["updates"]),
     ):
-        result = apply_metadata_candidate_to_index(record["paper_id"], candidate, overwrite=overwrite)
-        _refresh_reading_note_header_after_metadata_apply(record["paper_id"])
-        st.session_state.pop(candidate_key, None)
-        updated = ", ".join(result["updated_fields"]) if result["updated_fields"] else "none"
-        st.success(f"DOI-less metadata applied. Updated fields: {updated}.")
-        _rerun_paper_detail(record["paper_id"])
+        mutation = _apply_metadata_change(record["paper_id"], dict(plan["updates"]))
+        if mutation.ok:
+            st.session_state.pop(candidate_key, None)
+            updated = ", ".join(mutation.changed_fields) if mutation.changed_fields else "none"
+            st.success(f"DOI-less metadata applied. Updated fields: {updated}.")
+            _rerun_paper_detail(record["paper_id"])
     if col2.button("Clear DOI-less candidate", key=f"doi_less_clear_{record['paper_id']}"):
         st.session_state.pop(candidate_key, None)
         _rerun_paper_detail(record["paper_id"])

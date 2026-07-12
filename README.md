@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.25-lifecycle-and-recovery-closure**.
+Current release target: **v1.0.26-streamlit-finalization-api-contract-freeze**.
 
-v1.0.25 defines conservative corruption recovery, verified cache quarantine/restore, exact duplicate decisions, and reversible metadata-only archive behavior. It adds no FastAPI or frontend code. Browser-level Reader and lifecycle validation remain manual gates.
+v1.0.26 is the final Streamlit correctness and architecture-boundary release before migration. It fixes Reader tag/Reading-Note header divergence, consolidates canonical metadata mutation, freezes five read-only domain contracts, and adds read-only disposable restore readiness checks. The user reported Sections A-H manual validation passed, including Save convergence and accepted navigation discard; G4 is closed. It adds no FastAPI route or frontend code.
 
 The app remains intentionally local-first and single-user:
 
@@ -77,8 +77,10 @@ Current support includes:
 - Search and filtering by metadata, status, priority, and tags.
 - Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, and tags.
 - Reading Note headers refresh from accepted paper metadata while preserving existing note body sections and unsaved draft text.
-- Reader note state follows a documented per-paper transition contract; dirty reload never replaces a draft without explicit discard confirmation.
-- Reading status and priority use one explicit Apply action; paper-scoped note and PDF-renderer state remain stable across Reader actions.
+- Manual/suggested tags, Edit metadata, DOI, DOI-less, and Crossref acceptance share one metadata coordinator; dirty bodies are never autosaved and explicit Save converges the latest header and body.
+- Reader note state survives metadata-triggered reruns while the same paper remains active; dirty Reload still requires explicit Keep/Discard.
+- Unsaved drafts are never autosaved. Switching papers, refreshing the browser, or restarting discards them; returning loads the last explicitly saved note.
+- Reading status and priority use one explicit Apply action; active-paper note and PDF-renderer state remain stable across same-paper reruns.
 - Structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
 - BluePrint Reading Note template download and confirmed local import into the Reading Note and structured note blocks, with duplicate source imports blocked unless explicitly forced.
 - Full-text extraction with MarkItDown when available and `pypdf` fallback.
@@ -124,7 +126,7 @@ Settings is organized into four sections:
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
 
-Library Health Check reports missing or unindexed PDFs, duplicate filenames, duplicate PDF hashes, duplicate DOI values, incomplete metadata, orphan records, corrupt or invalid JSON stores, backup snapshot concerns, orphan extracted-text caches, noncanonical paths, and stale extracted-text caches. Each reported section includes severity, meaning, and recommended next action. Duplicate PDF hash groups show `pdf_sha256`, indexed/unindexed counts, indexed `paper_id`, title, filename, filepath, status, and cheap note/project-link counts when available. Indexed PDFs reuse current hash metadata when size and modified time are unchanged; unindexed duplicate candidates are hashed deterministically when needed. Duplicate rows can be explicitly kept, reconnected to an unindexed same-hash PDF, ignored for the current session, or removed from `paper_index.csv` after confirmation; none of these actions auto-merge or delete PDFs, notes, note blocks, project links, or extracted text. Orphan note files and note block files can be exported, reattached to an indexed paper, or deleted only after explicit confirmation. Orphan project links can be exported, reattached, or unlinked without changing papers, PDFs, notes, note blocks, or index rows. Missing indexed PDFs can be explicitly reconnected to a selected PDF under `papers/` or removed from the index without deleting related user files.
+Library Health Check reports missing/unindexed PDFs, duplicate identities, incomplete metadata, orphan records, structured app-owned corruption, quarantine state, backup concerns, noncanonical paths, and stale caches. Exact duplicate ignores are persistent, reversible, and bound to workspace-relative path plus SHA-256. No duplicate action automatically merges or deletes PDFs or linked user state.
 
 `BLUEPRINT_INBOX_DIR` can point to a Google Drive for desktop synced folder such as `G:\My Drive\BluePrint\paper`. No Google Drive API or OAuth is used. Inbox PDFs are candidates only; the app uses an explicit preview/confirm workflow to copy one selected PDF into `papers/` and leaves the source untouched.
 
@@ -133,7 +135,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, counts, and snapshot policy. Verify a snapshot in place with `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>` before restoring; verification never extracts files or modifies runtime data. Source code, `.git`, virtual environments, package caches, secrets, logs, temporary files, and regenerable caches such as `data/extracted_text/` and `data/paper_profiles/` are excluded by default. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, counts, and snapshot policy. Verify it in place with `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>`. Before a rehearsal, run `.\.venv\Scripts\python.exe scripts\restore_check.py <snapshot.zip> <existing-empty-disposable-directory>`; this verifies the original and refuses unsafe/non-empty targets without extracting. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
 
 Recommended move workflow:
 
@@ -158,8 +160,10 @@ Foundation release documents:
 - [Reader note state machine](docs/READER_NOTE_STATE_MACHINE.md)
 - [Reader frontend parity checklist](docs/READER_FRONTEND_PARITY_CHECKLIST.md)
 - [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
+- [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
+- [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
 - [v1.0.25 lifecycle and recovery release notes](docs/release_notes/v1.0.25.md)
 - [v1.0.24 Reader validation and parity release notes](docs/release_notes/v1.0.24.md)
 - [v1.0.23 Reader state-machine release notes](docs/release_notes/v1.0.23.md)
@@ -208,6 +212,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 
 ## Version History
 
+### v1.0.26-streamlit-finalization-api-contract-freeze
+
+- Fixes Reader manual/suggested tag synchronization with canonical Reading Note headers.
+- Routes canonical metadata changes through one typed, Streamlit-independent mutation coordinator.
+- Freezes JSON-safe Health, Library, Paper, Detail, and Reader read models without adding routes.
+- Adds a read-only snapshot/disposable-target restore readiness check and final frontend parity criteria.
+
 ### v1.0.25-lifecycle-and-recovery-closure
 
 - Adds structured app-owned corruption diagnosis and byte-preserving recovery-copy export.
@@ -220,7 +231,7 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - Combines status and priority persistence into one explicit Apply action and skips unchanged writes.
 - Removes avoidable explicit reruns while retaining intentional reloads required for fresh records, disk transitions, or confirmation cleanup.
 - Defines the Reader action/rerun contract and minimum future frontend parity requirements.
-- Keeps G4 conditional on user-performed Streamlit manual smoke and accepts remaining framework-level PDF rerenders.
+- The user later reported the v1.0.24 manual Reader smoke complete; remaining framework-level PDF rerenders are accepted.
 
 ### v1.0.23-reader-state-machine-closure
 
@@ -461,7 +472,7 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - The HTML/base64 PDF viewer is an explicit experimental fallback and may fail depending on browser, Streamlit, file size, or local security policy.
 - Large PDFs are warned before rendering; large-file HTML/base64 fallback requires explicit confirmation.
 - Same-hash duplicate rows are never auto-merged; users must choose keep, reconnect, ignore, or confirmed index-row removal.
-- Orphan repair can reattach/export/unlink/delete supported records, but archive lifecycle and automatic corrupt-cache quarantine remain deferred.
+- Orphan repair, metadata-only archive, and explicit verified rebuildable-cache quarantine are implemented; automatic destructive repair remains deferred.
 - Extracted-text and paper-profile caches are excluded from backup snapshots by default because they are regenerable.
 
 If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:

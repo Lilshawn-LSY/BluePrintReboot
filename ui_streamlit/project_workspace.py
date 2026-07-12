@@ -4,6 +4,7 @@ from typing import Any, MutableMapping
 
 import streamlit as st
 
+from services.reader_state_keys import activate_reader_paper
 from storage.index_store import load_index
 from storage.note_block_store import ALLOWED_BLOCK_TYPES, get_note_block
 from storage.project_link_store import (
@@ -472,8 +473,7 @@ def project_link_counts(project_id: str, links: list[dict[str, Any]]) -> dict[st
 
 
 def open_paper_in_reader(paper_id: str, session_state: MutableMapping) -> None:
-    session_state["active_paper_id"] = paper_id
-    session_state["current_page"] = "Paper Detail"
+    activate_reader_paper(paper_id, session_state)
 
 
 def _project_label(project: dict[str, Any], counts: dict[str, int]) -> str:
