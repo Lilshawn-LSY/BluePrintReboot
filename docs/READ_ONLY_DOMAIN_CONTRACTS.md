@@ -55,3 +55,9 @@ Canonical sources and precedence are:
 | `arxiv_id` | Existing Reading Note identity rule | A normalized explicit `arxiv_id` wins when present; otherwise the first identifier detected deterministically from stored DOI, filename, title, abstract, and keywords is used. |
 
 Older indexes need no migration during reads: the read-only index snapshot supplies safe defaults for absent canonical columns. PaperTextProfile is a derived cache and is not a fallback for this contract. API reads do not call Crossref, OpenAlex, arXiv, PDF extraction, or any other network/enrichment path, and they do not parse extracted full text.
+
+## Consumed by the v1.2.0 frontend shell
+
+The desktop-first web shell consumes only `GET /health`, `GET /library/status`, `GET /papers`, and `GET /papers/{paper_id}` through a centralized typed client. Browser components do not call FastAPI directly; a same-origin server bridge forwards only these allowlisted GET paths to the configured local API URL.
+
+Dashboard, Library, Papers, and Paper Detail render explicit loading, empty, error, and unavailable states. Projects, Tags, and Settings do not invent domain data while their contracts are absent. The frontend adds no write operation and does not change any frozen API or domain response shape.
