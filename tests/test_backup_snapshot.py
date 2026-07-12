@@ -22,6 +22,7 @@ def _seed_workspace(name: str) -> Path:
         encoding="utf-8",
     )
     (workspace / "data" / "note_imports.json").write_text("[]", encoding="utf-8")
+    (workspace / "data" / "lifecycle_decisions.json").write_text("[]", encoding="utf-8")
     (workspace / "data" / "projects" / "projects.json").write_text(
         json.dumps([{"id": "project-1"}]), encoding="utf-8"
     )
@@ -65,6 +66,7 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
         manifest = json.loads(archive.read("manifest.json"))
     assert "data/paper_index.csv" in names
     assert "data/note_imports.json" in names
+    assert "data/lifecycle_decisions.json" in names
     assert "data/projects/projects.json" in names
     assert "data/projects/project_links.json" in names
     assert "data/note_blocks/paper-1.json" in names

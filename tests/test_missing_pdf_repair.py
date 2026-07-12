@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 from services.missing_pdf_repair import (
-    ARCHIVE_DEFERRED_MESSAGE,
     MissingPDFRepairError,
     build_reconnect_plan,
     list_reconnect_candidates,
@@ -234,7 +233,3 @@ def test_remove_from_index_requires_confirmation_and_deletes_only_index_row() ->
     assert extracted_text_path.read_text(encoding="utf-8") == "cache"
     assert projects_path.read_text(encoding="utf-8") == "[]"
     assert paper_id in project_links_path.read_text(encoding="utf-8")
-
-
-def test_archive_missing_pdf_is_documented_as_deferred() -> None:
-    assert "deferred" in ARCHIVE_DEFERRED_MESSAGE.lower()

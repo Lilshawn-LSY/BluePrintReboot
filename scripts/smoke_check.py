@@ -25,6 +25,8 @@ REQUIRED_FILES = (
     "docs/BACKLOG.md",
     "docs/DEV_WORKFLOW.md",
     "docs/RELEASE_CHECKLIST.md",
+    "docs/READER_NOTE_STATE_MACHINE.md",
+    "docs/READER_FRONTEND_PARITY_CHECKLIST.md",
     "docs/templates/blueprint_reading_note_template.md",
     "config/tag_rules.json",
     "config/canonical_tags.json",
@@ -36,7 +38,8 @@ REQUIRED_FILES = (
     "docs/checklists/v1.0_smoke_test.md",
     "docs/checklists/regression_checklist.md",
     "docs/checklists/new_pc_restore_checklist.md",
-    "docs/release_notes/v1.0.23.md",
+    "docs/release_notes/v1.0.25.md",
+    "docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md",
     "docs/release_notes/v1.0_draft.md",
 )
 REQUIRED_DIRECTORIES = ("data", "papers", "notes", "exports")

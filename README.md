@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.0.23-reader-state-machine-closure**.
+Current release target: **v1.0.25-lifecycle-and-recovery-closure**.
 
-v1.0.23 makes Reading Note transitions explicit and paper-scoped. The editor shows Saved, Unsaved changes, and Header refresh pending status; dirty Reload offers Keep draft or an explicit Discard changes and reload decision. Pending replacement/append operations are ordered and idempotent, newer edits are protected, and explicit Save remains the only draft-to-disk path.
+v1.0.25 defines conservative corruption recovery, verified cache quarantine/restore, exact duplicate decisions, and reversible metadata-only archive behavior. It adds no FastAPI or frontend code. Browser-level Reader and lifecycle validation remain manual gates.
 
 The app remains intentionally local-first and single-user:
 
@@ -78,6 +78,7 @@ Current support includes:
 - Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, and tags.
 - Reading Note headers refresh from accepted paper metadata while preserving existing note body sections and unsaved draft text.
 - Reader note state follows a documented per-paper transition contract; dirty reload never replaces a draft without explicit discard confirmation.
+- Reading status and priority use one explicit Apply action; paper-scoped note and PDF-renderer state remain stable across Reader actions.
 - Structured note blocks for summaries, claims, methods, evidence, questions, ideas, and limitations.
 - BluePrint Reading Note template download and confirmed local import into the Reading Note and structured note blocks, with duplicate source imports blocked unless explicitly forced.
 - Full-text extraction with MarkItDown when available and `pypdf` fallback.
@@ -142,6 +143,8 @@ Recommended move workflow:
 4. With the app stopped, extract the snapshot into the project root while preserving directory structure.
 5. Start the app, scan papers, and run Library Health Check again.
 
+Backup snapshots include the atomic `data/lifecycle_decisions.json` store because exact duplicate ignores affect visible behavior. Rebuildable extracted-text and PaperTextProfile caches, exports, and quarantine copies remain excluded. Recovery copies are separate evidence and should be preserved independently when needed.
+
 ## Development/Release Workflow
 
 Foundation release documents:
@@ -153,8 +156,12 @@ Foundation release documents:
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Mandatory regression checklist](docs/checklists/regression_checklist.md)
 - [Reader note state machine](docs/READER_NOTE_STATE_MACHINE.md)
+- [Reader frontend parity checklist](docs/READER_FRONTEND_PARITY_CHECKLIST.md)
+- [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
+- [v1.0.25 lifecycle and recovery release notes](docs/release_notes/v1.0.25.md)
+- [v1.0.24 Reader validation and parity release notes](docs/release_notes/v1.0.24.md)
 - [v1.0.23 Reader state-machine release notes](docs/release_notes/v1.0.23.md)
 - [v1.0.22 note durability and validation release notes](docs/release_notes/v1.0.22.md)
 - [v1.0.21 reader performance polish release notes](docs/release_notes/v1.0.21.md)
@@ -200,6 +207,20 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.0.25-lifecycle-and-recovery-closure
+
+- Adds structured app-owned corruption diagnosis and byte-preserving recovery-copy export.
+- Adds confirmed, verified quarantine/restore for rebuildable caches only.
+- Persists reversible exact-path/SHA duplicate ignores atomically and includes them in backup snapshots.
+- Adds reversible metadata-only archive visibility without changing reading status or moving files.
+
+### v1.0.24-reader-validation-and-parity-closure
+
+- Combines status and priority persistence into one explicit Apply action and skips unchanged writes.
+- Removes avoidable explicit reruns while retaining intentional reloads required for fresh records, disk transitions, or confirmation cleanup.
+- Defines the Reader action/rerun contract and minimum future frontend parity requirements.
+- Keeps G4 conditional on user-performed Streamlit manual smoke and accepts remaining framework-level PDF rerenders.
 
 ### v1.0.23-reader-state-machine-closure
 

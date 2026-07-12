@@ -1,4 +1,6 @@
 import platform
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Callable
 
 import pandas as pd
@@ -42,6 +44,8 @@ from services.paper_file_hygiene import (
 )
 from storage.paper_profile_store import load_profile
 from services.backup_snapshot import create_backup_snapshot
+from services.storage_recovery import StorageRecoveryError, export_recovery_copy, quarantine_file, restore_quarantined_file
+from services.lifecycle_decisions import ignore_exact_duplicate, unignore_exact_duplicate
 from services.library_health import (
     ORPHAN_PRESERVE_ACTION,
     ORPHAN_EXPORT_ACTION,
@@ -69,7 +73,6 @@ from services.metadata_fallback import (
     fill_metadata_gaps_from_pdf_profile,
 )
 from services.missing_pdf_repair import (
-    ARCHIVE_DEFERRED_MESSAGE,
     MissingPDFRepairError,
     build_reconnect_plan,
     list_reconnect_candidates,
@@ -97,11 +100,13 @@ from storage.index_store import (
     accept_crossref_metadata,
     enrich_paper_doi_from_pdf,
     load_index,
+    filter_archived,
+    set_paper_archived,
     update_index_from_scan,
     update_paper_metadata,
 )
 from storage.note_store import refresh_note_header
-from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
+from storage.paths import DATA_DIR, EXPORTS_DIR, INDEX_CSV, NOTES_DIR, PAPERS_DIR, PROJECT_ROOT, RECOVERY_DIR, QUARANTINE_DIR, LIFECYCLE_DECISIONS_JSON, ensure_workspace_dirs
 from ui_streamlit.project_workspace import render_paper_project_links, render_project_workspace
 from ui_streamlit.reader_workspace import (
     has_unsaved_note_changes,
@@ -244,6 +249,8 @@ def library_page() -> None:
     st.title("Library")
     df = _index()
 
+    archive_view = st.radio("Archive visibility", ("Active", "Include archived", "Archived only"), horizontal=True)
+    df = filter_archived(df, include_archived=archive_view == "Include archived", archived_only=archive_view == "Archived only")
     col1, col2, col3, col4 = st.columns([3, 1, 1, 2])
     search = col1.text_input("Search")
     status_filter = col2.selectbox("Status", ["all"] + STATUS_OPTIONS)
@@ -313,6 +320,13 @@ def paper_detail_page() -> None:
             ]
         )
     )
+    archived = str(record.get("is_archived", "false")).lower() == "true"
+    if archived:
+        st.info(f"Archived at {record.get('archived_at', '') or 'an unknown time'}. The PDF and linked data remain unchanged.")
+    if st.button("Unarchive" if archived else "Archive", key=f"archive_{record['paper_id']}"):
+        set_paper_archived(record["paper_id"], not archived)
+        st.success("Paper unarchived." if archived else "Paper archived. No files were moved or deleted.")
+        _rerun_paper_detail(record["paper_id"])
 
     render_reader_workspace(record)
 
@@ -1027,6 +1041,8 @@ def _render_library_health_check() -> None:
         ("Unindexed PDFs", "unindexed_pdfs"),
         ("Duplicate filenames", "duplicate_filenames"),
         ("Duplicate PDF hashes", "duplicate_pdf_hashes"),
+        ("Ignored exact duplicates", "ignored_duplicates"),
+        ("Quarantined caches", "quarantined_caches"),
         ("Duplicate DOI values", "duplicate_dois"),
         ("Missing metadata", "missing_metadata"),
         ("Orphan notes", "orphan_notes"),
@@ -1049,6 +1065,12 @@ def _render_library_health_check() -> None:
                 _render_missing_pdf_repair(items)
             elif key == "duplicate_pdf_hashes":
                 _render_duplicate_pdf_hash_review(items)
+            elif key == "ignored_duplicates":
+                _render_ignored_duplicate_review(items)
+            elif key == "quarantined_caches":
+                _render_quarantined_cache_review(items)
+            elif key == "corrupt_json":
+                _render_corrupt_storage_review(items)
             elif key == "orphan_notes":
                 _render_orphan_note_review(items)
             elif key == "orphan_note_blocks":
@@ -1070,6 +1092,91 @@ def _render_health_issue_guidance(report: dict[str, object], key: str) -> None:
     st.write(f"**{severity} - {category}**")
     st.write(str(guidance.get("meaning", "")))
     st.info(str(guidance.get("next_action", "")))
+
+
+def _refresh_health_after_action(message: str) -> None:
+    st.session_state["library_health_report"] = run_library_health_check()
+    st.session_state["library_health_repair_success"] = message
+
+
+def _render_corrupt_storage_review(items: list[dict[str, object]]) -> None:
+    groups: dict[str, list[dict[str, object]]] = {}
+    for item in items:
+        groups.setdefault(str(item.get("storage_class", "unclassified")), []).append(item)
+    for storage_class, records in groups.items():
+        st.write(f"**{storage_class.title()}**")
+        for index, item in enumerate(records):
+            path = str(item.get("path", ""))
+            st.error(str(item.get("issue", "Storage corruption detected.")))
+            st.write(f"Safe default: {item.get('suggested_action', 'Export a recovery copy before repair.')}")
+            with st.expander("Technical details"):
+                st.json(item)
+            col1, col2 = st.columns(2)
+            if col1.button("Export recovery copy", key=f"recovery_export_{index}_{path}"):
+                try:
+                    result = export_recovery_copy(path, workspace_root=PROJECT_ROOT, recovery_dir=RECOVERY_DIR, storage_class=storage_class, reason=str(item.get("issue", "Health Check diagnosis")))
+                except (OSError, StorageRecoveryError) as exc:
+                    st.error(f"Recovery-copy export failed for this target: {exc}")
+                else:
+                    _refresh_health_after_action(f"Recovery copy exported to {result['copy_path']}. The source was unchanged.")
+                    st.rerun()
+            if bool(item.get("rebuildable", False)):
+                confirmed = col2.checkbox("Confirm quarantine", key=f"quarantine_confirm_{index}_{path}")
+                if col2.button("Quarantine cache", key=f"quarantine_{index}_{path}", disabled=not confirmed):
+                    try:
+                        result = quarantine_file(path, workspace_root=PROJECT_ROOT, quarantine_dir=QUARANTINE_DIR, storage_class=storage_class, reason=str(item.get("issue", "Health Check diagnosis")), rebuildable=True, confirm=True)
+                    except (OSError, StorageRecoveryError) as exc:
+                        st.error(f"Quarantine failed; the active target was preserved: {exc}")
+                    else:
+                        _refresh_health_after_action(f"Cache quarantined after verified recovery copy: {result.get('copy_path', path)}. Rebuild remains explicit.")
+                        st.rerun()
+            else:
+                col2.caption("Manual repair only. Critical user state cannot be quarantined by default.")
+    manifests = sorted(QUARANTINE_DIR.glob("*.manifest.json")) if QUARANTINE_DIR.is_dir() else []
+    if manifests:
+        st.write("**Restore quarantined cache**")
+        selected = st.selectbox("Quarantine manifest", manifests, format_func=lambda path: path.name)
+        confirmed = st.checkbox("Confirm restore; an existing active destination will never be overwritten.", key="restore_quarantine_confirm")
+        if st.button("Restore", disabled=not confirmed):
+            try:
+                result = restore_quarantined_file(selected, workspace_root=PROJECT_ROOT, confirm=True)
+            except (OSError, StorageRecoveryError) as exc:
+                st.error(f"Restore failed for this target: {exc}")
+            else:
+                _refresh_health_after_action(f"Quarantined bytes restored to {result['destination_path']}; the quarantine copy was retained.")
+                st.rerun()
+
+
+def _render_ignored_duplicate_review(items: list[dict[str, object]]) -> None:
+    st.info("These exact path/content decisions are informational. A path or content change makes the decision inapplicable.")
+    for index, item in enumerate(items):
+        st.write(f"`{item.get('workspace_relative_path', item.get('filepath', ''))}`")
+        st.code(f"SHA-256: {item.get('pdf_sha256', '')}")
+        if st.button("Unignore", key=f"unignore_duplicate_{index}_{item.get('pdf_sha256', '')}"):
+            try:
+                changed = unignore_exact_duplicate(str(item.get("filepath", "")), decision_path=LIFECYCLE_DECISIONS_JSON, workspace_root=PROJECT_ROOT)
+            except (JsonStoreError, ValueError) as exc:
+                st.error(f"Unignore failed: {exc}")
+            else:
+                _refresh_health_after_action("Exact duplicate decision removed." if changed else "The decision was already absent.")
+                st.rerun()
+
+
+def _render_quarantined_cache_review(items: list[dict[str, object]]) -> None:
+    st.info("Restore is explicit, verifies retained bytes, refuses to overwrite an active file, and retains the quarantine copy.")
+    for index, item in enumerate(items):
+        st.write(f"Original: `{item.get('original_path', '')}`")
+        with st.expander("Technical details"):
+            st.json(item)
+        confirmed = st.checkbox("Confirm restore", key=f"restore_quarantine_confirm_{index}")
+        if st.button("Restore quarantined cache", key=f"restore_quarantine_{index}", disabled=not confirmed):
+            try:
+                result = restore_quarantined_file(str(item.get("manifest_path", "")), workspace_root=PROJECT_ROOT, confirm=True)
+            except (OSError, StorageRecoveryError) as exc:
+                st.error(f"Restore failed for this target: {exc}")
+            else:
+                _refresh_health_after_action(f"Quarantined bytes restored to {result['destination_path']}; the quarantine copy was retained.")
+                st.rerun()
 
 
 def _duplicate_pdf_hash_rows(group: dict[str, object]) -> list[dict[str, object]]:
@@ -1134,6 +1241,23 @@ def _render_duplicate_pdf_hash_review(items: list[dict[str, object]]) -> None:
         rows = _duplicate_pdf_hash_rows(group)
         if rows:
             st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        for file_index, duplicate_file in enumerate(group.get("unindexed_files", [])):
+            if not isinstance(duplicate_file, dict) or not duplicate_file.get("filepath"):
+                continue
+            filepath = str(duplicate_file["filepath"])
+            col1, col2 = st.columns(2)
+            if col1.button("Keep for review", key=f"keep_unindexed_{index}_{file_index}_{pdf_sha256}"):
+                st.info("No changes were made. The duplicate remains visible.")
+            if col2.button("Ignore this exact duplicate", key=f"ignore_unindexed_{index}_{file_index}_{pdf_sha256}"):
+                try:
+                    path = Path(filepath)
+                    stat = path.stat()
+                    ignore_exact_duplicate(filepath, pdf_sha256, size_bytes=stat.st_size, modified_at=datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(), decision_path=LIFECYCLE_DECISIONS_JSON, workspace_root=PROJECT_ROOT)
+                except (OSError, JsonStoreError, ValueError) as exc:
+                    st.error(f"Ignore decision could not be saved: {exc}")
+                else:
+                    _refresh_health_after_action("Exact duplicate ignored. No PDF, index row, paper_id, note, or project link was changed.")
+                    st.rerun()
         indexed_records = [
             record for record in group.get("indexed_records", []) if isinstance(record, dict) and record.get("paper_id")
         ]
@@ -1155,19 +1279,13 @@ def _render_duplicate_pdf_hash_review(items: list[dict[str, object]]) -> None:
         )
         action = st.radio(
             "Duplicate action",
-            options=("Keep", "Reconnect", "Ignore", "Remove index row"),
+            options=("Keep", "Reconnect", "Remove index row"),
             horizontal=True,
             key=f"duplicate_pdf_action_{index}_{pdf_sha256}_{selected_paper_id}",
         )
         if action == "Keep":
             if st.button("Keep duplicate rows", key=f"duplicate_pdf_keep_{index}_{selected_paper_id}"):
                 st.info("No changes were made. This duplicate group remains visible in health checks.")
-        elif action == "Ignore":
-            if st.button("Ignore for now", key=f"duplicate_pdf_ignore_{index}_{selected_paper_id}"):
-                ignored = set(st.session_state.get("ignored_duplicate_pdf_hashes", set()))
-                ignored.add(pdf_sha256)
-                st.session_state["ignored_duplicate_pdf_hashes"] = ignored
-                st.info("No library data was changed. This duplicate was marked ignored for the current app session.")
         elif action == "Reconnect":
             candidate_files = [
                 candidate
@@ -1648,8 +1766,10 @@ def _render_missing_pdf_repair(items: list[dict[str, object]]) -> None:
                 st.rerun()
         if st.button("Keep missing", key=f"missing_pdf_keep_{selected_paper_id}"):
             st.info("No changes were made.")
-        st.button("Archive missing record", key=f"missing_pdf_archive_{selected_paper_id}", disabled=True)
-        st.caption(ARCHIVE_DEFERRED_MESSAGE)
+        if st.button("Archive missing record", key=f"missing_pdf_archive_{selected_paper_id}"):
+            set_paper_archived(selected_paper_id, True)
+            _refresh_health_after_action("Missing-PDF record archived. No files or linked data were changed.")
+            st.rerun()
 
 
 def _render_pdf_inbox() -> None:

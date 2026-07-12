@@ -69,7 +69,7 @@ def read_json_file(
         return default
     try:
         return json.loads(target.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise CorruptJsonError(
             target,
             f"{store_name} is invalid JSON",

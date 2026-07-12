@@ -116,21 +116,101 @@ def test_health_check_surfaces_corrupt_json_with_recovery_action() -> None:
     report = _run_health(paths)
 
     assert report["healthy"] is False
-    assert report["corrupt_json"] == [
-        {
-            "severity": "error",
-            "category": "storage",
-            "path": str(corrupt_path.resolve()),
-            "issue": "Note block file is invalid JSON",
-            "suggested_action": (
-                "Do not overwrite this file. Restore it from a known-good backup snapshot or make a copy "
-                "and repair the JSON manually before using related write actions."
-            ),
-            "classification": "corrupt json",
-        }
-    ]
+    assert len(report["corrupt_json"]) == 1
+    issue = report["corrupt_json"][0]
+    assert issue["path"] == str(corrupt_path.resolve())
+    assert issue["classification"] == "corrupt json"
+    assert issue["storage_class"] == "critical user state"
+    assert issue["workspace_relative_path"] == "data/note_blocks/paper-1.json"
+    assert issue["size_bytes"] == len(before.encode("utf-8"))
+    assert issue["sha256"] == _sha256(before.encode("utf-8"))
+    assert issue["rebuildable"] is False
+    assert issue["allowed_recovery_actions"] == ["export recovery copy", "manual repair"]
     assert report["issue_guidance"]["corrupt_json"]["next_action"].startswith("Do not overwrite")
     assert corrupt_path.read_text(encoding="utf-8") == before
+
+
+def test_health_check_classifies_invalid_utf8_text_cache_as_rebuildable() -> None:
+    paths = _workspace("health-invalid-text-cache")
+    extracted = paths[4]
+    (extracted / "paper-1.txt").write_bytes(b"\xff\xfe")
+    (extracted / "paper-1.json").write_text("{}", encoding="utf-8")
+    pd.DataFrame(columns=["paper_id", "filename", "filepath"]).to_csv(paths[-1], index=False)
+
+    report = _run_health(paths)
+
+    issue = next(item for item in report["corrupt_json"] if item["path"].endswith("paper-1.txt"))
+    assert issue["classification"] == "corrupt extracted-text cache"
+    assert issue["storage_class"] == "rebuildable cache"
+    assert issue["rebuildable"] is True
+    assert "quarantine" in issue["allowed_recovery_actions"]
+
+
+def test_health_check_classifies_invalid_utf8_critical_json() -> None:
+    paths = _workspace("health-invalid-json-utf8")
+    projects = paths[3] / "projects.json"
+    projects.write_bytes(b"\xff\xfe")
+    pd.DataFrame(columns=["paper_id", "filename", "filepath"]).to_csv(paths[-1], index=False)
+
+    report = _run_health(paths)
+
+    issue = next(item for item in report["corrupt_json"] if item["path"] == str(projects.resolve()))
+    assert issue["storage_class"] == "critical user state"
+    assert issue["detected_error_type"] == "CorruptJsonError"
+
+
+def test_health_check_structures_inaccessible_app_owned_json(monkeypatch) -> None:
+    paths = _workspace("health-inaccessible-json")
+    projects = paths[3] / "projects.json"
+    projects.write_text("[]", encoding="utf-8")
+    pd.DataFrame(columns=["paper_id", "filename", "filepath"]).to_csv(paths[-1], index=False)
+    original = Path.read_text
+
+    def deny_target(path: Path, *args, **kwargs):
+        if path.resolve(strict=False) == projects.resolve():
+            raise PermissionError("denied for test")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", deny_target)
+    report = _run_health(paths)
+
+    issue = next(item for item in report["corrupt_json"] if item["path"] == str(projects.resolve()))
+    assert issue["classification"] == "invalid json store"
+    assert issue["detected_error_type"] == "JsonStoreError"
+    assert issue["storage_class"] == "critical user state"
+
+
+def test_health_check_detects_wrong_cache_shape_and_missing_pair() -> None:
+    paths = _workspace("health-cache-shape-pair")
+    extracted = paths[4]
+    (extracted / "paper-1.json").write_text("[]", encoding="utf-8")
+    pd.DataFrame(columns=["paper_id", "filename", "filepath"]).to_csv(paths[-1], index=False)
+
+    report = _run_health(paths)
+
+    classifications = {item["classification"] for item in report["corrupt_json"]}
+    assert "corrupt extracted-text metadata" in classifications
+    assert "inconsistent extracted-text cache pair" in classifications
+
+
+def test_health_check_does_not_scan_arbitrary_external_json() -> None:
+    paths = _workspace("health-contained-scan")
+    external = paths[0].parent / "external" / "unowned.json"
+    external.parent.mkdir()
+    external.write_text("{bad", encoding="utf-8")
+    pd.DataFrame(columns=["paper_id", "filename", "filepath"]).to_csv(paths[-1], index=False)
+
+    report = _run_health(paths)
+
+    assert all(item["path"] != str(external.resolve()) for item in report["corrupt_json"])
+
+
+def test_health_check_rejects_external_diagnostic_root() -> None:
+    paths = _workspace("health-external-root")
+    external = paths[0].parent.parent / f"external-cache-{paths[0].parent.name}"
+    external.mkdir()
+    with pytest.raises(ValueError, match="outside"):
+        run_library_health_check(index_csv=paths[-1], papers_dir=paths[0], notes_dir=paths[1], note_blocks_dir=paths[2], projects_dir=paths[3], extracted_text_dir=external)
 
 
 def test_health_check_surfaces_missing_backup_snapshot_concern() -> None:

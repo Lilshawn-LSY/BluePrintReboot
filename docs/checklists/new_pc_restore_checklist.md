@@ -73,6 +73,8 @@ python -m pip install -r requirements-optional.txt
 - [ ] Confirm indexed and physical PDF counts are plausible.
 - [ ] Open several papers and verify metadata, PDF viewing, Markdown notes, and structured note blocks.
 - [ ] Open Project Workspace and verify projects and links.
+- [ ] Confirm `data/lifecycle_decisions.json`, when present, restored exact duplicate-ignore behavior and is included in the snapshot manifest.
+- [ ] Confirm archived papers are hidden by default, visible in the archived view, and can be opened without moving PDFs.
 - [ ] Check Tag Manager and tag configuration.
 - [ ] Verify extracted text or re-extract it when caches were not included.
 - [ ] Run Crossref Diagnostics if network enrichment will be used.

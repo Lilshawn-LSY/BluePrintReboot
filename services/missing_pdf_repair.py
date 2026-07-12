@@ -11,11 +11,6 @@ from storage.index_store import load_index, save_index
 from storage.paths import INDEX_CSV, PAPERS_DIR
 
 
-ARCHIVE_DEFERRED_MESSAGE = (
-    "Archive is deferred because paper status currently supports unread, reading, and read only."
-)
-
-
 class MissingPDFRepairError(RuntimeError):
     def __init__(self, message: str, plan: dict[str, Any] | None = None) -> None:
         super().__init__(message)
