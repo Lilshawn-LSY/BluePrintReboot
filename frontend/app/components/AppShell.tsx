@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="top-bar__separator" aria-hidden="true">/</span>
             <strong>{currentTitle(pathname)}</strong>
           </div>
-          <span className="version-label">v1.2.0 · read-only shell</span>
+          <span className="version-label">v1.2.1 · read-only shell</span>
         </header>
         <main id="main-content" className="main-content">{children}</main>
       </div>

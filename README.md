@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.2.0-frontend-application-shell**.
+Current release target: **v1.2.1-full-stack-validation-gate**.
 
-v1.2.0 adds a calm, dense, desktop-first web shell with Dashboard, Library, Papers, Paper Detail, Projects, Tags, and Settings routes. Health, library status, and paper routes use the existing read-only API through one typed client. Streamlit remains the primary interface for write actions, Reader Workspace, PDF rendering, and maintenance workflows.
+v1.2.1 makes the implemented Streamlit application, read-only FastAPI layer, and v1.2.0 TypeScript shell part of one reproducible release gate. It adds portable Node resolution, deterministic frontend setup, bridge behavior tests, optional machine-readable evidence, and matching Python/frontend CI jobs. Streamlit remains the primary interface for write actions, Reader Workspace, PDF rendering, and maintenance workflows.
 
 The app remains intentionally local-first and single-user:
 
@@ -26,10 +26,12 @@ From a fresh clone in Windows PowerShell:
 ```powershell
 git clone <repository-url> BluePrintReboot
 cd BluePrintReboot
-.\scripts\dev_setup.ps1
-.\scripts\dev_check.ps1
+.\scripts\dev_setup.ps1 -IncludeFrontend -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
+.\scripts\dev_check.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
 .\scripts\run_app.ps1
 ```
+
+For a Streamlit-only machine, `.\scripts\dev_setup.ps1` still performs Python setup without requiring Node. That machine may use `.\scripts\dev_check.ps1 -PythonOnly`, but the prominently labeled partial result is not release-qualified.
 
 After setup, `start_blueprint.bat` is available as a convenience launcher from File Explorer or Command Prompt. It starts the existing `.venv` app; it does not run setup automatically.
 
@@ -37,7 +39,7 @@ Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the 
 
 ## Read-Only Local API
 
-Streamlit remains the primary BluePrintReboot interface. The FastAPI service is a separate, local-only, read-only adapter: it exposes current health and library counts but provides no paper content or mutation operations.
+Streamlit remains the primary BluePrintReboot interface. The FastAPI service is a separate, local-only, read-only adapter: it exposes health, library status, paper collection metadata, and paper detail metadata, with no mutation operations or PDF/note content routes.
 
 Start it from Windows PowerShell:
 
@@ -63,12 +65,14 @@ The frontend lives in `frontend/` and requires Node.js 22.13 or newer. Start Fas
 
 ```powershell
 .\scripts\run_api.ps1
-.\scripts\run_frontend.ps1
+.\scripts\run_frontend.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
 ```
 
 Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The same-origin frontend bridge connects to FastAPI at `http://127.0.0.1:8000` by default. Copy `frontend/.env.example` to `frontend/.env.local` only when that address needs to change.
 
 Dashboard, Library, Papers, and Paper Detail use real read-only API contracts with explicit loading, empty, error, and unavailable states. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
+
+Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
 For optional MarkItDown PDF support:
 
@@ -92,6 +96,8 @@ py -m venv .venv
 - **PowerShell execution policy** - Run scripts from PowerShell with `.\scripts\dev_setup.ps1`. If local policy blocks a script, use a process-only bypass such as `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\dev_setup.ps1`.
 - **Python not found** - Install Python 3, make sure either `py` or `python` is available on `PATH`, reopen PowerShell, and rerun `.\scripts\dev_setup.ps1`.
 - **Missing `.venv`** - Run `.\scripts\dev_setup.ps1`. `.\scripts\dev_check.ps1`, `.\scripts\run_app.ps1`, and `start_blueprint.bat` expect the environment to already exist.
+- **Portable Node not found** - Pass its directory with `-NodeHome`, or set `$env:BLUEPRINT_NODE_HOME` for the current shell. The directory must contain both `node.exe` and `npm.cmd`.
+- **Missing frontend dependencies** - Run `.\scripts\frontend_setup.ps1 -NodeHome <portable-node-directory>`; setup uses `npm ci` and requires the committed lock file.
 - **Port 8501 already in use** - Launch with another port, for example `.\scripts\run_app.ps1 -Port 8502`.
 
 ## Core Reading Workflow
@@ -170,7 +176,7 @@ Backup Snapshot creates timestamped ZIP files under `exports/`:
 - **Light** - index, projects, links, notes, note blocks, tag configuration, and relevant local settings.
 - **Full** - everything in a light snapshot plus managed PDFs from `papers/`.
 
-Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, counts, and snapshot policy. Verify it in place with `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>`. Before a rehearsal, run `.\.venv\Scripts\python.exe scripts\restore_check.py <snapshot.zip> <existing-empty-disposable-directory>`; this verifies the original and refuses unsafe/non-empty targets without extracting. Restore remains manual. See the [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md).
+Each archive contains `manifest.json` with the app version, timestamp, included files, SHA-256 checksums, counts, and snapshot policy. Verify it in place with `.\.venv\Scripts\python.exe scripts\verify_snapshot.py <snapshot.zip>`. Before a rehearsal, run `.\.venv\Scripts\python.exe scripts\restore_check.py <snapshot.zip> <existing-empty-disposable-directory>`; this verifies the original and refuses unsafe/non-empty targets without extracting. Restore remains manual. The [new-PC restore checklist](docs/checklists/new_pc_restore_checklist.md) is canonical and supersedes the old project-level `backup_guideline.txt`.
 
 Recommended move workflow:
 
@@ -200,6 +206,7 @@ Foundation release documents:
 - [v1.1.1 Paper API release notes](docs/release_notes/v1.1.1.md)
 - [v1.1.2 Rich Paper Metadata release notes](docs/release_notes/v1.1.2.md)
 - [v1.2.0 Frontend Application Shell release notes](docs/release_notes/v1.2.0.md)
+- [v1.2.1 Full-Stack Validation Gate release notes](docs/release_notes/v1.2.1.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -211,17 +218,19 @@ Foundation release documents:
 - [v1.0.20 safety release notes](docs/release_notes/v1.0.20.md)
 - [v1.0.0-foundation release-note draft](docs/release_notes/v1.0_draft.md)
 
-Before Codex-assisted changes, run the baseline validation command and note the result:
+The release-qualified gate includes Python smoke, full pytest, frontend lint, and frontend test/build:
 
 ```powershell
-.\scripts\dev_check.ps1
+.\scripts\dev_check.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64" -WriteEvidence
 ```
 
-After Codex-assisted changes, run the same command again before review. For release hygiene work, also complete the [mandatory regression checklist](docs/checklists/regression_checklist.md).
+The evidence file is opt-in and ignored at `artifacts/validation-summary.json`. A deliberately requested Python-only check is available but partial:
 
 ```powershell
-.\scripts\dev_check.ps1
+.\scripts\dev_check.ps1 -PythonOnly
 ```
+
+`-PythonOnly` and `-SmokeOnly` never claim release readiness. For release hygiene work, also complete the [mandatory regression checklist](docs/checklists/regression_checklist.md), run `git diff --check`, and inspect `git status --short`.
 
 Run a focused test file:
 
@@ -251,6 +260,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.2.1-full-stack-validation-gate
+
+- Adds one portable-Node-aware full gate across Python smoke, full pytest, frontend lint, and frontend build/tests.
+- Adds deterministic frontend `npm ci` setup, opt-in safe JSON evidence, and independent Python/frontend CI jobs.
+- Adds focused same-origin bridge tests while preserving the four GET-only API path shapes and all existing response contracts.
+- Defines the next product milestone as a separate read-only Reader/PDF vertical slice.
 
 ### v1.2.0-frontend-application-shell
 

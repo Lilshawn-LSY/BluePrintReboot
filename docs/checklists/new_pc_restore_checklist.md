@@ -40,11 +40,12 @@ Open PowerShell and run:
 ```powershell
 git clone <repository-url> BluePrintReboot
 cd BluePrintReboot
-.\scripts\dev_setup.ps1
-.\scripts\dev_check.ps1
+.\scripts\dev_setup.ps1 -IncludeFrontend -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
+.\scripts\dev_check.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
 ```
 
 - [ ] Confirm the smoke check reports zero failures.
+- [ ] Confirm pytest, frontend lint, and frontend test/build pass for a release-qualified development setup.
 - [ ] Do not launch Streamlit until the restore files are in place.
 
 Optional MarkItDown support:
@@ -53,7 +54,7 @@ Optional MarkItDown support:
 python -m pip install -r requirements-optional.txt
 ```
 
-This is the only canonical setup order: clone, enter the repository, run `dev_setup.ps1`, then `dev_check.ps1`. Setup failures stop with an actionable error and do not remove library data.
+This is the canonical full development setup order: clone, enter the repository, run `dev_setup.ps1 -IncludeFrontend`, then the default full `dev_check.ps1`. Supply a portable Node directory with `-NodeHome`, set `BLUEPRINT_NODE_HOME`, or provide Node 22.13.0 or newer on `PATH`. A Streamlit-only restore machine may run `.\scripts\dev_setup.ps1` followed by `.\scripts\dev_check.ps1 -PythonOnly`, but that result is partial and not release-qualified. Setup failures stop with an actionable error and do not remove library data.
 
 ## D. Disposable Restore Rehearsal
 
@@ -97,7 +98,7 @@ Create an empty disposable directory outside the active repository, then run:
 ## G. Completion
 
 - [ ] Resolve unexpected missing, unindexed, orphaned, duplicate, or noncanonical records.
-- [ ] Re-run `.\scripts\dev_check.ps1` if this is a development machine.
+- [ ] Re-run `.\scripts\dev_check.ps1 -NodeHome <portable-node-directory>` if this is a full development machine; use `-PythonOnly` only as a deliberately partial check.
 - [ ] Keep the original snapshot until normal daily use is verified.
 - [ ] Create a new snapshot on the new computer after verification.
 - [ ] Record the real clean-PC rehearsal as user-performed; do not infer it from automated checks.

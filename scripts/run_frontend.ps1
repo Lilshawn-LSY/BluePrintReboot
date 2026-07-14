@@ -1,5 +1,6 @@
 param(
-    [int]$Port = 3000
+    [int]$Port = 3000,
+    [string]$NodeHome
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,21 +10,20 @@ try {
     $frontendRoot = Join-Path $repoRoot "frontend"
     $packageJson = Join-Path $frontendRoot "package.json"
     $nodeModules = Join-Path $frontendRoot "node_modules"
-    $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    . (Join-Path $PSScriptRoot "resolve_node.ps1")
+    $node = Resolve-BlueprintNode -NodeHome $NodeHome
 
     if (-not (Test-Path -LiteralPath $packageJson -PathType Leaf)) {
         throw "Frontend package.json was not found."
     }
-    if (-not $npm) {
-        throw "Node.js and npm were not found on PATH. Install Node.js 22.13 or newer."
-    }
     if (-not (Test-Path -LiteralPath $nodeModules -PathType Container)) {
-        throw "Frontend dependencies are missing. Run npm install in the frontend directory."
+        throw "Frontend dependencies are missing. Run .\scripts\frontend_setup.ps1 -NodeHome <portable-node-directory>."
     }
 
     Set-Location -LiteralPath $frontendRoot
+    Write-Host "Using Node.js $($node.NodeVersion) and npm $($node.NpmVersion)."
     Write-Host "Starting the BluePrintReboot frontend at http://127.0.0.1:$Port"
-    & $npm.Source run dev -- --host 127.0.0.1 --port $Port
+    Invoke-BlueprintNpm -Node $node -ArgumentList @("run", "dev", "--", "--host", "127.0.0.1", "--port", $Port)
     if ($LASTEXITCODE -ne 0) {
         throw "The frontend exited with code $LASTEXITCODE."
     }
