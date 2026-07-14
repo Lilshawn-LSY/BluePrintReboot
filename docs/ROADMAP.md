@@ -1,33 +1,32 @@
 # BluePrintReboot Roadmap
 
-Last synced: 2026-07-12
+Last synced: 2026-07-14
 
-v1.0.26 is the final Streamlit stabilization and architecture-boundary release before any FastAPI/frontend migration. The product remains local-first, single-user, and Streamlit-based.
+BluePrintReboot is a local-first, single-user research workspace with an established Streamlit application, a read-only FastAPI layer, and a TypeScript frontend shell. These are implemented architecture, not future placeholders.
 
-## Implemented through v1.0.26
+## Implemented architecture
 
-- v1.0.24 froze Reader note state, explicit Save/Reload behavior, rerun expectations, and initial frontend parity. The user subsequently reported its manual Reader matrix completed.
-- v1.0.25 closed archive, corruption diagnosis, recovery-copy, cache quarantine/restore, exact duplicate decisions, backup coverage, and lifecycle read semantics. The user subsequently reported its manual lifecycle matrix completed.
-- Actual use after those validations exposed Reader toolbar tag changes bypassing Reading Note header synchronization.
-- v1.0.26 routes canonical metadata changes through one UI-independent coordinator, guarantees dirty-draft preservation and Save-time convergence, freezes `HealthSummary`, `LibraryStatus`, `PaperListItem`, `PaperDetail`, and `ReaderSnapshot`, and adds read-only disposable restore readiness checks.
+- v1.0.26 finalized Streamlit Reader/lifecycle stability, routed metadata mutations through one coordinator, froze JSON-safe read models, and added non-destructive restore-readiness checks.
+- v1.1.0 exposed read-only `GET /health` and `GET /library/status` FastAPI adapters.
+- v1.1.1 added read-only paper collection and detail routes; v1.1.2 extended paper detail with rich citation metadata without changing storage identity.
+- v1.2.0 added the seven-route TypeScript frontend shell and an allowlisted same-origin bridge for the four GET route shapes.
+- v1.2.1 makes Python and frontend validation one reproducible release gate, with portable Node resolution, deterministic `npm ci`, bridge tests, optional evidence, and equivalent independent CI jobs.
 
 ## Decision gates
 
-| Gate | Status | Required next evidence |
+| Gate | Status after v1.2.1 implementation | Required evidence |
 |---|---|---|
-| G0: Automated baseline | Closed for v1.0.26 | Final smoke, pytest, platform, Python, Streamlit, serialization, diff, and data-hygiene results are recorded. |
-| G1: Lifecycle safety | Closed for v1.0.25 | Preserve the completed lifecycle contract and regression coverage. |
-| G4: Reader stability | Closed | User reported v1.0.26 Sections A-H passed, the Save exception fixed, convergence passed, and navigation discard accepted. |
-| G5: Deterministic tags | Frozen | No governance expansion in v1.0.26. |
-| G6: FastAPI readiness | No | Close v1.0.26 automated and focused manual validation, then release v1.0.26. |
-| G7: Frontend readiness | No | Begin only after read-only adapters exist and parity tests consume the frozen contracts. |
+| G0: Full-stack automated baseline | Closed for v1.2.1 | Smoke 84/0/0, pytest 476/0/0, frontend lint, frontend build plus 10 tests, diff, evidence, and data-hygiene checks passed. |
+| G1: Lifecycle safety | Closed and preserved | Existing disposable-fixture regressions remain green; no data formats change. |
+| G4: Reader stability | Closed and preserved | Previously reported v1.0.26 manual evidence remains valid; new manual claims require an actual run. |
+| G6: Read-only FastAPI foundation | Implemented | Four GET-only route shapes and response contracts remain unchanged. |
+| G7: Frontend shell readiness | Implemented | Rendered shell and same-origin bridge behavior are in the canonical frontend gate. |
+| G8: Reader/PDF vertical slice | Next | Define a read-only PDF/Reader contract and preserve Reader parity before choosing rendering details. |
 
-## Next sequence
+## Next product milestone
 
-1. Close and release v1.0.26 with explicit approval.
-2. Implement read-only FastAPI adapters for the frozen domain builders; add no write endpoints initially.
-3. Build a frontend vertical slice against the Reader/lifecycle parity contracts. PDF.js-specific rendering and annotations remain deferred until that slice.
+Build one read-only Reader/PDF vertical slice in the web frontend. It should connect a paper detail to safe PDF/Reader presentation while preserving explicit note-save semantics and the existing Streamlit workflows. PDF.js selection, PDF-serving contracts, and security/path behavior require a separate scoped design; they are not part of v1.2.1.
 
 ## Continuing constraints
 
-No autosave, automatic duplicate merge/deletion, automatic critical-state repair, database migration, OCR, LLM tagging, cloud sync, `paper_id` redesign, or destructive automated restore. Keep setup/restore rehearsal explicit and disposable.
+No write API, autosave, automatic duplicate merge/deletion, automatic repair, database migration, OCR, LLM tagging, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of tests and validation evidence.

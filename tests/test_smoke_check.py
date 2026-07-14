@@ -43,7 +43,7 @@ def test_frontend_application_contract_passes_without_starting_server() -> None:
     result = check_frontend_contract(PROJECT_ROOT)
 
     assert result.status == "pass"
-    assert "v1.2.0" in result.detail
+    assert f"v{APP_VERSION}" in result.detail
 
 
 def test_smoke_check_main_succeeds(capsys) -> None:

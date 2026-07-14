@@ -1,34 +1,39 @@
 # BluePrintReboot Backlog
 
-Last synced: 2026-07-12
+Last synced: 2026-07-14
 
-## v1.0.26 release closure
+## Implemented foundations
 
-- [x] Fix Reader manual/suggested tag to Reading Note header divergence.
-- [x] Consolidate canonical metadata mutation and partial-failure reporting behind a Streamlit-independent service.
-- [x] Freeze JSON-safe read-only health, library, paper, detail, and Reader contracts without routes.
-- [x] Add read-only snapshot plus disposable empty-target restore readiness validation.
-- [x] Freeze Reader and lifecycle frontend acceptance criteria.
-- [x] Run final automated validation and record evidence.
-- [x] User reported focused v1.0.26 Sections A-H passed; Save convergence and navigation discard are accepted; G4 is closed.
+- [x] v1.0.26 Streamlit finalization, frozen read models, lifecycle safety, and restore-readiness boundary.
+- [x] v1.1.0 read-only health/library FastAPI foundation.
+- [x] v1.1.1 paper list/detail API and v1.1.2 rich paper metadata.
+- [x] v1.2.0 desktop TypeScript shell, typed client, and same-origin read-only bridge.
+
+## v1.2.1 full-stack validation gate
+
+- [x] Resolve Node from `-NodeHome`, `BLUEPRINT_NODE_HOME`, or `PATH`, enforcing Node 22.13.0 and complete node/npm executables.
+- [x] Add deterministic `npm ci` frontend setup and keep Python-only setup usable.
+- [x] Make the default `dev_check.ps1` run smoke, full pytest, frontend lint, and one frontend build/test pass.
+- [x] Label `-PythonOnly` and `-SmokeOnly` as partial, non-release-qualified validation.
+- [x] Add opt-in ignored JSON evidence without command output, secrets, or private paths.
+- [x] Add allowlist, query, upstream error, fetch failure, and GET-only bridge tests.
+- [x] Split GitHub Actions into equivalent Python and frontend jobs.
+- [x] Record final automated results: smoke 84/0/0, pytest 476/0/0, frontend lint passed, and frontend build plus 10 tests passed.
+- [ ] Record manual browser checks only if actually performed; do not infer completion.
 - [ ] Commit, merge, tag, and release only after explicit approval.
 
-The user reported the v1.0.24 Reader and v1.0.25 lifecycle manual matrices completed. Their implemented archive, recovery, quarantine, duplicate, and Reader state behavior is no longer future work. The later-discovered toolbar tag/header defect is the scoped v1.0.26 correctness fix.
+## Next: read-only Reader/PDF vertical slice
 
-## After v1.0.26
+- [ ] Define the minimal safe read-only PDF/Reader API contract without exposing absolute paths.
+- [ ] Reconcile the Reader frontend parity checklist with the vertical-slice acceptance criteria.
+- [ ] Choose and validate a PDF rendering approach only after the contract and local security boundary are explicit.
+- [ ] Preserve Streamlit as the write/note workflow until a separately approved migration exists.
 
-### Read-only FastAPI adapters
+## Deferred product work
 
-Adapt, without duplicating parsing, these frozen builders: `build_health_summary`, `build_library_status`, `build_paper_list_items`, `build_paper_detail`, and `build_reader_snapshot`. Start with conceptual `GET /health`, `/library/status`, `/papers`, `/papers/{paper_id}`, and `/papers/{paper_id}/reader`. No write endpoints.
+Write APIs; project/tag APIs; OpenAPI-generated TypeScript types; UI redesign; database or user-data migration; installer/packaging; automated restore; cloud sync; background services; OCR; semantic/LLM tagging; multi-user support; knowledge graphs; automatic duplicate operations; and `paper_id` redesign.
 
-### Frontend vertical slice
+## Documentation cleanup
 
-Reproduce the Reader/frontend parity checklist, then evaluate PDF.js. Keep explicit Save, dirty-draft isolation, metadata/header convergence, archived access, and lifecycle confirmations testable.
-
-### Restore rehearsal and packaging
-
-User performs a real clean-PC rehearsal using a copied snapshot and disposable target. Automated restore and installer packaging remain deferred.
-
-### Deferred product work
-
-OCR, semantic/LLM tagging, cloud sync, multi-user support, database migration, knowledge graphs, tag-governance expansion, automatic duplicate operations, `paper_id` redesign, and unrelated Streamlit redesign.
+- [x] Treat the old project-level `backup_guideline.txt` as superseded by `docs/checklists/new_pc_restore_checklist.md`.
+- [ ] Merge or archive tracker rows that still describe implemented FastAPI health/library/paper adapters or the v1.2.0 frontend shell as future work.

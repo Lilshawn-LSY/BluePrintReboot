@@ -1,3 +1,8 @@
+param(
+    [switch]$IncludeFrontend,
+    [string]$NodeHome
+)
+
 $ErrorActionPreference = "Stop"
 
 function Write-Phase {
@@ -79,9 +84,28 @@ try {
     Invoke-CheckedCommand -Description "Install requirements.txt" -FilePath $venvPython -ArgumentList @("-m", "pip", "install", "-r", $requirementsPath)
     Invoke-CheckedCommand -Description "Verify expected imports" -FilePath $venvPython -ArgumentList @("-c", "import streamlit, pytest; print('Verified imports: streamlit, pytest')")
 
+    if ($IncludeFrontend) {
+        Write-Phase "Set up frontend dependencies"
+        $frontendSetup = Join-Path $PSScriptRoot "frontend_setup.ps1"
+        $frontendArguments = @{}
+        if (-not [string]::IsNullOrWhiteSpace($NodeHome)) {
+            $frontendArguments["NodeHome"] = $NodeHome
+        }
+        & $frontendSetup @frontendArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Frontend setup failed with exit code $LASTEXITCODE."
+        }
+    } elseif (-not [string]::IsNullOrWhiteSpace($NodeHome)) {
+        throw "-NodeHome is used with -IncludeFrontend. Run .\scripts\dev_setup.ps1 -IncludeFrontend -NodeHome <portable-node-directory>."
+    }
+
     Write-Host ""
     Write-Host "BluePrintReboot setup complete."
-    Write-Host "Next: .\scripts\dev_check.ps1"
+    if ($IncludeFrontend) {
+        Write-Host "Next: .\scripts\dev_check.ps1 -NodeHome <portable-node-directory>"
+    } else {
+        Write-Host "Python setup is complete. For the full release gate, also run .\scripts\frontend_setup.ps1 and then .\scripts\dev_check.ps1."
+    }
     exit 0
 } catch {
     Write-Error $_.Exception.Message

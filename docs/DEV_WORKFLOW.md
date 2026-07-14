@@ -7,43 +7,62 @@
 - Codex: implementation and test execution.
 - GitHub: source of truth for code, reviews, pull requests, releases, and tags.
 
-## Standard Flow
+## Setup
 
-Use this flow for normal development unless Shawn explicitly chooses a different release path:
-
-```powershell
-git status
-git checkout main
-git pull
-git checkout -b feature/short-description
-```
-
-Then implement the change.
+Python-only setup remains available for a Streamlit-only machine:
 
 ```powershell
-python -m pytest
-python scripts/smoke_check.py
-streamlit run app.py
-git diff
-git add <changed-files>
-git commit -m "Short imperative summary"
-git push
+.\scripts\dev_setup.ps1
 ```
 
-After review, merge to `main`, then tag the release only when Shawn explicitly approves the release.
+For the complete repository, install Python and lock-file-pinned frontend dependencies together:
 
-## Canonical Clean-PC Setup and Restore Rehearsal
+```powershell
+.\scripts\dev_setup.ps1 -IncludeFrontend -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
+```
 
-Use exactly the setup order in `docs/checklists/new_pc_restore_checklist.md`: clone, `dev_setup.ps1`, then `dev_check.ps1`. Verify snapshots in place. Before any disposable extraction, run `scripts/restore_check.py` against an existing empty directory outside the active repository. The helper is read-only; extraction and the real clean-PC rehearsal remain manual.
+If Python is already configured, run only the deterministic frontend setup:
 
-## Manual Streamlit Check
+```powershell
+.\scripts\frontend_setup.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
+```
 
-Before release, open the Streamlit app and verify:
+The shared resolver selects Node in this order: explicit `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` plus `npm.cmd` on `PATH`. Both executables are required and Node must be at least 22.13.0. The scripts do not download Node or permanently change `PATH`. Frontend setup always uses `npm ci`, never `npm install`.
 
-- Dashboard opens.
-- Library opens.
-- Paper Detail opens.
-- Reader Workspace opens.
-- Settings opens.
+## Canonical validation
 
-Do not commit, push, merge, or tag release work until the review decision is clear.
+The default check is the release-qualified full-stack gate:
+
+```powershell
+.\scripts\dev_check.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
+```
+
+It runs, in order, `python scripts/smoke_check.py`, full `python -m pytest`, `npm run lint`, and `npm test` (one frontend build followed by rendered-shell and bridge tests). Add `-WriteEvidence` to write the ignored, machine-readable `artifacts/validation-summary.json`.
+
+Use `-PythonOnly` only when frontend validation is deliberately unavailable:
+
+```powershell
+.\scripts\dev_check.ps1 -PythonOnly
+```
+
+This is explicitly a **PARTIAL VALIDATION** result and is not release-qualified. `-SmokeOnly` is also partial. A normal full check never silently skips missing Node or frontend dependencies.
+
+## Standard flow
+
+Implement the bounded change on a review branch. Before review, run the full gate, inspect `git diff`, and run `git diff --check` plus `git status --short`. Commit, push, merge, and tag only with explicit approval.
+
+GitHub Actions mirrors the gate with independent Python 3.12 and Node 22.13.1 jobs. Neither job requires a live personal library or a running local API.
+
+## Launch checks
+
+Start Streamlit with `.\scripts\run_app.ps1`. For the read-only web shell, start `.\scripts\run_api.ps1`, then in another window run:
+
+```powershell
+.\scripts\run_frontend.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
+```
+
+Manual browser checks remain separate from automated validation and must not be marked complete unless performed.
+
+## Restore guidance
+
+Use `docs/checklists/new_pc_restore_checklist.md` for clean-PC setup and restore rehearsal. The old project-level `backup_guideline.txt` is superseded by that checklist. Restore remains manual and should use a copied snapshot plus a disposable target; validation scripts do not mutate personal library data.

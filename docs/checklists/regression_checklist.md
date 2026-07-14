@@ -1,6 +1,17 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.0.26-streamlit-finalization-api-contract-freeze`. Use a disposable or non-sensitive workspace for manual checks.
+Required before and after Codex-assisted release work, including `v1.2.1-full-stack-validation-gate`. Use a disposable or non-sensitive workspace for manual checks.
+
+## v1.2.1 Full-Stack Validation
+
+- [x] Run `.\scripts\frontend_setup.ps1 -NodeHome <portable-node-directory>` and confirm it uses `npm ci` without rewriting `package-lock.json`.
+- [x] Run `.\scripts\dev_check.ps1 -NodeHome <portable-node-directory> -WriteEvidence` and record smoke, full pytest, frontend lint, and frontend test/build results.
+- [x] Inspect `artifacts/validation-summary.json` for schema/timestamp, Git state when available, runtime versions, four phase states, and full/partial scope; confirm it contains no private paths, environment values, or command output.
+- [x] Run `.\scripts\dev_check.ps1 -PythonOnly` only if intentionally validating the partial-mode label; never use it as release evidence.
+- [x] Run `git diff --check` and `git status --short`; confirm no user data, dependency directory, cache, or evidence artifact is staged.
+- [ ] Start FastAPI and the portable-Node frontend, then check Dashboard, Library, Papers, Paper Detail, API-offline navigation, and separate Streamlit launch only if manual browser validation is in scope.
+
+Automated status: smoke 84 passed/0 warnings/0 failed; pytest 476 passed/0 failed/0 skipped; frontend lint passed; frontend build passed and 10 tests passed/0 failed/0 skipped. Manual browser/launch status: not performed.
 
 ## v1.0.26 Focused Manual Validation
 
@@ -36,9 +47,11 @@ Manual evidence: user-reported Sections A-H passed; detailed tester/date/browser
 
 ## 2. Automated Checks
 
-- [ ] Run `.\scripts\dev_check.ps1` and confirm it completes successfully.
+- [ ] Run `.\scripts\dev_check.ps1 -NodeHome <portable-node-directory>` and confirm the full Python and frontend gate completes successfully.
+- [ ] Treat `.\scripts\dev_check.ps1 -PythonOnly` as partial validation, never as release qualification.
 - [ ] If the script cannot be used, run `python scripts/smoke_check.py` and confirm zero failures.
 - [ ] If the script cannot be used, run `python -m pytest -q` and confirm the full suite passes.
+- [ ] If the script cannot be used, run `npm run lint` and `npm test` from `frontend/` with Node 22.13.0 or newer.
 - [ ] Record the exact commands, command results, platform, Python version, and Streamlit version in the release notes or release handoff.
 
 ## 3. Streamlit Baseline

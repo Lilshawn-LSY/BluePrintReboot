@@ -51,6 +51,9 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.1.1.md",
     "docs/release_notes/v1.1.2.md",
     "docs/release_notes/v1.2.0.md",
+    "docs/release_notes/v1.2.1.md",
+    "scripts/resolve_node.ps1",
+    "scripts/frontend_setup.ps1",
     "scripts/run_api.ps1",
     "scripts/run_frontend.ps1",
     "frontend/package.json",
@@ -226,8 +229,10 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
     try:
         frontend_root = Path(project_root) / "frontend"
         package = json.loads((frontend_root / "package.json").read_text(encoding="utf-8"))
-        if package.get("version") != "1.2.0":
-            raise ValueError("frontend package version is not 1.2.0")
+        from config.contact import APP_VERSION
+
+        if package.get("version") != APP_VERSION:
+            raise ValueError("frontend package version does not match the runtime version")
         if package.get("name") != "blueprint-reboot-frontend":
             raise ValueError("frontend package name is unexpected")
         shell = (frontend_root / "app/components/AppShell.tsx").read_text(encoding="utf-8")
@@ -239,7 +244,7 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
                 raise ValueError(f"frontend API client is missing {method}")
     except Exception as exc:
         return SmokeCheckResult("frontend:application-contract", "fail", str(exc))
-    return SmokeCheckResult("frontend:application-contract", "pass", "seven routes share the v1.2.0 shell")
+    return SmokeCheckResult("frontend:application-contract", "pass", f"seven routes share the v{APP_VERSION} shell")
 
 
 def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]:

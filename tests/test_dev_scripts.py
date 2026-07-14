@@ -11,7 +11,9 @@ def read_script(relative_path: str) -> str:
 def test_windows_dev_script_files_exist() -> None:
     for relative_path in (
         "scripts/dev_setup.ps1",
+        "scripts/frontend_setup.ps1",
         "scripts/dev_check.ps1",
+        "scripts/resolve_node.ps1",
         "scripts/run_app.ps1",
         "scripts/run_api.ps1",
         "scripts/run_frontend.ps1",
@@ -26,6 +28,33 @@ def test_dev_check_runs_smoke_check_and_pytest() -> None:
 
     assert "scripts/smoke_check.py" in script
     assert "pytest" in script
+    assert '"npm run lint"' in script
+    assert '"npm test"' in script
+    assert "$PythonOnly" in script
+    assert "PARTIAL VALIDATION" in script
+    assert "$WriteEvidence" in script
+    assert "validation-summary.json" in script
+
+
+def test_node_resolver_has_required_priority_and_minimum() -> None:
+    script = read_script("scripts/resolve_node.ps1")
+
+    explicit_position = script.index("$NodeHome")
+    environment_position = script.index("$env:BLUEPRINT_NODE_HOME")
+    path_position = script.index("Get-Command node.exe")
+    assert explicit_position < environment_position < path_position
+    assert '22.13.0' in script
+    assert 'node.exe' in script
+    assert 'npm.cmd' in script
+    assert 'SetEnvironmentVariable' not in script
+
+
+def test_frontend_setup_is_lockfile_deterministic() -> None:
+    script = read_script("scripts/frontend_setup.ps1")
+
+    assert "package-lock.json" in script
+    assert '@("ci")' in script
+    assert "npm install" not in script.lower()
 
 
 def test_run_app_launches_streamlit_entrypoint_with_port() -> None:
@@ -71,7 +100,9 @@ def test_bootstrap_scripts_do_not_contain_obviously_dangerous_commands() -> None
         read_script(relative_path)
         for relative_path in (
             "scripts/dev_setup.ps1",
+            "scripts/frontend_setup.ps1",
             "scripts/dev_check.ps1",
+            "scripts/resolve_node.ps1",
             "scripts/run_app.ps1",
             "scripts/run_api.ps1",
             "scripts/run_frontend.ps1",

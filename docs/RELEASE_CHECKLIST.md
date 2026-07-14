@@ -1,5 +1,19 @@
 # Release Checklist
 
+## v1.2.1-full-stack-validation-gate
+
+- [x] The implemented baseline is reconciled: v1.0.26 Streamlit/read contracts, v1.1.0-v1.1.2 read-only FastAPI routes, and the v1.2.0 frontend shell are current architecture.
+- [x] Shared Node resolution prefers `-NodeHome`, then `BLUEPRINT_NODE_HOME`, then `PATH`, and enforces Node 22.13.0 plus both required executables.
+- [x] Frontend dependency setup requires `package-lock.json` and runs `npm ci`; Python-only setup remains usable.
+- [x] Default `dev_check.ps1` includes smoke, full pytest, frontend lint, and frontend test/build without duplicate builds.
+- [x] `-PythonOnly` and `-SmokeOnly` are prominent partial, non-release-qualified modes.
+- [x] `-WriteEvidence` is opt-in, ignored, machine-readable, and excludes command output and private paths.
+- [x] Bridge tests cover exact allowlisting, query forwarding, upstream 404, generic 503 mapping, network failure, and absence of write methods.
+- [x] GitHub Actions has independent Python 3.12 and Node 22.13.1 jobs with lock-file caching and `npm ci`.
+- [x] Exact local smoke, pytest, frontend lint, frontend build/test, diff, and status results are recorded in v1.2.1 release notes.
+- [ ] Manual API/frontend/Streamlit launch checks are recorded only if actually performed.
+- [ ] Commit, push, merge, tag, and release occur only after explicit instruction.
+
 ## v1.0.26-streamlit-finalization-api-contract-freeze
 
 - [x] Clean v1.0.25 baseline recorded: smoke 49 passed/0 warnings/0 failed; pytest 396 passed.
