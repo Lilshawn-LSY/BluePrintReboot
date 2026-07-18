@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "current_version": "1.2.2",
+  "release_name": "v1.2.2-runtime-and-release-evidence-closure",
+  "implemented_milestones": [
+    "v1.0.26 Streamlit finalization and lifecycle safety",
+    "v1.1.0-v1.1.2 read-only FastAPI foundation",
+    "v1.2.0 frontend application shell",
+    "v1.2.1 full-stack validation gate",
+    "v1.2.2 runtime and release evidence closure implementation"
+  ],
+  "open_gates": [
+    "v1.2.2 Paper Detail manual browser validation",
+    "v1.2.2 GitHub-hosted CI",
+    "user-performed clean-PC restore rehearsal"
+  ],
+  "next_milestone": {
+    "name": "read-only Reader/PDF vertical slice",
+    "status": "planned"
+  },
+  "verification": {
+    "local_smoke": {
+      "status": "VERIFIED",
+      "evidence": "86 passed, 0 warnings, 0 failed on 2026-07-18."
+    },
+    "local_pytest": {
+      "status": "VERIFIED",
+      "evidence": "484 passed, 0 failed, 0 skipped on 2026-07-18."
+    },
+    "frontend_lint": {
+      "status": "VERIFIED",
+      "evidence": "npm run lint exited 0 with no findings on 2026-07-18."
+    },
+    "frontend_test_build": {
+      "status": "VERIFIED",
+      "evidence": "npm test build passed; 10 Node tests passed, 0 failed, 0 skipped on 2026-07-18."
+    },
+    "manual_runtime": {
+      "status": "NOT VERIFIED",
+      "evidence": "Verified local-only API/frontend listeners, direct and bridged HTTP checks, query forwarding, Dashboard/Library/Papers rendering, offline unavailable states/sidebar navigation, and Streamlit launch/navigation on 2026-07-18; Paper Detail was not performed because no paper record was available."
+    },
+    "github_actions": {
+      "status": "NOT VERIFIED",
+      "run_url": null,
+      "commit_sha": null
+    },
+    "clean_pc_restore": {
+      "status": "NOT PERFORMED",
+      "evidence": null
+    }
+  }
+}

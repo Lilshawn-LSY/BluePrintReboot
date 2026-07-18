@@ -1,17 +1,20 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.2.1-full-stack-validation-gate`. Use a disposable or non-sensitive workspace for manual checks.
+Required before and after Codex-assisted release work, including `v1.2.2-runtime-and-release-evidence-closure`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
 
-## v1.2.1 Full-Stack Validation
+## v1.2.2 Runtime and Release Evidence Closure
 
-- [x] Run `.\scripts\frontend_setup.ps1 -NodeHome <portable-node-directory>` and confirm it uses `npm ci` without rewriting `package-lock.json`.
-- [x] Run `.\scripts\dev_check.ps1 -NodeHome <portable-node-directory> -WriteEvidence` and record smoke, full pytest, frontend lint, and frontend test/build results.
-- [x] Inspect `artifacts/validation-summary.json` for schema/timestamp, Git state when available, runtime versions, four phase states, and full/partial scope; confirm it contains no private paths, environment values, or command output.
-- [x] Run `.\scripts\dev_check.ps1 -PythonOnly` only if intentionally validating the partial-mode label; never use it as release evidence.
+- [x] Run `.\scripts\frontend_setup.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"` and confirm it uses `npm ci` without rewriting the dependency graph.
+- [x] Run `.\scripts\dev_check.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64" -WriteEvidence` and record actual smoke, full pytest, frontend lint, and frontend test/build results.
+- [x] Inspect `artifacts/validation-summary.json` for schema/timestamp, Git state, runtime versions, four phase states, and full scope; confirm it contains no private paths, environment values, or command output.
+- [x] Run focused launcher, workflow, version, release-note, and tracker-handoff contracts.
 - [x] Run `git diff --check` and `git status --short`; confirm no user data, dependency directory, cache, or evidence artifact is staged.
-- [ ] Start FastAPI and the portable-Node frontend, then check Dashboard, Library, Papers, Paper Detail, API-offline navigation, and separate Streamlit launch only if manual browser validation is in scope.
+- [x] Start FastAPI before the portable-Node frontend and open exactly `http://127.0.0.1:3000`.
+- [x] Inspect local-only listener addresses; check Dashboard, Library, Papers, bridge/query behavior, API-offline navigation, and separate Streamlit launch.
+- [ ] Check one existing Paper Detail route; no paper record was available on 2026-07-18.
+- [ ] Record GitHub Actions as verified only with a relevant hosted conclusion and run URL.
 
-Automated status: smoke 84 passed/0 warnings/0 failed; pytest 476 passed/0 failed/0 skipped; frontend lint passed; frontend build passed and 10 tests passed/0 failed/0 skipped. Manual browser/launch status: not performed.
+Automated and manual v1.2.2 results are recorded in `docs/release_notes/v1.2.2.md`; v1.2.1 counts are historical and must not be reused as current evidence.
 
 ## v1.0.26 Focused Manual Validation
 

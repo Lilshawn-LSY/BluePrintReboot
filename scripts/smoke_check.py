@@ -52,6 +52,8 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.1.2.md",
     "docs/release_notes/v1.2.0.md",
     "docs/release_notes/v1.2.1.md",
+    "docs/release_notes/v1.2.2.md",
+    "docs/tracker_sync_status.json",
     "scripts/resolve_node.ps1",
     "scripts/frontend_setup.ps1",
     "scripts/run_api.ps1",

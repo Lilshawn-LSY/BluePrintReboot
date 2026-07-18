@@ -81,8 +81,48 @@ def test_run_frontend_launches_local_application_shell() -> None:
 
     assert "frontend" in script
     assert "npm" in script
-    assert "127.0.0.1" in script
-    assert "$Port" in script
+    assert '$bindAddress = "127.0.0.1"' in script
+    assert '[int]$Port = 3000' in script
+    assert '$canonicalBrowserUrl = "http://${bindAddress}:$Port"' in script
+    assert '@("run", "dev", "--", "--hostname", $bindAddress, "--port", $Port.ToString())' in script
+
+
+def test_run_frontend_preserves_portable_node_and_prints_launch_diagnostics() -> None:
+    script = read_script("scripts/run_frontend.ps1")
+
+    assert "[string]$NodeHome" in script
+    assert "Resolve-BlueprintNode -NodeHome $NodeHome" in script
+    assert "Configured bind address: $bindAddress" in script
+    assert "Configured port: $Port" in script
+    assert "Canonical browser URL: $canonicalBrowserUrl" in script
+    assert "Node.js version: $($node.NodeVersion)" in script
+    assert "npm version: $($node.NpmVersion)" in script
+    assert "Node source: $($node.Source)" in script
+    assert "Invoke-WebRequest -UseBasicParsing" in script
+    assert "Get-NetTCPConnection -State Listen" in script
+
+
+def test_run_frontend_errors_remain_specific() -> None:
+    launcher = read_script("scripts/run_frontend.ps1")
+    resolver = read_script("scripts/resolve_node.ps1")
+
+    assert "Node.js and npm were not found on PATH" in resolver
+    assert "is too old. BluePrintReboot requires Node.js" in resolver
+    assert "Frontend package.json was not found." in launcher
+    assert "Frontend dependencies are missing." in launcher
+    assert "frontend server process exited with nonzero code" in launcher
+
+
+def test_run_frontend_is_local_only_and_does_not_permanently_modify_path() -> None:
+    launcher = read_script("scripts/run_frontend.ps1")
+    resolver = read_script("scripts/resolve_node.ps1")
+
+    assert "0.0.0.0" not in launcher
+    assert '"--host"' not in launcher
+    assert '"--hostname"' in launcher
+    assert "SetEnvironmentVariable" not in launcher
+    assert "$previousPath = $env:PATH" in resolver
+    assert "$env:PATH = $previousPath" in resolver
 
 
 def test_dev_setup_uses_venv_and_requirements() -> None:
