@@ -95,5 +95,9 @@ def test_tracker_sync_status_contract() -> None:
     assert set(tracker["verification"]) == required_verification
     for item in tracker["verification"].values():
         assert item["status"] in ALLOWED_STATUSES
-    assert tracker["verification"]["github_actions"]["run_url"] is None
-    assert tracker["verification"]["github_actions"]["commit_sha"] is None
+    github_actions = tracker["verification"]["github_actions"]
+    assert github_actions["status"] == "VERIFIED"
+    assert github_actions["run_url"] == "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/29639358889"
+    assert github_actions["commit_sha"] == "5710dfaf2ec8e9a0212bc68d74f11ce573d87fe1"
+    assert "v1.2.2 GitHub-hosted CI" not in tracker["open_gates"]
+    assert "user-performed clean-PC restore rehearsal" in tracker["open_gates"]

@@ -16,11 +16,11 @@
 - [x] One existing Paper Detail route is visibly checked in the v1.2.2 read-only shell without retaining private paper metadata.
 - [x] FastAPI-offline unavailable states and sidebar navigation are visibly checked in a browser.
 - [x] Separate Streamlit launch/basic regression is performed without mutating library data.
-- [ ] A GitHub-hosted run for the relevant v1.2.2 commit/branch is verified with its conclusion and URL.
+- [x] GitHub Actions run `29639358889` for commit `5710dfaf2ec8e9a0212bc68d74f11ce573d87fe1` concluded successfully with successful Python and frontend jobs.
 - [ ] A user performs the clean-PC restore rehearsal on a clean machine.
 - [x] Commit `e26ee8c` was created by the user.
 - [x] The feature branch was pushed to origin by the user.
-- [ ] Pull request is created only after explicit instruction.
+- [x] Pull Request #1 was created.
 - [ ] Merge is performed only after explicit instruction.
 - [ ] Tag is created only after explicit instruction.
 - [ ] Release is published only after explicit instruction.
