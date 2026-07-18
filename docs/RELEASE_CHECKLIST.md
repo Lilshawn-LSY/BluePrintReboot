@@ -13,13 +13,13 @@
 - [x] Independent smoke, full pytest, frontend lint, and frontend build/Node-test results are recorded with actual v1.2.2 counts.
 - [x] FastAPI listener, direct requests, canonical frontend launcher/listener, and bridge/query behavior are manually checked.
 - [x] Dashboard, Library, and Papers are visibly checked in a browser.
-- [ ] One existing Paper Detail route is visibly checked in a browser; no paper record was available on 2026-07-18.
+- [x] One existing Paper Detail route is visibly checked in the v1.2.2 read-only shell without retaining private paper metadata.
 - [x] FastAPI-offline unavailable states and sidebar navigation are visibly checked in a browser.
 - [x] Separate Streamlit launch/basic regression is performed without mutating library data.
 - [ ] A GitHub-hosted run for the relevant v1.2.2 commit/branch is verified with its conclusion and URL.
 - [ ] A user performs the clean-PC restore rehearsal on a clean machine.
-- [ ] Commit is performed only after explicit instruction.
-- [ ] Push is performed only after explicit instruction.
+- [x] Commit `e26ee8c` was created by the user.
+- [x] The feature branch was pushed to origin by the user.
 - [ ] Pull request is created only after explicit instruction.
 - [ ] Merge is performed only after explicit instruction.
 - [ ] Tag is created only after explicit instruction.

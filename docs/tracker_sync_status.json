@@ -10,7 +10,6 @@
     "v1.2.2 runtime and release evidence closure implementation"
   ],
   "open_gates": [
-    "v1.2.2 Paper Detail manual browser validation",
     "v1.2.2 GitHub-hosted CI",
     "user-performed clean-PC restore rehearsal"
   ],
@@ -36,8 +35,8 @@
       "evidence": "npm test build passed; 10 Node tests passed, 0 failed, 0 skipped on 2026-07-18."
     },
     "manual_runtime": {
-      "status": "NOT VERIFIED",
-      "evidence": "Verified local-only API/frontend listeners, direct and bridged HTTP checks, query forwarding, Dashboard/Library/Papers rendering, offline unavailable states/sidebar navigation, and Streamlit launch/navigation on 2026-07-18; Paper Detail was not performed because no paper record was available."
+      "status": "VERIFIED",
+      "evidence": "Verified local-only API/frontend listeners, localhost and IPv4 HTTP reachability, direct and bridged API behavior, Dashboard/Library/Papers/Paper Detail rendering, sidebar navigation, API-offline unavailable states, API recovery, and separate Streamlit regression on 2026-07-18."
     },
     "github_actions": {
       "status": "NOT VERIFIED",

@@ -10,8 +10,8 @@ Required before and after Codex-assisted release work, including `v1.2.2-runtime
 - [x] Run focused launcher, workflow, version, release-note, and tracker-handoff contracts.
 - [x] Run `git diff --check` and `git status --short`; confirm no user data, dependency directory, cache, or evidence artifact is staged.
 - [x] Start FastAPI before the portable-Node frontend and open exactly `http://127.0.0.1:3000`.
-- [x] Inspect local-only listener addresses; check Dashboard, Library, Papers, bridge/query behavior, API-offline navigation, and separate Streamlit launch.
-- [ ] Check one existing Paper Detail route; no paper record was available on 2026-07-18.
+- [x] Inspect local-only listener addresses; check Dashboard, Library, Papers, bridge/query behavior, API-offline navigation, API recovery, and separate Streamlit launch.
+- [x] Check one existing Paper Detail route in the v1.2.2 read-only shell without recording private paper metadata.
 - [ ] Record GitHub Actions as verified only with a relevant hosted conclusion and run URL.
 
 Automated and manual v1.2.2 results are recorded in `docs/release_notes/v1.2.2.md`; v1.2.1 counts are historical and must not be reused as current evidence.
