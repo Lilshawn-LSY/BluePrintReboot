@@ -142,7 +142,7 @@ def test_openapi_has_only_intended_application_paths_and_read_methods() -> None:
     application = create_app()
     paths = application.openapi()["paths"]
 
-    assert set(paths) == {"/health", "/library/status", "/papers", "/papers/{paper_id}"}
+    assert set(paths) == {"/health", "/library/status", "/papers", "/papers/{paper_id}", "/papers/{paper_id}/pdf"}
     assert all(set(operations) == {"get"} for operations in paths.values())
     unsafe_methods = {"POST", "PUT", "PATCH", "DELETE"}
     assert not any(

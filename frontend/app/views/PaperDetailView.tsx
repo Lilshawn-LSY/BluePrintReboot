@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { DetailPanel } from "../components/DetailPanel";
@@ -21,7 +21,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
       {resource.status === "error" ? <ErrorState description={resource.message} /> : null}
       {resource.status === "success" ? (
         <>
-          <PageHeader eyebrow="Paper detail" title={resource.data.title} description={[resource.data.authors.join(", ") || "Authors unknown", resource.data.journal, resource.data.year].filter(Boolean).join(" · ") || "Citation metadata is incomplete."} actions={<div className="badge-row"><StatusBadge tone={resource.data.archived ? "neutral" : "accent"}>{resource.data.lifecycle_state}</StatusBadge><StatusBadge>{resource.data.status}</StatusBadge>{resource.data.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}</div>} />
+          <PageHeader eyebrow="Paper detail" title={resource.data.title} description={[resource.data.authors.join(", ") || "Authors unknown", resource.data.journal, resource.data.year].filter(Boolean).join(" · ") || "Citation metadata is incomplete."} actions={<div className="paper-detail-actions"><div className="badge-row"><StatusBadge tone={resource.data.archived ? "neutral" : "accent"}>{resource.data.lifecycle_state}</StatusBadge><StatusBadge>{resource.data.status}</StatusBadge>{resource.data.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}</div>{!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Open Reader</Link> : <span className="reader-action reader-action--disabled" aria-disabled="true">Reader unavailable</span>}</div>} />
           <div className="detail-grid">
             <Section title="Citation metadata" description="Stored metadata from the stable read-only paper contract.">
               <dl className="metadata-list">
@@ -40,7 +40,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
                 <div><dt>Profile</dt><dd>{resource.data.profile_available ? "Available" : "Unavailable"}</dd></div>
                 <div><dt>Projects</dt><dd>{resource.data.project_links.length}</dd></div>
               </dl>
-              <p className="deferred-note">Reader Workspace and PDF rendering remain in Streamlit in v1.2.2.</p>
+              <p className="deferred-note">Notes, metadata changes, and all write actions remain in Streamlit in v1.3.0.</p>
             </DetailPanel>
           </div>
           <Section title="Abstract"><div className="abstract-text">{resource.data.abstract || <span className="muted-text">No abstract is stored for this paper.</span>}</div></Section>

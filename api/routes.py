@@ -2,15 +2,21 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi.responses import FileResponse
 
 from api.adapters import PaperContractError, adapt_paper_detail, adapt_paper_list_item
-from api.dependencies import ReadModelUnavailable, get_health_summary, get_library_status, get_paper_detail, get_paper_list_items
+from api.dependencies import ReadModelUnavailable, get_health_summary, get_library_status, get_managed_pdf, get_paper_detail, get_paper_list_items
+from api.pdf_files import ManagedPdfResult, ManagedPdfState
 from api.schemas import APIError, ArchiveStatus, HealthSummaryResponse, LibraryStatusResponse, PaginatedPaperList, PaperDetail, PaperListItem
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem
 
 
 router = APIRouter()
+
+PDF_MISSING_DETAIL = "Managed PDF not found."
+PDF_INVALID_DETAIL = "Managed PDF path is invalid."
+PDF_UNAVAILABLE_DETAIL = "Managed PDF is temporarily unavailable."
 
 
 @router.get("/health", response_model=HealthSummaryResponse)
@@ -88,3 +94,50 @@ def paper_detail(
         return adapt_paper_detail(paper)
     except PaperContractError:
         raise ReadModelUnavailable from None
+
+
+@router.get(
+    "/papers/{paper_id}/pdf",
+    response_class=FileResponse,
+    summary="Read managed paper PDF",
+    description="Stream one indexed PDF from the canonical managed papers directory.",
+    responses={
+        200: {
+            "description": "The managed PDF byte stream.",
+            "content": {"application/pdf": {}},
+        },
+        404: {
+            "model": APIError,
+            "description": "The paper identity is unknown or its managed PDF is missing.",
+        },
+        409: {
+            "model": APIError,
+            "description": "The indexed path is not a safe managed PDF path.",
+        },
+        503: {
+            "model": APIError,
+            "description": "The managed PDF cannot currently be read.",
+        },
+    },
+)
+def paper_pdf(
+    paper_id: Annotated[str, Path(min_length=1, description="Stable BluePrintReboot paper identity.")],
+    pdf: Annotated[ManagedPdfResult, Depends(get_managed_pdf)],
+) -> Response:
+    if pdf.state is ManagedPdfState.unknown_paper:
+        raise HTTPException(status_code=404, detail="Paper not found.")
+    if pdf.state is ManagedPdfState.missing:
+        raise HTTPException(status_code=404, detail=PDF_MISSING_DETAIL)
+    if pdf.state is ManagedPdfState.invalid:
+        raise HTTPException(status_code=409, detail=PDF_INVALID_DETAIL)
+    if pdf.state is ManagedPdfState.unavailable:
+        raise HTTPException(status_code=503, detail=PDF_UNAVAILABLE_DETAIL)
+    if pdf.path is None or pdf.stat_result is None or not pdf.filename:
+        raise HTTPException(status_code=503, detail=PDF_UNAVAILABLE_DETAIL)
+    return FileResponse(
+        pdf.path,
+        media_type="application/pdf",
+        filename=pdf.filename,
+        stat_result=pdf.stat_result,
+        content_disposition_type="inline",
+    )

@@ -18,11 +18,11 @@ def test_version_contract_is_consistent() -> None:
     lock = json.loads(read_text("frontend/package-lock.json"))
     readme = read_text("README.md")
 
-    assert APP_VERSION == "1.2.2"
+    assert APP_VERSION == "1.3.0"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
-    assert "v1.2.2-runtime-and-release-evidence-closure" in readme
+    assert "v1.3.0-reader-pdf-readonly-vertical-slice" in readme
 
 
 def test_primary_workflow_preserves_full_manual_and_automatic_gate() -> None:
@@ -75,12 +75,12 @@ def test_tracker_sync_status_contract() -> None:
     tracker = json.loads(read_text("docs/tracker_sync_status.json"))
 
     assert tracker["schema_version"] == "1.0"
-    assert tracker["current_version"] == "1.2.2"
-    assert tracker["release_name"] == "v1.2.2-runtime-and-release-evidence-closure"
+    assert tracker["current_version"] == "1.3.0"
+    assert tracker["release_name"] == "v1.3.0-reader-pdf-readonly-vertical-slice"
     assert isinstance(tracker["implemented_milestones"], list)
     assert isinstance(tracker["open_gates"], list)
     assert tracker["next_milestone"] == {
-        "name": "read-only Reader/PDF vertical slice",
+        "name": "Reader/PDF hardening and optional PDF.js evaluation",
         "status": "planned",
     }
     required_verification = {
@@ -96,8 +96,25 @@ def test_tracker_sync_status_contract() -> None:
     for item in tracker["verification"].values():
         assert item["status"] in ALLOWED_STATUSES
     github_actions = tracker["verification"]["github_actions"]
-    assert github_actions["status"] == "VERIFIED"
-    assert github_actions["run_url"] == "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/29639358889"
-    assert github_actions["commit_sha"] == "5710dfaf2ec8e9a0212bc68d74f11ce573d87fe1"
-    assert "v1.2.2 GitHub-hosted CI" not in tracker["open_gates"]
+    assert github_actions["status"] == "NOT VERIFIED"
+    assert github_actions["run_url"] is None
+    assert github_actions["commit_sha"] is None
+    assert "v1.3.0 GitHub-hosted CI" in tracker["open_gates"]
     assert "user-performed clean-PC restore rehearsal" in tracker["open_gates"]
+
+
+def test_current_release_note_and_documentation_contract() -> None:
+    release_note = read_text("docs/release_notes/v1.3.0.md")
+    tracker = read_text("docs/tracker_sync_status.json")
+
+    assert "v1.3.0-reader-pdf-readonly-vertical-slice" in release_note
+    assert "GET /papers/{paper_id}/pdf" in release_note
+    assert "/papers/{paper_id}/reader" in release_note
+    assert "PDF.js is intentionally not included" in release_note
+    statuses = re.findall(r"\| (VERIFIED|NOT VERIFIED|NOT PERFORMED|FAILED) \|", release_note)
+    assert statuses
+    assert set(statuses) <= ALLOWED_STATUSES
+
+    private_user_path = re.compile(r"[A-Za-z]:\\Users\\(?!Public(?:\\|\b))[^\\\s]+", re.IGNORECASE)
+    for text in (release_note, tracker):
+        assert private_user_path.search(text) is None

@@ -30,13 +30,41 @@ test("server-renders the stable research workspace shell", async () => {
 });
 
 test("all required routes render inside the shared shell", async () => {
-  for (const path of ["/dashboard", "/library", "/papers", "/papers/example-paper", "/projects", "/tags", "/settings"]) {
+  for (const path of ["/dashboard", "/library", "/papers", "/papers/example-paper", "/papers/example-paper/reader", "/projects", "/tags", "/settings"]) {
     const response = await render(path);
     assert.equal(response.status, 200, path);
     const html = await response.text();
     assert.match(html, /class="app-shell"/, path);
     assert.match(html, /aria-label="Primary navigation"/, path);
   }
+});
+
+test("keeps the Reader route read-only, same-origin, and explicitly stateful", async () => {
+  const [detail, reader, client, shell] = await Promise.all([
+    readFile(new URL("../app/views/PaperDetailView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/api/client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/AppShell.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(detail, /Open Reader/);
+  assert.match(detail, /encodeURIComponent\(resource\.data\.paper_id\)/);
+  assert.match(detail, /Reader unavailable/);
+  assert.match(reader, /title=\{resource\.data\.title\}/);
+  assert.match(reader, /Read-only context/);
+  assert.match(reader, /Back to Paper Detail/);
+  assert.match(reader, /Loading paper metadata/);
+  assert.match(reader, /Loading PDF/);
+  assert.match(reader, /Managed PDF missing/);
+  assert.match(reader, /PDF response unavailable/);
+  assert.match(reader, /Browser PDF viewer unavailable/);
+  assert.match(reader, /<object[^>]+data=\{resource\.data\.url\}[^>]+type="application\/pdf"/s);
+  assert.match(reader, /write action remain in Streamlit|write actions remain in Streamlit/);
+  assert.doesNotMatch(reader, /note editor|autosave|annotation|highlight/i);
+  assert.match(client, /\/papers\/\$\{encodeURIComponent\(paperId\)\}\/pdf/);
+  assert.match(client, /Range: "bytes=0-0"/);
+  assert.doesNotMatch(client, /http:\/\/127\.0\.0\.1:8000/);
+  assert.match(shell, /return "Reader"/);
 });
 
 test("keeps tokens, API access, and page views separated", async () => {

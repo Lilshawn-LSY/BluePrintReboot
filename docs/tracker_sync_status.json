@@ -1,29 +1,31 @@
 {
   "schema_version": "1.0",
-  "current_version": "1.2.2",
-  "release_name": "v1.2.2-runtime-and-release-evidence-closure",
+  "current_version": "1.3.0",
+  "release_name": "v1.3.0-reader-pdf-readonly-vertical-slice",
   "implemented_milestones": [
     "v1.0.26 Streamlit finalization and lifecycle safety",
     "v1.1.0-v1.1.2 read-only FastAPI foundation",
     "v1.2.0 frontend application shell",
     "v1.2.1 full-stack validation gate",
-    "v1.2.2 runtime and release evidence closure implementation"
+    "v1.2.2 runtime and release evidence closure",
+    "v1.3.0 read-only Reader/PDF vertical slice implementation"
   ],
   "open_gates": [
+    "v1.3.0 GitHub-hosted CI",
     "user-performed clean-PC restore rehearsal"
   ],
   "next_milestone": {
-    "name": "read-only Reader/PDF vertical slice",
+    "name": "Reader/PDF hardening and optional PDF.js evaluation",
     "status": "planned"
   },
   "verification": {
     "local_smoke": {
       "status": "VERIFIED",
-      "evidence": "86 passed, 0 warnings, 0 failed on 2026-07-18."
+      "evidence": "90 passed, 0 warnings, 0 failed on 2026-07-18."
     },
     "local_pytest": {
       "status": "VERIFIED",
-      "evidence": "484 passed, 0 failed, 0 skipped on 2026-07-18."
+      "evidence": "Final suite: 496 passed, 0 failed, 0 skipped on 2026-07-18."
     },
     "frontend_lint": {
       "status": "VERIFIED",
@@ -31,16 +33,16 @@
     },
     "frontend_test_build": {
       "status": "VERIFIED",
-      "evidence": "npm test build passed; 10 Node tests passed, 0 failed, 0 skipped on 2026-07-18."
+      "evidence": "Production build passed; 14 Node tests passed, 0 failed, 0 skipped on 2026-07-18."
     },
     "manual_runtime": {
       "status": "VERIFIED",
-      "evidence": "Verified local-only API/frontend listeners, localhost and IPv4 HTTP reachability, direct and bridged API behavior, Dashboard/Library/Papers/Paper Detail rendering, sidebar navigation, API-offline unavailable states, API recovery, and separate Streamlit regression on 2026-07-18."
+      "evidence": "User-performed local-only validation covered frontend/API launch diagnostics, Papers, an existing Paper Detail and managed PDF, Open Reader, title/citation context, stable-identity URL, Back navigation, absence of write controls, 206 Range delivery with an exact 16-byte body, safe headers, invalid-path rejection, unknown-paper state, API-offline navigation, API recovery, separate Streamlit regression, and process cleanup. No private library metadata is retained."
     },
     "github_actions": {
-      "status": "VERIFIED",
-      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/29639358889",
-      "commit_sha": "5710dfaf2ec8e9a0212bc68d74f11ce573d87fe1"
+      "status": "NOT VERIFIED",
+      "run_url": null,
+      "commit_sha": null
     },
     "clean_pc_restore": {
       "status": "NOT PERFORMED",

@@ -11,22 +11,25 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.2.0 added the seven-route TypeScript shell and allowlisted same-origin bridge.
 - v1.2.1 made Python/frontend validation one reproducible local gate with portable Node resolution, deterministic `npm ci`, bridge tests, evidence output, and separate workflow jobs.
 - v1.2.2 corrects the local frontend bind contract, adds manual workflow execution support, reconciles controlled release evidence, and adds a canonical tracker handoff. It adds no product feature.
+- v1.3.0 adds the first safe read-only Reader/PDF vertical slice: a managed-file PDF endpoint, a streaming same-origin bridge, Paper Detail navigation, and a dedicated browser-native Reader route.
 
 ## Decision gates
 
 | Gate | Current status | Required evidence |
 |---|---|---|
-| Full-stack automated baseline | Verified locally for the dirty v1.2.2 working tree | Smoke 86/0/0, pytest 484 passed, lint passed, build plus 10 Node tests passed, deterministic setup and runtime-version evidence. |
+| v1.3.0 focused implementation | Verified locally | Disposable PDF endpoint tests cover containment, exact bytes, byte ranges, errors, and the unchanged GET-only surface; frontend tests cover binary streaming and Reader source contracts. |
+| v1.3.0 full-stack automated baseline | Verified locally | Smoke 90/0/0, final pytest 496 passed, deterministic `npm ci`, lint passed, production build plus 14 Node tests passed, and full-scope evidence. |
 | Runtime address contract | Verified locally | Supported Vinext hostname argument, `127.0.0.1:3000` listener, canonical URL probes, and no external listener. |
-| Manual runtime validation | Open only for Paper Detail | API/frontend/Streamlit listeners, direct and bridged requests, query forwarding, Dashboard, Library, Papers, offline unavailable states, and sidebar navigation were verified; no paper record was available for a detail-route check. |
+| v1.3.0 Reader runtime validation | Verified with disposable data | Papers, Paper Detail, Open Reader, native PDF display, same-origin URL, Back navigation, Range delivery, offline state, navigation continuity, and recovery were visibly checked without real library data. |
 | Hosted CI | Open | Relevant GitHub Actions conclusion and run URL; workflow-file existence is insufficient. |
 | Clean-PC restore | Open | User-performed clean-machine rehearsal. |
+| Separate real Streamlit manual regression | Open | Intentionally not launched because this pass may not read real library content; existing Reader regressions remain automated. |
 | Lifecycle and Reader safety | Closed and preserved | Existing disposable-fixture regressions stay green; no contract or format changes. |
-| Reader/PDF vertical slice | Next product milestone | A separately scoped safe read-only PDF/Reader contract and parity plan. |
+| Reader/PDF vertical slice | Implemented in v1.3.0 | Managed-root containment, GET-only streaming, same-origin delivery, explicit Reader states, and no write controls. |
 
 ## Next product milestone
 
-Build one read-only Reader/PDF vertical slice in the web frontend. It should connect a paper detail to safe PDF/Reader presentation while preserving explicit note-save semantics and the existing Streamlit workflows. PDF.js selection, PDF-serving contracts, and security/path behavior require a separate scoped design; they are not part of v1.2.2.
+Harden the native Reader/PDF slice after runtime evidence is complete, then evaluate PDF.js only as a separately approved enhancement. Any future renderer must preserve the managed-root security boundary, byte-range delivery, same-origin browser access, and Streamlit ownership of all write workflows.
 
 ## Continuing constraints
 

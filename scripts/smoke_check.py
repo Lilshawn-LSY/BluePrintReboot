@@ -23,6 +23,7 @@ REQUIRED_FILES = (
     "api/adapters.py",
     "api/dependencies.py",
     "api/main.py",
+    "api/pdf_files.py",
     "api/routes.py",
     "api/schemas.py",
     "requirements.txt",
@@ -53,6 +54,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.2.0.md",
     "docs/release_notes/v1.2.1.md",
     "docs/release_notes/v1.2.2.md",
+    "docs/release_notes/v1.3.0.md",
     "docs/tracker_sync_status.json",
     "scripts/resolve_node.ps1",
     "scripts/frontend_setup.ps1",
@@ -67,6 +69,8 @@ REQUIRED_FILES = (
     "frontend/app/library/page.tsx",
     "frontend/app/papers/page.tsx",
     "frontend/app/papers/[paperId]/page.tsx",
+    "frontend/app/papers/[paperId]/reader/page.tsx",
+    "frontend/app/views/ReaderView.tsx",
     "frontend/app/projects/page.tsx",
     "frontend/app/tags/page.tsx",
     "frontend/app/settings/page.tsx",
@@ -218,13 +222,13 @@ def check_api_contract() -> SmokeCheckResult:
         if app.version != APP_VERSION:
             raise ValueError("API version does not match the runtime version")
         paths = app.openapi().get("paths", {})
-        if set(paths) != {"/health", "/library/status", "/papers", "/papers/{paper_id}"}:
+        if set(paths) != {"/health", "/library/status", "/papers", "/papers/{paper_id}", "/papers/{paper_id}/pdf"}:
             raise ValueError("API application paths do not match the read-only foundation")
         if any(set(operations) != {"get"} for operations in paths.values()):
             raise ValueError("API application routes are not GET-only")
     except Exception as exc:
         return SmokeCheckResult("api:application-contract", "fail", str(exc))
-    return SmokeCheckResult("api:application-contract", "pass", f"four GET routes for {APP_VERSION}")
+    return SmokeCheckResult("api:application-contract", "pass", f"five GET routes for {APP_VERSION}")
 
 
 def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
@@ -241,12 +245,12 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
         api_client = (frontend_root / "app/lib/api/client.ts").read_text(encoding="utf-8")
         if "SidebarNavigation" not in shell or "main-content" not in shell:
             raise ValueError("frontend application shell is incomplete")
-        for method in ("getHealth", "getLibraryStatus", "getPapers", "getPaper"):
+        for method in ("getHealth", "getLibraryStatus", "getPapers", "getPaper", "getPaperPdf"):
             if method not in api_client:
                 raise ValueError(f"frontend API client is missing {method}")
     except Exception as exc:
         return SmokeCheckResult("frontend:application-contract", "fail", str(exc))
-    return SmokeCheckResult("frontend:application-contract", "pass", f"seven routes share the v{APP_VERSION} shell")
+    return SmokeCheckResult("frontend:application-contract", "pass", f"eight routes share the v{APP_VERSION} shell")
 
 
 def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]:
