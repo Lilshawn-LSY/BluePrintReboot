@@ -1,5 +1,32 @@
 # Release Checklist
 
+## v1.3.0-reader-pdf-readonly-vertical-slice
+
+- [x] `GET /papers/{paper_id}/pdf` resolves only an indexed paper and never accepts a filesystem path from the request.
+- [x] PDF resolution remains inside the canonical managed papers directory and rejects missing, non-file, non-PDF, escaped, or otherwise unsafe paths without exposing an absolute path.
+- [x] PDF delivery is GET-only, streamed as `application/pdf`, presented inline, and supports browser byte ranges through the response implementation.
+- [x] The same-origin bridge allowlists only the exact PDF route, forwards Range, streams binary bytes, and preserves only safe PDF response headers.
+- [x] Paper Detail exposes an Open Reader action based on stable `paper_id`, with an unavailable state when no managed PDF reference exists.
+- [x] `/papers/{paper_id}/reader` provides title/citation context, back navigation, native PDF display, explicit loading/missing/offline/error states, and no write controls.
+- [x] Notes and all write, metadata, PDF-maintenance, and recovery workflows remain in Streamlit.
+- [x] Focused disposable-fixture API and frontend tests pass.
+- [x] Current v1.3.0 smoke 90/0/0, final full pytest 496 passed, deterministic frontend setup, lint, build, 14 Node tests, and full release gate are recorded.
+- [x] Disposable read-only API/frontend browser validation and API-offline recovery are recorded without private library metadata.
+- [x] User-performed local-only FastAPI/frontend launch and listener validation passed with the expected v1.3.0 runtime diagnostics and no external listener.
+- [x] User-performed real-library Papers, Paper Detail, Open Reader, correct managed PDF, title/citation, stable-identity URL, Back navigation, and no-write-control validation passed without retaining private metadata.
+- [x] User-performed same-origin PDF bridge validation passed for HTTP 206, an exact 16-byte range body, safe representation headers, invalid-path rejection, and no filesystem-path exposure.
+- [x] User-performed unknown-paper, FastAPI-offline navigation, restart recovery, and Reader/PDF recovery validation passed.
+- [x] A separate user-performed Streamlit regression passed for Dashboard, Library, Paper Detail, Reader Workspace, existing PDF viewing, and existing note visibility without an application exception or mutation action.
+- [x] Temporary frontend, FastAPI, and Streamlit processes were stopped; ports 3000, 8000, and 8501 were clear after validation.
+- [ ] A relevant GitHub-hosted CI run is verified after an approved commit and push.
+- [ ] A user performs the clean-PC restore rehearsal on a clean machine.
+- [ ] Commit is created only after explicit instruction.
+- [ ] The feature branch is pushed only after explicit instruction.
+- [ ] Pull Request is created only after explicit instruction.
+- [ ] Merge is performed only after explicit instruction.
+- [ ] Tag is created only after explicit instruction.
+- [ ] Release is published only after explicit instruction.
+
 ## v1.2.2-runtime-and-release-evidence-closure
 
 - [x] Implementation uses Vinext's supported `--hostname 127.0.0.1` argument and keeps the frontend local-only.

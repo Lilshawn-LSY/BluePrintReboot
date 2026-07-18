@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.2.2-runtime-and-release-evidence-closure**.
+Current release target: **v1.3.0-reader-pdf-readonly-vertical-slice**.
 
-v1.2.2 closes the frontend address-family mismatch, adds deliberate GitHub Actions execution support, and makes release/tracker evidence use explicit verification states. It adds no product feature. Streamlit remains the primary interface for write actions, Reader Workspace, PDF rendering, and maintenance workflows.
+v1.3.0 adds the first safe read-only Reader/PDF vertical slice to the TypeScript frontend. Paper Detail links to a dedicated Reader route, while a local-only GET endpoint and same-origin streaming bridge deliver only indexed PDFs contained inside the managed `papers/` directory. Streamlit remains the interface for notes, metadata changes, PDF maintenance, and every write action.
 
 The app remains intentionally local-first and single-user:
 
@@ -39,7 +39,7 @@ Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the 
 
 ## Read-Only Local API
 
-Streamlit remains the primary BluePrintReboot interface. The FastAPI service is a separate, local-only, read-only adapter: it exposes health, library status, paper collection metadata, and paper detail metadata, with no mutation operations or PDF/note content routes.
+Streamlit remains the primary BluePrintReboot interface. The FastAPI service is a separate, local-only, read-only adapter: it exposes health, library status, paper collection/detail metadata, and one managed-PDF byte route. It has no mutation or note-content operations.
 
 Start it from Windows PowerShell:
 
@@ -54,6 +54,7 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Library status: [http://127.0.0.1:8000/library/status](http://127.0.0.1:8000/library/status)
 - Active paper collection: [http://127.0.0.1:8000/papers](http://127.0.0.1:8000/papers)
 - Paper detail: `http://127.0.0.1:8000/papers/{paper_id}`
+- Managed PDF stream: `http://127.0.0.1:8000/papers/{paper_id}/pdf`
 
 `GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), and `archive_status` (`active`, `archived`, or `all`; default `active`). Results are ordered by case-insensitive title and then stable `paper_id`.
 
@@ -83,7 +84,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
 
 If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
-Dashboard, Library, Papers, and Paper Detail use real read-only API contracts with explicit loading, empty, error, and unavailable states. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
+Dashboard, Library, Papers, Paper Detail, and `/papers/{paper_id}/reader` use real read-only API contracts with explicit loading, empty, error, and unavailable states. The Reader uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL and the browser's native PDF capability; no local filesystem path reaches the browser. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
@@ -221,6 +222,7 @@ Foundation release documents:
 - [v1.2.0 Frontend Application Shell release notes](docs/release_notes/v1.2.0.md)
 - [v1.2.1 Full-Stack Validation Gate release notes](docs/release_notes/v1.2.1.md)
 - [v1.2.2 Runtime and Release Evidence Closure release notes](docs/release_notes/v1.2.2.md)
+- [v1.3.0 Read-Only Reader/PDF Vertical Slice release notes](docs/release_notes/v1.3.0.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -274,6 +276,12 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.3.0-reader-pdf-readonly-vertical-slice
+
+- Adds GET-only, range-capable managed PDF delivery with canonical-root containment and generic error responses.
+- Extends the same-origin bridge for exact binary PDF streaming without exposing the FastAPI origin or local paths.
+- Adds a dedicated dependency-free Reader route and Paper Detail entry action while leaving all notes and writes in Streamlit.
 
 ### v1.2.2-runtime-and-release-evidence-closure
 

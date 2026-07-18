@@ -25,6 +25,36 @@ async function request<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export function paperPdfUrl(paperId: string): string {
+  return `${API_BASE_URL}/papers/${encodeURIComponent(paperId)}/pdf`;
+}
+
+async function probePaperPdf(paperId: string): Promise<{ url: string }> {
+  const url = paperPdfUrl(paperId);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Accept: "application/pdf", Range: "bytes=0-0" },
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiClientError("The managed PDF response could not be reached.", "unavailable");
+  }
+
+  if (!response.ok) {
+    await response.body?.cancel();
+    if (response.status === 404) throw new ApiClientError("The managed PDF is missing.", "not-found", 404);
+    if (response.status === 503) throw new ApiClientError("The managed PDF service is unavailable.", "unavailable", 503);
+    throw new ApiClientError(`The managed PDF returned HTTP ${response.status}.`, "error", response.status);
+  }
+  const contentType = response.headers.get("Content-Type") || "";
+  await response.body?.cancel();
+  if (!contentType.toLowerCase().startsWith("application/pdf")) {
+    throw new ApiClientError("The managed PDF response is unavailable.", "error", response.status);
+  }
+  return { url };
+}
+
 export const apiClient = {
   getHealth: () => request<HealthSummary>("/health"),
   getLibraryStatus: () => request<LibraryStatus>("/library/status"),
@@ -37,6 +67,7 @@ export const apiClient = {
     return request<PaginatedPaperList>(`/papers?${params}`);
   },
   getPaper: (paperId: string) => request<PaperDetail>(`/papers/${encodeURIComponent(paperId)}`),
+  getPaperPdf: (paperId: string) => probePaperPdf(paperId),
   getDashboard: async (): Promise<DashboardSnapshot> => {
     const [health, library, papers] = await Promise.all([
       request<HealthSummary>("/health"),

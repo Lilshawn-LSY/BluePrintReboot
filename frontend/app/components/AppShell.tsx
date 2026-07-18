@@ -15,6 +15,7 @@ const routeTitles: Record<string, string> = {
 };
 
 function currentTitle(pathname: string): string {
+  if (/^\/papers\/[^/]+\/reader$/.test(pathname)) return "Reader";
   if (pathname.startsWith("/papers/")) return "Paper Detail";
   return routeTitles[pathname] ?? "Workspace";
 }
@@ -31,7 +32,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="top-bar__separator" aria-hidden="true">/</span>
             <strong>{currentTitle(pathname)}</strong>
           </div>
-          <span className="version-label">v1.2.2 · read-only shell</span>
+          <span className="version-label">v1.3.0 · read-only shell</span>
         </header>
         <main id="main-content" className="main-content">{children}</main>
       </div>

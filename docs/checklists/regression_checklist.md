@@ -1,6 +1,27 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.2.2-runtime-and-release-evidence-closure`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+Required before and after Codex-assisted release work, including `v1.3.0-reader-pdf-readonly-vertical-slice`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+
+## v1.3.0 Reader/PDF Read-only Vertical Slice
+
+- [x] Use only disposable index/PDF fixtures to test valid bytes, ranges, unknown papers, missing files, non-PDF paths, traversal, outside-root paths, and unavailable files.
+- [x] Confirm the pre-existing health, library status, papers, and paper-detail response shapes remain unchanged and no write route is added.
+- [x] Confirm the bridge allowlists only the exact PDF GET route, streams binary data, forwards Range, preserves safe response headers, and maps unavailable upstreams safely.
+- [x] Confirm Paper Detail uses stable `paper_id` for Open Reader and the Reader uses only the same-origin PDF URL.
+- [x] Confirm Reader source contracts include explicit loading, unknown, missing, unavailable, native-viewer fallback, archived, success, sidebar, and back-navigation behavior.
+- [x] Confirm Reader contains no note editor, autosave, annotation, highlighting, tag/project/metadata write, upload, delete, or replacement action.
+- [x] Run current v1.3.0 smoke 90/0/0 and final full pytest 496 passed.
+- [x] Run deterministic `npm ci`, frontend lint, production build, 14 Node tests, and the full `dev_check.ps1 -WriteEvidence` gate.
+- [x] Start disposable FastAPI fixtures and the frontend on IPv4 loopback only; inspect Papers, Paper Detail, Reader, native PDF display, stable-identity URL, and Back navigation without reading or retaining real metadata.
+- [x] User-performed real-library validation confirms Papers, one existing Paper Detail, Open Reader, the correct managed PDF, title/citation context, stable-identity URL, Back navigation, and the absence of write controls without retaining private metadata.
+- [x] User-performed same-origin bridge validation confirms HTTP 206, an exact 16-byte range body, safe headers, invalid-path rejection, and no filesystem-path exposure.
+- [x] Confirm an unknown paper displays an explicit non-crashing state.
+- [x] Stop FastAPI and confirm explicit Reader unavailable behavior and usable navigation; restart FastAPI and confirm Reader/PDF recovery.
+- [x] Start Streamlit separately and confirm Dashboard, Library, Paper Detail, Reader Workspace, existing PDF viewing, and existing note visibility without an application exception or mutation action.
+- [x] Stop all temporary services and confirm ports 3000, 8000, and 8501 are clear.
+- [x] Run `git diff --check` and inspect status; no private data, runtime files, PDFs, notes, caches, dependencies, or evidence artifacts are included.
+
+Current v1.3.0 results are recorded in `docs/release_notes/v1.3.0.md`; historical release counts must not be reused as current evidence.
 
 ## v1.2.2 Runtime and Release Evidence Closure
 

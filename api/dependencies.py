@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from api.pdf_files import ManagedPdfResult, resolve_managed_pdf
 from services import library_read_model
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail, PaperListItem
 
@@ -32,5 +33,12 @@ def get_paper_list_items() -> list[PaperListItem]:
 def get_paper_detail(paper_id: str) -> PaperDetail | None:
     try:
         return library_read_model.build_paper_detail(paper_id)
+    except Exception:
+        raise ReadModelUnavailable from None
+
+
+def get_managed_pdf(paper_id: str) -> ManagedPdfResult:
+    try:
+        return resolve_managed_pdf(paper_id)
     except Exception:
         raise ReadModelUnavailable from None
