@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "current_version": "1.2.2",
+  "release_name": "v1.2.2-runtime-and-release-evidence-closure",
+  "implemented_milestones": [
+    "v1.0.26 Streamlit finalization and lifecycle safety",
+    "v1.1.0-v1.1.2 read-only FastAPI foundation",
+    "v1.2.0 frontend application shell",
+    "v1.2.1 full-stack validation gate",
+    "v1.2.2 runtime and release evidence closure implementation"
+  ],
+  "open_gates": [
+    "user-performed clean-PC restore rehearsal"
+  ],
+  "next_milestone": {
+    "name": "read-only Reader/PDF vertical slice",
+    "status": "planned"
+  },
+  "verification": {
+    "local_smoke": {
+      "status": "VERIFIED",
+      "evidence": "86 passed, 0 warnings, 0 failed on 2026-07-18."
+    },
+    "local_pytest": {
+      "status": "VERIFIED",
+      "evidence": "484 passed, 0 failed, 0 skipped on 2026-07-18."
+    },
+    "frontend_lint": {
+      "status": "VERIFIED",
+      "evidence": "npm run lint exited 0 with no findings on 2026-07-18."
+    },
+    "frontend_test_build": {
+      "status": "VERIFIED",
+      "evidence": "npm test build passed; 10 Node tests passed, 0 failed, 0 skipped on 2026-07-18."
+    },
+    "manual_runtime": {
+      "status": "VERIFIED",
+      "evidence": "Verified local-only API/frontend listeners, localhost and IPv4 HTTP reachability, direct and bridged API behavior, Dashboard/Library/Papers/Paper Detail rendering, sidebar navigation, API-offline unavailable states, API recovery, and separate Streamlit regression on 2026-07-18."
+    },
+    "github_actions": {
+      "status": "VERIFIED",
+      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/29639358889",
+      "commit_sha": "5710dfaf2ec8e9a0212bc68d74f11ce573d87fe1"
+    },
+    "clean_pc_restore": {
+      "status": "NOT PERFORMED",
+      "evidence": null
+    }
+  }
+}

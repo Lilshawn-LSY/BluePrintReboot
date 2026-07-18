@@ -1,26 +1,24 @@
 # BluePrintReboot Backlog
 
-Last synced: 2026-07-14
+Last synced: 2026-07-18
 
 ## Implemented foundations
 
 - [x] v1.0.26 Streamlit finalization, frozen read models, lifecycle safety, and restore-readiness boundary.
-- [x] v1.1.0 read-only health/library FastAPI foundation.
-- [x] v1.1.1 paper list/detail API and v1.1.2 rich paper metadata.
+- [x] v1.1.0-v1.1.2 four-route GET-only FastAPI foundation and rich paper metadata.
 - [x] v1.2.0 desktop TypeScript shell, typed client, and same-origin read-only bridge.
+- [x] v1.2.1 portable-Node-aware full local validation gate and separate Python/frontend workflow jobs.
 
-## v1.2.1 full-stack validation gate
+## v1.2.2 runtime and release evidence closure
 
-- [x] Resolve Node from `-NodeHome`, `BLUEPRINT_NODE_HOME`, or `PATH`, enforcing Node 22.13.0 and complete node/npm executables.
-- [x] Add deterministic `npm ci` frontend setup and keep Python-only setup usable.
-- [x] Make the default `dev_check.ps1` run smoke, full pytest, frontend lint, and one frontend build/test pass.
-- [x] Label `-PythonOnly` and `-SmokeOnly` as partial, non-release-qualified validation.
-- [x] Add opt-in ignored JSON evidence without command output, secrets, or private paths.
-- [x] Add allowlist, query, upstream error, fetch failure, and GET-only bridge tests.
-- [x] Split GitHub Actions into equivalent Python and frontend jobs.
-- [x] Record final automated results: smoke 84/0/0, pytest 476/0/0, frontend lint passed, and frontend build plus 10 tests passed.
-- [ ] Record manual browser checks only if actually performed; do not infer completion.
-- [ ] Commit, merge, tag, and release only after explicit approval.
+- [x] Implementation complete: use Vinext's supported IPv4-loopback hostname argument and print deterministic launch diagnostics.
+- [x] Implementation complete: preserve push/pull-request CI and add `workflow_dispatch` without changing the required Python/frontend jobs.
+- [x] Implementation complete: reconcile v1.2.1 evidence, v1.2.2 version surfaces, checklists, roadmap, and canonical tracker handoff.
+- [x] Local validation complete: smoke 86/0/0, pytest 484 passed, lint passed, build plus 10 Node tests passed, deterministic setup passed, and runtime versions were recorded on 2026-07-18.
+- [ ] Manual runtime validation complete: local listeners, direct/bridge/query checks, Dashboard, Library, Papers, offline navigation, and Streamlit were verified; Paper Detail remains unperformed because no paper record was available.
+- [ ] Hosted CI verified: retain the relevant GitHub Actions conclusion and run URL.
+- [ ] Clean-PC restore rehearsed: retain user-performed clean-machine evidence.
+- [ ] Commit, push, pull request, merge, tag, and release only after explicit approval.
 
 ## Next: read-only Reader/PDF vertical slice
 
@@ -33,7 +31,7 @@ Last synced: 2026-07-14
 
 Write APIs; project/tag APIs; OpenAPI-generated TypeScript types; UI redesign; database or user-data migration; installer/packaging; automated restore; cloud sync; background services; OCR; semantic/LLM tagging; multi-user support; knowledge graphs; automatic duplicate operations; and `paper_id` redesign.
 
-## Documentation cleanup
+## Tracker handoff
 
-- [x] Treat the old project-level `backup_guideline.txt` as superseded by `docs/checklists/new_pc_restore_checklist.md`.
-- [ ] Merge or archive tracker rows that still describe implemented FastAPI health/library/paper adapters or the v1.2.0 frontend shell as future work.
+- [x] `docs/tracker_sync_status.json` is the canonical repository handoff for the external roadmap tracker.
+- [ ] Update the external tracker from that handoff outside repository code; do not add a Drive API, OAuth flow, or sync client.

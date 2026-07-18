@@ -52,6 +52,7 @@ This is explicitly a **PARTIAL VALIDATION** result and is not release-qualified.
 Implement the bounded change on a review branch. Before review, run the full gate, inspect `git diff`, and run `git diff --check` plus `git status --short`. Commit, push, merge, and tag only with explicit approval.
 
 GitHub Actions mirrors the gate with independent Python 3.12 and Node 22.13.1 jobs. Neither job requires a live personal library or a running local API.
+The primary workflow runs for `push` and `pull_request` and can also be started deliberately with `workflow_dispatch`. A valid local workflow file is not evidence of a GitHub-hosted run; record hosted CI as verified only with the relevant run conclusion and URL.
 
 ## Launch checks
 
@@ -61,7 +62,13 @@ Start Streamlit with `.\scripts\run_app.ps1`. For the read-only web shell, start
 .\scripts\run_frontend.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
 ```
 
-Manual browser checks remain separate from automated validation and must not be marked complete unless performed.
+Open exactly `http://127.0.0.1:3000`. The launcher binds with `--hostname 127.0.0.1`, prints the configured address, port, canonical URL, Node/npm versions, and Node source, and remains a foreground process. After it reports ready, probe without changing application state:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
+```
+
+If the listener is unexpectedly `::1`, `localhost` resolution selected IPv6 because the intended IPv4 bind was not applied; inspect `Get-NetTCPConnection -State Listen -LocalPort 3000` and the launcher arguments. Never bind to an external interface. Manual browser checks remain separate from automated validation and must not be marked complete unless performed.
 
 ## Restore guidance
 

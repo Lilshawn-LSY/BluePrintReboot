@@ -1,4 +1,5 @@
 param(
+    [ValidateRange(1, 65535)]
     [int]$Port = 3000,
     [string]$NodeHome
 )
@@ -10,6 +11,8 @@ try {
     $frontendRoot = Join-Path $repoRoot "frontend"
     $packageJson = Join-Path $frontendRoot "package.json"
     $nodeModules = Join-Path $frontendRoot "node_modules"
+    $bindAddress = "127.0.0.1"
+    $canonicalBrowserUrl = "http://${bindAddress}:$Port"
     . (Join-Path $PSScriptRoot "resolve_node.ps1")
     $node = Resolve-BlueprintNode -NodeHome $NodeHome
 
@@ -20,12 +23,24 @@ try {
         throw "Frontend dependencies are missing. Run .\scripts\frontend_setup.ps1 -NodeHome <portable-node-directory>."
     }
 
-    Set-Location -LiteralPath $frontendRoot
-    Write-Host "Using Node.js $($node.NodeVersion) and npm $($node.NpmVersion)."
-    Write-Host "Starting the BluePrintReboot frontend at http://127.0.0.1:$Port"
-    Invoke-BlueprintNpm -Node $node -ArgumentList @("run", "dev", "--", "--host", "127.0.0.1", "--port", $Port)
-    if ($LASTEXITCODE -ne 0) {
-        throw "The frontend exited with code $LASTEXITCODE."
+    Write-Host "Configured bind address: $bindAddress"
+    Write-Host "Configured port: $Port"
+    Write-Host "Canonical browser URL: $canonicalBrowserUrl"
+    Write-Host "Node.js version: $($node.NodeVersion)"
+    Write-Host "npm version: $($node.NpmVersion)"
+    Write-Host "Node source: $($node.Source)"
+    Write-Host "Post-launch reachability probe: Invoke-WebRequest -UseBasicParsing -Uri `"$canonicalBrowserUrl`" -TimeoutSec 10"
+    Write-Host "If the printed URL and browser reachability disagree, inspect Get-NetTCPConnection -State Listen -LocalPort $Port and [System.Net.Dns]::GetHostAddresses(`"localhost`")."
+    Write-Host "Starting the foreground frontend server. Press Ctrl+C to stop it."
+
+    Push-Location -LiteralPath $frontendRoot
+    try {
+        Invoke-BlueprintNpm -Node $node -ArgumentList @("run", "dev", "--", "--hostname", $bindAddress, "--port", $Port.ToString())
+        if ($LASTEXITCODE -ne 0) {
+            throw "The frontend server process exited with nonzero code $LASTEXITCODE."
+        }
+    } finally {
+        Pop-Location
     }
 } catch {
     Write-Error $_.Exception.Message

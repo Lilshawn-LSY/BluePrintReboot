@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.2.1-full-stack-validation-gate**.
+Current release target: **v1.2.2-runtime-and-release-evidence-closure**.
 
-v1.2.1 makes the implemented Streamlit application, read-only FastAPI layer, and v1.2.0 TypeScript shell part of one reproducible release gate. It adds portable Node resolution, deterministic frontend setup, bridge behavior tests, optional machine-readable evidence, and matching Python/frontend CI jobs. Streamlit remains the primary interface for write actions, Reader Workspace, PDF rendering, and maintenance workflows.
+v1.2.2 closes the frontend address-family mismatch, adds deliberate GitHub Actions execution support, and makes release/tracker evidence use explicit verification states. It adds no product feature. Streamlit remains the primary interface for write actions, Reader Workspace, PDF rendering, and maintenance workflows.
 
 The app remains intentionally local-first and single-user:
 
@@ -61,14 +61,27 @@ The equivalent direct command is `python -m uvicorn api.main:app --host 127.0.0.
 
 ## Frontend Application Shell
 
-The frontend lives in `frontend/` and requires Node.js 22.13 or newer. Start FastAPI first, then launch the shell in a second PowerShell window:
+The frontend lives in `frontend/` and requires Node.js 22.13 or newer. Start FastAPI first in one PowerShell window:
 
 ```powershell
 .\scripts\run_api.ps1
+```
+
+After FastAPI is listening, launch the frontend in a second PowerShell window with the portable Node runtime:
+
+```powershell
 .\scripts\run_frontend.ps1 -NodeHome "C:\Users\Public\tools\node-v24.18.0-win-x64"
 ```
 
-Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The same-origin frontend bridge connects to FastAPI at `http://127.0.0.1:8000` by default. Copy `frontend/.env.example` to `frontend/.env.local` only when that address needs to change.
+Open exactly [http://127.0.0.1:3000](http://127.0.0.1:3000). The launcher passes Vinext's supported `--hostname 127.0.0.1` option and never binds the frontend to an external interface. The same-origin frontend bridge connects to FastAPI at `http://127.0.0.1:8000` by default. Copy `frontend/.env.example` to `frontend/.env.local` only when that API address needs to change.
+
+After the foreground frontend reports that it is ready, this non-invasive probe checks HTTP reachability:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
+```
+
+If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
 Dashboard, Library, Papers, and Paper Detail use real read-only API contracts with explicit loading, empty, error, and unavailable states. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
 
@@ -207,6 +220,7 @@ Foundation release documents:
 - [v1.1.2 Rich Paper Metadata release notes](docs/release_notes/v1.1.2.md)
 - [v1.2.0 Frontend Application Shell release notes](docs/release_notes/v1.2.0.md)
 - [v1.2.1 Full-Stack Validation Gate release notes](docs/release_notes/v1.2.1.md)
+- [v1.2.2 Runtime and Release Evidence Closure release notes](docs/release_notes/v1.2.2.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -260,6 +274,12 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.2.2-runtime-and-release-evidence-closure
+
+- Corrects the Vinext launch flag so the canonical local frontend URL is `http://127.0.0.1:3000`.
+- Adds deterministic launch diagnostics and a deliberate GitHub Actions `workflow_dispatch` trigger while preserving the full push/pull-request gate.
+- Reconciles release evidence, checklists, roadmap/backlog state, version metadata, and the canonical tracker handoff without changing product or data contracts.
 
 ### v1.2.1-full-stack-validation-gate
 

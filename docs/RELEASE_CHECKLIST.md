@@ -1,5 +1,30 @@
 # Release Checklist
 
+## v1.2.2-runtime-and-release-evidence-closure
+
+- [x] Implementation uses Vinext's supported `--hostname 127.0.0.1` argument and keeps the frontend local-only.
+- [x] The launcher prints the configured bind address, port, canonical browser URL `http://127.0.0.1:3000`, Node version, npm version, Node source, and a post-launch probe.
+- [x] `push` and `pull_request` remain in the primary workflow, and `workflow_dispatch` is defined locally for deliberate execution after the workflow is committed and pushed.
+- [x] Python and frontend remain separate jobs requiring smoke, pytest, `npm ci`, lint, and frontend build/tests.
+- [x] v1.2.1 historical evidence uses one controlled status per verification item.
+- [x] Numeric version surfaces, current release name, release-note index, roadmap/backlog, and tracker handoff identify v1.2.2.
+- [x] Focused launcher and release-contract tests pass and are recorded in v1.2.2 release notes.
+- [x] Canonical `npm ci` frontend setup and the full `dev_check.ps1 -WriteEvidence` gate pass.
+- [x] Independent smoke, full pytest, frontend lint, and frontend build/Node-test results are recorded with actual v1.2.2 counts.
+- [x] FastAPI listener, direct requests, canonical frontend launcher/listener, and bridge/query behavior are manually checked.
+- [x] Dashboard, Library, and Papers are visibly checked in a browser.
+- [x] One existing Paper Detail route is visibly checked in the v1.2.2 read-only shell without retaining private paper metadata.
+- [x] FastAPI-offline unavailable states and sidebar navigation are visibly checked in a browser.
+- [x] Separate Streamlit launch/basic regression is performed without mutating library data.
+- [x] GitHub Actions run `29639358889` for commit `5710dfaf2ec8e9a0212bc68d74f11ce573d87fe1` concluded successfully with successful Python and frontend jobs.
+- [ ] A user performs the clean-PC restore rehearsal on a clean machine.
+- [x] Commit `e26ee8c` was created by the user.
+- [x] The feature branch was pushed to origin by the user.
+- [x] Pull Request #1 was created.
+- [ ] Merge is performed only after explicit instruction.
+- [ ] Tag is created only after explicit instruction.
+- [ ] Release is published only after explicit instruction.
+
 ## v1.2.1-full-stack-validation-gate
 
 - [x] The implemented baseline is reconciled: v1.0.26 Streamlit/read contracts, v1.1.0-v1.1.2 read-only FastAPI routes, and the v1.2.0 frontend shell are current architecture.
