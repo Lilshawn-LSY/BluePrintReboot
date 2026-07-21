@@ -1,6 +1,21 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.3.0-reader-pdf-readonly-vertical-slice`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+Required before and after Codex-assisted release work, including `v1.3.1-release-state-convergence-and-repo-hygiene`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+
+## v1.3.1 Release-State Convergence and Repository Hygiene
+
+- [x] Confirm the accidental tracked root file `tatus --short` is absent from the working tree.
+- [x] Run focused release-state tests that accept truthful CI transitions and reject missing evidence, stale open gates, and uncontrolled statuses.
+- [x] Run focused repository-hygiene tests, including a disposable Git repository with the accidental filename reintroduced as a tracked entry.
+- [x] Confirm hygiene rules inspect tracked entry names only and allow the `.gitkeep` placeholders under `data/`, `papers/`, `notes/`, and `exports/`.
+- [x] Run focused tracker-export tests for schema, deterministic ordering/bytes, standard-library imports, controlled status values, explicit output, and private-value rejection.
+- [x] Generate the tracker CSV under ignored `artifacts/` and inspect at least five rows against current code or documents.
+- [x] Confirm the CSV header is exactly `task_id,status,evidence,disposition,last_verified` and includes no private identity, path, note, or environment value.
+- [x] Inspect PR #2 run `29641757582` and post-merge `main` run `29641792069` separately; do not conflate their commit SHAs or events.
+- [x] Confirm the user-performed separate Streamlit regression remains VERIFIED.
+- [x] Confirm clean-PC restore, v1.3.x tag creation, and GitHub release publication remain NOT PERFORMED.
+- [x] Run standalone hygiene, smoke 94/0/0, full pytest 524 passed, deterministic `npm ci`, frontend lint, production build/14 Node tests, `git diff --check`, and `git status --short`; record exact final results.
+- [x] Confirm no product route, response shape, Reader behavior, storage format, write workflow, or managed-root PDF security boundary changed.
 
 ## v1.3.0 Reader/PDF Read-only Vertical Slice
 
@@ -20,6 +35,11 @@ Required before and after Codex-assisted release work, including `v1.3.0-reader-
 - [x] Start Streamlit separately and confirm Dashboard, Library, Paper Detail, Reader Workspace, existing PDF viewing, and existing note visibility without an application exception or mutation action.
 - [x] Stop all temporary services and confirm ports 3000, 8000, and 8501 are clear.
 - [x] Run `git diff --check` and inspect status; no private data, runtime files, PDFs, notes, caches, dependencies, or evidence artifacts are included.
+- [x] PR #2 commit and push completed; PR #2 merged into `main` at `9663c8cd052a2fa106382630afff7dcd9cfda421`.
+- [x] PR #2 run `29641757582` and its Python/frontend jobs succeeded for `1d51f37971e5898d2f531e9812510c150a4ab56b`.
+- [x] Post-merge `main` run `29641792069` and its Python/frontend jobs succeeded for `9663c8cd052a2fa106382630afff7dcd9cfda421`.
+- [ ] A genuinely clean-PC restore rehearsal remains unperformed.
+- [ ] A v1.3.x tag and GitHub release remain unperformed pending explicit approval.
 
 Current v1.3.0 results are recorded in `docs/release_notes/v1.3.0.md`; historical release counts must not be reused as current evidence.
 
@@ -33,7 +53,7 @@ Current v1.3.0 results are recorded in `docs/release_notes/v1.3.0.md`; historica
 - [x] Start FastAPI before the portable-Node frontend and open exactly `http://127.0.0.1:3000`.
 - [x] Inspect local-only listener addresses; check Dashboard, Library, Papers, bridge/query behavior, API-offline navigation, API recovery, and separate Streamlit launch.
 - [x] Check one existing Paper Detail route in the v1.2.2 read-only shell without recording private paper metadata.
-- [ ] Record GitHub Actions as verified only with a relevant hosted conclusion and run URL.
+- [x] GitHub Actions run `29639358889` is recorded with its hosted conclusion and run URL.
 
 Automated and manual v1.2.2 results are recorded in `docs/release_notes/v1.2.2.md`; v1.2.1 counts are historical and must not be reused as current evidence.
 

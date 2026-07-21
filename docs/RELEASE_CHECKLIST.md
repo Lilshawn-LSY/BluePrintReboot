@@ -1,5 +1,23 @@
 # Release Checklist
 
+## v1.3.1-release-state-convergence-and-repo-hygiene
+
+- [x] Runtime, frontend package, lockfile, README, tracker, and release-note version surfaces identify v1.3.1.
+- [x] The tracked root file `tatus --short` is deleted; no ignored runtime/user-data directory is inspected or changed.
+- [x] `scripts/check_repo_hygiene.py` reads tracked entry names through Git and rejects the known artifact, root logs/output, shell-fragment filenames, generated evidence, dependencies, and private runtime/user-data paths with narrow rules.
+- [x] Repository hygiene runs inside `scripts/smoke_check.py`, which is executed by the normal local gate and GitHub Actions Python job.
+- [x] Release-state tests conditionally accept VERIFIED and NOT VERIFIED CI states only when evidence fields and the corresponding open gate agree.
+- [x] Clean-PC restore, tag creation, and GitHub release publication remain independently validated and are not closed by CI success.
+- [x] PR #2 commit, push, pull request, merge, and hosted run `29641757582` are recorded as completed/verified.
+- [x] The separate post-merge `main` run `29641792069` is recorded as verified against merge SHA `9663c8cd052a2fa106382630afff7dcd9cfda421`.
+- [x] The separate user-performed Streamlit regression remains recorded as VERIFIED.
+- [x] External tracker tasks `R-001` through `R-025` use only controlled status values and repository-grounded evidence.
+- [x] `scripts/export_tracker_status.py` uses only the Python standard library and emits deterministic UTF-8 CSV with the required five columns.
+- [x] Record focused tests 40 passed, standalone hygiene/export passed, smoke 94/0/0, full pytest 524 passed, `npm ci` passed, lint passed, production build plus 14 Node tests passed, and final `git diff --check`/`git status --short` in the v1.3.1 release notes.
+- [ ] A user performs the clean-PC restore rehearsal on a genuinely clean machine.
+- [ ] A v1.3.x tag is created only after explicit instruction.
+- [ ] A v1.3.x GitHub release is published only after explicit instruction.
+
 ## v1.3.0-reader-pdf-readonly-vertical-slice
 
 - [x] `GET /papers/{paper_id}/pdf` resolves only an indexed paper and never accepts a filesystem path from the request.
@@ -18,14 +36,12 @@
 - [x] User-performed unknown-paper, FastAPI-offline navigation, restart recovery, and Reader/PDF recovery validation passed.
 - [x] A separate user-performed Streamlit regression passed for Dashboard, Library, Paper Detail, Reader Workspace, existing PDF viewing, and existing note visibility without an application exception or mutation action.
 - [x] Temporary frontend, FastAPI, and Streamlit processes were stopped; ports 3000, 8000, and 8501 were clear after validation.
-- [ ] A relevant GitHub-hosted CI run is verified after an approved commit and push.
+- [x] Commit `1d51f37971e5898d2f531e9812510c150a4ab56b` was created and pushed on the feature branch; PR #2 was created and merged into `main`.
+- [x] PR #2 GitHub Actions run `29641757582` concluded successfully with successful Python and frontend jobs.
+- [x] Post-merge `main` GitHub Actions run `29641792069` concluded successfully for merge commit `9663c8cd052a2fa106382630afff7dcd9cfda421`, with successful Python and frontend jobs.
 - [ ] A user performs the clean-PC restore rehearsal on a clean machine.
-- [ ] Commit is created only after explicit instruction.
-- [ ] The feature branch is pushed only after explicit instruction.
-- [ ] Pull Request is created only after explicit instruction.
-- [ ] Merge is performed only after explicit instruction.
-- [ ] Tag is created only after explicit instruction.
-- [ ] Release is published only after explicit instruction.
+- [ ] A v1.3.x tag is created only after explicit instruction; none is currently approved or created.
+- [ ] A v1.3.x GitHub release is published only after explicit instruction; none is currently approved or published.
 
 ## v1.2.2-runtime-and-release-evidence-closure
 
@@ -48,9 +64,8 @@
 - [x] Commit `e26ee8c` was created by the user.
 - [x] The feature branch was pushed to origin by the user.
 - [x] Pull Request #1 was created.
-- [ ] Merge is performed only after explicit instruction.
-- [ ] Tag is created only after explicit instruction.
-- [ ] Release is published only after explicit instruction.
+- [x] PR #1 was merged and the v1.2.2 tag exists in repository history.
+- [ ] GitHub release publication is not asserted without separate evidence.
 
 ## v1.2.1-full-stack-validation-gate
 
