@@ -4,6 +4,7 @@ from scripts.smoke_check import (
     check_api_contract,
     check_frontend_contract,
     check_manifest_contract,
+    check_repository_hygiene,
     check_required_paths,
     main,
 )
@@ -30,6 +31,13 @@ def test_backup_manifest_contract_passes() -> None:
 
     assert result.status == "pass"
     assert APP_VERSION in result.detail
+
+
+def test_repository_hygiene_contract_passes() -> None:
+    result = check_repository_hygiene(PROJECT_ROOT)
+
+    assert result.status == "pass"
+    assert "tracked entries inspected" in result.detail
 
 
 def test_api_application_contract_passes_without_starting_server() -> None:

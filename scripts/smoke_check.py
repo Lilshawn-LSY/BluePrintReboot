@@ -16,6 +16,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from scripts.check_repo_hygiene import check_repository
+
 
 REQUIRED_FILES = (
     "app.py",
@@ -55,7 +57,10 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.2.1.md",
     "docs/release_notes/v1.2.2.md",
     "docs/release_notes/v1.3.0.md",
+    "docs/release_notes/v1.3.1.md",
     "docs/tracker_sync_status.json",
+    "scripts/check_repo_hygiene.py",
+    "scripts/export_tracker_status.py",
     "scripts/resolve_node.ps1",
     "scripts/frontend_setup.ps1",
     "scripts/run_api.ps1",
@@ -155,6 +160,21 @@ def check_dependencies() -> list[SmokeCheckResult]:
     else:
         results.append(SmokeCheckResult("dependency:markitdown", "pass", f"optional {version}"))
     return results
+
+
+def check_repository_hygiene(project_root: Path) -> SmokeCheckResult:
+    try:
+        entries, violations = check_repository(project_root)
+    except RuntimeError as exc:
+        return SmokeCheckResult("repository:tracked-file-hygiene", "fail", str(exc))
+    if violations:
+        detail = "; ".join(f"{violation.path}: {violation.reason}" for violation in violations)
+        return SmokeCheckResult("repository:tracked-file-hygiene", "fail", detail)
+    return SmokeCheckResult(
+        "repository:tracked-file-hygiene",
+        "pass",
+        f"{len(entries)} present tracked entries inspected without reading user-data contents",
+    )
 
 
 def check_module_imports() -> list[SmokeCheckResult]:
@@ -257,6 +277,7 @@ def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]
     project_root = Path(project_root).resolve()
     return [
         *check_required_paths(project_root),
+        check_repository_hygiene(project_root),
         *check_dependencies(),
         *check_module_imports(),
         check_manifest_contract(project_root),

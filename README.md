@@ -8,9 +8,13 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.3.0-reader-pdf-readonly-vertical-slice**.
+Current release target: **v1.3.1-release-state-convergence-and-repo-hygiene**.
 
-v1.3.0 adds the first safe read-only Reader/PDF vertical slice to the TypeScript frontend. Paper Detail links to a dedicated Reader route, while a local-only GET endpoint and same-origin streaming bridge deliver only indexed PDFs contained inside the managed `papers/` directory. Streamlit remains the interface for notes, metadata changes, PDF maintenance, and every write action.
+v1.3.1 is a control-plane patch: it reconciles PR #2, hosted CI, manual regression, restore, tag, and publication evidence; removes an accidental tracked console-output artifact; adds tracked-entry repository hygiene to smoke/CI; and makes the external tracker handoff deterministic. The v1.3.0 Reader/PDF slice is unchanged, and Streamlit remains the interface for notes, metadata changes, PDF maintenance, and every write action.
+
+PR #2 is merged. Its hosted run `29641757582` and the separate post-merge `main` run `29641792069` both completed successfully with successful Python and frontend jobs. The separate user-performed Streamlit regression is VERIFIED. A genuinely clean-PC restore rehearsal, v1.3.x tag creation, and v1.3.x GitHub release publication are NOT PERFORMED.
+
+Current v1.3.1 local validation passed: focused control-plane tests 40, smoke 94/0/0, full pytest 524, frontend lint, production build, and 14 Node tests. Exact commands and environment notes are recorded in the v1.3.1 release notes.
 
 The app remains intentionally local-first and single-user:
 
@@ -223,6 +227,7 @@ Foundation release documents:
 - [v1.2.1 Full-Stack Validation Gate release notes](docs/release_notes/v1.2.1.md)
 - [v1.2.2 Runtime and Release Evidence Closure release notes](docs/release_notes/v1.2.2.md)
 - [v1.3.0 Read-Only Reader/PDF Vertical Slice release notes](docs/release_notes/v1.3.0.md)
+- [v1.3.1 Release-State Convergence and Repository Hygiene release notes](docs/release_notes/v1.3.1.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -247,6 +252,15 @@ The evidence file is opt-in and ignored at `artifacts/validation-summary.json`. 
 ```
 
 `-PythonOnly` and `-SmokeOnly` never claim release readiness. For release hygiene work, also complete the [mandatory regression checklist](docs/checklists/regression_checklist.md), run `git diff --check`, and inspect `git status --short`.
+
+The smoke path includes tracked-entry repository hygiene. It can also be run directly, and the versioned external-tracker handoff can be exported without network access or non-standard dependencies:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\check_repo_hygiene.py
+.\.venv\Scripts\python.exe scripts\export_tracker_status.py
+```
+
+Tracker CSV defaults to ignored `artifacts/tracker_status.csv`; use `--output <path>` for an explicit destination.
 
 Run a focused test file:
 
@@ -276,6 +290,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.3.1-release-state-convergence-and-repo-hygiene
+
+- Separates PR #2 CI from the post-merge `main` run and validates truthful release-state transitions instead of freezing a provisional status.
+- Removes the accidental tracked console-output file and adds narrow tracked-entry hygiene to smoke and hosted CI.
+- Adds a versioned external-tracker mapping and deterministic standard-library CSV export without Drive API, OAuth, or network access.
+- Adds no product feature and preserves the Reader/PDF, API, storage, and Streamlit contracts.
 
 ### v1.3.0-reader-pdf-readonly-vertical-slice
 
@@ -583,6 +604,7 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - Same-hash duplicate rows are never auto-merged; users must choose keep, reconnect, ignore, or confirmed index-row removal.
 - Orphan repair, metadata-only archive, and explicit verified rebuildable-cache quarantine are implemented; automatic destructive repair remains deferred.
 - Extracted-text and paper-profile caches are excluded from backup snapshots by default because they are regenerable.
+- A genuinely clean-PC restore rehearsal and any v1.3.x tag or GitHub release remain unperformed pending separate evidence and approval.
 
 If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:
 
