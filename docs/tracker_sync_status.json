@@ -1,7 +1,7 @@
 {
   "schema_version": "2.0",
-  "current_version": "1.3.1",
-  "release_name": "v1.3.1-release-state-convergence-and-repo-hygiene",
+  "current_version": "1.4.0",
+  "release_name": "v1.4.0-pdfjs-reader-foundation",
   "implemented_milestones": [
     "v1.0.26 Streamlit finalization and lifecycle safety",
     "v1.1.0-v1.1.2 read-only FastAPI foundation",
@@ -9,15 +9,15 @@
     "v1.2.1 full-stack validation gate",
     "v1.2.2 runtime and release evidence closure",
     "v1.3.0 read-only Reader/PDF vertical slice",
-    "v1.3.1 release-state convergence and repository hygiene"
+    "v1.3.1 release-state convergence and repository hygiene",
+    "v1.4.0 PDF.js Reader foundation"
   ],
   "open_gates": [
-    "user-performed clean-PC restore rehearsal",
-    "v1.3.x tag creation",
-    "v1.3.x GitHub release publication"
+    "v1.4.0 tag creation",
+    "v1.4.0 GitHub release publication"
   ],
   "next_milestone": {
-    "name": "Reader/PDF hardening and optional PDF.js evaluation",
+    "name": "PDF.js Reader runtime verification and future read-only hardening",
     "status": "planned"
   },
   "source_control": {
@@ -39,39 +39,39 @@
   "verification": {
     "local_smoke": {
       "status": "VERIFIED",
-      "evidence": "v1.3.1 validation: 94 passed, 0 warnings, 0 failed on 2026-07-21."
+      "evidence": "v1.4.0 final smoke validation: 98 passed, 0 warnings, 0 failed on 2026-07-21."
     },
     "local_pytest": {
       "status": "VERIFIED",
-      "evidence": "v1.3.1 final validation: 524 passed, 0 failed, 0 skipped in 38.05 seconds on 2026-07-21."
+      "evidence": "v1.4.0 final full pytest validation: 526 passed, 0 failed, 0 skipped in 34.57 seconds on 2026-07-21."
     },
     "frontend_dependency_setup": {
       "status": "VERIFIED",
-      "evidence": "npm ci installed 492 packages from the committed lockfile with Node 24.18.0 and npm 11.16.0 on 2026-07-21."
+      "evidence": "npm ci added 495 packages and audited 496 from the committed lockfile with Node 24.18.0 and npm 11.16.0 on 2026-07-21; 12 audit findings were reported."
     },
     "frontend_lint": {
       "status": "VERIFIED",
-      "evidence": "npm run lint exited 0 with no findings on 2026-07-21."
+      "evidence": "npm run lint exited 0 with no findings after the clean npm ci install on 2026-07-21."
     },
     "frontend_test_build": {
       "status": "VERIFIED",
-      "evidence": "Production build passed and 14 Node tests passed with 0 failed, 0 skipped, and 0 cancelled on 2026-07-21."
+      "evidence": "Vinext production build passed, emitted the local PDF.js worker asset, and 25 Node tests passed with 0 failed, 0 skipped, and 0 cancelled on 2026-07-21."
     },
     "repository_hygiene": {
       "status": "VERIFIED",
-      "evidence": "The standalone tracked-entry check passed, and focused tests detected the reintroduced disposable artifact and all controlled deny cases."
+      "evidence": "The standalone tracked-entry check passed for 219 present tracked entries; smoke repeated the same tracked-only check without reading user-data contents."
     },
     "tracker_export": {
       "status": "VERIFIED",
       "evidence": "The standard-library exporter produced a deterministic 25-row UTF-8 CSV with the required header and no forbidden private values."
     },
     "manual_runtime": {
-      "status": "VERIFIED",
-      "evidence": "User-performed local-only Reader/PDF validation covered launch diagnostics, managed PDF delivery, Range handling, navigation, offline recovery, and cleanup without retaining private library metadata."
+      "status": "NOT PERFORMED",
+      "evidence": null
     },
     "streamlit_regression": {
-      "status": "VERIFIED",
-      "evidence": "A separate user-performed Streamlit regression covered Dashboard, Library, Paper Detail, Reader Workspace, existing PDF viewing, and existing note visibility without mutation."
+      "status": "NOT PERFORMED",
+      "evidence": null
     },
     "github_actions": {
       "status": "VERIFIED",
@@ -247,16 +247,16 @@
       },
       {
         "task_id": "R-018",
-        "status": "DEFERRED",
-        "evidence": "Reader request count and index-read latency have not been measured.",
-        "disposition": "Measure with disposable data after v1.3.1 before adding caching or endpoints.",
+        "status": "PARTIAL",
+        "evidence": "The PDF.js Reader exposes development-only request-count, Range-response, load, render, and cancellation diagnostics; real-browser request inspection and index-read latency remain unmeasured.",
+        "disposition": "Complete browser request inspection with a disposable or approved real PDF; measure index latency only if a later bottleneck requires it.",
         "last_verified": "2026-07-21"
       },
       {
         "task_id": "R-019",
-        "status": "DEFERRED",
-        "evidence": "Native Reader validation passed; no measured renderer failure justifies PDF.js scope.",
-        "disposition": "Open a separate dependency-reviewed milestone only for demonstrated limitations.",
+        "status": "COMPLETED",
+        "evidence": "v1.4.0 implements pinned pdfjs-dist with a bundled local worker, bounded controls, cleanup, diagnostics, tests, and a conditional native fallback.",
+        "disposition": "Keep advanced PDF.js layers and write features deferred; complete the pending manual runtime checklist separately.",
         "last_verified": "2026-07-21"
       },
       {
@@ -297,7 +297,7 @@
       {
         "task_id": "R-025",
         "status": "NOT VERIFIED",
-        "evidence": "No approved v1.3.x tag or published GitHub release exists.",
+        "evidence": "No approved v1.4.0 tag or published GitHub release exists.",
         "disposition": "Create an immutable checkpoint only after explicit approval and required evidence.",
         "last_verified": "2026-07-21"
       }

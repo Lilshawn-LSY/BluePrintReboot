@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+async function listFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  return (await Promise.all(entries.map(async (entry) => {
+    const path = `${directory}/${entry.name}`;
+    return entry.isDirectory() ? listFiles(path) : [path];
+  }))).flat();
+}
 
 async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -39,32 +48,63 @@ test("all required routes render inside the shared shell", async () => {
   }
 });
 
-test("keeps the Reader route read-only, same-origin, and explicitly stateful", async () => {
-  const [detail, reader, client, shell] = await Promise.all([
+test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer", async () => {
+  const [detail, readerView, reader, adapter, controller, client, shell, packageJson, packageLock] = await Promise.all([
     readFile(new URL("../app/views/PaperDetailView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/PdfJsReader.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/pdf/pdfjs-adapter.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/pdf/reader-controller.mjs", import.meta.url), "utf8"),
     readFile(new URL("../app/lib/api/client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/components/AppShell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
   ]);
 
   assert.match(detail, /Open Reader/);
   assert.match(detail, /encodeURIComponent\(resource\.data\.paper_id\)/);
   assert.match(detail, /Reader unavailable/);
-  assert.match(reader, /title=\{resource\.data\.title\}/);
-  assert.match(reader, /Read-only context/);
-  assert.match(reader, /Back to Paper Detail/);
-  assert.match(reader, /Loading paper metadata/);
-  assert.match(reader, /Loading PDF/);
-  assert.match(reader, /Managed PDF missing/);
-  assert.match(reader, /PDF response unavailable/);
+  assert.match(readerView, /title=\{resource\.data\.title\}/);
+  assert.match(readerView, /Read-only context/);
+  assert.match(readerView, /Back to Paper Detail/);
+  assert.match(readerView, /Loading paper metadata/);
+  assert.match(readerView, /Managed PDF missing/);
+  assert.match(readerView, /<PdfJsReader paperId=\{paper\.paper_id\}/);
+  assert.doesNotMatch(readerView, /<object\b/);
+  assert.match(reader, /<canvas\b/);
+  assert.match(reader, /Previous PDF page/);
+  assert.match(reader, /Next PDF page/);
+  assert.match(reader, /PDF page number/);
+  assert.match(reader, /Zoom out/);
+  assert.match(reader, /Zoom in/);
+  assert.match(reader, /Reset PDF zoom/);
+  assert.match(reader, /Loading PDF\.js Reader/);
+  assert.match(reader, /Retry PDF\.js/);
+  assert.match(reader, /Use native viewer fallback/);
+  assert.match(reader, /if \(state\.mode === "fallback"\)/);
+  assert.match(reader, /role="img" aria-label=\{`PDF page/);
   assert.match(reader, /Browser PDF viewer unavailable/);
-  assert.match(reader, /<object[^>]+data=\{resource\.data\.url\}[^>]+type="application\/pdf"/s);
-  assert.match(reader, /write action remain in Streamlit|write actions remain in Streamlit/);
-  assert.doesNotMatch(reader, /note editor|autosave|annotation|highlight/i);
+  assert.match(reader, /<object[^>]+data=\{pdfUrl\}[^>]+type="application\/pdf"/s);
+  assert.match(reader, /NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1"/);
+  assert.match(readerView, /write action remain in Streamlit|write actions remain in Streamlit/);
+  assert.doesNotMatch(readerView, /note editor|autosave|annotation|highlight/i);
   assert.match(client, /\/papers\/\$\{encodeURIComponent\(paperId\)\}\/pdf/);
-  assert.match(client, /Range: "bytes=0-0"/);
+  assert.doesNotMatch(client, /bytes=0-0|getPaperPdf|probePaperPdf/);
   assert.doesNotMatch(client, /http:\/\/127\.0\.0\.1:8000/);
+  assert.match(adapter, /typeof window === "undefined"/);
+  assert.match(adapter, /import\("pdfjs-dist"\)/);
+  assert.match(adapter, /pdf\.worker\.min\.mjs\?url/);
+  assert.doesNotMatch(adapter, /https?:\/\//);
+  assert.match(controller, /documentLoadCount/);
+  assert.match(controller, /renderCancellationCount/);
+  assert.equal(JSON.parse(packageJson).dependencies["pdfjs-dist"], "6.1.200");
+  assert.equal(JSON.parse(packageLock).packages[""].dependencies["pdfjs-dist"], "6.1.200");
   assert.match(shell, /return "Reader"/);
+});
+
+test("production build contains the repository-local PDF.js worker asset", async () => {
+  const files = await listFiles(fileURLToPath(new URL("../dist", import.meta.url)));
+  assert.ok(files.some((path) => /pdf\.worker\.min-[^/]+\.mjs$/i.test(path)), files.join("\n"));
 });
 
 test("keeps tokens, API access, and page views separated", async () => {

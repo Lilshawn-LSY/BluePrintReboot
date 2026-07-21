@@ -1,10 +1,12 @@
 "use client";
 
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { DetailPanel } from "../components/DetailPanel";
 import { PageHeader } from "../components/PageHeader";
+import { PdfJsReader } from "../components/PdfJsReader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
@@ -15,38 +17,31 @@ function ReaderPdf({ paper }: { paper: PaperDetail }) {
   if (paper.missing_pdf || !paper.relative_pdf_path) {
     return <EmptyState title="Managed PDF missing" description="This paper record does not currently have an accessible PDF in the managed library." />;
   }
-  return <AvailableReaderPdf paper={paper} />;
-}
-
-
-function AvailableReaderPdf({ paper }: { paper: PaperDetail }) {
-  const resource = useApiResource(`paper-pdf:${paper.paper_id}`, () => apiClient.getPaperPdf(paper.paper_id));
-  if (resource.status === "loading") return <LoadingState label="Loading PDF" />;
-  if (resource.status === "unavailable") return <UnavailableState title="PDF response unavailable" description={resource.message} />;
-  if (resource.status === "not-found") return <EmptyState title="Managed PDF missing" description={resource.message} />;
-  if (resource.status === "error") return <ErrorState description={resource.message} />;
-  return (
-    <object className="reader-pdf-viewer" data={resource.data.url} type="application/pdf" aria-label={`PDF viewer for ${paper.title}`}>
-      <div className="reader-native-fallback" role="status">
-        <h2>Browser PDF viewer unavailable</h2>
-        <p>This browser cannot display the managed PDF inline.</p>
-        <a className="text-link" href={resource.data.url} target="_blank" rel="noreferrer"><ExternalLink size={15} />Open PDF in a browser tab</a>
-      </div>
-    </object>
-  );
+  return <PdfJsReader paperId={paper.paper_id} />;
 }
 
 
 export function ReaderView({ paperId }: { paperId: string }) {
-  const resource = useApiResource(`reader-paper:${paperId}`, () => apiClient.getPaper(paperId));
+  const [retryCount, setRetryCount] = useState(0);
+  const resource = useApiResource(`reader-paper:${paperId}:${retryCount}`, () => apiClient.getPaper(paperId));
   const detailHref = `/papers/${encodeURIComponent(paperId)}`;
   return (
     <div className="page-stack">
       <Link className="back-link" href={detailHref}><ArrowLeft size={15} />Back to Paper Detail</Link>
       {resource.status === "loading" ? <LoadingState label="Loading paper metadata" /> : null}
-      {resource.status === "unavailable" ? <UnavailableState description={resource.message} /> : null}
+      {resource.status === "unavailable" ? (
+        <div className="reader-metadata-state">
+          <UnavailableState description={resource.message} />
+          <button className="reader-control" type="button" onClick={() => setRetryCount((value) => value + 1)}>Retry local API</button>
+        </div>
+      ) : null}
       {resource.status === "not-found" ? <EmptyState title="Paper not found" description="The requested paper identity is not present in the local read model." /> : null}
-      {resource.status === "error" ? <ErrorState description={resource.message} /> : null}
+      {resource.status === "error" ? (
+        <div className="reader-metadata-state">
+          <ErrorState description={resource.message} />
+          <button className="reader-control" type="button" onClick={() => setRetryCount((value) => value + 1)}>Retry local API</button>
+        </div>
+      ) : null}
       {resource.status === "success" ? (
         <>
           <PageHeader

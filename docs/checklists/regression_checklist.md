@@ -1,6 +1,20 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.3.1-release-state-convergence-and-repo-hygiene`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+Required before and after Codex-assisted release work, including `v1.4.0-pdfjs-reader-foundation`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+
+## v1.4.0 PDF.js Reader Foundation
+
+- [x] Confirm the Reader uses a client-only PDF.js adapter, canvas primary path, bundled local worker, existing same-origin URL, and no arbitrary path input.
+- [x] Confirm page and zoom controls are bounded, accessible, and rerender pages without recreating the document loading task.
+- [x] Confirm stale renders are cancelled or superseded and cleanup covers unmount, paper change, retry, fallback, and pending load.
+- [x] Confirm PDF.js errors drive retry/fallback and the old one-byte availability probe is absent.
+- [x] Confirm the native fallback is labeled, uses the safe URL, and is not mounted concurrently with PDF.js.
+- [x] Confirm diagnostics are disabled by default and contain no paper title, DOI, author, note, URL, path, PDF content, or persistent telemetry.
+- [x] Run disposable backend/bridge regressions for full/partial bytes, exact lengths, safe headers, malformed/unsatisfiable Range, missing/invalid PDFs, containment, and unchanged GET-only routes.
+- [x] Run repository hygiene, smoke 98/0/0, full pytest 526, deterministic `npm ci`, frontend lint, and production build/25 Node tests; final Git diff checks are recorded in the implementation handoff.
+- [ ] Verify a real PDF for initial render, page controls, zoom, request/Range behavior, repeated entry/exit, offline/restart recovery, native fallback, and large-PDF behavior.
+- [ ] Run the separate Streamlit regression without mutation.
+- [ ] Confirm no commit, staging, push, PR, merge, tag, GitHub release, Drive update, user data, generated diagnostics, or dependencies are included.
 
 ## v1.3.1 Release-State Convergence and Repository Hygiene
 

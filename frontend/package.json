@@ -1,6 +1,6 @@
 {
   "name": "blueprint-reboot-frontend",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -9,12 +9,13 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/api-bridge.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/api-bridge.test.mjs tests/pdf-reader-controller.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
     "lucide-react": "1.24.0",
     "next": "16.2.6",
+    "pdfjs-dist": "6.1.200",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },

@@ -51,7 +51,32 @@ def test_valid_managed_pdf_streams_exact_bytes_inline_and_supports_ranges(tmp_pa
     assert response.content == PDF_BYTES
     assert ranged.status_code == 206
     assert ranged.content == PDF_BYTES[1:5]
+    assert ranged.headers["content-length"] == "4"
     assert ranged.headers["content-range"] == f"bytes 1-4/{len(PDF_BYTES)}"
+
+
+def test_unsatisfiable_pdf_range_returns_416_with_file_size(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "papers" / "paper.pdf"
+    pdf_path.parent.mkdir()
+    pdf_path.write_bytes(PDF_BYTES)
+    response = client_for(
+        resolve_fixture(tmp_path, {"paper_id": "paper-1", "filename": "paper.pdf"})
+    ).get("/papers/paper-1/pdf", headers={"Range": f"bytes={len(PDF_BYTES) + 10}-"})
+
+    assert response.status_code == 416
+    assert response.headers["content-range"] == f"bytes */{len(PDF_BYTES)}"
+
+
+def test_malformed_pdf_range_returns_400_without_private_details(tmp_path: Path) -> None:
+    pdf_path = tmp_path / "papers" / "paper.pdf"
+    pdf_path.parent.mkdir()
+    pdf_path.write_bytes(PDF_BYTES)
+    response = client_for(
+        resolve_fixture(tmp_path, {"paper_id": "paper-1", "filename": "paper.pdf"})
+    ).get("/papers/paper-1/pdf", headers={"Range": "items=0-1"})
+
+    assert response.status_code == 400
+    assert str(tmp_path) not in response.text
 
 
 def test_unknown_paper_id_is_distinct_and_private(tmp_path: Path) -> None:

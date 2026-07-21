@@ -8,13 +8,13 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.3.1-release-state-convergence-and-repo-hygiene**.
+Current release target: **v1.4.0-pdfjs-reader-foundation**.
 
-v1.3.1 is a control-plane patch: it reconciles PR #2, hosted CI, manual regression, restore, tag, and publication evidence; removes an accidental tracked console-output artifact; adds tracked-entry repository hygiene to smoke/CI; and makes the external tracker handoff deterministic. The v1.3.0 Reader/PDF slice is unchanged, and Streamlit remains the interface for notes, metadata changes, PDF maintenance, and every write action.
+v1.4.0 replaces the web Reader's default native `<object>` viewer with a controlled PDF.js canvas renderer. It adds bounded page and zoom controls, explicit loading/error/retry states, lifecycle cleanup, disabled-by-default development diagnostics, and an explicit native fallback. It reuses the existing stable-`paper_id`, same-origin, GET-only PDF endpoint and removes the redundant one-byte availability probe.
 
-PR #2 is merged. Its hosted run `29641757582` and the separate post-merge `main` run `29641792069` both completed successfully with successful Python and frontend jobs. The separate user-performed Streamlit regression is VERIFIED. A genuinely clean-PC restore rehearsal, v1.3.x tag creation, and v1.3.x GitHub release publication are NOT PERFORMED.
+The official `pdfjs-dist` package is pinned in the frontend lockfile. The client-only adapter dynamically imports PDF.js and Vite resolves `pdf.worker.min.mjs?url` into a repository-built local asset, so runtime rendering does not depend on a public CDN. Streamlit remains the interface for notes, metadata changes, PDF maintenance, and every write action.
 
-Current v1.3.1 local validation passed: focused control-plane tests 40, smoke 94/0/0, full pytest 524, frontend lint, production build, and 14 Node tests. Exact commands and environment notes are recorded in the v1.3.1 release notes.
+Automated final validation is recorded in the v1.4.0 release notes. Real-PDF browser behavior, request inspection, repeated route entry/exit, API restart recovery, large-PDF behavior, the native fallback, and the separate Streamlit regression remain pending manual verification. Clean-PC restore remains a recurring operational procedure, not a completion gate for this implementation. No v1.4.0 tag or GitHub release is approved or created.
 
 The app remains intentionally local-first and single-user:
 
@@ -228,6 +228,7 @@ Foundation release documents:
 - [v1.2.2 Runtime and Release Evidence Closure release notes](docs/release_notes/v1.2.2.md)
 - [v1.3.0 Read-Only Reader/PDF Vertical Slice release notes](docs/release_notes/v1.3.0.md)
 - [v1.3.1 Release-State Convergence and Repository Hygiene release notes](docs/release_notes/v1.3.1.md)
+- [v1.4.0 PDF.js Reader Foundation release notes](docs/release_notes/v1.4.0.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -290,6 +291,14 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.4.0-pdfjs-reader-foundation
+
+- Makes a PDF.js canvas the primary web Reader while retaining a clearly labeled, conditional native browser fallback.
+- Adds bounded page navigation, direct page entry, zoom controls, safe loading/error/retry states, and explicit task/document/render cleanup.
+- Pins `pdfjs-dist` and bundles its worker locally through the client-only Vinext/Vite build with no CDN dependency.
+- Removes the redundant one-byte probe and adds disabled-by-default, private-data-free development diagnostics for document loads, renders, cancellations, first-page duration, and observed request mode.
+- Preserves the managed-root endpoint, stable `paper_id`, byte ranges, all storage formats, and every Streamlit write workflow.
 
 ### v1.3.1-release-state-convergence-and-repo-hygiene
 

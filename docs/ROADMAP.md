@@ -13,6 +13,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.2.2 corrected the local frontend bind contract, added manual workflow execution support, reconciled controlled release evidence, and added a canonical tracker handoff.
 - v1.3.0 added the first safe read-only Reader/PDF vertical slice: a managed-file PDF endpoint, a streaming same-origin bridge, Paper Detail navigation, and a dedicated browser-native Reader route.
 - v1.3.1 converges source-control, hosted-CI, manual-regression, restore, and publication state; removes the accidental tracked console-output artifact; adds a tracked-entry hygiene gate; and makes the external tracker handoff deterministic.
+- v1.4.0 makes PDF.js the primary web Reader, bundles its worker locally, adds bounded navigation/zoom/error/fallback behavior, and instruments document/render lifecycle without changing the secure PDF API or Streamlit writes.
 
 ## Decision gates
 
@@ -26,13 +27,14 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | PR #2 hosted CI | Closed | GitHub Actions run `29641757582` tested `1d51f37971e5898d2f531e9812510c150a4ab56b`; Python and frontend jobs succeeded. |
 | Post-merge `main` hosted CI | Closed | GitHub Actions run `29641792069` tested merge commit `9663c8cd052a2fa106382630afff7dcd9cfda421`; Python and frontend jobs succeeded. |
 | v1.3.1 repository hygiene and state contracts | Verified locally | Focused tests 40 passed; hygiene passed; smoke 94/0/0; full pytest 524 passed; deterministic export, `npm ci`, lint, production build, and 14 Node tests passed. |
-| Clean-PC restore | Open — NOT PERFORMED | A user must complete the canonical rehearsal on a genuinely clean machine. Automated readiness checks are not equivalent. |
-| v1.3.x tag | Open — NOT PERFORMED | No v1.3.x tag is approved or created. |
-| v1.3.x GitHub release | Open — NOT PERFORMED | No v1.3.x GitHub release is approved or published. |
+| v1.4.0 PDF.js Reader foundation | Verified automatically; manual runtime pending | Hygiene passed; smoke 98/0/0; focused PDF API 13 and release/version 24 passed; full pytest 526 passed; deterministic `npm ci`, lint, production build, and 25 Node tests passed. Real-PDF browser and Streamlit checks remain manual. |
+| Clean-PC restore | Recurring procedure — NOT PERFORMED | The canonical rehearsal remains useful operational work but is not a v1.4.0 implementation gate. |
+| v1.4.0 tag | Open — NOT PERFORMED | No v1.4.0 tag is approved or created. |
+| v1.4.0 GitHub release | Open — NOT PERFORMED | No v1.4.0 GitHub release is approved or published. |
 
 ## Next product milestone
 
-After the v1.3.1 control-plane patch and a genuinely clean-PC restore rehearsal, measure native Reader request count and index-read latency. Evaluate PDF.js only as a separately approved enhancement justified by observed browser limitations. Any future renderer must preserve the managed-root security boundary, byte-range delivery, same-origin browser access, and Streamlit ownership of all write workflows.
+Complete the pending real-PDF browser checks for the v1.4.0 Reader, including Range/request inspection, repeated entry/exit, offline recovery, native fallback, and large-PDF behavior. Future Reader hardening may address only measured gaps and must preserve managed-root containment, same-origin byte-range delivery, stable `paper_id`, and Streamlit ownership of all write workflows.
 
 ## Continuing constraints
 

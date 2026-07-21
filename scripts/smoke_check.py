@@ -58,6 +58,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.2.2.md",
     "docs/release_notes/v1.3.0.md",
     "docs/release_notes/v1.3.1.md",
+    "docs/release_notes/v1.4.0.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
     "scripts/export_tracker_status.py",
@@ -76,6 +77,9 @@ REQUIRED_FILES = (
     "frontend/app/papers/[paperId]/page.tsx",
     "frontend/app/papers/[paperId]/reader/page.tsx",
     "frontend/app/views/ReaderView.tsx",
+    "frontend/app/components/PdfJsReader.tsx",
+    "frontend/app/lib/pdf/pdfjs-adapter.ts",
+    "frontend/app/lib/pdf/reader-controller.mjs",
     "frontend/app/projects/page.tsx",
     "frontend/app/tags/page.tsx",
     "frontend/app/settings/page.tsx",
@@ -265,9 +269,24 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
         api_client = (frontend_root / "app/lib/api/client.ts").read_text(encoding="utf-8")
         if "SidebarNavigation" not in shell or "main-content" not in shell:
             raise ValueError("frontend application shell is incomplete")
-        for method in ("getHealth", "getLibraryStatus", "getPapers", "getPaper", "getPaperPdf"):
+        for method in ("getHealth", "getLibraryStatus", "getPapers", "getPaper"):
             if method not in api_client:
                 raise ValueError(f"frontend API client is missing {method}")
+        if "paperPdfUrl" not in api_client:
+            raise ValueError("frontend API client is missing the stable managed PDF URL builder")
+        if "bytes=0-0" in api_client or "probePaperPdf" in api_client:
+            raise ValueError("frontend API client still contains the redundant PDF availability probe")
+        if package.get("dependencies", {}).get("pdfjs-dist") != "6.1.200":
+            raise ValueError("frontend PDF.js dependency is not pinned to the approved version")
+        reader = (frontend_root / "app/components/PdfJsReader.tsx").read_text(encoding="utf-8")
+        adapter = (frontend_root / "app/lib/pdf/pdfjs-adapter.ts").read_text(encoding="utf-8")
+        controller = (frontend_root / "app/lib/pdf/reader-controller.mjs").read_text(encoding="utf-8")
+        if "<canvas" not in reader or "NativePdfFallback" not in reader:
+            raise ValueError("PDF.js Reader canvas or native fallback contract is incomplete")
+        if "pdf.worker.min.mjs?url" not in adapter or 'typeof window === "undefined"' not in adapter:
+            raise ValueError("PDF.js worker or client-boundary contract is incomplete")
+        if "documentLoadCount" not in controller or "renderCancellationCount" not in controller:
+            raise ValueError("PDF.js lifecycle diagnostics contract is incomplete")
     except Exception as exc:
         return SmokeCheckResult("frontend:application-contract", "fail", str(exc))
     return SmokeCheckResult("frontend:application-contract", "pass", f"eight routes share the v{APP_VERSION} shell")
