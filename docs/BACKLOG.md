@@ -1,6 +1,8 @@
 # BluePrintReboot Backlog
 
-Last synced: 2026-07-21
+Stable backlog last edited: 2026-07-25
+
+Current release evidence and individually addressable pending checks live in the generated [Current Release Status](CURRENT_RELEASE_STATUS.md). This backlog does not duplicate mutable counts or verification state.
 
 ## Implemented foundations
 
@@ -22,8 +24,16 @@ Last synced: 2026-07-21
 - [x] Cancel stale renders and clean loading tasks, loaded documents, pages, canvas state, retry cycles, paper changes, and unmounts.
 - [x] Add disabled-by-default development diagnostics and automated document-load/render/cancellation/request-mode contracts without private metadata.
 - [x] Preserve full/partial PDF responses, exact lengths, Range headers, 400/416 handling, managed-root containment, and the GET-only route surface.
-- [ ] Complete real-PDF browser checks, request inspection, repeated route entry/exit, API recovery, native fallback, large-PDF behavior, and the separate Streamlit regression.
-- [ ] Create a v1.4.0 tag or GitHub release only after explicit approval; neither is part of this implementation task.
+- Current runtime, source-control, publication, and operational state is intentionally represented only in the canonical manifest and generated status document.
+
+## v1.4.1 release-state single source and tracker convergence
+
+- [x] Evolve `docs/tracker_sync_status.json` into the canonical current release-state manifest.
+- [x] Generate `docs/CURRENT_RELEASE_STATUS.md` deterministically and reject stale committed output.
+- [x] Separate implementation, source control, automated validation, manual validation, publication, and recurring operational procedures.
+- [x] Preserve conflicting smoke records instead of selecting a count silently.
+- [x] Derive deterministic external-tracker CSV from the canonical manifest.
+- [x] Integrate offline release-state validation into the smoke path.
 
 ## v1.3.1 release-state convergence and repository hygiene
 
@@ -75,6 +85,6 @@ Write APIs; project/tag APIs; OpenAPI-generated TypeScript types; UI redesign; d
 
 ## Tracker handoff
 
-- [x] `docs/tracker_sync_status.json` is the canonical versioned repository handoff for the external roadmap tracker.
+- [x] `docs/tracker_sync_status.json` is the canonical versioned release-state manifest and repository handoff for the external roadmap tracker.
 - [x] `scripts/export_tracker_status.py` emits deterministic UTF-8 CSV under ignored `artifacts/` by default or at an explicit output path.
 - [ ] Import or apply the generated CSV to the external tracker outside repository code; no Drive API, OAuth flow, or sync client is added.

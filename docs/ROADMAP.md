@@ -1,6 +1,8 @@
 # BluePrintReboot Roadmap
 
-Last synced: 2026-07-21
+Stable roadmap last edited: 2026-07-25
+
+Current release evidence is not duplicated here. See the generated [Current Release Status](CURRENT_RELEASE_STATUS.md), derived from the canonical machine-readable manifest.
 
 BluePrintReboot is a local-first, single-user research workspace with an established Streamlit application, a read-only FastAPI layer, and a TypeScript frontend shell. These are implemented architecture, not future placeholders.
 
@@ -27,10 +29,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | PR #2 hosted CI | Closed | GitHub Actions run `29641757582` tested `1d51f37971e5898d2f531e9812510c150a4ab56b`; Python and frontend jobs succeeded. |
 | Post-merge `main` hosted CI | Closed | GitHub Actions run `29641792069` tested merge commit `9663c8cd052a2fa106382630afff7dcd9cfda421`; Python and frontend jobs succeeded. |
 | v1.3.1 repository hygiene and state contracts | Verified locally | Focused tests 40 passed; hygiene passed; smoke 94/0/0; full pytest 524 passed; deterministic export, `npm ci`, lint, production build, and 14 Node tests passed. |
-| v1.4.0 PDF.js Reader foundation | Verified automatically; manual runtime pending | Hygiene passed; smoke 98/0/0; focused PDF API 13 and release/version 24 passed; full pytest 526 passed; deterministic `npm ci`, lint, production build, and 25 Node tests passed. Real-PDF browser and Streamlit checks remain manual. |
-| Clean-PC restore | Recurring procedure — NOT PERFORMED | The canonical rehearsal remains useful operational work but is not a v1.4.0 implementation gate. |
-| v1.4.0 tag | Open — NOT PERFORMED | No v1.4.0 tag is approved or created. |
-| v1.4.0 GitHub release | Open — NOT PERFORMED | No v1.4.0 GitHub release is approved or published. |
+| v1.4.0 PDF.js Reader foundation | Canonical current state | Implementation, source control, automated/manual validation, tag, publication, and recurring operations are rendered from the [Current Release Status](CURRENT_RELEASE_STATUS.md). |
 
 ## Next product milestone
 

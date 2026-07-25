@@ -1,5 +1,7 @@
 # Release Checklist
 
+Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
+
 ## v1.4.0-pdfjs-reader-foundation
 
 - [x] Runtime, frontend package, lockfile, visible shell labels, README, tracker, and release-note version surfaces identify v1.4.0.
@@ -11,9 +13,12 @@
 - [x] Loading tasks, documents, page/render tasks, canvas state, retries, paper changes, and unmounts have explicit cleanup contracts.
 - [x] Full and partial response, exact-length, `Accept-Ranges`, `Content-Range`, malformed/unsatisfiable Range, missing-file, traversal, and GET-only regressions are covered.
 - [x] Development diagnostics are disabled by default and expose only bounded counts, durations, cancellation, and inferred request mode.
-- [x] Record final hygiene, smoke 98/0/0, focused PDF API 13, focused release/version 24, full pytest 526, `npm ci`, lint, production build, and 25 Node tests; record Git diff results in the final implementation handoff.
-- [ ] Perform real-PDF rendering/navigation/zoom, browser Range inspection, repeated entry/exit, offline/restart recovery, native fallback, large-PDF, and Streamlit regression checks.
-- [ ] Create no commit, staging, push, PR, merge, tag, release, or Drive update as part of this implementation task.
+- [x] Automated and manual evidence is structured in `docs/tracker_sync_status.json`; conflicting evidence remains explicit.
+- [x] The generated status document separates passed and pending Reader checks and keeps Streamlit regression independent.
+
+## Operational approval policy
+
+Commit, push, merge, tag, GitHub Release publication, and external-tracker application are separately authorized procedures. Their instructions are not release-state evidence and cannot close a gate.
 
 ## v1.3.1-release-state-convergence-and-repo-hygiene
 

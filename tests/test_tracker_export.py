@@ -12,6 +12,7 @@ from scripts.export_tracker_status import (
     PROJECT_ROOT,
     export_tracker_status,
     main,
+    tracker_csv_bytes,
     validated_rows,
 )
 
@@ -28,9 +29,9 @@ def test_tracker_mapping_has_controlled_complete_drive_task_set() -> None:
 
     assert [row["task_id"] for row in rows] == [f"R-{number:03d}" for number in range(1, 26)]
     assert {row["status"] for row in rows} <= ALLOWED_TASK_STATUSES
-    assert next(row for row in rows if row["task_id"] == "R-006")["status"] == "PARTIAL"
+    assert next(row for row in rows if row["task_id"] == "R-006")["status"] == "PARTIALLY VERIFIED"
     assert next(row for row in rows if row["task_id"] == "R-017")["status"] == "NOT VERIFIED"
-    assert next(row for row in rows if row["task_id"] == "R-025")["status"] == "NOT VERIFIED"
+    assert next(row for row in rows if row["task_id"] == "R-025")["status"] == "PARTIALLY VERIFIED"
 
 
 def test_tracker_export_is_deterministic_utf8_csv(tmp_path: Path) -> None:
@@ -47,6 +48,7 @@ def test_tracker_export_is_deterministic_utf8_csv(tmp_path: Path) -> None:
         rows = list(csv.DictReader(handle))
     assert len(rows) == 25
     assert [row["task_id"] for row in rows] == sorted(row["task_id"] for row in rows)
+    assert first.read_bytes() == tracker_csv_bytes(read_tracker())
 
 
 def test_tracker_export_contains_no_private_metadata_or_environment_values(tmp_path: Path) -> None:
@@ -107,4 +109,16 @@ def test_tracker_export_uses_only_python_standard_library() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module.split(".")[0])
 
-    assert imports <= {"argparse", "csv", "datetime", "json", "pathlib", "re", "typing", "__future__"}
+    assert imports <= {
+        "argparse",
+        "csv",
+        "datetime",
+        "io",
+        "json",
+        "pathlib",
+        "re",
+        "scripts",
+        "sys",
+        "typing",
+        "__future__",
+    }

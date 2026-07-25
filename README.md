@@ -14,7 +14,7 @@ v1.4.0 replaces the web Reader's default native `<object>` viewer with a control
 
 The official `pdfjs-dist` package is pinned in the frontend lockfile. The client-only adapter dynamically imports PDF.js and Vite resolves `pdf.worker.min.mjs?url` into a repository-built local asset, so runtime rendering does not depend on a public CDN. Streamlit remains the interface for notes, metadata changes, PDF maintenance, and every write action.
 
-Automated final validation is recorded in the v1.4.0 release notes. Real-PDF browser behavior, request inspection, repeated route entry/exit, API restart recovery, large-PDF behavior, the native fallback, and the separate Streamlit regression remain pending manual verification. Clean-PC restore remains a recurring operational procedure, not a completion gate for this implementation. No v1.4.0 tag or GitHub release is approved or created.
+The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
 The app remains intentionally local-first and single-user:
 
@@ -88,7 +88,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
 
 If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
-Dashboard, Library, Papers, Paper Detail, and `/papers/{paper_id}/reader` use real read-only API contracts with explicit loading, empty, error, and unavailable states. The Reader uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL and the browser's native PDF capability; no local filesystem path reaches the browser. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
+Dashboard, Library, Papers, Paper Detail, and `/papers/{paper_id}/reader` use real read-only API contracts with explicit loading, empty, error, and unavailable states. The Reader uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL with a PDF.js canvas renderer as the primary path and a conditional native fallback; no local filesystem path reaches the browser. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
@@ -210,6 +210,7 @@ Backup snapshots include the atomic `data/lifecycle_decisions.json` store becaus
 
 Foundation release documents:
 
+- [Canonical current release status](docs/CURRENT_RELEASE_STATUS.md)
 - [BluePrint principles](docs/BLUEPRINT_PRINCIPLES.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Backlog](docs/BACKLOG.md)
@@ -254,10 +255,11 @@ The evidence file is opt-in and ignored at `artifacts/validation-summary.json`. 
 
 `-PythonOnly` and `-SmokeOnly` never claim release readiness. For release hygiene work, also complete the [mandatory regression checklist](docs/checklists/regression_checklist.md), run `git diff --check`, and inspect `git status --short`.
 
-The smoke path includes tracked-entry repository hygiene. It can also be run directly, and the versioned external-tracker handoff can be exported without network access or non-standard dependencies:
+The smoke path includes tracked-entry repository hygiene and canonical release-state reconciliation. Both reconciliation and the versioned external-tracker handoff work without network access:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\check_repo_hygiene.py
+.\.venv\Scripts\python.exe scripts\reconcile_release_state.py --check
 .\.venv\Scripts\python.exe scripts\export_tracker_status.py
 ```
 
@@ -613,7 +615,7 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - Same-hash duplicate rows are never auto-merged; users must choose keep, reconnect, ignore, or confirmed index-row removal.
 - Orphan repair, metadata-only archive, and explicit verified rebuildable-cache quarantine are implemented; automatic destructive repair remains deferred.
 - Extracted-text and paper-profile caches are excluded from backup snapshots by default because they are regenerable.
-- A genuinely clean-PC restore rehearsal and any v1.3.x tag or GitHub release remain unperformed pending separate evidence and approval.
+- Current restore, tag, and publication evidence is reported only in the [canonical current release status](docs/CURRENT_RELEASE_STATUS.md).
 
 If Crossref reports an SSL/certificate problem, update the networking dependencies and check for TLS inspection:
 
