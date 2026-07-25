@@ -59,9 +59,11 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.3.0.md",
     "docs/release_notes/v1.3.1.md",
     "docs/release_notes/v1.4.0.md",
+    "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
     "scripts/export_tracker_status.py",
+    "scripts/reconcile_release_state.py",
     "scripts/resolve_node.ps1",
     "scripts/frontend_setup.ps1",
     "scripts/run_api.ps1",
@@ -181,6 +183,26 @@ def check_repository_hygiene(project_root: Path) -> SmokeCheckResult:
     )
 
 
+def check_canonical_release_state(project_root: Path) -> SmokeCheckResult:
+    try:
+        from scripts.reconcile_release_state import check_release_state
+
+        root = Path(project_root).resolve()
+        errors = check_release_state(
+            root / "docs" / "tracker_sync_status.json",
+            root / "docs" / "CURRENT_RELEASE_STATUS.md",
+        )
+        if errors:
+            raise ValueError("; ".join(errors))
+    except Exception as exc:
+        return SmokeCheckResult("release:canonical-state", "fail", str(exc))
+    return SmokeCheckResult(
+        "release:canonical-state",
+        "pass",
+        "manifest invariants and generated current status are synchronized",
+    )
+
+
 def check_module_imports() -> list[SmokeCheckResult]:
     results: list[SmokeCheckResult] = []
     for module_name in KEY_MODULES:
@@ -297,6 +319,7 @@ def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]
     return [
         *check_required_paths(project_root),
         check_repository_hygiene(project_root),
+        check_canonical_release_state(project_root),
         *check_dependencies(),
         *check_module_imports(),
         check_manifest_contract(project_root),

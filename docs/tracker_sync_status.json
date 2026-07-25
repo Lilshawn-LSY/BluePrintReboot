@@ -1,305 +1,594 @@
 {
-  "schema_version": "2.0",
-  "current_version": "1.4.0",
+  "schema_version": "3.0",
+  "product_version": "1.4.0",
   "release_name": "v1.4.0-pdfjs-reader-foundation",
-  "implemented_milestones": [
-    "v1.0.26 Streamlit finalization and lifecycle safety",
-    "v1.1.0-v1.1.2 read-only FastAPI foundation",
-    "v1.2.0 frontend application shell",
-    "v1.2.1 full-stack validation gate",
-    "v1.2.2 runtime and release evidence closure",
-    "v1.3.0 read-only Reader/PDF vertical slice",
-    "v1.3.1 release-state convergence and repository hygiene",
-    "v1.4.0 PDF.js Reader foundation"
+  "as_of": "2026-07-25",
+  "controlled_statuses": [
+    "VERIFIED",
+    "PARTIALLY VERIFIED",
+    "DOCUMENTED ONLY",
+    "NOT VERIFIED",
+    "BLOCKED"
   ],
-  "open_gates": [
-    "v1.4.0 tag creation",
-    "v1.4.0 GitHub release publication"
-  ],
-  "next_milestone": {
-    "name": "PDF.js Reader runtime verification and future read-only hardening",
-    "status": "planned"
-  },
-  "source_control": {
-    "pr_2": {
-      "status": "COMPLETED",
-      "pull_request_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/pull/2",
-      "head_commit_sha": "1d51f37971e5898d2f531e9812510c150a4ab56b",
-      "merge_commit_sha": "9663c8cd052a2fa106382630afff7dcd9cfda421",
-      "target_branch": "main",
-      "operations": {
-        "commit": "COMPLETED",
-        "push": "COMPLETED",
-        "pull_request": "COMPLETED",
-        "merge": "COMPLETED"
-      },
-      "evidence": "PR #2 merged the v1.3.0 Reader/PDF vertical slice into main on 2026-07-18."
+  "implementation_state": {
+    "status": "VERIFIED",
+    "scope": "PDF.js Reader foundation and lifecycle repair",
+    "evidence": {
+      "date": "2026-07-25",
+      "reference": "PR #4 merge history",
+      "summary": "The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are merged into main."
     }
   },
-  "verification": {
+  "source_control": {
+    "main": {
+      "status": "VERIFIED",
+      "branch": "main",
+      "commit_sha": "09a02e3dd42fb3f0209a89be43cb7de77f0599d4",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "local Git refs main and origin/main",
+        "summary": "The local main and origin/main refs identify the PR #4 merge commit."
+      }
+    },
+    "pull_request": {
+      "status": "VERIFIED",
+      "number": 4,
+      "state": "MERGED",
+      "url": "https://github.com/Lilshawn-LSY/BluePrintReboot/pull/4",
+      "head_commit_sha": "e3dffd7de5cad1540227eb14f0fdac1178dde665",
+      "merge_commit_sha": "09a02e3dd42fb3f0209a89be43cb7de77f0599d4",
+      "target_branch": "main",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "PR #4 and local merge history",
+        "summary": "PR #4 merged the PDF.js Reader lifecycle and worker-cancellation repair into main."
+      }
+    },
+    "tag": {
+      "status": "VERIFIED",
+      "name": "v1.4.0",
+      "object_sha": "c855e8953a4fcf7fef11723820786b791abce8df",
+      "target_commit_sha": "09a02e3dd42fb3f0209a89be43cb7de77f0599d4",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "local annotated tag object",
+        "summary": "The v1.4.0 annotated tag exists and resolves to the PR #4 merge commit."
+      }
+    }
+  },
+  "automated_validation": {
+    "pr_head_ci": {
+      "status": "VERIFIED",
+      "scope": "PR #4 head commit",
+      "command": "GitHub Actions workflow .github/workflows/tests.yml",
+      "counts": {
+        "jobs_passed": 2,
+        "jobs_failed": 0
+      },
+      "run_id": "30145836293",
+      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/30145836293",
+      "commit_sha": "e3dffd7de5cad1540227eb14f0fdac1178dde665",
+      "event": "pull_request",
+      "jobs": {
+        "frontend": "success",
+        "python": "success"
+      },
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "GitHub Actions run 30145836293",
+        "summary": "The PR-head workflow completed successfully for both Python and frontend jobs."
+      }
+    },
+    "post_merge_main_ci": {
+      "status": "NOT VERIFIED",
+      "scope": "post-merge main commit",
+      "command": "GitHub Actions workflow .github/workflows/tests.yml",
+      "counts": null,
+      "run_id": null,
+      "run_url": null,
+      "commit_sha": null,
+      "event": "push",
+      "jobs": {},
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "repository evidence audit",
+        "summary": "No repository-accessible evidence proves a separate post-merge main workflow run."
+      }
+    },
     "local_smoke": {
       "status": "VERIFIED",
-      "evidence": "v1.4.0 final smoke validation: 98 passed, 0 warnings, 0 failed on 2026-07-21."
+      "scope": "offline repository readiness smoke",
+      "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
+      "counts": null,
+      "conflicting_evidence": [
+        {
+          "date": "2026-07-25",
+          "reference": "v1.4.0 lifecycle-repair validation record",
+          "counts": {
+            "passed": 97,
+            "warnings": 1,
+            "failed": 0
+          }
+        },
+        {
+          "date": "2026-07-21",
+          "reference": "v1.4.0 foundation validation record",
+          "counts": {
+            "passed": 98,
+            "warnings": 0,
+            "failed": 0
+          }
+        }
+      ],
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "conflicting committed v1.4.0 smoke records",
+        "summary": "Smoke execution success is verified because both records report zero failures; their pass and warning counts conflict."
+      }
     },
-    "local_pytest": {
+    "full_pytest": {
       "status": "VERIFIED",
-      "evidence": "v1.4.0 final full pytest validation: 526 passed, 0 failed, 0 skipped in 34.57 seconds on 2026-07-21."
+      "scope": "full Python test suite",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+      "counts": {
+        "passed": 526,
+        "failed": 0,
+        "skipped": 0
+      },
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 lifecycle-repair validation record",
+        "summary": "The full Python suite completed without failures or skips."
+      }
     },
-    "frontend_dependency_setup": {
+    "focused_pdf_api": {
       "status": "VERIFIED",
-      "evidence": "npm ci added 495 packages and audited 496 from the committed lockfile with Node 24.18.0 and npm 11.16.0 on 2026-07-21; 12 audit findings were reported."
+      "scope": "managed PDF API contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_api_pdf.py -q",
+      "counts": {
+        "passed": 13,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 focused API validation record",
+        "summary": "The focused managed-PDF API contract suite passed."
+      }
+    },
+    "focused_release_version": {
+      "status": "VERIFIED",
+      "scope": "release and version contracts before convergence",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_release_contracts.py -q",
+      "counts": {
+        "passed": 24,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 focused release validation record",
+        "summary": "The pre-convergence focused release and version contract suite passed."
+      }
     },
     "frontend_lint": {
       "status": "VERIFIED",
-      "evidence": "npm run lint exited 0 with no findings after the clean npm ci install on 2026-07-21."
+      "scope": "frontend static analysis",
+      "command": "npm run lint",
+      "counts": null,
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 lifecycle-repair validation record",
+        "summary": "Frontend lint completed successfully with no findings."
+      }
     },
-    "frontend_test_build": {
+    "frontend_production_build": {
       "status": "VERIFIED",
-      "evidence": "Vinext production build passed, emitted the local PDF.js worker asset, and 25 Node tests passed with 0 failed, 0 skipped, and 0 cancelled on 2026-07-21."
+      "scope": "frontend production build",
+      "command": "npm test",
+      "counts": null,
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 lifecycle-repair validation record",
+        "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
+      }
+    },
+    "frontend_node_tests": {
+      "status": "VERIFIED",
+      "scope": "frontend Node test suite after lifecycle repair",
+      "command": "npm test",
+      "counts": {
+        "passed": 30,
+        "failed": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 lifecycle-repair validation record",
+        "summary": "All frontend Node tests passed after the lifecycle repair."
+      }
     },
     "repository_hygiene": {
       "status": "VERIFIED",
-      "evidence": "The standalone tracked-entry check passed for 219 present tracked entries; smoke repeated the same tracked-only check without reading user-data contents."
-    },
-    "tracker_export": {
-      "status": "VERIFIED",
-      "evidence": "The standard-library exporter produced a deterministic 25-row UTF-8 CSV with the required header and no forbidden private values."
-    },
-    "manual_runtime": {
-      "status": "NOT PERFORMED",
-      "evidence": null
-    },
-    "streamlit_regression": {
-      "status": "NOT PERFORMED",
-      "evidence": null
-    },
-    "github_actions": {
-      "status": "VERIFIED",
-      "scope": "PR #2 head commit",
-      "run_id": "29641757582",
-      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/29641757582",
-      "commit_sha": "1d51f37971e5898d2f531e9812510c150a4ab56b",
-      "event": "pull_request",
-      "jobs": {
-        "python": "success",
-        "frontend": "success"
+      "scope": "tracked repository entries only",
+      "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
+      "counts": {
+        "entries_inspected": 226,
+        "violations": 0
       },
-      "evidence": "The PR #2 workflow completed successfully on 2026-07-18; Python and frontend jobs both concluded success."
-    },
-    "post_merge_main_github_actions": {
-      "status": "VERIFIED",
-      "scope": "post-merge main commit",
-      "run_id": "29641792069",
-      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/29641792069",
-      "commit_sha": "9663c8cd052a2fa106382630afff7dcd9cfda421",
-      "event": "push",
-      "jobs": {
-        "python": "success",
-        "frontend": "success"
-      },
-      "evidence": "The main push workflow for merge commit 9663c8cd completed successfully on 2026-07-18; Python and frontend jobs both concluded success."
-    },
-    "clean_pc_restore": {
-      "status": "NOT PERFORMED",
-      "evidence": null
-    },
-    "tag": {
-      "status": "NOT PERFORMED",
-      "tag_name": null,
-      "evidence": null
-    },
-    "github_release": {
-      "status": "NOT PERFORMED",
-      "release_url": null,
-      "evidence": null
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 lifecycle-repair validation record",
+        "summary": "Tracked-entry hygiene passed without reading user-data contents."
+      }
     }
   },
+  "manual_validation": {
+    "reader_runtime": {
+      "status": "PARTIALLY VERIFIED",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "PR #4 manual validation record",
+        "summary": "Real-PDF Reader behavior has verified core interactions and separately listed pending recovery, scale, and request-inspection checks."
+      },
+      "checks": {
+        "real_pdf_first_page_render": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "A real PDF rendered its first page successfully."
+          }
+        },
+        "previous_next_navigation": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "Previous and next page navigation succeeded."
+          }
+        },
+        "direct_page_entry": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "Direct page entry succeeded."
+          }
+        },
+        "zoom_controls": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "Zoom controls succeeded."
+          }
+        },
+        "repeated_reader_entry_exit": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "Repeated Reader entry and exit succeeded."
+          }
+        },
+        "different_paper_transition": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "Transitioning between different papers succeeded."
+          }
+        },
+        "rapid_page_navigation": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "Rapid page navigation completed without stale visible output."
+          }
+        },
+        "native_fallback_exclusivity": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "The native fallback remained exclusive with the PDF.js viewer."
+          }
+        },
+        "worker_termination_error_absent": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "PR #4 manual validation record",
+            "summary": "The prior worker-termination error was not observed."
+          }
+        },
+        "api_offline_restart_recovery": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "current evidence audit",
+            "summary": "Current-release API offline and restart recovery has no completed manual record."
+          }
+        },
+        "large_pdf_behavior": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "current evidence audit",
+            "summary": "Current-release large-PDF behavior has no completed manual record."
+          }
+        },
+        "detailed_range_inspection": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-07-25",
+            "reference": "current evidence audit",
+            "summary": "Detailed browser request and Range inspection has no completed manual record."
+          }
+        }
+      }
+    },
+    "streamlit_regression": {
+      "status": "NOT VERIFIED",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "current evidence audit",
+        "summary": "No separate Streamlit regression result is recorded for the current release state."
+      }
+    }
+  },
+  "publication_state": {
+    "github_release": {
+      "status": "NOT VERIFIED",
+      "url": null,
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "current publication evidence audit",
+        "summary": "No GitHub Release publication evidence is recorded; tag existence is not publication evidence."
+      }
+    },
+    "release_checkpoint": {
+      "status": "PARTIALLY VERIFIED",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "source-control tag and publication state",
+        "summary": "The v1.4.0 tag is verified while GitHub Release publication remains NOT VERIFIED."
+      }
+    }
+  },
+  "recurring_operational_procedures": {
+    "clean_pc_restore": {
+      "status": "NOT VERIFIED",
+      "procedure": "docs/checklists/new_pc_restore_checklist.md",
+      "cadence": "Repeat for release readiness or environment migration when explicitly scheduled.",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "current operational evidence audit",
+        "summary": "Readiness scripts and a checklist exist, but no genuine clean-PC restore rehearsal is recorded."
+      }
+    }
+  },
+  "unresolved_evidence": {
+    "smoke_count_conflict": {
+      "status": "NOT VERIFIED",
+      "evidence": {
+        "date": "2026-07-25",
+        "reference": "two committed v1.4.0 smoke records",
+        "summary": "One successful record reports 97 passed and 1 optional warning; another reports 98 passed and no warnings."
+      }
+    }
+  },
+  "next_milestone": {
+    "status": "DOCUMENTED ONLY",
+    "name": "Reader runtime verification and future read-only hardening",
+    "evidence": {
+      "date": "2026-07-25",
+      "reference": "docs/ROADMAP.md",
+      "summary": "Complete only the remaining measured Reader runtime checks before separately approved hardening."
+    }
+  },
+  "historical_evidence": {
+    "status": "DOCUMENTED ONLY",
+    "policy": "Historical release notes remain immutable context and cannot override current fields in this manifest.",
+    "references": [
+      "docs/release_notes/v1.2.2.md",
+      "docs/release_notes/v1.3.0.md",
+      "docs/release_notes/v1.3.1.md",
+      "docs/release_notes/v1.4.0.md"
+    ]
+  },
+  "operational_policy": {
+    "status": "DOCUMENTED ONLY",
+    "reference": "docs/DEV_WORKFLOW.md",
+    "summary": "Commit, merge, tag, publication, and tracker-application instructions are procedures and approvals, not current release-state fields."
+  },
   "external_tracker": {
-    "schema_version": "1.0",
+    "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-07-21",
+    "last_reconciled": "2026-07-25",
     "status_values": [
-      "COMPLETED",
-      "DEFERRED",
+      "VERIFIED",
+      "PARTIALLY VERIFIED",
+      "DOCUMENTED ONLY",
       "NOT VERIFIED",
-      "PARTIAL",
-      "SUPERSEDED"
+      "BLOCKED"
     ],
     "tasks": [
       {
         "task_id": "R-001",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Streamlit save, draft, lifecycle, and regression contracts are documented and tested.",
         "disposition": "Preserve as the Streamlit regression floor.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-002",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Lifecycle and recovery contracts retain confirmation gates and non-destructive defaults.",
         "disposition": "Preserve containment and byte-preserving recovery behavior.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-003",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Setup, Node resolution, local launch, and diagnostic scripts have focused contract tests.",
-        "disposition": "Keep clean-PC rehearsal as an independent gate.",
-        "last_verified": "2026-07-21"
+        "disposition": "Keep clean-PC rehearsal as an independent recurring procedure.",
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-004",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Scanner and hash-reuse tests preserve local deterministic scanning and explicit enrichment.",
         "disposition": "Retain scanner and cache regressions.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-005",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Reader state-machine and note-state tests cover explicit save and draft preservation.",
         "disposition": "Use this contract as the parity floor for future writes.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-006",
-        "status": "PARTIAL",
+        "status": "PARTIALLY VERIFIED",
         "evidence": "Deterministic Tag Book aliases and evidence-bearing candidates exist; measured governance quality does not.",
         "disposition": "Complete auditable governance with a representative fixture corpus during retrieval work.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-007",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Read-only health and library endpoints have strict schemas and failure-state tests.",
         "disposition": "Keep mutation behind a future command boundary.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-008",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Collection and detail endpoints have pagination, archive, ordering, and error contract tests.",
         "disposition": "Preserve existing route and response compatibility.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-009",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Rich local metadata schemas and read models are covered without read-time enrichment.",
         "disposition": "Measure completeness before widening schemas.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-010",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "The desktop shell, typed client, shared components, and read-only bridge are implemented and tested.",
         "disposition": "Treat the shell as migration infrastructure, not write parity.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-011",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "The full local gate and hosted workflow include Python and frontend validation paths.",
         "disposition": "Keep partial modes explicitly non-release-qualified.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-012",
-        "status": "COMPLETED",
-        "evidence": "Loopback launch, workflow dispatch, local gate, runtime, and PR #1 evidence are recorded.",
+        "status": "VERIFIED",
+        "evidence": "Loopback launch, workflow dispatch, local gate, runtime, and prior pull-request evidence are recorded.",
         "disposition": "Preserve as historical v1.2.2 evidence.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-013",
-        "status": "COMPLETED",
+        "status": "VERIFIED",
         "evidence": "Managed PDF delivery, byte ranges, Reader navigation, failure states, and no-write scope are tested.",
         "disposition": "Preserve the managed-root boundary and native fallback.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-014",
-        "status": "COMPLETED",
-        "evidence": "Current documents and conditional tests distinguish PR CI, main CI, restore, tag, and publication states.",
-        "disposition": "v1.3.1 release-state convergence replaces the stale provisional snapshot.",
-        "last_verified": "2026-07-21"
+        "status": "VERIFIED",
+        "evidence": "The canonical release-state manifest separates implementation, source control, validation, publication, and operations.",
+        "disposition": "Run offline reconciliation checking in smoke and hosted CI.",
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-015",
-        "status": "COMPLETED",
-        "evidence": "The accidental root artifact is removed and tracked-file hygiene runs through smoke validation.",
+        "status": "VERIFIED",
+        "evidence": "Tracked-file hygiene runs through smoke validation and rejects known artifact classes.",
         "disposition": "Maintain narrow tracked-entry rules and focused tests.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-016",
-        "status": "COMPLETED",
-        "evidence": "Canonical JSON now exports deterministic standard-library CSV with controlled fields.",
+        "status": "VERIFIED",
+        "evidence": "The canonical manifest exports deterministic standard-library UTF-8 CSV with controlled fields.",
         "disposition": "Use the CSV as the mechanical external-tracker handoff.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-017",
         "status": "NOT VERIFIED",
-        "evidence": "A restore checklist and automated readiness checks exist, but no genuine clean-PC rehearsal is recorded.",
-        "disposition": "User performs the complete rehearsal on a genuinely clean machine.",
-        "last_verified": "2026-07-21"
+        "evidence": "Readiness scripts and a checklist exist, but no genuine clean-PC restore rehearsal is recorded.",
+        "disposition": "Perform the complete rehearsal on a genuinely clean machine when scheduled.",
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-018",
-        "status": "PARTIAL",
-        "evidence": "The PDF.js Reader exposes development-only request-count, Range-response, load, render, and cancellation diagnostics; real-browser request inspection and index-read latency remain unmeasured.",
-        "disposition": "Complete browser request inspection with a disposable or approved real PDF; measure index latency only if a later bottleneck requires it.",
-        "last_verified": "2026-07-21"
+        "status": "PARTIALLY VERIFIED",
+        "evidence": "Real-PDF Reader behavior has verified core interactions and separately listed pending recovery, scale, and request-inspection checks.",
+        "disposition": "Complete only the individually listed pending runtime checks.",
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-019",
-        "status": "COMPLETED",
-        "evidence": "v1.4.0 implements pinned pdfjs-dist with a bundled local worker, bounded controls, cleanup, diagnostics, tests, and a conditional native fallback.",
-        "disposition": "Keep advanced PDF.js layers and write features deferred; complete the pending manual runtime checklist separately.",
-        "last_verified": "2026-07-21"
+        "status": "VERIFIED",
+        "evidence": "The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are merged into main.",
+        "disposition": "Keep advanced PDF.js layers and write features deferred.",
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-020",
-        "status": "DEFERRED",
+        "status": "DOCUMENTED ONLY",
         "evidence": "The API remains GET-only and no single write-command boundary is implemented.",
         "disposition": "Design one tested command service before exposing web mutations.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-021",
-        "status": "DEFERRED",
+        "status": "DOCUMENTED ONLY",
         "evidence": "Development launch paths exist; distributable packaging and clean-machine operation are unproven.",
         "disposition": "Revisit after restore evidence and interface direction stabilize.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-022",
-        "status": "DEFERRED",
+        "status": "DOCUMENTED ONLY",
         "evidence": "Cross-context local retrieval and a benchmark are not implemented.",
         "disposition": "Implement and measure retrieval in a separately approved milestone.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-023",
         "status": "NOT VERIFIED",
         "evidence": "No external activation, retention, workflow-replacement, or value evidence is recorded.",
         "disposition": "Collect dogfood evidence before a small external researcher cohort.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-024",
-        "status": "DEFERRED",
+        "status": "DOCUMENTED ONLY",
         "evidence": "Graph and AI-assisted features remain outside the implemented product scope.",
         "disposition": "Require closed retrieval and product-validation gates first.",
-        "last_verified": "2026-07-21"
+        "last_verified": "2026-07-25"
       },
       {
         "task_id": "R-025",
-        "status": "NOT VERIFIED",
-        "evidence": "No approved v1.4.0 tag or published GitHub release exists.",
-        "disposition": "Create an immutable checkpoint only after explicit approval and required evidence.",
-        "last_verified": "2026-07-21"
+        "status": "PARTIALLY VERIFIED",
+        "evidence": "The v1.4.0 tag is verified while GitHub Release publication remains NOT VERIFIED.",
+        "disposition": "Keep tag evidence and publication evidence separate.",
+        "last_verified": "2026-07-25"
       }
     ]
   }

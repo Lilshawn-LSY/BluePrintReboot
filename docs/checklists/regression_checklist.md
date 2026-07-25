@@ -2,6 +2,8 @@
 
 Required before and after Codex-assisted release work, including `v1.4.0-pdfjs-reader-foundation`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
 
+Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
+
 ## v1.4.0 PDF.js Reader Foundation
 
 - [x] Confirm the Reader uses a client-only PDF.js adapter, canvas primary path, bundled local worker, existing same-origin URL, and no arbitrary path input.
@@ -14,10 +16,13 @@ Required before and after Codex-assisted release work, including `v1.4.0-pdfjs-r
 - [x] Confirm the native fallback is labeled, uses the safe URL, and is not mounted concurrently with PDF.js.
 - [x] Confirm diagnostics are disabled by default and contain no paper title, DOI, author, note, URL, path, PDF content, or persistent telemetry.
 - [x] Run disposable backend/bridge regressions for full/partial bytes, exact lengths, safe headers, malformed/unsatisfiable Range, missing/invalid PDFs, containment, and unchanged GET-only routes.
-- [x] Run repository hygiene, smoke, focused PDF/API and release/version tests, full pytest, deterministic `npm ci`, frontend lint, and production build/30 Node tests; final exact counts and Git diff checks are recorded in the implementation handoff.
-- [ ] Verify a real PDF for initial render, page controls, zoom, request/Range behavior, repeated entry/exit, offline/restart recovery, native fallback, and large-PDF behavior.
-- [ ] Run the separate Streamlit regression without mutation.
-- [ ] Confirm no commit, staging, push, PR, merge, tag, GitHub release, Drive update, user data, or generated diagnostics are included; the only dependency change is the documented official PDF.js cancellation-fix pin and lockfile update.
+- [x] Run the automated repository, Python, and frontend regression scopes; exact current evidence is canonical rather than copied into this checklist.
+- [x] Represent each real-PDF runtime observation independently so partial evidence cannot become blanket completion.
+
+## Operational task guardrails
+
+- Keep commit, staging, push, merge, tag, GitHub Release, and external-tracker application instructions separate from validation state.
+- Never use private user data, generated diagnostics, dependency directories, or runtime artifacts as committed release evidence.
 
 ## v1.3.1 Release-State Convergence and Repository Hygiene
 
