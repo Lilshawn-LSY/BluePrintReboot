@@ -70,6 +70,21 @@ function initialDiagnostics() {
   };
 }
 
+function createLoadOperation(cycle) {
+  return {
+    cycle,
+    cancelled: false,
+    creationPromise: null,
+    loadingTask: null,
+    documentPromise: null,
+    document: null,
+    renderTask: null,
+    activePage: null,
+    renderCycle: 0,
+    disposalPromise: null,
+  };
+}
+
 async function safeCall(callback) {
   try {
     await callback?.();
@@ -86,6 +101,7 @@ export class PdfReaderController {
     onDiagnostics = () => {},
     getNetworkDiagnostics = () => ({}),
     now = () => performance.now(),
+    isCurrent = () => true,
   }) {
     this.createLoadingTask = createLoadingTask;
     this.getCanvas = getCanvas;
@@ -93,16 +109,13 @@ export class PdfReaderController {
     this.onDiagnostics = onDiagnostics;
     this.getNetworkDiagnostics = getNetworkDiagnostics;
     this.now = now;
+    this.isCurrent = isCurrent;
 
     this.state = initialState();
     this.diagnostics = initialDiagnostics();
     this.url = "";
-    this.loadingTask = null;
-    this.document = null;
-    this.renderTask = null;
-    this.activePage = null;
+    this.activeLoad = null;
     this.loadCycle = 0;
-    this.renderCycle = 0;
     this.destroyed = false;
   }
 
@@ -116,17 +129,27 @@ export class PdfReaderController {
 
   _emitState(nextState) {
     this.state = { ...this.state, ...nextState };
-    this.onState(this.snapshot());
+    if (this.isCurrent()) this.onState(this.snapshot());
   }
 
   _emitDiagnostics(nextDiagnostics = {}) {
     this.diagnostics = { ...this.diagnostics, ...nextDiagnostics };
-    this.onDiagnostics(this.diagnosticsSnapshot());
+    if (this.isCurrent()) this.onDiagnostics(this.diagnosticsSnapshot());
+  }
+
+  _isActive(operation) {
+    return Boolean(
+      operation
+        && this.activeLoad === operation
+        && operation.cycle === this.loadCycle
+        && !operation.cancelled
+        && !this.destroyed,
+    );
   }
 
   async load(url) {
+    if (this.destroyed) return;
     const cycle = ++this.loadCycle;
-    this.destroyed = false;
     this.url = url;
     this._emitState({
       mode: url ? "loading" : "empty",
@@ -137,9 +160,16 @@ export class PdfReaderController {
       errorKind: null,
       message: url ? "" : "No managed PDF URL is available.",
     });
-    await this._disposePdfResources();
+    const previousOperation = this.activeLoad;
+    if (previousOperation) {
+      previousOperation.cancelled = true;
+      this.activeLoad = null;
+    }
+    await this._disposeLoadOperation(previousOperation);
     if (!url || cycle !== this.loadCycle || this.destroyed) return;
 
+    const operation = createLoadOperation(cycle);
+    this.activeLoad = operation;
     const loadStartedAt = this.now();
     this._emitDiagnostics({
       documentLoadCount: this.diagnostics.documentLoadCount + 1,
@@ -152,20 +182,29 @@ export class PdfReaderController {
     });
 
     try {
-      const loadingTask = await this.createLoadingTask(url);
-      if (cycle !== this.loadCycle || this.destroyed) {
-        await safeCall(() => loadingTask.destroy());
+      operation.creationPromise = Promise.resolve(this.createLoadingTask(url)).then((loadingTask) => {
+        operation.loadingTask = loadingTask;
+        operation.documentPromise = Promise.resolve(loadingTask.promise).then((document) => {
+          operation.document = document;
+          return document;
+        });
+        // Observe the PDF.js task immediately, including cancellation before load() resumes.
+        operation.documentPromise.catch(() => {});
+        return loadingTask;
+      });
+      operation.creationPromise.catch(() => {});
+
+      await operation.creationPromise;
+      if (!this._isActive(operation)) {
+        await this._disposeLoadOperation(operation);
         return;
       }
-      this.loadingTask = loadingTask;
-      const document = await loadingTask.promise;
-      if (cycle !== this.loadCycle || this.destroyed) {
-        await safeCall(() => document.cleanup?.());
-        await safeCall(() => loadingTask.destroy());
+      const document = await operation.documentPromise;
+      if (!this._isActive(operation)) {
+        await this._disposeLoadOperation(operation);
         return;
       }
 
-      this.document = document;
       const totalPages = Math.max(1, Number(document.numPages) || 1);
       this._emitDiagnostics({ documentLoadDurationMs: Math.max(0, this.now() - loadStartedAt) });
       this._emitState({
@@ -177,10 +216,13 @@ export class PdfReaderController {
         errorKind: null,
         message: "",
       });
-      await this._renderCurrentPage({ firstPage: true });
+      await this._renderCurrentPage({ firstPage: true, operation });
     } catch (error) {
-      if (cycle !== this.loadCycle || this.destroyed || isPdfCancellation(error)) return;
-      await this._disposePdfResources();
+      if (!this._isActive(operation) || isPdfCancellation(error)) return;
+      operation.cancelled = true;
+      this.activeLoad = null;
+      await this._disposeLoadOperation(operation);
+      if (cycle !== this.loadCycle || this.destroyed) return;
       this._emitState({
         mode: "error",
         rendering: false,
@@ -194,13 +236,16 @@ export class PdfReaderController {
   }
 
   setPage(requestedPage) {
-    if (!this.document || this.state.mode !== "ready") return Promise.resolve();
+    const operation = this.activeLoad;
+    if (!this._isActive(operation) || !operation.document || this.state.mode !== "ready") {
+      return Promise.resolve();
+    }
     const numericPage = Number(requestedPage);
     if (!Number.isFinite(numericPage)) return Promise.resolve();
     const pageNumber = clamp(Math.trunc(numericPage), 1, this.state.totalPages);
     if (pageNumber === this.state.pageNumber && !this.state.rendering) return Promise.resolve();
     this._emitState({ pageNumber, rendering: true, errorKind: null, message: "" });
-    return this._renderCurrentPage();
+    return this._renderCurrentPage({ operation });
   }
 
   previousPage() {
@@ -212,13 +257,16 @@ export class PdfReaderController {
   }
 
   setZoom(requestedZoom) {
-    if (!this.document || this.state.mode !== "ready") return Promise.resolve();
+    const operation = this.activeLoad;
+    if (!this._isActive(operation) || !operation.document || this.state.mode !== "ready") {
+      return Promise.resolve();
+    }
     const numericZoom = Number(requestedZoom);
     if (!Number.isFinite(numericZoom)) return Promise.resolve();
     const zoom = clamp(numericZoom, MIN_ZOOM, MAX_ZOOM);
     if (zoom === this.state.zoom && !this.state.rendering) return Promise.resolve();
     this._emitState({ zoom, rendering: true, errorKind: null, message: "" });
-    return this._renderCurrentPage();
+    return this._renderCurrentPage({ operation });
   }
 
   zoomIn() {
@@ -234,9 +282,14 @@ export class PdfReaderController {
   }
 
   async activateFallback() {
-    ++this.loadCycle;
-    await this._disposePdfResources();
-    if (this.destroyed) return;
+    const cycle = ++this.loadCycle;
+    const operation = this.activeLoad;
+    if (operation) {
+      operation.cancelled = true;
+      this.activeLoad = null;
+    }
+    await this._disposeLoadOperation(operation);
+    if (this.destroyed || cycle !== this.loadCycle) return;
     this._emitState({
       mode: "fallback",
       rendering: false,
@@ -246,17 +299,23 @@ export class PdfReaderController {
   }
 
   async destroy() {
+    if (this.destroyed && !this.activeLoad) return;
     this.destroyed = true;
     ++this.loadCycle;
-    await this._disposePdfResources();
+    const operation = this.activeLoad;
+    if (operation) {
+      operation.cancelled = true;
+      this.activeLoad = null;
+    }
+    await this._disposeLoadOperation(operation);
   }
 
-  async _renderCurrentPage({ firstPage = false } = {}) {
-    const document = this.document;
-    if (!document) return;
-    const cycle = ++this.renderCycle;
-    await this._cancelActiveRender();
-    if (cycle !== this.renderCycle || document !== this.document || this.destroyed) return;
+  async _renderCurrentPage({ firstPage = false, operation = this.activeLoad } = {}) {
+    const document = operation?.document;
+    if (!document || !this._isActive(operation)) return;
+    const cycle = ++operation.renderCycle;
+    await this._cancelActiveRender(operation);
+    if (cycle !== operation.renderCycle || !this._isActive(operation)) return;
 
     const pageNumber = this.state.pageNumber;
     const zoom = this.state.zoom;
@@ -266,7 +325,7 @@ export class PdfReaderController {
 
     try {
       page = await document.getPage(pageNumber);
-      if (cycle !== this.renderCycle || document !== this.document || this.destroyed) {
+      if (cycle !== operation.renderCycle || !this._isActive(operation)) {
         await safeCall(() => page.cleanup?.());
         return;
       }
@@ -279,18 +338,18 @@ export class PdfReaderController {
       canvas.height = Math.max(1, Math.ceil(viewport.height));
 
       renderTask = page.render({ canvasContext, viewport });
-      if (cycle !== this.renderCycle || document !== this.document || this.destroyed) {
+      if (cycle !== operation.renderCycle || !this._isActive(operation)) {
         renderTask.cancel?.();
         await safeCall(() => renderTask.promise);
         await safeCall(() => page.cleanup?.());
         return;
       }
 
-      this.renderTask = renderTask;
-      this.activePage = page;
+      operation.renderTask = renderTask;
+      operation.activePage = page;
       this._emitDiagnostics({ renderCount: this.diagnostics.renderCount + 1 });
       await renderTask.promise;
-      if (cycle !== this.renderCycle || document !== this.document || this.destroyed) return;
+      if (cycle !== operation.renderCycle || !this._isActive(operation)) return;
 
       const renderDuration = Math.max(0, this.now() - renderStartedAt);
       const network = this.getNetworkDiagnostics(this.url) || {};
@@ -305,7 +364,7 @@ export class PdfReaderController {
       });
       this._emitState({ mode: "ready", rendering: false, errorKind: null, message: "" });
     } catch (error) {
-      if (cycle !== this.renderCycle || document !== this.document || this.destroyed || isPdfCancellation(error)) return;
+      if (cycle !== operation.renderCycle || !this._isActive(operation) || isPdfCancellation(error)) return;
       this._clearCanvas();
       this._emitState({
         mode: "error",
@@ -313,17 +372,18 @@ export class PdfReaderController {
         ...classifyPdfError(error, "render"),
       });
     } finally {
-      if (this.renderTask === renderTask) this.renderTask = null;
-      if (this.activePage === page) this.activePage = null;
+      if (operation.renderTask === renderTask) operation.renderTask = null;
+      if (operation.activePage === page) operation.activePage = null;
       await safeCall(() => page?.cleanup?.());
     }
   }
 
-  async _cancelActiveRender() {
-    const renderTask = this.renderTask;
-    const page = this.activePage;
-    this.renderTask = null;
-    this.activePage = null;
+  async _cancelActiveRender(operation) {
+    if (!operation) return;
+    const renderTask = operation.renderTask;
+    const page = operation.activePage;
+    operation.renderTask = null;
+    operation.activePage = null;
     if (renderTask) {
       renderTask.cancel?.();
       this._emitDiagnostics({
@@ -334,20 +394,42 @@ export class PdfReaderController {
     await safeCall(() => page?.cleanup?.());
   }
 
-  async _disposePdfResources() {
-    ++this.renderCycle;
-    await this._cancelActiveRender();
-    const document = this.document;
-    const loadingTask = this.loadingTask;
-    this.document = null;
-    this.loadingTask = null;
-    await safeCall(() => document?.cleanup?.());
-    if (loadingTask) await safeCall(() => loadingTask.destroy?.());
-    else await safeCall(() => document?.destroy?.());
-    this._clearCanvas();
+  _disposeLoadOperation(operation) {
+    if (!operation) {
+      this._clearCanvas();
+      return Promise.resolve();
+    }
+    if (operation.disposalPromise) return operation.disposalPromise;
+
+    operation.cancelled = true;
+    operation.disposalPromise = (async () => {
+      ++operation.renderCycle;
+      await this._cancelActiveRender(operation);
+      if (!operation.loadingTask && operation.creationPromise) {
+        await safeCall(() => operation.creationPromise);
+      }
+
+      const document = operation.document;
+      const loadingTask = operation.loadingTask;
+      operation.document = null;
+      operation.loadingTask = null;
+      await safeCall(() => document?.cleanup?.());
+      if (loadingTask) await safeCall(() => loadingTask.destroy?.());
+      else await safeCall(() => document?.destroy?.());
+
+      const lateDocument = operation.document;
+      operation.document = null;
+      if (lateDocument && lateDocument !== document) {
+        await safeCall(() => lateDocument.cleanup?.());
+        if (!loadingTask) await safeCall(() => lateDocument.destroy?.());
+      }
+      this._clearCanvas();
+    })();
+    return operation.disposalPromise;
   }
 
   _clearCanvas() {
+    if (!this.isCurrent()) return;
     const canvas = this.getCanvas?.();
     if (!canvas) return;
     const context = canvas.getContext?.("2d");

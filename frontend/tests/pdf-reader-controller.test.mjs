@@ -269,6 +269,185 @@ test("cleans a pending loading task on unmount without an unhandled rejection", 
   assert.equal(task.destroyCalls, 1);
 });
 
+test("strict-mode-like cleanup cannot clear or corrupt the replacement controller", async () => {
+  const sharedCanvas = makeCanvas();
+  const firstDocumentPending = deferred();
+  const firstDestroyPending = deferred();
+  const { document: firstDocument } = makeResolvedDocument();
+  const firstTask = makeLoadingTask(firstDocument, firstDocumentPending.promise);
+  firstTask.destroy = async function destroy() {
+    this.destroyCalls += 1;
+    firstDocumentPending.reject(Object.assign(new Error("intentional cleanup"), { name: "AbortException" }));
+    await firstDestroyPending.promise;
+  };
+  const { document: secondDocument } = makeResolvedDocument({ numPages: 5 });
+  const secondTask = makeLoadingTask(secondDocument);
+  const firstStates = [];
+  const secondStates = [];
+  let currentController = null;
+  let firstController;
+  let secondController;
+
+  firstController = new PdfReaderController({
+    createLoadingTask: async () => firstTask,
+    getCanvas: () => sharedCanvas,
+    isCurrent: () => currentController === firstController,
+    onState: (state) => firstStates.push(state),
+  });
+  currentController = firstController;
+  const firstLoad = firstController.load("/api/blueprint/papers/fixture-a/pdf");
+  await waitUntil(() => firstController.diagnosticsSnapshot().documentLoadCount === 1);
+  const firstCleanup = firstController.destroy();
+
+  secondController = new PdfReaderController({
+    createLoadingTask: async () => secondTask,
+    getCanvas: () => sharedCanvas,
+    isCurrent: () => currentController === secondController,
+    onState: (state) => secondStates.push(state),
+  });
+  currentController = secondController;
+  await secondController.load("/api/blueprint/papers/fixture-b/pdf");
+  assert.equal(secondController.snapshot().mode, "ready");
+  assert.equal(secondController.snapshot().totalPages, 5);
+  assert.deepEqual(secondDocument.getPageCalls, [1]);
+  assert.equal(sharedCanvas.width, 600);
+  assert.equal(sharedCanvas.height, 800);
+
+  firstDestroyPending.resolve();
+  await Promise.all([firstCleanup, firstLoad]);
+  assert.equal(firstTask.destroyCalls, 1);
+  assert.equal(secondTask.destroyCalls, 0);
+  assert.equal(secondController.snapshot().mode, "ready");
+  assert.equal(sharedCanvas.width, 600);
+  assert.equal(sharedCanvas.height, 800);
+  assert.equal(firstStates.some((state) => state.mode === "error"), false);
+  assert.equal(secondStates.at(-1).mode, "ready");
+});
+
+
+test("destroy waits for asynchronous loading-task creation and disposes the obsolete task", async () => {
+  const creationPending = deferred();
+  const documentPending = deferred();
+  const { document } = makeResolvedDocument();
+  const task = makeLoadingTask(document, documentPending.promise);
+  task.destroy = async function destroy() {
+    this.destroyCalls += 1;
+    documentPending.reject(Object.assign(new Error("intentional cleanup"), { name: "AbortException" }));
+  };
+  const states = [];
+  const { controller } = makeController({
+    createLoadingTask: () => creationPending.promise,
+  });
+  controller.onState = (state) => states.push(state);
+
+  const load = controller.load("/api/blueprint/papers/fixture/pdf");
+  await waitUntil(() => controller.diagnosticsSnapshot().documentLoadCount === 1);
+  let destroySettled = false;
+  const destroy = controller.destroy().then(() => {
+    destroySettled = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(destroySettled, false);
+
+  creationPending.resolve(task);
+  await Promise.all([destroy, load]);
+  assert.equal(task.destroyCalls, 1);
+  assert.equal(states.some((state) => state.mode === "error"), false);
+});
+
+
+test("destroy observes a pending loading-task cancellation without a user-visible error", async () => {
+  const documentPending = deferred();
+  const { document } = makeResolvedDocument();
+  const task = makeLoadingTask(document, documentPending.promise);
+  task.destroy = async function destroy() {
+    this.destroyCalls += 1;
+    documentPending.reject(Object.assign(new Error("intentional cleanup"), { name: "AbortException" }));
+  };
+  const { controller, states } = makeController({ createLoadingTask: async () => task });
+
+  const load = controller.load("/api/blueprint/papers/fixture/pdf");
+  await waitUntil(() => controller.diagnosticsSnapshot().documentLoadCount === 1);
+  await Promise.all([controller.destroy(), load]);
+
+  assert.equal(task.destroyCalls, 1);
+  assert.equal(states.some((state) => state.mode === "error"), false);
+});
+
+
+test("retry cancels the prior operation and starts one new authoritative load", async () => {
+  const firstDocumentPending = deferred();
+  const { document: firstDocument } = makeResolvedDocument();
+  const { document: secondDocument } = makeResolvedDocument({ numPages: 7 });
+  const firstTask = makeLoadingTask(firstDocument, firstDocumentPending.promise);
+  firstTask.destroy = async function destroy() {
+    this.destroyCalls += 1;
+    firstDocumentPending.reject(Object.assign(new Error("superseded"), { name: "AbortException" }));
+  };
+  const secondTask = makeLoadingTask(secondDocument);
+  const created = [];
+  const { controller } = makeController({
+    createLoadingTask: async () => {
+      const task = created.length === 0 ? firstTask : secondTask;
+      created.push(task);
+      return task;
+    },
+  });
+
+  const firstLoad = controller.load("/api/blueprint/papers/fixture/pdf");
+  await waitUntil(() => created.length === 1);
+  await Promise.all([controller.retry(), firstLoad]);
+
+  assert.equal(created.length, 2);
+  assert.equal(firstTask.destroyCalls, 1);
+  assert.equal(secondTask.destroyCalls, 0);
+  assert.equal(controller.snapshot().mode, "ready");
+  assert.equal(controller.snapshot().totalPages, 7);
+  assert.deepEqual(secondDocument.getPageCalls, [1]);
+});
+
+
+test("paper change cancels old work and unmount cleans only the new paper operation", async () => {
+  const firstDocumentPending = deferred();
+  const { document: firstDocument } = makeResolvedDocument();
+  const { document: secondDocument } = makeResolvedDocument({ numPages: 6 });
+  const firstTask = makeLoadingTask(firstDocument, firstDocumentPending.promise);
+  firstTask.destroy = async function destroy() {
+    this.destroyCalls += 1;
+    firstDocumentPending.reject(Object.assign(new Error("paper changed"), { name: "AbortException" }));
+  };
+  const secondTask = makeLoadingTask(secondDocument);
+  const createdUrls = [];
+  const { controller, states } = makeController({
+    createLoadingTask: async (url) => {
+      createdUrls.push(url);
+      return createdUrls.length === 1 ? firstTask : secondTask;
+    },
+  });
+
+  const firstLoad = controller.load("/api/blueprint/papers/first/pdf");
+  await waitUntil(() => createdUrls.length === 1);
+  await Promise.all([
+    controller.load("/api/blueprint/papers/second/pdf"),
+    firstLoad,
+  ]);
+  assert.deepEqual(createdUrls, [
+    "/api/blueprint/papers/first/pdf",
+    "/api/blueprint/papers/second/pdf",
+  ]);
+  assert.equal(firstTask.destroyCalls, 1);
+  assert.equal(secondTask.destroyCalls, 0);
+  assert.equal(controller.snapshot().mode, "ready");
+  assert.equal(controller.snapshot().totalPages, 6);
+  assert.equal(states.at(-1).totalPages, 6);
+
+  await controller.destroy();
+  assert.equal(firstTask.destroyCalls, 1);
+  assert.equal(secondTask.destroyCalls, 1);
+  await controller.retry();
+  assert.equal(createdUrls.length, 2);
+});
+
 
 test("records bounded diagnostics without document identity or content", async () => {
   const times = [10, 20, 25, 45];

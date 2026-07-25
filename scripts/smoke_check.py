@@ -276,7 +276,7 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             raise ValueError("frontend API client is missing the stable managed PDF URL builder")
         if "bytes=0-0" in api_client or "probePaperPdf" in api_client:
             raise ValueError("frontend API client still contains the redundant PDF availability probe")
-        if package.get("dependencies", {}).get("pdfjs-dist") != "6.1.200":
+        if package.get("dependencies", {}).get("pdfjs-dist") != "5.7.284":
             raise ValueError("frontend PDF.js dependency is not pinned to the approved version")
         reader = (frontend_root / "app/components/PdfJsReader.tsx").read_text(encoding="utf-8")
         adapter = (frontend_root / "app/lib/pdf/pdfjs-adapter.ts").read_text(encoding="utf-8")

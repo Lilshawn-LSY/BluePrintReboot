@@ -49,7 +49,7 @@ test("all required routes render inside the shared shell", async () => {
 });
 
 test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer", async () => {
-  const [detail, readerView, reader, adapter, controller, client, shell, packageJson, packageLock] = await Promise.all([
+  const [detail, readerView, reader, adapter, controller, client, shell, packageJson, packageLock, workerSource] = await Promise.all([
     readFile(new URL("../app/views/PaperDetailView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/components/PdfJsReader.tsx", import.meta.url), "utf8"),
@@ -59,6 +59,7 @@ test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer",
     readFile(new URL("../app/components/AppShell.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
+    readFile(new URL("../node_modules/pdfjs-dist/build/pdf.worker.mjs", import.meta.url), "utf8"),
   ]);
 
   assert.match(detail, /Open Reader/);
@@ -86,6 +87,8 @@ test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer",
   assert.match(reader, /Browser PDF viewer unavailable/);
   assert.match(reader, /<object[^>]+data=\{pdfUrl\}[^>]+type="application\/pdf"/s);
   assert.match(reader, /NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1"/);
+  assert.match(reader, /lifecycleGenerationRef/);
+  assert.match(reader, /observeLifecyclePromise\(controller\.destroy\(\), "cleanup"\)/);
   assert.match(readerView, /write action remain in Streamlit|write actions remain in Streamlit/);
   assert.doesNotMatch(readerView, /note editor|autosave|annotation|highlight/i);
   assert.match(client, /\/papers\/\$\{encodeURIComponent\(paperId\)\}\/pdf/);
@@ -97,8 +100,10 @@ test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer",
   assert.doesNotMatch(adapter, /https?:\/\//);
   assert.match(controller, /documentLoadCount/);
   assert.match(controller, /renderCancellationCount/);
-  assert.equal(JSON.parse(packageJson).dependencies["pdfjs-dist"], "6.1.200");
-  assert.equal(JSON.parse(packageLock).packages[""].dependencies["pdfjs-dist"], "6.1.200");
+  assert.equal(JSON.parse(packageJson).dependencies["pdfjs-dist"], "5.7.284");
+  assert.equal(JSON.parse(packageLock).packages[""].dependencies["pdfjs-dist"], "5.7.284");
+  assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
+  assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /return "Reader"/);
 });
 

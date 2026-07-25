@@ -43,6 +43,7 @@ export class PdfReaderController {
     onDiagnostics?: (diagnostics: PdfReaderDiagnostics) => void;
     getNetworkDiagnostics?: (url: string) => Partial<PdfReaderDiagnostics>;
     now?: () => number;
+    isCurrent?: () => boolean;
   });
   snapshot(): PdfReaderState;
   diagnosticsSnapshot(): PdfReaderDiagnostics;

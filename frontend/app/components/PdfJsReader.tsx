@@ -36,6 +36,26 @@ const INITIAL_DIAGNOSTICS: PdfReaderDiagnostics = {
   requestMode: "pdfjs-auto",
 };
 
+function safeLifecycleErrorName(error: unknown): string {
+  return error && typeof error === "object" && "name" in error && typeof error.name === "string"
+    ? error.name
+    : "Error";
+}
+
+function observeLifecyclePromise(promise: Promise<void>, phase: "load" | "cleanup"): void {
+  promise.catch((error: unknown) => {
+    if (
+      process.env.NODE_ENV !== "production"
+      && process.env.NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1"
+    ) {
+      console.warn("PDF.js Reader lifecycle promise rejected.", {
+        phase,
+        errorName: safeLifecycleErrorName(error),
+      });
+    }
+  });
+}
+
 
 function NativePdfFallback({ pdfUrl, onRetry }: { pdfUrl: string; onRetry: () => void }) {
   return (
@@ -81,6 +101,7 @@ export function PdfJsReader({ paperId }: { paperId: string }) {
   const pdfUrl = useMemo(() => paperPdfUrl(paperId), [paperId]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const controllerRef = useRef<PdfReaderController | null>(null);
+  const lifecycleGenerationRef = useRef(0);
   const [state, setState] = useState<PdfReaderState>(INITIAL_STATE);
   const [diagnostics, setDiagnostics] = useState<PdfReaderDiagnostics>(INITIAL_DIAGNOSTICS);
   const [pageInput, setPageInput] = useState("1");
@@ -88,10 +109,20 @@ export function PdfJsReader({ paperId }: { paperId: string }) {
     && process.env.NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1";
 
   useEffect(() => {
+    const lifecycleGeneration = ++lifecycleGenerationRef.current;
     const baseline = readPdfNetworkDiagnostics(pdfUrl);
     const controller = new PdfReaderController({
       createLoadingTask: createPdfLoadingTask,
-      getCanvas: () => canvasRef.current,
+      isCurrent: () => (
+        lifecycleGenerationRef.current === lifecycleGeneration
+        && controllerRef.current === controller
+      ),
+      getCanvas: () => (
+        lifecycleGenerationRef.current === lifecycleGeneration
+        && controllerRef.current === controller
+          ? canvasRef.current
+          : null
+      ),
       onState: (nextState) => {
         setState(nextState);
         setPageInput(String(nextState.pageNumber));
@@ -108,10 +139,13 @@ export function PdfJsReader({ paperId }: { paperId: string }) {
       },
     });
     controllerRef.current = controller;
-    void controller.load(pdfUrl);
+    observeLifecyclePromise(controller.load(pdfUrl), "load");
     return () => {
+      if (lifecycleGenerationRef.current === lifecycleGeneration) {
+        lifecycleGenerationRef.current += 1;
+      }
       if (controllerRef.current === controller) controllerRef.current = null;
-      void controller.destroy();
+      observeLifecyclePromise(controller.destroy(), "cleanup");
     };
   }, [pdfUrl]);
 
