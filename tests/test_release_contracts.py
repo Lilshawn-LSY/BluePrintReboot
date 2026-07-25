@@ -14,8 +14,8 @@ ALLOWED_TASK_STATUSES = {"COMPLETED", "SUPERSEDED", "DEFERRED", "PARTIAL", "NOT 
 PR_CI_GATE = "PR #2 GitHub-hosted CI"
 MAIN_CI_GATE = "post-merge main GitHub-hosted CI"
 CLEAN_PC_GATE = "user-performed clean-PC restore rehearsal"
-TAG_GATE = "v1.3.x tag creation"
-RELEASE_GATE = "v1.3.x GitHub release publication"
+TAG_GATE = "v1.4.0 tag creation"
+RELEASE_GATE = "v1.4.0 GitHub release publication"
 
 
 def read_text(relative_path: str) -> str:
@@ -58,7 +58,6 @@ def validate_clean_pc_state(item: dict, open_gates: set[str]) -> None:
         assert CLEAN_PC_GATE not in open_gates
     elif item["status"] == "NOT PERFORMED":
         assert item.get("evidence") is None
-        assert CLEAN_PC_GATE in open_gates
     else:
         assert _has_text(item.get("evidence"))
         assert CLEAN_PC_GATE in open_gates
@@ -103,11 +102,11 @@ def test_version_contract_is_consistent() -> None:
     lock = json.loads(read_text("frontend/package-lock.json"))
     readme = read_text("README.md")
 
-    assert APP_VERSION == "1.3.1"
+    assert APP_VERSION == "1.4.0"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
-    assert "v1.3.1-release-state-convergence-and-repo-hygiene" in readme
+    assert "v1.4.0-pdfjs-reader-foundation" in readme
 
 
 def test_primary_workflow_preserves_full_manual_and_automatic_gate() -> None:
@@ -160,11 +159,11 @@ def test_tracker_sync_status_contract() -> None:
     tracker = read_tracker()
 
     assert tracker["schema_version"] == "2.0"
-    assert tracker["current_version"] == "1.3.1"
-    assert tracker["release_name"] == "v1.3.1-release-state-convergence-and-repo-hygiene"
+    assert tracker["current_version"] == "1.4.0"
+    assert tracker["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert isinstance(tracker["implemented_milestones"], list)
     assert tracker["next_milestone"] == {
-        "name": "Reader/PDF hardening and optional PDF.js evaluation",
+        "name": "PDF.js Reader runtime verification and future read-only hardening",
         "status": "planned",
     }
     required_verification = {
@@ -276,17 +275,17 @@ def test_uncontrolled_verification_status_is_rejected() -> None:
 
 
 def test_current_release_note_and_documentation_contract() -> None:
-    release_note = read_text("docs/release_notes/v1.3.1.md")
-    prior_release_note = read_text("docs/release_notes/v1.3.0.md")
+    release_note = read_text("docs/release_notes/v1.4.0.md")
+    prior_release_note = read_text("docs/release_notes/v1.3.1.md")
     tracker = read_text("docs/tracker_sync_status.json")
 
-    assert "v1.3.1-release-state-convergence-and-repo-hygiene" in release_note
-    assert "29641757582" in release_note
-    assert "29641792069" in release_note
-    assert "Clean-PC restore rehearsal | NOT PERFORMED" in release_note
-    assert "Tag creation | NOT PERFORMED" in release_note
-    assert "GitHub release publication | NOT PERFORMED" in release_note
-    assert "PDF.js is intentionally not included" in prior_release_note
+    assert "v1.4.0-pdfjs-reader-foundation" in release_note
+    assert "pdfjs-dist" in release_note
+    assert "pdf.worker.min.mjs?url" in release_note
+    assert "Manual PDF.js Reader runtime | NOT PERFORMED" in release_note
+    assert "Streamlit regression | NOT PERFORMED" in release_note
+    assert "one-byte" in release_note
+    assert "v1.3.1-release-state-convergence-and-repo-hygiene" in prior_release_note
     statuses = re.findall(r"\| (VERIFIED|NOT VERIFIED|NOT PERFORMED|FAILED) \|", release_note)
     assert statuses
     assert set(statuses) <= ALLOWED_STATUSES

@@ -125,6 +125,23 @@ test("forwards PDF byte ranges and preserves partial response headers", async ()
   assert.deepEqual(new Uint8Array(await response.arrayBuffer()), new Uint8Array([1, 2, 3]));
 });
 
+test("preserves unsatisfiable PDF Range responses and safe size metadata", async () => {
+  const response = await proxyBlueprintGet(
+    new Request("http://localhost/api/blueprint/papers/paper-1/pdf", { headers: { Range: "bytes=999-1000" } }),
+    ["papers", "paper-1", "pdf"],
+    {
+      apiUrl: API_URL,
+      fetchImpl: async (_url, options) => {
+        assert.equal(options.headers.get("Range"), "bytes=999-1000");
+        return new Response(null, { status: 416, headers: { "Content-Range": "bytes */100" } });
+      },
+    },
+  );
+
+  assert.equal(response.status, 416);
+  assert.equal(response.headers.get("Content-Range"), "bytes */100");
+});
+
 test("preserves a PDF endpoint 404 without exposing an upstream origin", async () => {
   const response = await proxyBlueprintGet(
     new Request("http://localhost/api/blueprint/papers/missing/pdf"),

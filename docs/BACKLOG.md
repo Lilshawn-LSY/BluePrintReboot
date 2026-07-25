@@ -10,6 +10,20 @@ Last synced: 2026-07-21
 - [x] v1.2.1 portable-Node-aware full local validation gate and separate Python/frontend workflow jobs.
 - [x] v1.2.2 local runtime and release-evidence closure.
 - [x] v1.3.0 safe read-only Reader/PDF vertical slice.
+- [x] v1.3.1 release-state convergence, tracked-entry hygiene, and deterministic tracker export.
+
+## v1.4.0 PDF.js Reader foundation
+
+- [x] Replace the native `<object>` primary path with a client-only PDF.js canvas renderer using the existing same-origin stable-`paper_id` route.
+- [x] Pin `pdfjs-dist` and bundle the explicit worker locally through the Vinext/Vite `?url` asset path with no CDN.
+- [x] Add previous/next/direct-page controls, bounded zoom in/out/reset, accessible labels, and first/last disabled states.
+- [x] Remove the redundant one-byte Range availability probe; PDF.js is the authoritative load.
+- [x] Add loading, unavailable, render-failure, retry, and clearly labeled conditional native-fallback behavior without mounting two viewers.
+- [x] Cancel stale renders and clean loading tasks, loaded documents, pages, canvas state, retry cycles, paper changes, and unmounts.
+- [x] Add disabled-by-default development diagnostics and automated document-load/render/cancellation/request-mode contracts without private metadata.
+- [x] Preserve full/partial PDF responses, exact lengths, Range headers, 400/416 handling, managed-root containment, and the GET-only route surface.
+- [ ] Complete real-PDF browser checks, request inspection, repeated route entry/exit, API recovery, native fallback, large-PDF behavior, and the separate Streamlit regression.
+- [ ] Create a v1.4.0 tag or GitHub release only after explicit approval; neither is part of this implementation task.
 
 ## v1.3.1 release-state convergence and repository hygiene
 
@@ -48,11 +62,11 @@ Last synced: 2026-07-21
 - [ ] A clean-PC restore rehearsal remains unperformed.
 - [ ] A published GitHub release for v1.2.2 is not asserted without separate evidence.
 
-## Next: measured Reader hardening
+## Next: Reader runtime verification and measured hardening
 
-- [ ] Measure native Reader request count and index-read latency with disposable data before adding caching or endpoints.
-- [ ] Evaluate PDF.js only as a separately scoped, dependency-reviewed response to observed limitations.
-- [ ] Preserve native-viewer fallback, managed-root containment, Range delivery, and the existing safe PDF-serving contract.
+- [ ] Use a disposable or approved real PDF to inspect initial request count, Range behavior, and first-page perceived load without retaining document identity.
+- [ ] Verify repeated route entry/exit and rapid page/zoom interaction do not leave persistent loaders or stale renders.
+- [ ] Preserve the native-viewer fallback, managed-root containment, Range delivery, and the existing safe PDF-serving contract.
 - [ ] Preserve Streamlit as the write/note workflow until a separately approved command boundary exists.
 
 ## Deferred product work

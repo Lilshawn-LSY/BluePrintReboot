@@ -1,5 +1,20 @@
 # Release Checklist
 
+## v1.4.0-pdfjs-reader-foundation
+
+- [x] Runtime, frontend package, lockfile, visible shell labels, README, tracker, and release-note version surfaces identify v1.4.0.
+- [x] The primary web Reader renders through PDF.js into one canvas and never accepts a path or arbitrary URL.
+- [x] `pdfjs-dist` is pinned and `pdf.worker.min.mjs?url` emits a production asset with no CDN or server-side browser import.
+- [x] Previous, next, bounded direct page entry, zoom in/out/reset, loading, error, retry, and accessible states are implemented.
+- [x] The one-byte probe is removed and one authoritative PDF.js load is used per paper load cycle.
+- [x] The native `<object>` fallback is conditional, labeled, uses the safe same-origin URL, and is not mounted with PDF.js.
+- [x] Loading tasks, documents, page/render tasks, canvas state, retries, paper changes, and unmounts have explicit cleanup contracts.
+- [x] Full and partial response, exact-length, `Accept-Ranges`, `Content-Range`, malformed/unsatisfiable Range, missing-file, traversal, and GET-only regressions are covered.
+- [x] Development diagnostics are disabled by default and expose only bounded counts, durations, cancellation, and inferred request mode.
+- [x] Record final hygiene, smoke 98/0/0, focused PDF API 13, focused release/version 24, full pytest 526, `npm ci`, lint, production build, and 25 Node tests; record Git diff results in the final implementation handoff.
+- [ ] Perform real-PDF rendering/navigation/zoom, browser Range inspection, repeated entry/exit, offline/restart recovery, native fallback, large-PDF, and Streamlit regression checks.
+- [ ] Create no commit, staging, push, PR, merge, tag, release, or Drive update as part of this implementation task.
+
 ## v1.3.1-release-state-convergence-and-repo-hygiene
 
 - [x] Runtime, frontend package, lockfile, README, tracker, and release-note version surfaces identify v1.3.1.
