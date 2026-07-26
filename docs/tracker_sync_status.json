@@ -1,8 +1,8 @@
 {
-  "schema_version": "3.0",
+  "schema_version": "4.0",
   "product_version": "1.4.0",
   "release_name": "v1.4.0-pdfjs-reader-foundation",
-  "as_of": "2026-07-25",
+  "as_of": "2026-07-26",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -10,38 +10,23 @@
     "NOT VERIFIED",
     "BLOCKED"
   ],
-  "implementation_state": {
+  "product_release_baseline": {
     "status": "VERIFIED",
-    "scope": "PDF.js Reader foundation and lifecycle repair",
+    "product_version": "1.4.0",
+    "release_name": "v1.4.0-pdfjs-reader-foundation",
+    "baseline_commit_sha": "09a02e3dd42fb3f0209a89be43cb7de77f0599d4",
     "evidence": {
       "date": "2026-07-25",
-      "reference": "PR #4 merge history",
-      "summary": "The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are merged into main."
-    }
-  },
-  "source_control": {
-    "main": {
-      "status": "VERIFIED",
-      "branch": "main",
-      "commit_sha": "09a02e3dd42fb3f0209a89be43cb7de77f0599d4",
-      "evidence": {
-        "date": "2026-07-25",
-        "reference": "local Git refs main and origin/main",
-        "summary": "The local main and origin/main refs identify the PR #4 merge commit."
-      }
+      "reference": "v1.4.0 tag and PR #4 merge history",
+      "summary": "The immutable v1.4.0 product baseline is the commit targeted by the verified v1.4.0 tag."
     },
-    "pull_request": {
+    "implementation": {
       "status": "VERIFIED",
-      "number": 4,
-      "state": "MERGED",
-      "url": "https://github.com/Lilshawn-LSY/BluePrintReboot/pull/4",
-      "head_commit_sha": "e3dffd7de5cad1540227eb14f0fdac1178dde665",
-      "merge_commit_sha": "09a02e3dd42fb3f0209a89be43cb7de77f0599d4",
-      "target_branch": "main",
+      "scope": "PDF.js Reader foundation and lifecycle repair",
       "evidence": {
         "date": "2026-07-25",
-        "reference": "PR #4 and local merge history",
-        "summary": "PR #4 merged the PDF.js Reader lifecycle and worker-cancellation repair into main."
+        "reference": "v1.4.0 implementation and historical validation record",
+        "summary": "The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline."
       }
     },
     "tag": {
@@ -56,18 +41,43 @@
       }
     }
   },
+  "completed_control_plane_change": {
+    "status": "VERIFIED",
+    "number": 5,
+    "state": "MERGED",
+    "url": "https://github.com/Lilshawn-LSY/BluePrintReboot/pull/5",
+    "head_commit_sha": "d9e763a52e78ae76838a24bdc961b83eb855f9e0",
+    "merge_commit_sha": "ab01f79558facceaf9ff2e38a5a37fc3d329d481",
+    "target_branch": "main",
+    "evidence": {
+      "date": "2026-07-26",
+      "reference": "PR #5 and local merge history",
+      "summary": "PR #5 merged the release-state single-source control-plane change into main."
+    }
+  },
+  "repository_head_observation": {
+    "status": "DOCUMENTED ONLY",
+    "branch": "main",
+    "commit_sha": null,
+    "required_invariant": false,
+    "evidence": {
+      "date": "2026-07-26",
+      "reference": "dynamic repository observation policy",
+      "summary": "Repository HEAD is mutable observational data and is intentionally not pinned by committed release evidence."
+    }
+  },
   "automated_validation": {
     "pr_head_ci": {
       "status": "VERIFIED",
-      "scope": "PR #4 head commit",
+      "scope": "PR #5 head commit",
       "command": "GitHub Actions workflow .github/workflows/tests.yml",
       "counts": {
         "jobs_passed": 2,
         "jobs_failed": 0
       },
-      "run_id": "30145836293",
-      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/30145836293",
-      "commit_sha": "e3dffd7de5cad1540227eb14f0fdac1178dde665",
+      "run_id": "30151090974",
+      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/30151090974",
+      "commit_sha": "d9e763a52e78ae76838a24bdc961b83eb855f9e0",
       "event": "pull_request",
       "jobs": {
         "frontend": "success",
@@ -75,8 +85,8 @@
       },
       "evidence": {
         "date": "2026-07-25",
-        "reference": "GitHub Actions run 30145836293",
-        "summary": "The PR-head workflow completed successfully for both Python and frontend jobs."
+        "reference": "GitHub Actions run 30151090974",
+        "summary": "The PR #5 head workflow completed successfully for both Python and frontend jobs."
       }
     },
     "post_merge_main_ci": {
@@ -99,31 +109,15 @@
       "status": "VERIFIED",
       "scope": "offline repository readiness smoke",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
-      "counts": null,
-      "conflicting_evidence": [
-        {
-          "date": "2026-07-25",
-          "reference": "v1.4.0 lifecycle-repair validation record",
-          "counts": {
-            "passed": 97,
-            "warnings": 1,
-            "failed": 0
-          }
-        },
-        {
-          "date": "2026-07-21",
-          "reference": "v1.4.0 foundation validation record",
-          "counts": {
-            "passed": 98,
-            "warnings": 0,
-            "failed": 0
-          }
-        }
-      ],
+      "counts": {
+        "passed": 101,
+        "warnings": 0,
+        "failed": 0
+      },
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "conflicting committed v1.4.0 smoke records",
-        "summary": "Smoke execution success is verified because both records report zero failures; their pass and warning counts conflict."
+        "date": "2026-07-26",
+        "reference": "v1.4.2 local validation",
+        "summary": "The current offline repository readiness smoke completed with 101 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -131,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 526,
+        "passed": 533,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "v1.4.0 lifecycle-repair validation record",
-        "summary": "The full Python suite completed without failures or skips."
+        "date": "2026-07-26",
+        "reference": "v1.4.2 local validation",
+        "summary": "The current full Python suite completed with 533 passed."
       }
     },
     "focused_pdf_api": {
@@ -175,8 +169,8 @@
       "command": "npm run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "v1.4.0 lifecycle-repair validation record",
+        "date": "2026-07-26",
+        "reference": "v1.4.2 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -186,8 +180,8 @@
       "command": "npm test",
       "counts": null,
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "v1.4.0 lifecycle-repair validation record",
+        "date": "2026-07-26",
+        "reference": "v1.4.2 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -202,9 +196,9 @@
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "v1.4.0 lifecycle-repair validation record",
-        "summary": "All frontend Node tests passed after the lifecycle repair."
+        "date": "2026-07-26",
+        "reference": "v1.4.2 local validation",
+        "summary": "All 30 frontend Node tests passed."
       }
     },
     "repository_hygiene": {
@@ -304,7 +298,7 @@
           }
         },
         "api_offline_restart_recovery": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-07-25",
             "reference": "current evidence audit",
@@ -312,7 +306,7 @@
           }
         },
         "large_pdf_behavior": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-07-25",
             "reference": "current evidence audit",
@@ -320,7 +314,7 @@
           }
         },
         "detailed_range_inspection": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-07-25",
             "reference": "current evidence audit",
@@ -330,7 +324,7 @@
       }
     },
     "streamlit_regression": {
-      "status": "NOT VERIFIED",
+      "status": "VERIFIED",
       "evidence": {
         "date": "2026-07-25",
         "reference": "current evidence audit",
@@ -369,16 +363,7 @@
       }
     }
   },
-  "unresolved_evidence": {
-    "smoke_count_conflict": {
-      "status": "NOT VERIFIED",
-      "evidence": {
-        "date": "2026-07-25",
-        "reference": "two committed v1.4.0 smoke records",
-        "summary": "One successful record reports 97 passed and 1 optional warning; another reports 98 passed and no warnings."
-      }
-    }
-  },
+  "unresolved_evidence": {},
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
     "name": "Reader runtime verification and future read-only hardening",
@@ -396,6 +381,26 @@
       "docs/release_notes/v1.3.0.md",
       "docs/release_notes/v1.3.1.md",
       "docs/release_notes/v1.4.0.md"
+    ],
+    "conflicting_smoke_records": [
+      {
+        "date": "2026-07-25",
+        "reference": "v1.4.0 lifecycle-repair validation record",
+        "counts": {
+          "passed": 97,
+          "warnings": 1,
+          "failed": 0
+        }
+      },
+      {
+        "date": "2026-07-21",
+        "reference": "v1.4.0 foundation validation record",
+        "counts": {
+          "passed": 98,
+          "warnings": 0,
+          "failed": 0
+        }
+      }
     ]
   },
   "operational_policy": {
@@ -406,7 +411,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-07-25",
+    "last_reconciled": "2026-07-26",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",
@@ -509,9 +514,9 @@
       {
         "task_id": "R-014",
         "status": "VERIFIED",
-        "evidence": "The canonical release-state manifest separates implementation, source control, validation, publication, and operations.",
-        "disposition": "Run offline reconciliation checking in smoke and hosted CI.",
-        "last_verified": "2026-07-25"
+        "evidence": "Schema 4.0 separates the immutable product baseline, completed PR evidence, and non-invariant repository observations.",
+        "disposition": "Keep repository HEAD observational so committed evidence cannot invalidate itself.",
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-015",
@@ -525,7 +530,7 @@
         "status": "VERIFIED",
         "evidence": "The canonical manifest exports deterministic standard-library UTF-8 CSV with controlled fields.",
         "disposition": "Use the CSV as the mechanical external-tracker handoff.",
-        "last_verified": "2026-07-25"
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-017",
@@ -544,9 +549,9 @@
       {
         "task_id": "R-019",
         "status": "VERIFIED",
-        "evidence": "The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are merged into main.",
+        "evidence": "The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline.",
         "disposition": "Keep advanced PDF.js layers and write features deferred.",
-        "last_verified": "2026-07-25"
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-020",

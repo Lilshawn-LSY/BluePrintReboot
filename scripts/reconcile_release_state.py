@@ -10,7 +10,7 @@ from typing import Any, Iterable, Mapping, Sequence
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = PROJECT_ROOT / "docs" / "tracker_sync_status.json"
 OUTPUT_PATH = PROJECT_ROOT / "docs" / "CURRENT_RELEASE_STATUS.md"
-SCHEMA_VERSION = "3.0"
+SCHEMA_VERSION = "4.0"
 CONTROLLED_STATUSES = (
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -25,7 +25,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/RELEASE_CHECKLIST.md",
     "docs/BACKLOG.md",
     "docs/checklists/regression_checklist.md",
-    "docs/release_notes/v1.4.0.md",
+    "docs/release_notes/v1.4.2.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -148,38 +148,66 @@ def _validate_evidence(item: Mapping[str, Any], field: str) -> None:
     _text(evidence.get("summary"), f"{field}.evidence.summary")
 
 
-def _validate_source_control(manifest: Mapping[str, Any]) -> None:
-    source = _mapping(manifest.get("source_control"), "source_control")
-    main = _mapping(source.get("main"), "source_control.main")
-    if main.get("status") != "VERIFIED" or main.get("branch") != "main":
-        raise ReleaseStateError("source_control.main must be VERIFIED for branch main")
-    main_sha = _sha(main.get("commit_sha"), "source_control.main.commit_sha")
-    _validate_evidence(main, "source_control.main")
+def _validate_release_evidence(manifest: Mapping[str, Any]) -> None:
+    baseline = _mapping(manifest.get("product_release_baseline"), "product_release_baseline")
+    if baseline.get("status") != "VERIFIED":
+        raise ReleaseStateError("product_release_baseline must be VERIFIED")
+    if baseline.get("product_version") != manifest["product_version"]:
+        raise ReleaseStateError("product baseline version must equal product_version")
+    if baseline.get("release_name") != manifest["release_name"]:
+        raise ReleaseStateError("product baseline release name must equal release_name")
+    baseline_sha = _sha(
+        baseline.get("baseline_commit_sha"),
+        "product_release_baseline.baseline_commit_sha",
+    )
+    _validate_evidence(baseline, "product_release_baseline")
 
-    pull_request = _mapping(source.get("pull_request"), "source_control.pull_request")
-    if pull_request.get("status") != "VERIFIED":
-        raise ReleaseStateError("source_control.pull_request must be VERIFIED")
-    if pull_request.get("number") != 4 or pull_request.get("state") != "MERGED":
-        raise ReleaseStateError("source_control.pull_request must identify merged PR #4")
-    if pull_request.get("target_branch") != "main":
-        raise ReleaseStateError("source_control.pull_request.target_branch must be main")
-    _sha(pull_request.get("head_commit_sha"), "source_control.pull_request.head_commit_sha")
-    merge_sha = _sha(pull_request.get("merge_commit_sha"), "source_control.pull_request.merge_commit_sha")
-    if merge_sha != main_sha:
-        raise ReleaseStateError("merged PR #4 commit must equal the verified main commit")
-    _text(pull_request.get("url"), "source_control.pull_request.url")
-    _validate_evidence(pull_request, "source_control.pull_request")
+    implementation = _mapping(
+        baseline.get("implementation"),
+        "product_release_baseline.implementation",
+    )
+    if implementation.get("status") != "VERIFIED":
+        raise ReleaseStateError("product baseline implementation must be VERIFIED")
+    _text(implementation.get("scope"), "product_release_baseline.implementation.scope")
+    _validate_evidence(implementation, "product_release_baseline.implementation")
 
-    tag = _mapping(source.get("tag"), "source_control.tag")
+    tag = _mapping(baseline.get("tag"), "product_release_baseline.tag")
     if tag.get("status") != "VERIFIED":
-        raise ReleaseStateError("source_control.tag must be VERIFIED")
+        raise ReleaseStateError("product baseline tag must be VERIFIED")
     expected_tag = f"v{manifest['product_version']}"
     if tag.get("name") != expected_tag:
-        raise ReleaseStateError(f"source_control.tag.name must be {expected_tag}")
-    if _sha(tag.get("target_commit_sha"), "source_control.tag.target_commit_sha") != main_sha:
-        raise ReleaseStateError("verified tag target must equal the verified main commit")
-    _sha(tag.get("object_sha"), "source_control.tag.object_sha")
-    _validate_evidence(tag, "source_control.tag")
+        raise ReleaseStateError(f"product baseline tag name must be {expected_tag}")
+    if _sha(tag.get("target_commit_sha"), "product_release_baseline.tag.target_commit_sha") != baseline_sha:
+        raise ReleaseStateError("verified tag target must equal the immutable product baseline commit")
+    _sha(tag.get("object_sha"), "product_release_baseline.tag.object_sha")
+    _validate_evidence(tag, "product_release_baseline.tag")
+
+    change = _mapping(
+        manifest.get("completed_control_plane_change"),
+        "completed_control_plane_change",
+    )
+    if change.get("status") != "VERIFIED":
+        raise ReleaseStateError("completed_control_plane_change must be VERIFIED")
+    if change.get("number") != 5 or change.get("state") != "MERGED":
+        raise ReleaseStateError("completed control-plane change must identify merged PR #5")
+    if change.get("target_branch") != "main":
+        raise ReleaseStateError("completed_control_plane_change.target_branch must be main")
+    _sha(change.get("head_commit_sha"), "completed_control_plane_change.head_commit_sha")
+    _sha(change.get("merge_commit_sha"), "completed_control_plane_change.merge_commit_sha")
+    _text(change.get("url"), "completed_control_plane_change.url")
+    _validate_evidence(change, "completed_control_plane_change")
+
+    observation = _mapping(
+        manifest.get("repository_head_observation"),
+        "repository_head_observation",
+    )
+    if observation.get("status") != "DOCUMENTED ONLY" or observation.get("branch") != "main":
+        raise ReleaseStateError("repository HEAD observation must be DOCUMENTED ONLY for branch main")
+    if observation.get("commit_sha") is not None:
+        raise ReleaseStateError("repository HEAD observation commit_sha must be null in committed state")
+    if observation.get("required_invariant") is not False:
+        raise ReleaseStateError("repository HEAD observation cannot be a committed invariant")
+    _validate_evidence(observation, "repository_head_observation")
 
 
 def _validate_automated_validation(manifest: Mapping[str, Any]) -> None:
@@ -205,15 +233,17 @@ def _validate_automated_validation(manifest: Mapping[str, Any]) -> None:
                     )
         _validate_evidence(item, f"automated_validation.{check_id}")
 
-    source = _mapping(manifest["source_control"], "source_control")
-    pull_request = _mapping(source["pull_request"], "source_control.pull_request")
+    pull_request = _mapping(
+        manifest["completed_control_plane_change"],
+        "completed_control_plane_change",
+    )
     pr_ci = _mapping(checks["pr_head_ci"], "automated_validation.pr_head_ci")
     if pr_ci.get("status") != "VERIFIED":
         raise ReleaseStateError("PR-head CI must be VERIFIED")
     if pr_ci.get("event") != "pull_request":
         raise ReleaseStateError("PR-head CI event must be pull_request")
     if pr_ci.get("commit_sha") != pull_request.get("head_commit_sha"):
-        raise ReleaseStateError("PR-head CI commit must equal PR #4 head commit")
+        raise ReleaseStateError("PR-head CI commit must equal PR #5 head commit")
     _text(pr_ci.get("run_id"), "automated_validation.pr_head_ci.run_id")
     _text(pr_ci.get("run_url"), "automated_validation.pr_head_ci.run_url")
     jobs = _mapping(pr_ci.get("jobs"), "automated_validation.pr_head_ci.jobs")
@@ -230,29 +260,10 @@ def _validate_automated_validation(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError("post-merge main CI cannot claim jobs or counts while NOT VERIFIED")
 
     smoke = _mapping(checks["local_smoke"], "automated_validation.local_smoke")
-    if smoke.get("status") != "VERIFIED" or smoke.get("counts") is not None:
-        raise ReleaseStateError("smoke must be VERIFIED without silently selected aggregate counts")
-    conflicts = _list(smoke.get("conflicting_evidence"), "automated_validation.local_smoke.conflicting_evidence")
-    if len(conflicts) < 2:
-        raise ReleaseStateError("smoke must preserve at least two conflicting count records")
-    count_signatures: set[tuple[tuple[str, int], ...]] = set()
-    for index, raw_conflict in enumerate(conflicts):
-        conflict = _mapping(raw_conflict, f"automated_validation.local_smoke.conflicting_evidence[{index}]")
-        _text(conflict.get("reference"), f"automated_validation.local_smoke.conflicting_evidence[{index}].reference")
-        _text(conflict.get("date"), f"automated_validation.local_smoke.conflicting_evidence[{index}].date")
-        counts = _mapping(
-            conflict.get("counts"),
-            f"automated_validation.local_smoke.conflicting_evidence[{index}].counts",
-        )
-        if set(counts) != {"failed", "passed", "warnings"}:
-            raise ReleaseStateError("each conflicting smoke record must contain passed, warnings, and failed")
-        if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in counts.values()):
-            raise ReleaseStateError("conflicting smoke counts must be non-negative integers")
-        if counts["failed"] != 0:
-            raise ReleaseStateError("VERIFIED smoke conflict records must each report zero failures")
-        count_signatures.add(tuple(sorted(counts.items())))
-    if len(count_signatures) < 2:
-        raise ReleaseStateError("smoke conflicting evidence must contain genuinely different counts")
+    if smoke.get("status") != "VERIFIED":
+        raise ReleaseStateError("current smoke must be VERIFIED")
+    if smoke.get("counts") != {"passed": 101, "warnings": 0, "failed": 0}:
+        raise ReleaseStateError("current smoke must record 101 passed, 0 warnings, 0 failed")
 
 
 def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
@@ -310,7 +321,8 @@ def _validate_external_tracker(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError("external_tracker.schema_version must be 2.0")
     if external.get("status_values") != list(CONTROLLED_STATUSES):
         raise ReleaseStateError("external_tracker.status_values must match the canonical statuses")
-    _text(external.get("last_reconciled"), "external_tracker.last_reconciled")
+    if _text(external.get("last_reconciled"), "external_tracker.last_reconciled") != manifest["as_of"]:
+        raise ReleaseStateError("external_tracker.last_reconciled must equal manifest as_of")
     tasks = _list(external.get("tasks"), "external_tracker.tasks")
     expected_ids = [f"R-{number:03d}" for number in range(1, 26)]
     task_ids = [task.get("task_id") if isinstance(task, dict) else None for task in tasks]
@@ -325,14 +337,13 @@ def _validate_external_tracker(manifest: Mapping[str, Any]) -> None:
             raise ReleaseStateError("external tracker task_id must match R-000")
         _text(task.get("evidence"), f"external_tracker.{task_id}.evidence")
         _text(task.get("disposition"), f"external_tracker.{task_id}.disposition")
-        if _text(task.get("last_verified"), f"external_tracker.{task_id}.last_verified") != manifest["as_of"]:
-            raise ReleaseStateError(f"external_tracker.{task_id}.last_verified must equal manifest as_of")
+        _text(task.get("last_verified"), f"external_tracker.{task_id}.last_verified")
 
     by_id = {task["task_id"]: task for task in tasks}
     derived_tasks = {
         "R-017": manifest["recurring_operational_procedures"]["clean_pc_restore"],
         "R-018": manifest["manual_validation"]["reader_runtime"],
-        "R-019": manifest["implementation_state"],
+        "R-019": manifest["product_release_baseline"]["implementation"],
         "R-025": manifest["publication_state"]["release_checkpoint"],
     }
     for task_id, state in derived_tasks.items():
@@ -347,8 +358,9 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         "release_name",
         "as_of",
         "controlled_statuses",
-        "implementation_state",
-        "source_control",
+        "product_release_baseline",
+        "completed_control_plane_change",
+        "repository_head_observation",
         "automated_validation",
         "manual_validation",
         "publication_state",
@@ -373,22 +385,14 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)
 
-    implementation = _mapping(manifest.get("implementation_state"), "implementation_state")
-    if implementation.get("status") != "VERIFIED":
-        raise ReleaseStateError("implementation_state must be VERIFIED")
-    _text(implementation.get("scope"), "implementation_state.scope")
-    _validate_evidence(implementation, "implementation_state")
-
-    _validate_source_control(manifest)
+    _validate_release_evidence(manifest)
     _validate_automated_validation(manifest)
     _validate_manual_validation(manifest)
     _validate_publication_and_operations(manifest)
 
     unresolved = _mapping(manifest.get("unresolved_evidence"), "unresolved_evidence")
-    smoke_conflict = _mapping(unresolved.get("smoke_count_conflict"), "unresolved_evidence.smoke_count_conflict")
-    if smoke_conflict.get("status") != "NOT VERIFIED":
-        raise ReleaseStateError("unresolved smoke count conflict must remain NOT VERIFIED")
-    _validate_evidence(smoke_conflict, "unresolved_evidence.smoke_count_conflict")
+    if unresolved:
+        raise ReleaseStateError("unresolved_evidence must be empty; historical conflicts belong in historical_evidence")
 
     next_milestone = _mapping(manifest.get("next_milestone"), "next_milestone")
     if next_milestone.get("status") != "DOCUMENTED ONLY":
@@ -403,6 +407,28 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     references = _list(historical.get("references"), "historical_evidence.references")
     if not references or any(not isinstance(item, str) or not item.strip() for item in references):
         raise ReleaseStateError("historical_evidence.references must contain repository-relative documents")
+    smoke_records = _list(
+        historical.get("conflicting_smoke_records"),
+        "historical_evidence.conflicting_smoke_records",
+    )
+    if len(smoke_records) != 2:
+        raise ReleaseStateError("historical evidence must preserve exactly two conflicting v1.4.0 smoke records")
+    count_signatures: set[tuple[tuple[str, int], ...]] = set()
+    for index, raw_record in enumerate(smoke_records):
+        record = _mapping(raw_record, f"historical_evidence.conflicting_smoke_records[{index}]")
+        _text(record.get("reference"), f"historical_evidence.conflicting_smoke_records[{index}].reference")
+        _text(record.get("date"), f"historical_evidence.conflicting_smoke_records[{index}].date")
+        counts = _mapping(
+            record.get("counts"),
+            f"historical_evidence.conflicting_smoke_records[{index}].counts",
+        )
+        if set(counts) != {"failed", "passed", "warnings"}:
+            raise ReleaseStateError("historical smoke records require passed, warnings, and failed")
+        if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in counts.values()):
+            raise ReleaseStateError("historical smoke counts must be non-negative integers")
+        count_signatures.add(tuple(sorted(counts.items())))
+    if len(count_signatures) != 2:
+        raise ReleaseStateError("historical v1.4.0 smoke records must remain conflicting")
 
     policy = _mapping(manifest.get("operational_policy"), "operational_policy")
     if policy.get("status") != "DOCUMENTED ONLY":
@@ -430,7 +456,9 @@ def _evidence_summary(item: Mapping[str, Any]) -> str:
 
 def render_current_status(manifest: Mapping[str, Any]) -> str:
     validate_manifest(manifest)
-    source = manifest["source_control"]
+    baseline = manifest["product_release_baseline"]
+    change = manifest["completed_control_plane_change"]
+    observation = manifest["repository_head_observation"]
     automated = manifest["automated_validation"]
     manual = manifest["manual_validation"]
     publication = manifest["publication_state"]
@@ -448,16 +476,17 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         "",
         f"- Product version: `{manifest['product_version']}`",
         f"- Release name: `{manifest['release_name']}`",
-        f"- Implementation state: **{manifest['implementation_state']['status']}**",
+        f"- Implementation state: **{baseline['implementation']['status']}**",
+        f"- Immutable baseline commit: `{baseline['baseline_commit_sha']}`",
         f"- Next milestone: **{manifest['next_milestone']['status']}** — {manifest['next_milestone']['name']}",
         "",
         "## Current state summary",
         "",
         "| Area | Status | Evidence |",
         "|---|---|---|",
-        f"| Implementation | {manifest['implementation_state']['status']} | {_escape_cell(_evidence_summary(manifest['implementation_state']))} |",
-        f"| PR #4 | {source['pull_request']['status']} | Merged into `main` at `{source['pull_request']['merge_commit_sha']}`. |",
-        f"| v1.4.0 tag | {source['tag']['status']} | Tag targets `{source['tag']['target_commit_sha']}`. |",
+        f"| v1.4.0 implementation baseline | {baseline['implementation']['status']} | {_escape_cell(_evidence_summary(baseline['implementation']))} |",
+        f"| PR #5 control-plane change | {change['status']} | Merged into `main` at `{change['merge_commit_sha']}`. |",
+        f"| v1.4.0 tag | {baseline['tag']['status']} | Tag targets immutable baseline `{baseline['tag']['target_commit_sha']}`. |",
         f"| PR-head GitHub Actions | {automated['pr_head_ci']['status']} | Run `{automated['pr_head_ci']['run_id']}`; Python and frontend jobs succeeded. |",
         f"| Post-merge `main` GitHub Actions | {automated['post_merge_main_ci']['status']} | {_escape_cell(automated['post_merge_main_ci']['evidence']['summary'])} |",
         f"| Reader runtime | {manual['reader_runtime']['status']} | Passed and pending checks are separated below. |",
@@ -465,12 +494,15 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         f"| GitHub Release publication | {publication['github_release']['status']} | {_escape_cell(publication['github_release']['evidence']['summary'])} |",
         f"| Clean-PC restore | {restore['status']} | Recurring operational procedure; no rehearsal is claimed. |",
         "",
-        "## Source-control state",
+        "## Immutable baseline and completed change",
         "",
-        f"- Verified `main` commit: `{source['main']['commit_sha']}`.",
-        f"- PR #4: [{source['pull_request']['url']}]({source['pull_request']['url']}); head `{source['pull_request']['head_commit_sha']}`, merge `{source['pull_request']['merge_commit_sha']}`.",
-        f"- Tag `{source['tag']['name']}` is verified at `{source['tag']['target_commit_sha']}`.",
+        f"- Product baseline commit: `{baseline['baseline_commit_sha']}`.",
+        f"- PR #5: [{change['url']}]({change['url']}); head `{change['head_commit_sha']}`, merge `{change['merge_commit_sha']}`.",
+        f"- Tag `{baseline['tag']['name']}` is verified at `{baseline['tag']['target_commit_sha']}`.",
         "- Tag existence is source-control evidence only. It does not imply GitHub Release publication.",
+        f"- Repository HEAD observation: **{observation['status']}**; committed SHA is intentionally "
+        f"`null`, and `required_invariant` is `{str(observation['required_invariant']).lower()}`.",
+        "- Generated evidence does not become stale when the commit containing it is merged.",
         "",
         "## Automated validation",
         "",
@@ -479,12 +511,6 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
     ]
     for check_id, item in automated.items():
         counts = _format_counts(item.get("counts"))
-        if check_id == "local_smoke":
-            records = [
-                f"{_format_counts(record['counts'])} ({record['reference']})"
-                for record in item["conflicting_evidence"]
-            ]
-            counts = "Conflicting records: " + "; ".join(records)
         label = check_id.replace("_", " ").title().replace("Ci", "CI").replace("Pytest", "pytest")
         lines.append(
             f"| {label} | {item['status']} | {_escape_cell(item['scope'])} | "
@@ -494,8 +520,8 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "The smoke result is VERIFIED because both committed records report zero failures. "
-            "Its pass/warning counts remain explicitly unresolved; no value is selected silently.",
+            "The current smoke result is 101 passed, 0 warnings, 0 failed. The two conflicting "
+            "v1.4.0 records remain historical evidence and do not override this current result.",
             "",
             "## Reader manual validation",
             "",
@@ -523,12 +549,21 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
             "",
             "## Unresolved evidence",
             "",
-            f"- Smoke pass/warning count: **{manifest['unresolved_evidence']['smoke_count_conflict']['status']}**. "
-            f"{manifest['unresolved_evidence']['smoke_count_conflict']['evidence']['summary']}",
             f"- Post-merge `main` workflow: **{automated['post_merge_main_ci']['status']}**. "
             f"{automated['post_merge_main_ci']['evidence']['summary']}",
             f"- API offline/restart recovery, large-PDF behavior, detailed Range inspection, "
             f"and separate Streamlit regression remain **NOT VERIFIED**.",
+            "",
+            "## Historical conflicting smoke evidence",
+            "",
+        ]
+    )
+    for record in manifest["historical_evidence"]["conflicting_smoke_records"]:
+        lines.append(f"- {_format_counts(record['counts'])} ({record['date']}; {record['reference']}).")
+    lines.extend(
+        [
+            "",
+            "These records remain conflicting historical v1.4.0 evidence. They are not the latest smoke result.",
             "",
             "Historical release notes remain historical evidence. They are not inputs for current-state "
             "inference when the canonical manifest has a current field.",

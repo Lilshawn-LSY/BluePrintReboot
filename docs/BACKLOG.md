@@ -1,6 +1,6 @@
 # BluePrintReboot Backlog
 
-Stable backlog last edited: 2026-07-25
+Stable backlog last edited: 2026-07-26
 
 Current release evidence and individually addressable pending checks live in the generated [Current Release Status](CURRENT_RELEASE_STATUS.md). This backlog does not duplicate mutable counts or verification state.
 
@@ -13,6 +13,15 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.2.2 local runtime and release-evidence closure.
 - [x] v1.3.0 safe read-only Reader/PDF vertical slice.
 - [x] v1.3.1 release-state convergence, tracked-entry hygiene, and deterministic tracker export.
+
+## v1.4.2 post-merge evidence and Reader runtime closure
+
+- [x] Separate the immutable v1.4.0 product baseline from completed PR #5 control-plane evidence.
+- [x] Make repository HEAD a nullable, explicitly observational field rather than a committed invariant.
+- [x] Keep PR-head CI, post-merge `main` CI, tag existence, and GitHub Release publication structurally independent.
+- [x] Preserve conflicting v1.4.0 smoke records as historical evidence while exposing only the canonical current result as current state.
+- [x] Add deterministic render, stale-output, tracker-export, privacy, status-control, and fresh-clone regression coverage.
+- [ ] Supply manual evidence for the pending Reader runtime and separate Streamlit checks listed in the generated current status.
 
 ## v1.4.0 PDF.js Reader foundation
 
