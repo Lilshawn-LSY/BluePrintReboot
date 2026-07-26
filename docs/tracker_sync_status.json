@@ -43,16 +43,16 @@
   },
   "completed_control_plane_change": {
     "status": "VERIFIED",
-    "number": 5,
+    "number": 6,
     "state": "MERGED",
-    "url": "https://github.com/Lilshawn-LSY/BluePrintReboot/pull/5",
-    "head_commit_sha": "d9e763a52e78ae76838a24bdc961b83eb855f9e0",
-    "merge_commit_sha": "ab01f79558facceaf9ff2e38a5a37fc3d329d481",
+    "url": "https://github.com/Lilshawn-LSY/BluePrintReboot/pull/6",
+    "head_commit_sha": "eaec50925b761f86dfa25fbc5105954efb603f60",
+    "merge_commit_sha": "7b6a17369d3987dc1c8c6527a268a1df17feedcb",
     "target_branch": "main",
     "evidence": {
       "date": "2026-07-26",
-      "reference": "PR #5 and local merge history",
-      "summary": "PR #5 merged the release-state single-source control-plane change into main."
+      "reference": "PR #6 and local merge history",
+      "summary": "PR #6 merged the v1.4.2 release-state and Reader runtime evidence change into main."
     }
   },
   "repository_head_observation": {
@@ -68,25 +68,25 @@
   },
   "automated_validation": {
     "pr_head_ci": {
-      "status": "VERIFIED",
-      "scope": "PR #5 head commit",
+      "status": "PARTIALLY VERIFIED",
+      "scope": "PR #6 head commit",
       "command": "GitHub Actions workflow .github/workflows/tests.yml",
       "counts": {
-        "jobs_passed": 2,
-        "jobs_failed": 0
+        "jobs_passed": 1,
+        "jobs_failed": 1
       },
-      "run_id": "30151090974",
-      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/30151090974",
-      "commit_sha": "d9e763a52e78ae76838a24bdc961b83eb855f9e0",
+      "run_id": "30190817882",
+      "run_url": "https://github.com/Lilshawn-LSY/BluePrintReboot/actions/runs/30190817882",
+      "commit_sha": "eaec50925b761f86dfa25fbc5105954efb603f60",
       "event": "pull_request",
       "jobs": {
         "frontend": "success",
-        "python": "success"
+        "python": "failure"
       },
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "GitHub Actions run 30151090974",
-        "summary": "The PR #5 head workflow completed successfully for both Python and frontend jobs."
+        "date": "2026-07-26",
+        "reference": "GitHub Actions run 30190817882",
+        "summary": "The PR #6 head workflow completed with a successful frontend job and a Python smoke-check failure."
       }
     },
     "post_merge_main_ci": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 533,
+        "passed": 543,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-07-26",
         "reference": "v1.4.2 local validation",
-        "summary": "The current full Python suite completed with 533 passed."
+        "summary": "The current full Python suite completed with 543 passed."
       }
     },
     "focused_pdf_api": {
@@ -218,11 +218,11 @@
   },
   "manual_validation": {
     "reader_runtime": {
-      "status": "PARTIALLY VERIFIED",
+      "status": "VERIFIED",
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "PR #4 manual validation record",
-        "summary": "Real-PDF Reader behavior has verified core interactions and separately listed pending recovery, scale, and request-inspection checks."
+        "date": "2026-07-26",
+        "reference": "PR #6 manual validation record",
+        "summary": "All listed real-PDF Reader runtime checks have completed manual evidence."
       },
       "checks": {
         "real_pdf_first_page_render": {
@@ -300,25 +300,25 @@
         "api_offline_restart_recovery": {
           "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-25",
-            "reference": "current evidence audit",
-            "summary": "Current-release API offline and restart recovery has no completed manual record."
+            "date": "2026-07-26",
+            "reference": "PR #6 manual validation record",
+            "summary": "Manual validation confirmed explicit Reader unavailability while the API was offline and Reader/PDF recovery after restart."
           }
         },
         "large_pdf_behavior": {
           "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-25",
-            "reference": "current evidence audit",
-            "summary": "Current-release large-PDF behavior has no completed manual record."
+            "date": "2026-07-26",
+            "reference": "PR #6 manual validation record",
+            "summary": "Manual validation confirmed large-PDF loading and navigation behavior without changing the Reader or stored data."
           }
         },
         "detailed_range_inspection": {
           "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-25",
-            "reference": "current evidence audit",
-            "summary": "Detailed browser request and Range inspection has no completed manual record."
+            "date": "2026-07-26",
+            "reference": "PR #6 manual validation record",
+            "summary": "Detailed browser inspection confirmed managed PDF byte-range requests and safe partial-response headers."
           }
         }
       }
@@ -326,9 +326,9 @@
     "streamlit_regression": {
       "status": "VERIFIED",
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "current evidence audit",
-        "summary": "No separate Streamlit regression result is recorded for the current release state."
+        "date": "2026-07-26",
+        "reference": "PR #6 separate Streamlit regression record",
+        "summary": "A separate non-mutating Streamlit regression completed across the established reading and library surfaces."
       }
     }
   },
@@ -363,14 +363,21 @@
       }
     }
   },
-  "unresolved_evidence": {},
+  "unresolved_evidence": {
+    "items": [
+      "automated_validation.pr_head_ci",
+      "automated_validation.post_merge_main_ci",
+      "publication_state.github_release",
+      "recurring_operational_procedures.clean_pc_restore"
+    ]
+  },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "Reader runtime verification and future read-only hardening",
+    "name": "Release-state truth preservation and future read-only hardening",
     "evidence": {
       "date": "2026-07-25",
       "reference": "docs/ROADMAP.md",
-      "summary": "Complete only the remaining measured Reader runtime checks before separately approved hardening."
+      "summary": "Preserve completed runtime evidence and address only separately measured Reader gaps in future work."
     }
   },
   "historical_evidence": {
@@ -541,10 +548,10 @@
       },
       {
         "task_id": "R-018",
-        "status": "PARTIALLY VERIFIED",
-        "evidence": "Real-PDF Reader behavior has verified core interactions and separately listed pending recovery, scale, and request-inspection checks.",
-        "disposition": "Complete only the individually listed pending runtime checks.",
-        "last_verified": "2026-07-25"
+        "status": "VERIFIED",
+        "evidence": "All listed real-PDF Reader runtime checks have completed manual evidence.",
+        "disposition": "Preserve completed manual evidence and keep future hardening separately scoped.",
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-019",

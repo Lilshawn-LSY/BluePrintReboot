@@ -14,6 +14,15 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.3.0 safe read-only Reader/PDF vertical slice.
 - [x] v1.3.1 release-state convergence, tracked-entry hygiene, and deterministic tracker export.
 
+## v1.4.3 release-state truth repair
+
+- [x] Derive Reader aggregate status from all Reader child statuses.
+- [x] Accept truthful completed Streamlit regression evidence without hard-coding a past state.
+- [x] Reject VERIFIED evidence with incomplete language and NOT VERIFIED evidence with completion claims.
+- [x] Record PR #6 frontend success and Python smoke failure independently.
+- [x] Keep schema 4.0, repository HEAD observational, and mutable PR/workflow identifiers out of validator invariants.
+- [x] Preserve product, API, Reader, dependency, storage, and user-data behavior unchanged.
+
 ## v1.4.2 post-merge evidence and Reader runtime closure
 
 - [x] Separate the immutable v1.4.0 product baseline from completed PR #5 control-plane evidence.
@@ -21,7 +30,7 @@ Current release evidence and individually addressable pending checks live in the
 - [x] Keep PR-head CI, post-merge `main` CI, tag existence, and GitHub Release publication structurally independent.
 - [x] Preserve conflicting v1.4.0 smoke records as historical evidence while exposing only the canonical current result as current state.
 - [x] Add deterministic render, stale-output, tracker-export, privacy, status-control, and fresh-clone regression coverage.
-- [ ] Supply manual evidence for the pending Reader runtime and separate Streamlit checks listed in the generated current status.
+- [x] Manual Reader runtime and separate non-mutating Streamlit evidence were supplied with PR #6; v1.4.3 repairs their contradictory canonical representation.
 
 ## v1.4.0 PDF.js Reader foundation
 

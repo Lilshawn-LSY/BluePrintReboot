@@ -16,6 +16,8 @@ The official `pdfjs-dist` package is pinned in the frontend lockfile. The client
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
+The v1.4.3 control-plane repair makes Reader aggregates derive from their child checks and rejects evidence text that contradicts its controlled status. It changes no product, API, Reader, dependency, storage, or user-data behavior.
+
 The app remains intentionally local-first and single-user:
 
 - Runtime library data is ignored by Git.

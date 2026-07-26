@@ -25,7 +25,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/RELEASE_CHECKLIST.md",
     "docs/BACKLOG.md",
     "docs/checklists/regression_checklist.md",
-    "docs/release_notes/v1.4.2.md",
+    "docs/release_notes/v1.4.3.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -67,12 +67,28 @@ PRIVATE_VALUE_PATTERNS = (
 CURRENT_DRIFT_PATTERNS = (
     re.compile(r"No v1\.4\.0 tag\b", re.IGNORECASE),
     re.compile(r"v1\.4\.0 tag[^\n|]*\|\s*(?:NOT PERFORMED|NOT VERIFIED)\b", re.IGNORECASE),
-    re.compile(r"Manual PDF\.js Reader runtime\s*\|\s*(?:VERIFIED|NOT PERFORMED|NOT VERIFIED)\b", re.IGNORECASE),
     re.compile(r"Current v1\.4\.0[^\n]*(?:smoke|pytest|Node tests)\s+\d", re.IGNORECASE),
-    re.compile(r"v1\.4\.0[^\n]*manual[^\n]*(?:complete|passed|VERIFIED)\b", re.IGNORECASE),
     re.compile(r"\bReader (?:manual )?runtime\s*(?:is|:|\|)\s*\**VERIFIED\b", re.IGNORECASE),
     re.compile(r"\bStreamlit regression\s*(?:is|:|\|)\s*\**VERIFIED\b", re.IGNORECASE),
     re.compile(r"browser's native PDF capability", re.IGNORECASE),
+)
+INCOMPLETE_EVIDENCE_PATTERNS = (
+    re.compile(r"\bno completed(?: manual)? record\b", re.IGNORECASE),
+    re.compile(r"\bnot recorded\b", re.IGNORECASE),
+    re.compile(r"\bno result\b", re.IGNORECASE),
+    re.compile(r"\bpending\b", re.IGNORECASE),
+    re.compile(r"\bremains\s+(?:not\s+verified|unverified)\b", re.IGNORECASE),
+)
+COMPLETION_EVIDENCE_PATTERNS = (
+    re.compile(r"\bcompleted\b", re.IGNORECASE),
+    re.compile(r"\bpassed\b", re.IGNORECASE),
+    re.compile(r"(?<!not )\bverified\b", re.IGNORECASE),
+)
+EXPECTED_UNRESOLVED_EVIDENCE = (
+    "automated_validation.pr_head_ci",
+    "automated_validation.post_merge_main_ci",
+    "publication_state.github_release",
+    "recurring_operational_procedures.clean_pc_restore",
 )
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 TASK_ID_PATTERN = re.compile(r"R-\d{3}")
@@ -145,7 +161,31 @@ def _validate_evidence(item: Mapping[str, Any], field: str) -> None:
     evidence = _mapping(item.get("evidence"), f"{field}.evidence")
     _text(evidence.get("date"), f"{field}.evidence.date")
     _text(evidence.get("reference"), f"{field}.evidence.reference")
-    _text(evidence.get("summary"), f"{field}.evidence.summary")
+    summary = _text(evidence.get("summary"), f"{field}.evidence.summary")
+    status = item.get("status")
+    if status == "VERIFIED" and any(pattern.search(summary) for pattern in INCOMPLETE_EVIDENCE_PATTERNS):
+        raise ReleaseStateError(f"{field}.evidence.summary contradicts VERIFIED status")
+    if status == "NOT VERIFIED" and any(pattern.search(summary) for pattern in COMPLETION_EVIDENCE_PATTERNS):
+        raise ReleaseStateError(f"{field}.evidence.summary contradicts NOT VERIFIED status")
+
+
+def derive_reader_runtime_status(checks: Mapping[str, Any]) -> str:
+    statuses = {
+        _mapping(item, f"reader_runtime.checks.{check_id}").get("status")
+        for check_id, item in checks.items()
+    }
+    unsupported = statuses - {"VERIFIED", "NOT VERIFIED"}
+    if unsupported:
+        raise ReleaseStateError(
+            f"Reader runtime leaf checks must be VERIFIED or NOT VERIFIED; found={sorted(unsupported)}"
+        )
+    if statuses == {"VERIFIED"}:
+        return "VERIFIED"
+    if statuses == {"NOT VERIFIED"}:
+        return "NOT VERIFIED"
+    if statuses == {"VERIFIED", "NOT VERIFIED"}:
+        return "PARTIALLY VERIFIED"
+    raise ReleaseStateError("Reader runtime checks cannot be empty")
 
 
 def _validate_release_evidence(manifest: Mapping[str, Any]) -> None:
@@ -188,8 +228,10 @@ def _validate_release_evidence(manifest: Mapping[str, Any]) -> None:
     )
     if change.get("status") != "VERIFIED":
         raise ReleaseStateError("completed_control_plane_change must be VERIFIED")
-    if change.get("number") != 5 or change.get("state") != "MERGED":
-        raise ReleaseStateError("completed control-plane change must identify merged PR #5")
+    if not isinstance(change.get("number"), int) or isinstance(change.get("number"), bool) or change["number"] < 1:
+        raise ReleaseStateError("completed control-plane change number must be a positive integer")
+    if change.get("state") != "MERGED":
+        raise ReleaseStateError("completed control-plane change state must be MERGED")
     if change.get("target_branch") != "main":
         raise ReleaseStateError("completed_control_plane_change.target_branch must be main")
     _sha(change.get("head_commit_sha"), "completed_control_plane_change.head_commit_sha")
@@ -238,17 +280,33 @@ def _validate_automated_validation(manifest: Mapping[str, Any]) -> None:
         "completed_control_plane_change",
     )
     pr_ci = _mapping(checks["pr_head_ci"], "automated_validation.pr_head_ci")
-    if pr_ci.get("status") != "VERIFIED":
-        raise ReleaseStateError("PR-head CI must be VERIFIED")
     if pr_ci.get("event") != "pull_request":
         raise ReleaseStateError("PR-head CI event must be pull_request")
     if pr_ci.get("commit_sha") != pull_request.get("head_commit_sha"):
-        raise ReleaseStateError("PR-head CI commit must equal PR #5 head commit")
+        raise ReleaseStateError("PR-head CI commit must equal the recorded completed-change head commit")
     _text(pr_ci.get("run_id"), "automated_validation.pr_head_ci.run_id")
     _text(pr_ci.get("run_url"), "automated_validation.pr_head_ci.run_url")
     jobs = _mapping(pr_ci.get("jobs"), "automated_validation.pr_head_ci.jobs")
-    if jobs != {"frontend": "success", "python": "success"}:
-        raise ReleaseStateError("PR-head CI must record successful Python and frontend jobs")
+    if set(jobs) != {"frontend", "python"} or any(result not in {"success", "failure"} for result in jobs.values()):
+        raise ReleaseStateError("PR-head CI must record success or failure for Python and frontend jobs")
+    job_results = set(jobs.values())
+    expected_pr_ci_status = (
+        "VERIFIED"
+        if job_results == {"success"}
+        else "NOT VERIFIED"
+        if job_results == {"failure"}
+        else "PARTIALLY VERIFIED"
+    )
+    if pr_ci.get("status") != expected_pr_ci_status:
+        raise ReleaseStateError(
+            f"PR-head CI status must be {expected_pr_ci_status} for recorded job conclusions"
+        )
+    expected_job_counts = {
+        "jobs_passed": sum(result == "success" for result in jobs.values()),
+        "jobs_failed": sum(result == "failure" for result in jobs.values()),
+    }
+    if pr_ci.get("counts") != expected_job_counts:
+        raise ReleaseStateError("PR-head CI counts must match recorded job conclusions")
 
     main_ci = _mapping(checks["post_merge_main_ci"], "automated_validation.post_merge_main_ci")
     if main_ci.get("status") != "NOT VERIFIED":
@@ -262,32 +320,30 @@ def _validate_automated_validation(manifest: Mapping[str, Any]) -> None:
     smoke = _mapping(checks["local_smoke"], "automated_validation.local_smoke")
     if smoke.get("status") != "VERIFIED":
         raise ReleaseStateError("current smoke must be VERIFIED")
-    if smoke.get("counts") != {"passed": 101, "warnings": 0, "failed": 0}:
-        raise ReleaseStateError("current smoke must record 101 passed, 0 warnings, 0 failed")
+    smoke_counts = _mapping(smoke.get("counts"), "automated_validation.local_smoke.counts")
+    if set(smoke_counts) != {"passed", "warnings", "failed"} or smoke_counts["failed"] != 0:
+        raise ReleaseStateError("VERIFIED current smoke must record passed, warnings, and zero failed")
 
 
 def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
     manual = _mapping(manifest.get("manual_validation"), "manual_validation")
     reader = _mapping(manual.get("reader_runtime"), "manual_validation.reader_runtime")
-    if reader.get("status") != "PARTIALLY VERIFIED":
-        raise ReleaseStateError("Reader runtime must be PARTIALLY VERIFIED")
-    _validate_evidence(reader, "manual_validation.reader_runtime")
     checks = _mapping(reader.get("checks"), "manual_validation.reader_runtime.checks")
     if set(checks) != REQUIRED_MANUAL_CHECKS:
         missing = sorted(REQUIRED_MANUAL_CHECKS - set(checks))
         extra = sorted(set(checks) - REQUIRED_MANUAL_CHECKS)
         raise ReleaseStateError(f"Reader runtime checks differ; missing={missing}, extra={extra}")
-    statuses: set[str] = set()
     for check_id, raw_item in checks.items():
         item = _mapping(raw_item, f"manual_validation.reader_runtime.checks.{check_id}")
-        statuses.add(str(item.get("status")))
         _validate_evidence(item, f"manual_validation.reader_runtime.checks.{check_id}")
-    if "VERIFIED" not in statuses or "NOT VERIFIED" not in statuses:
-        raise ReleaseStateError("PARTIALLY VERIFIED Reader runtime needs passed and pending checks")
+    expected_status = derive_reader_runtime_status(checks)
+    if reader.get("status") != expected_status:
+        raise ReleaseStateError(
+            f"Reader runtime aggregate status must be {expected_status} for its child checks"
+        )
+    _validate_evidence(reader, "manual_validation.reader_runtime")
 
     streamlit = _mapping(manual.get("streamlit_regression"), "manual_validation.streamlit_regression")
-    if streamlit.get("status") != "NOT VERIFIED":
-        raise ReleaseStateError("current Streamlit regression must remain NOT VERIFIED")
     _validate_evidence(streamlit, "manual_validation.streamlit_regression")
 
 
@@ -391,8 +447,11 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
     _validate_publication_and_operations(manifest)
 
     unresolved = _mapping(manifest.get("unresolved_evidence"), "unresolved_evidence")
-    if unresolved:
-        raise ReleaseStateError("unresolved_evidence must be empty; historical conflicts belong in historical_evidence")
+    unresolved_items = _list(unresolved.get("items"), "unresolved_evidence.items")
+    if unresolved_items != list(EXPECTED_UNRESOLVED_EVIDENCE):
+        raise ReleaseStateError(
+            "unresolved_evidence.items must list the canonical remaining partial or unverified release-state paths"
+        )
 
     next_milestone = _mapping(manifest.get("next_milestone"), "next_milestone")
     if next_milestone.get("status") != "DOCUMENTED ONLY":
@@ -463,6 +522,8 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
     manual = manifest["manual_validation"]
     publication = manifest["publication_state"]
     restore = manifest["recurring_operational_procedures"]["clean_pc_restore"]
+    smoke_counts = automated["local_smoke"]["counts"]
+    pr_jobs = automated["pr_head_ci"]["jobs"]
 
     lines = [
         "<!-- Generated by scripts/reconcile_release_state.py. Do not edit by hand. -->",
@@ -485,11 +546,12 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         "| Area | Status | Evidence |",
         "|---|---|---|",
         f"| v1.4.0 implementation baseline | {baseline['implementation']['status']} | {_escape_cell(_evidence_summary(baseline['implementation']))} |",
-        f"| PR #5 control-plane change | {change['status']} | Merged into `main` at `{change['merge_commit_sha']}`. |",
+        f"| PR #{change['number']} control-plane change | {change['status']} | Merged into `main` at `{change['merge_commit_sha']}`. |",
         f"| v1.4.0 tag | {baseline['tag']['status']} | Tag targets immutable baseline `{baseline['tag']['target_commit_sha']}`. |",
-        f"| PR-head GitHub Actions | {automated['pr_head_ci']['status']} | Run `{automated['pr_head_ci']['run_id']}`; Python and frontend jobs succeeded. |",
+        f"| PR-head GitHub Actions | {automated['pr_head_ci']['status']} | Run `{automated['pr_head_ci']['run_id']}`; "
+        f"Python `{pr_jobs['python']}`, frontend `{pr_jobs['frontend']}`. |",
         f"| Post-merge `main` GitHub Actions | {automated['post_merge_main_ci']['status']} | {_escape_cell(automated['post_merge_main_ci']['evidence']['summary'])} |",
-        f"| Reader runtime | {manual['reader_runtime']['status']} | Passed and pending checks are separated below. |",
+        f"| Reader runtime | {manual['reader_runtime']['status']} | {_escape_cell(manual['reader_runtime']['evidence']['summary'])} |",
         f"| Streamlit regression | {manual['streamlit_regression']['status']} | {_escape_cell(manual['streamlit_regression']['evidence']['summary'])} |",
         f"| GitHub Release publication | {publication['github_release']['status']} | {_escape_cell(publication['github_release']['evidence']['summary'])} |",
         f"| Clean-PC restore | {restore['status']} | Recurring operational procedure; no rehearsal is claimed. |",
@@ -497,7 +559,7 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         "## Immutable baseline and completed change",
         "",
         f"- Product baseline commit: `{baseline['baseline_commit_sha']}`.",
-        f"- PR #5: [{change['url']}]({change['url']}); head `{change['head_commit_sha']}`, merge `{change['merge_commit_sha']}`.",
+        f"- PR #{change['number']}: [{change['url']}]({change['url']}); head `{change['head_commit_sha']}`, merge `{change['merge_commit_sha']}`.",
         f"- Tag `{baseline['tag']['name']}` is verified at `{baseline['tag']['target_commit_sha']}`.",
         "- Tag existence is source-control evidence only. It does not imply GitHub Release publication.",
         f"- Repository HEAD observation: **{observation['status']}**; committed SHA is intentionally "
@@ -520,7 +582,8 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "The current smoke result is 101 passed, 0 warnings, 0 failed. The two conflicting "
+            f"The current smoke result is {smoke_counts['passed']} passed, {smoke_counts['warnings']} warnings, "
+            f"{smoke_counts['failed']} failed. The two conflicting "
             "v1.4.0 records remain historical evidence and do not override this current result.",
             "",
             "## Reader manual validation",
@@ -549,10 +612,13 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
             "",
             "## Unresolved evidence",
             "",
+            f"- PR-head workflow: **{automated['pr_head_ci']['status']}**. "
+            f"{automated['pr_head_ci']['evidence']['summary']}",
             f"- Post-merge `main` workflow: **{automated['post_merge_main_ci']['status']}**. "
             f"{automated['post_merge_main_ci']['evidence']['summary']}",
-            f"- API offline/restart recovery, large-PDF behavior, detailed Range inspection, "
-            f"and separate Streamlit regression remain **NOT VERIFIED**.",
+            f"- GitHub Release publication: **{publication['github_release']['status']}**. "
+            f"{publication['github_release']['evidence']['summary']}",
+            f"- Clean-PC restore: **{restore['status']}**. {restore['evidence']['summary']}",
             "",
             "## Historical conflicting smoke evidence",
             "",

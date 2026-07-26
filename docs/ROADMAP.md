@@ -17,6 +17,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.3.1 converges source-control, hosted-CI, manual-regression, restore, and publication state; removes the accidental tracked console-output artifact; adds a tracked-entry hygiene gate; and makes the external tracker handoff deterministic.
 - v1.4.0 makes PDF.js the primary web Reader, bundles its worker locally, adds bounded navigation/zoom/error/fallback behavior, and instruments document/render lifecycle without changing the secure PDF API or Streamlit writes.
 - v1.4.2 makes release evidence non-self-invalidating by separating the immutable product baseline, completed control-plane change evidence, and non-invariant repository observations.
+- v1.4.3 makes Reader aggregate state derive from its child evidence, permits truthful Streamlit regression completion, and rejects status/evidence contradictions without changing product behavior.
 
 ## Decision gates
 
@@ -32,10 +33,11 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | v1.3.1 repository hygiene and state contracts | Verified locally | Focused tests 40 passed; hygiene passed; smoke 94/0/0; full pytest 524 passed; deterministic export, `npm ci`, lint, production build, and 14 Node tests passed. |
 | v1.4.0 PDF.js Reader foundation | Canonical current state | Implementation, source control, automated/manual validation, tag, publication, and recurring operations are rendered from the [Current Release Status](CURRENT_RELEASE_STATUS.md). |
 | v1.4.2 release-state closure | Canonical current state | Schema 4.0 and all current verification boundaries are rendered from the [Current Release Status](CURRENT_RELEASE_STATUS.md), without a committed mutable-HEAD invariant. |
+| v1.4.3 release-state truth repair | Canonical current state | Reader and Streamlit completion evidence, the failed PR #6 Python job, and remaining open release checks are represented independently in the [Current Release Status](CURRENT_RELEASE_STATUS.md). |
 
 ## Next product milestone
 
-Complete the pending real-PDF browser checks for the v1.4.0 Reader, including Range/request inspection, repeated entry/exit, offline recovery, native fallback, and large-PDF behavior. Future Reader hardening may address only measured gaps and must preserve managed-root containment, same-origin byte-range delivery, stable `paper_id`, and Streamlit ownership of all write workflows.
+Preserve the completed real-PDF and separate Streamlit evidence. Future Reader hardening may address only newly measured gaps and must preserve managed-root containment, same-origin byte-range delivery, stable `paper_id`, and Streamlit ownership of all write workflows.
 
 ## Continuing constraints
 

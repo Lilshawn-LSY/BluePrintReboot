@@ -11,26 +11,26 @@ Rendered as of 2026-07-26.
 - Release name: `v1.4.0-pdfjs-reader-foundation`
 - Implementation state: **VERIFIED**
 - Immutable baseline commit: `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`
-- Next milestone: **DOCUMENTED ONLY** — Reader runtime verification and future read-only hardening
+- Next milestone: **DOCUMENTED ONLY** — Release-state truth preservation and future read-only hardening
 
 ## Current state summary
 
 | Area | Status | Evidence |
 |---|---|---|
 | v1.4.0 implementation baseline | VERIFIED | The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline. (2026-07-25; v1.4.0 implementation and historical validation record) |
-| PR #5 control-plane change | VERIFIED | Merged into `main` at `ab01f79558facceaf9ff2e38a5a37fc3d329d481`. |
+| PR #6 control-plane change | VERIFIED | Merged into `main` at `7b6a17369d3987dc1c8c6527a268a1df17feedcb`. |
 | v1.4.0 tag | VERIFIED | Tag targets immutable baseline `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`. |
-| PR-head GitHub Actions | VERIFIED | Run `30151090974`; Python and frontend jobs succeeded. |
+| PR-head GitHub Actions | PARTIALLY VERIFIED | Run `30190817882`; Python `failure`, frontend `success`. |
 | Post-merge `main` GitHub Actions | NOT VERIFIED | No repository-accessible evidence proves a separate post-merge main workflow run. |
-| Reader runtime | PARTIALLY VERIFIED | Passed and pending checks are separated below. |
-| Streamlit regression | NOT VERIFIED | No separate Streamlit regression result is recorded for the current release state. |
+| Reader runtime | VERIFIED | All listed real-PDF Reader runtime checks have completed manual evidence. |
+| Streamlit regression | VERIFIED | A separate non-mutating Streamlit regression completed across the established reading and library surfaces. |
 | GitHub Release publication | NOT VERIFIED | No GitHub Release publication evidence is recorded; tag existence is not publication evidence. |
 | Clean-PC restore | NOT VERIFIED | Recurring operational procedure; no rehearsal is claimed. |
 
 ## Immutable baseline and completed change
 
 - Product baseline commit: `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`.
-- PR #5: [https://github.com/Lilshawn-LSY/BluePrintReboot/pull/5](https://github.com/Lilshawn-LSY/BluePrintReboot/pull/5); head `d9e763a52e78ae76838a24bdc961b83eb855f9e0`, merge `ab01f79558facceaf9ff2e38a5a37fc3d329d481`.
+- PR #6: [https://github.com/Lilshawn-LSY/BluePrintReboot/pull/6](https://github.com/Lilshawn-LSY/BluePrintReboot/pull/6); head `eaec50925b761f86dfa25fbc5105954efb603f60`, merge `7b6a17369d3987dc1c8c6527a268a1df17feedcb`.
 - Tag `v1.4.0` is verified at `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`.
 - Tag existence is source-control evidence only. It does not imply GitHub Release publication.
 - Repository HEAD observation: **DOCUMENTED ONLY**; committed SHA is intentionally `null`, and `required_invariant` is `false`.
@@ -40,10 +40,10 @@ Rendered as of 2026-07-26.
 
 | Check | Status | Scope | Counts | Evidence |
 |---|---|---|---|---|
-| Pr Head CI | VERIFIED | PR #5 head commit | 2 jobs passed, 0 jobs failed | The PR #5 head workflow completed successfully for both Python and frontend jobs. (2026-07-25; GitHub Actions run 30151090974) |
+| Pr Head CI | PARTIALLY VERIFIED | PR #6 head commit | 1 jobs passed, 1 jobs failed | The PR #6 head workflow completed with a successful frontend job and a Python smoke-check failure. (2026-07-26; GitHub Actions run 30190817882) |
 | Post Merge Main CI | NOT VERIFIED | post-merge main commit | Not recorded | No repository-accessible evidence proves a separate post-merge main workflow run. (2026-07-25; repository evidence audit) |
 | Local Smoke | VERIFIED | offline repository readiness smoke | 101 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 101 passed, 0 warnings, and 0 failed. (2026-07-26; v1.4.2 local validation) |
-| Full pytest | VERIFIED | full Python test suite | 533 passed, 0 failed, 0 skipped | The current full Python suite completed with 533 passed. (2026-07-26; v1.4.2 local validation) |
+| Full pytest | VERIFIED | full Python test suite | 543 passed, 0 failed, 0 skipped | The current full Python suite completed with 543 passed. (2026-07-26; v1.4.2 local validation) |
 | Focused Pdf Api | VERIFIED | managed PDF API contracts | 13 passed, 0 failed | The focused managed-PDF API contract suite passed. (2026-07-25; v1.4.0 focused API validation record) |
 | Focused Release Version | VERIFIED | release and version contracts before convergence | 24 passed, 0 failed | The pre-convergence focused release and version contract suite passed. (2026-07-25; v1.4.0 focused release validation record) |
 | Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-07-26; v1.4.2 local validation) |
@@ -55,7 +55,7 @@ The current smoke result is 101 passed, 0 warnings, 0 failed. The two conflictin
 
 ## Reader manual validation
 
-Aggregate state: **PARTIALLY VERIFIED**.
+Aggregate state: **VERIFIED**.
 
 | Check | Status | Evidence |
 |---|---|---|
@@ -68,9 +68,9 @@ Aggregate state: **PARTIALLY VERIFIED**.
 | Rapid page navigation | VERIFIED | Rapid page navigation completed without stale visible output. (2026-07-25; PR #4 manual validation record) |
 | Native fallback exclusivity | VERIFIED | The native fallback remained exclusive with the PDF.js viewer. (2026-07-25; PR #4 manual validation record) |
 | Worker termination error absent | VERIFIED | The prior worker-termination error was not observed. (2026-07-25; PR #4 manual validation record) |
-| Api offline restart recovery | NOT VERIFIED | Current-release API offline and restart recovery has no completed manual record. (2026-07-25; current evidence audit) |
-| Large pdf behavior | NOT VERIFIED | Current-release large-PDF behavior has no completed manual record. (2026-07-25; current evidence audit) |
-| Detailed range inspection | NOT VERIFIED | Detailed browser request and Range inspection has no completed manual record. (2026-07-25; current evidence audit) |
+| Api offline restart recovery | VERIFIED | Manual validation confirmed explicit Reader unavailability while the API was offline and Reader/PDF recovery after restart. (2026-07-26; PR #6 manual validation record) |
+| Large pdf behavior | VERIFIED | Manual validation confirmed large-PDF loading and navigation behavior without changing the Reader or stored data. (2026-07-26; PR #6 manual validation record) |
+| Detailed range inspection | VERIFIED | Detailed browser inspection confirmed managed PDF byte-range requests and safe partial-response headers. (2026-07-26; PR #6 manual validation record) |
 
 ## Publication and recurring operations
 
@@ -80,8 +80,10 @@ Aggregate state: **PARTIALLY VERIFIED**.
 
 ## Unresolved evidence
 
+- PR-head workflow: **PARTIALLY VERIFIED**. The PR #6 head workflow completed with a successful frontend job and a Python smoke-check failure.
 - Post-merge `main` workflow: **NOT VERIFIED**. No repository-accessible evidence proves a separate post-merge main workflow run.
-- API offline/restart recovery, large-PDF behavior, detailed Range inspection, and separate Streamlit regression remain **NOT VERIFIED**.
+- GitHub Release publication: **NOT VERIFIED**. No GitHub Release publication evidence is recorded; tag existence is not publication evidence.
+- Clean-PC restore: **NOT VERIFIED**. Readiness scripts and a checklist exist, but no genuine clean-PC restore rehearsal is recorded.
 
 ## Historical conflicting smoke evidence
 

@@ -4,6 +4,16 @@ Required before and after Codex-assisted release work, including `v1.4.0-pdfjs-r
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
 
+## v1.4.3 Release-State Truth Repair
+
+- [x] Accept all-VERIFIED Reader children only with a VERIFIED aggregate.
+- [x] Accept mixed VERIFIED/NOT VERIFIED Reader children only with a PARTIALLY VERIFIED aggregate.
+- [x] Accept all-NOT VERIFIED Reader children only with a NOT VERIFIED aggregate.
+- [x] Reject incomplete-language evidence for VERIFIED items and completion claims for NOT VERIFIED items.
+- [x] Accept completed separate Streamlit regression evidence.
+- [x] Preserve stale-output, deterministic render/export, and fresh-clone checks without Git-history assumptions.
+- [x] Preserve schema 4.0 and all product/API/storage/dependency/Reader contracts.
+
 ## v1.4.2 Release-State Regression
 
 - [x] Accept the immutable v1.4.0 baseline commit and verified tag without equating either to current repository HEAD.
@@ -12,8 +22,9 @@ Current evidence is represented only in the generated [Current Release Status](.
 - [x] Confirm tracker CSV export is deterministic and rejects uncontrolled status and private evidence values.
 - [x] Preserve both conflicting historical v1.4.0 smoke records without presenting either as the latest result.
 - [x] Cover the fresh-clone-after-merge stale-output defect with a focused regression.
-- [ ] Manually verify API offline/restart recovery, large-PDF behavior, and detailed Range requests.
-- [ ] Perform a separate current-release Streamlit regression and a genuine clean-PC restore.
+- [x] Manual API offline/restart recovery, large-PDF behavior, and detailed Range requests were supplied with PR #6.
+- [x] A separate non-mutating Streamlit regression was supplied with PR #6.
+- [ ] Perform a genuine clean-PC restore.
 
 ## v1.4.0 PDF.js Reader Foundation
 
