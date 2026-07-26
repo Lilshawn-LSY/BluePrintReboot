@@ -28,12 +28,14 @@ def test_version_contract_is_consistent() -> None:
     readme = read_text("README.md")
     manifest = read_manifest()
 
-    assert APP_VERSION == "1.4.0"
+    assert APP_VERSION == "1.5.0"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.4.0-pdfjs-reader-foundation"
+    assert manifest["release_name"] == "v1.5.0-reader-snapshot-readonly-vertical-slice"
+    assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
+    assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
 
 
@@ -95,6 +97,8 @@ def test_schema_four_manifest_is_the_current_release_authority() -> None:
     assert manifest["automated_validation"]["post_merge_main_ci"]["status"] == "NOT VERIFIED"
     assert manifest["manual_validation"]["reader_runtime"]["status"] == "VERIFIED"
     assert manifest["manual_validation"]["streamlit_regression"]["status"] == "VERIFIED"
+    assert manifest["manual_validation"]["reader_snapshot_runtime"]["status"] == "PARTIALLY VERIFIED"
+    assert "manual_validation.reader_snapshot_runtime" in manifest["unresolved_evidence"]["items"]
     assert manifest["recurring_operational_procedures"]["clean_pc_restore"]["status"] == "NOT VERIFIED"
     assert manifest["publication_state"]["github_release"]["status"] == "NOT VERIFIED"
 
@@ -129,7 +133,11 @@ def test_generated_current_status_is_the_only_volatile_document_surface() -> Non
     assert "| Post-merge `main` GitHub Actions | NOT VERIFIED |" in current_status
     assert "| Reader runtime | VERIFIED |" in current_status
     assert "| Streamlit regression | VERIFIED |" in current_status
-    assert "101 passed, 0 warnings, 0 failed" in current_status
+    smoke_counts = read_manifest()["automated_validation"]["local_smoke"]["counts"]
+    assert (
+        f"{smoke_counts['passed']} passed, {smoke_counts['warnings']} warnings, "
+        f"{smoke_counts['failed']} failed"
+    ) in current_status
     assert "97 passed, 1 warnings, 0 failed" in current_status
     assert "98 passed, 0 warnings, 0 failed" in current_status
     assert "not the latest smoke result" in current_status

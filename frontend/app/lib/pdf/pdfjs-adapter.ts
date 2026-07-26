@@ -1,18 +1,18 @@
-import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 
 const RANGE_CHUNK_SIZE = 64 * 1024;
-let pdfJsModulePromise: Promise<typeof import("pdfjs-dist")> | null = null;
+let pdfJsModulePromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null = null;
 
 
-async function loadPdfJsModule(): Promise<typeof import("pdfjs-dist")> {
+async function loadPdfJsModule(): Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> {
   if (typeof window === "undefined") {
     throw new Error("PDF.js is available only inside the browser Reader client boundary.");
   }
   if (!pdfJsModulePromise) {
     pdfJsModulePromise = Promise.all([
-      import("pdfjs-dist"),
-      import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+      import("pdfjs-dist/legacy/build/pdf.mjs"),
+      import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"),
     ]).then(([pdfjs, worker]) => {
       pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
       return pdfjs;

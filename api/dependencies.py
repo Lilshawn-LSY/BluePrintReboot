@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from api.pdf_files import ManagedPdfResult, resolve_managed_pdf
 from services import library_read_model
-from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail, PaperListItem
+from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail, PaperListItem, ReaderSnapshot
 
 
 class ReadModelUnavailable(Exception):
@@ -33,6 +33,13 @@ def get_paper_list_items() -> list[PaperListItem]:
 def get_paper_detail(paper_id: str) -> PaperDetail | None:
     try:
         return library_read_model.build_paper_detail(paper_id)
+    except Exception:
+        raise ReadModelUnavailable from None
+
+
+def get_reader_snapshot(paper_id: str) -> ReaderSnapshot | None:
+    try:
+        return library_read_model.build_reader_snapshot(paper_id)
     except Exception:
         raise ReadModelUnavailable from None
 

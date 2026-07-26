@@ -5,7 +5,15 @@ from collections.abc import Mapping
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
-from api.schemas import PaperDetail, PaperListItem, ProjectLink
+from api.schemas import (
+    PaperDetail,
+    PaperListItem,
+    ProjectLink,
+    ReaderNoteBaseline,
+    ReaderNoteHeader,
+    ReaderPdfState,
+    ReaderSnapshotResponse,
+)
 
 
 class PaperContractError(ValueError):
@@ -120,4 +128,91 @@ def adapt_paper_detail(source: Mapping[str, Any]) -> PaperDetail:
         profile_available=_boolean(source.get("profile_available", False), "profile_available"),
         lifecycle_state=_text(source.get("lifecycle_state")) or ("archived" if base.archived else "active"),
         recoverable_warnings=_string_list(source.get("recoverable_warnings")),
+    )
+
+
+def _strict_string(value: object, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise PaperContractError(f"Reader {field_name} must be a string.")
+    return value
+
+
+def _reader_warnings(value: object) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        raise PaperContractError("Reader warnings must be a list.")
+    warnings: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise PaperContractError("Reader warnings must contain only strings.")
+        normalized = item.strip()
+        if normalized and normalized not in warnings:
+            warnings.append(normalized)
+    return warnings
+
+
+def adapt_reader_snapshot(source: Mapping[str, Any]) -> ReaderSnapshotResponse:
+    """Adapt one domain snapshot without re-reading or recomputing saved state."""
+
+    paper_source = source.get("paper")
+    header_source = source.get("canonical_note_header")
+    baseline_source = source.get("saved_note_baseline")
+    if not isinstance(paper_source, Mapping):
+        raise PaperContractError("Reader paper must be an object.")
+    if not isinstance(header_source, Mapping):
+        raise PaperContractError("Reader canonical_note_header must be an object.")
+    if not isinstance(baseline_source, Mapping):
+        raise PaperContractError("Reader saved_note_baseline must be an object.")
+
+    raw_pdf_state = _strict_string(source.get("pdf_state"), "pdf_state")
+    try:
+        pdf_state = ReaderPdfState(raw_pdf_state)
+    except ValueError:
+        raise PaperContractError("Reader pdf_state is not supported.") from None
+
+    saved_note_available = source.get("saved_note_available")
+    if not isinstance(saved_note_available, bool):
+        raise PaperContractError("Reader saved_note_available must be boolean.")
+    saved_note_content = _strict_string(source.get("saved_note_content"), "saved_note_content")
+    if saved_note_available is not bool(saved_note_content):
+        raise PaperContractError("Reader saved note availability conflicts with saved content.")
+    unavailable_reason = _strict_string(source.get("unavailable_reason"), "unavailable_reason")
+
+    paper = adapt_paper_detail(paper_source)
+    expected_pdf_state = ReaderPdfState.missing if paper.missing_pdf else ReaderPdfState.available
+    if pdf_state is not expected_pdf_state:
+        raise PaperContractError("Reader pdf_state conflicts with paper availability.")
+    if pdf_state is ReaderPdfState.missing and not unavailable_reason.strip():
+        raise PaperContractError("Reader missing PDF state requires an unavailable reason.")
+    if pdf_state is ReaderPdfState.available and unavailable_reason:
+        raise PaperContractError("Reader available PDF state cannot include an unavailable reason.")
+
+    header = ReaderNoteHeader(
+        template_version=_strict_string(header_source.get("template_version"), "canonical_note_header.template_version"),
+        paper_id=_strict_string(header_source.get("paper_id"), "canonical_note_header.paper_id"),
+        title=_strict_string(header_source.get("title"), "canonical_note_header.title"),
+        doi=_strict_string(header_source.get("doi"), "canonical_note_header.doi"),
+        arxiv_id=_strict_string(header_source.get("arxiv_id"), "canonical_note_header.arxiv_id"),
+        year=_strict_string(header_source.get("year"), "canonical_note_header.year"),
+        first_author=_strict_string(header_source.get("first_author"), "canonical_note_header.first_author"),
+        tags=_strict_string(header_source.get("tags"), "canonical_note_header.tags"),
+    )
+    if header.paper_id != paper.paper_id:
+        raise PaperContractError("Reader canonical note identity conflicts with paper identity.")
+
+    sha256 = _strict_string(baseline_source.get("sha256"), "saved_note_baseline.sha256")
+    size_bytes = baseline_source.get("size_bytes")
+    if isinstance(size_bytes, bool) or not isinstance(size_bytes, int) or size_bytes < 0:
+        raise PaperContractError("Reader saved_note_baseline.size_bytes must be a non-negative integer.")
+    if sha256 and (len(sha256) != 64 or any(character not in "0123456789abcdef" for character in sha256)):
+        raise PaperContractError("Reader saved_note_baseline.sha256 must be a lowercase SHA-256 value.")
+
+    return ReaderSnapshotResponse(
+        paper=paper,
+        pdf_state=pdf_state,
+        saved_note_available=saved_note_available,
+        saved_note_content=saved_note_content,
+        canonical_note_header=header,
+        saved_note_baseline=ReaderNoteBaseline(sha256=sha256, size_bytes=size_bytes),
+        warnings=_reader_warnings(source.get("warnings")),
+        unavailable_reason=unavailable_reason,
     )

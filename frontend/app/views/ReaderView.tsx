@@ -10,25 +10,61 @@ import { PdfJsReader } from "../components/PdfJsReader";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
-import type { PaperDetail } from "../lib/api/types";
+import type { ReaderSnapshot } from "../lib/api/types";
 
 
-function ReaderPdf({ paper }: { paper: PaperDetail }) {
-  if (paper.missing_pdf || !paper.relative_pdf_path) {
-    return <EmptyState title="Managed PDF missing" description="This paper record does not currently have an accessible PDF in the managed library." />;
+function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
+  if (snapshot.pdf_state === "missing" || snapshot.paper.missing_pdf || !snapshot.paper.relative_pdf_path) {
+    return (
+      <EmptyState
+        title="Managed PDF missing"
+        description={snapshot.unavailable_reason || "This paper record does not currently have an accessible PDF in the managed library."}
+      />
+    );
   }
-  return <PdfJsReader paperId={paper.paper_id} />;
+  return <PdfJsReader paperId={snapshot.paper.paper_id} />;
+}
+
+
+function SavedNoteCompanion({ snapshot }: { snapshot: ReaderSnapshot }) {
+  const noteUnavailable = snapshot.warnings.includes("saved_note_unavailable");
+  return (
+    <section className="reader-note" aria-labelledby="saved-reading-note-title">
+      <div className="reader-note__heading">
+        <div>
+          <p className="eyebrow">Persisted companion</p>
+          <h2 id="saved-reading-note-title">Saved Reading Note</h2>
+        </div>
+        <StatusBadge tone={noteUnavailable ? "warning" : snapshot.saved_note_available ? "accent" : "neutral"}>
+          {noteUnavailable ? "Unavailable" : snapshot.saved_note_available ? "Saved" : "Empty"}
+        </StatusBadge>
+      </div>
+      {noteUnavailable ? (
+        <div className="reader-note__message" role="status">
+          The persisted note could not be read. The PDF remains available independently.
+        </div>
+      ) : snapshot.saved_note_available ? (
+        <pre className="reader-note__content" tabIndex={0}>{snapshot.saved_note_content}</pre>
+      ) : (
+        <div className="reader-note__message">No persisted Reading Note exists for this paper.</div>
+      )}
+      <p className="deferred-note">This companion is plain-text and read-only. Note editing and every write action remain in Streamlit.</p>
+    </section>
+  );
 }
 
 
 export function ReaderView({ paperId }: { paperId: string }) {
   const [retryCount, setRetryCount] = useState(0);
-  const resource = useApiResource(`reader-paper:${paperId}:${retryCount}`, () => apiClient.getPaper(paperId));
+  const resource = useApiResource(
+    `reader-snapshot:${paperId}:${retryCount}`,
+    () => apiClient.getReaderSnapshot(paperId),
+  );
   const detailHref = `/papers/${encodeURIComponent(paperId)}`;
   return (
     <div className="page-stack">
       <Link className="back-link" href={detailHref}><ArrowLeft size={15} />Back to Paper Detail</Link>
-      {resource.status === "loading" ? <LoadingState label="Loading paper metadata" /> : null}
+      {resource.status === "loading" ? <LoadingState label="Loading Reader snapshot" /> : null}
       {resource.status === "unavailable" ? (
         <div className="reader-metadata-state">
           <UnavailableState description={resource.message} />
@@ -46,23 +82,29 @@ export function ReaderView({ paperId }: { paperId: string }) {
         <>
           <PageHeader
             eyebrow="Read-only Reader"
-            title={resource.data.title}
-            description={[resource.data.authors.join(", ") || "Authors unknown", resource.data.journal, resource.data.year].filter(Boolean).join(" · ") || "Citation metadata is incomplete."}
-            actions={<StatusBadge tone={resource.data.archived ? "neutral" : "accent"}>{resource.data.lifecycle_state}</StatusBadge>}
+            title={resource.data.paper.title}
+            description={[
+              resource.data.paper.authors.join(", ") || "Authors unknown",
+              resource.data.paper.journal,
+              resource.data.paper.year,
+            ].filter(Boolean).join(" · ") || "Citation metadata is incomplete."}
+            actions={<StatusBadge tone={resource.data.paper.archived ? "neutral" : "accent"}>{resource.data.paper.lifecycle_state}</StatusBadge>}
           />
           <div className="reader-layout">
             <section className="reader-stage" aria-label="Managed PDF viewing region">
-              <ReaderPdf paper={resource.data} />
+              <ReaderPdf snapshot={resource.data} />
             </section>
-            <DetailPanel title="Read-only context">
-              <dl className="metadata-list metadata-list--compact">
-                <div><dt>First author</dt><dd>{resource.data.first_author || "Unknown"}</dd></div>
-                <div><dt>Year</dt><dd>{resource.data.year || "Unknown"}</dd></div>
-                <div><dt>Journal</dt><dd>{resource.data.journal || "Unknown"}</dd></div>
-                <div><dt>Status</dt><dd>{resource.data.status}</dd></div>
-              </dl>
-              <p className="deferred-note">Notes, metadata changes, and every write action remain in Streamlit. This web Reader is read-only.</p>
-            </DetailPanel>
+            <aside className="reader-companion" aria-label="Read-only Reader companion">
+              <SavedNoteCompanion snapshot={resource.data} />
+              <DetailPanel title="Read-only context">
+                <dl className="metadata-list metadata-list--compact">
+                  <div><dt>First author</dt><dd>{resource.data.paper.first_author || "Unknown"}</dd></div>
+                  <div><dt>Year</dt><dd>{resource.data.paper.year || "Unknown"}</dd></div>
+                  <div><dt>Journal</dt><dd>{resource.data.paper.journal || "Unknown"}</dd></div>
+                  <div><dt>Status</dt><dd>{resource.data.paper.status}</dd></div>
+                </dl>
+              </DetailPanel>
+            </aside>
           </div>
         </>
       ) : null}

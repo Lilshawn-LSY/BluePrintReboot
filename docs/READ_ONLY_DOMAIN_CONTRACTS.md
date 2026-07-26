@@ -2,7 +2,7 @@
 
 v1.0.26 freezes five plain-dictionary contracts in `services/library_read_model.py`. They contain JSON primitives only, use predictable empty-string/list/false defaults, expose workspace-safe relative paths, and never serialize pandas, `Path`, Streamlit state, exceptions, or absolute private paths. Builders read current state without creating, migrating, or saving files.
 
-| Contract | Future adapter | Stable purpose |
+| Contract | HTTP adapter | Stable purpose |
 |---|---|---|
 | `HealthSummary` | `GET /health` | Overall healthy/degraded/blocked state and stable blocking, warning, corruption, quarantine, missing, and duplicate counts. |
 | `LibraryStatus` | `GET /library/status` | Active/archived/missing/duplicate/corrupt/quarantine counts, degraded flag, and generic workspace warnings. |
@@ -58,6 +58,14 @@ Older indexes need no migration during reads: the read-only index snapshot suppl
 
 ## Consumed by the v1.2.0 frontend shell
 
-The desktop-first web shell consumes only `GET /health`, `GET /library/status`, `GET /papers`, and `GET /papers/{paper_id}` through a centralized typed client. Browser components do not call FastAPI directly; a same-origin server bridge forwards only these allowlisted GET paths to the configured local API URL.
+The initial desktop-first web shell consumed `GET /health`, `GET /library/status`, `GET /papers`, and `GET /papers/{paper_id}` through a centralized typed client. Browser components do not call FastAPI directly; a same-origin server bridge forwards only allowlisted GET paths to the configured local API URL.
 
 Dashboard, Library, Papers, and Paper Detail render explicit loading, empty, error, and unavailable states. Projects, Tags, and Settings do not invent domain data while their contracts are absent. The frontend adds no write operation and does not change any frozen API or domain response shape.
+
+## Reader Snapshot HTTP slice in v1.5.0
+
+`GET /papers/{paper_id}/reader` now calls `build_reader_snapshot(paper_id)` once and adapts its result through strict `ReaderSnapshotResponse`, `ReaderNoteHeader`, and `ReaderNoteBaseline` schemas. The nested paper uses the established `PaperDetail` adapter. Header and baseline dictionaries are field-allowlisted, PDF state is limited to `available` or `missing`, warning values are normalized strings, and malformed domain values become the existing generic unavailable boundary.
+
+The exact persisted `saved_note_content` string is returned without trimming, Markdown parsing, hashing, or another file read in the API layer. An unknown paper is a generic 404; missing PDF, missing note, and a recoverable unreadable-note warning remain HTTP 200 snapshot states. The route accepts no filesystem path and exposes no Streamlit state, pandas object, exception detail, environment value, or arbitrary storage dictionary.
+
+The same-origin bridge allowlists only the exact `papers/{paper_id}/reader` shape as JSON. It does not forward `Range` for this route and leaves the existing managed-PDF streaming and Range contract unchanged. The web Reader uses one snapshot request and presents the saved note as selectable plain text; editing and every write action remain in Streamlit.

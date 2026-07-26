@@ -112,6 +112,44 @@ class PaperDetail(PaperListItem):
     recoverable_warnings: list[str]
 
 
+class ReaderPdfState(str, Enum):
+    available = "available"
+    missing = "missing"
+
+
+class ReaderNoteHeader(StrictResponseModel):
+    """Allowlisted canonical Reading Note header values."""
+
+    template_version: str
+    paper_id: str
+    title: str
+    doi: str
+    arxiv_id: str
+    year: str
+    first_author: str
+    tags: str
+
+
+class ReaderNoteBaseline(StrictResponseModel):
+    """Identity of the exact saved note bytes returned in the snapshot."""
+
+    sha256: str = Field(pattern=r"^(?:|[0-9a-f]{64})$")
+    size_bytes: int = Field(ge=0)
+
+
+class ReaderSnapshotResponse(StrictResponseModel):
+    """One coherent, read-only Reader load from the domain snapshot builder."""
+
+    paper: PaperDetail
+    pdf_state: ReaderPdfState
+    saved_note_available: bool
+    saved_note_content: str
+    canonical_note_header: ReaderNoteHeader
+    saved_note_baseline: ReaderNoteBaseline
+    warnings: list[str]
+    unavailable_reason: str
+
+
 class PaginatedPaperList(StrictResponseModel):
     """A deterministic page of papers matching the requested archive filter."""
 

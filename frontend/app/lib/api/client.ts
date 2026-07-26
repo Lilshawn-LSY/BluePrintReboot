@@ -1,4 +1,4 @@
-import type { DashboardSnapshot, HealthSummary, LibraryStatus, PaginatedPaperList, PaperDetail } from "./types";
+import type { DashboardSnapshot, HealthSummary, LibraryStatus, PaginatedPaperList, PaperDetail, ReaderSnapshot } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -41,6 +41,7 @@ export const apiClient = {
     return request<PaginatedPaperList>(`/papers?${params}`);
   },
   getPaper: (paperId: string) => request<PaperDetail>(`/papers/${encodeURIComponent(paperId)}`),
+  getReaderSnapshot: (paperId: string) => request<ReaderSnapshot>(`/papers/${encodeURIComponent(paperId)}/reader`),
   getDashboard: async (): Promise<DashboardSnapshot> => {
     const [health, library, papers] = await Promise.all([
       request<HealthSummary>("/health"),

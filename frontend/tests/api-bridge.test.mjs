@@ -2,19 +2,41 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { buildBlueprintTarget, isAllowedBlueprintPath, isBlueprintPdfPath, proxyBlueprintGet } from "../app/api/blueprint/[...path]/bridge.mjs";
+import { buildBlueprintTarget, isAllowedBlueprintPath, isBlueprintPdfPath, isBlueprintReaderPath, proxyBlueprintGet } from "../app/api/blueprint/[...path]/bridge.mjs";
 
 const API_URL = "http://127.0.0.1:8000";
 
-test("allows the existing read routes plus the exact managed PDF route", () => {
-  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["papers", "paper-123", "pdf"]]) {
+test("allows the existing read routes plus the exact managed PDF and Reader routes", () => {
+  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"]]) {
     assert.equal(isAllowedBlueprintPath(parts), true, parts.join("/"));
   }
-  for (const parts of [[], ["library"], ["projects"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["health", "extra"]]) {
+  for (const parts of [[], ["library"], ["projects"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["papers", "paper-123", "reader", "raw"], ["health", "extra"]]) {
     assert.equal(isAllowedBlueprintPath(parts), false, parts.join("/"));
   }
   assert.equal(isBlueprintPdfPath(["papers", "paper-123", "pdf"]), true);
   assert.equal(isBlueprintPdfPath(["papers", "paper-123"]), false);
+  assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader"]), true);
+  assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader", "raw"]), false);
+});
+
+test("forwards the exact Reader route as JSON without a Range header", async () => {
+  let requestedUrl;
+  const response = await proxyBlueprintGet(
+    new Request("http://localhost/api/blueprint/papers/paper%201/reader?mode=readonly", { headers: { Range: "bytes=0-10" } }),
+    ["papers", "paper 1", "reader"],
+    {
+      apiUrl: API_URL,
+      fetchImpl: async (url, options) => {
+        requestedUrl = url;
+        assert.equal(options.headers.get("Accept"), "application/json");
+        assert.equal(options.headers.get("Range"), null);
+        return Response.json({ paper: { paper_id: "paper 1" } });
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(requestedUrl, `${API_URL}/papers/paper%201/reader?mode=readonly`);
 });
 
 test("returns 404 for an unlisted path without contacting the upstream API", async () => {

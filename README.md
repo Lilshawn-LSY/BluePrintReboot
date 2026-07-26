@@ -8,11 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current release target: **v1.4.0-pdfjs-reader-foundation**.
+Current runtime target: **v1.5.0-reader-snapshot-readonly-vertical-slice**.
 
-v1.4.0 replaces the web Reader's default native `<object>` viewer with a controlled PDF.js canvas renderer. It adds bounded page and zoom controls, explicit loading/error/retry states, lifecycle cleanup, disabled-by-default development diagnostics, and an explicit native fallback. It reuses the existing stable-`paper_id`, same-origin, GET-only PDF endpoint and removes the redundant one-byte availability probe.
+v1.5.0 connects the existing `ReaderSnapshot` domain builder to one strict GET endpoint. The web Reader loads paper metadata, PDF state, and the last explicitly saved Reading Note together, then shows the note as selectable plain text beside the unchanged PDF.js viewer. Missing PDFs, absent notes, unreadable notes, unknown papers, and API unavailability remain distinct read-only states.
 
-The official `pdfjs-dist` package is pinned in the frontend lockfile. The client-only adapter dynamically imports PDF.js and Vite resolves `pdf.worker.min.mjs?url` into a repository-built local asset, so runtime rendering does not depend on a public CDN. Streamlit remains the interface for notes, metadata changes, PDF maintenance, and every write action.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.0. The official `pdfjs-dist` package remains pinned in the frontend lockfile. The client-only adapter and repository-local worker are unchanged, and Streamlit remains the interface for note editing, metadata changes, PDF maintenance, and every write action.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -45,7 +45,7 @@ Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the 
 
 ## Read-Only Local API
 
-Streamlit remains the primary BluePrintReboot interface. The FastAPI service is a separate, local-only, read-only adapter: it exposes health, library status, paper collection/detail metadata, and one managed-PDF byte route. It has no mutation or note-content operations.
+Streamlit remains the primary BluePrintReboot interface. The FastAPI service is a separate, local-only, read-only adapter: it exposes health, library status, paper collection/detail metadata, one coherent Reader Snapshot, and one managed-PDF byte route. It has no mutation operations.
 
 Start it from Windows PowerShell:
 
@@ -60,6 +60,7 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Library status: [http://127.0.0.1:8000/library/status](http://127.0.0.1:8000/library/status)
 - Active paper collection: [http://127.0.0.1:8000/papers](http://127.0.0.1:8000/papers)
 - Paper detail: `http://127.0.0.1:8000/papers/{paper_id}`
+- Read-only Reader Snapshot: `http://127.0.0.1:8000/papers/{paper_id}/reader`
 - Managed PDF stream: `http://127.0.0.1:8000/papers/{paper_id}/pdf`
 
 `GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), and `archive_status` (`active`, `archived`, or `all`; default `active`). Results are ordered by case-insensitive title and then stable `paper_id`.
@@ -90,7 +91,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
 
 If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
-Dashboard, Library, Papers, Paper Detail, and `/papers/{paper_id}/reader` use real read-only API contracts with explicit loading, empty, error, and unavailable states. The Reader uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL with a PDF.js canvas renderer as the primary path and a conditional native fallback; no local filesystem path reaches the browser. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
+Dashboard, Library, Papers, Paper Detail, and `/papers/{paper_id}/reader` use real read-only API contracts with explicit loading, empty, error, and unavailable states. The Reader makes one Snapshot request for paper and persisted-note context, renders note text without HTML interpretation, and uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL with a PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser. Projects, Tags, and Settings explain their future purpose without displaying fake user data or nonfunctional actions. The shell remains navigable when FastAPI is offline.
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
@@ -232,6 +233,7 @@ Foundation release documents:
 - [v1.3.0 Read-Only Reader/PDF Vertical Slice release notes](docs/release_notes/v1.3.0.md)
 - [v1.3.1 Release-State Convergence and Repository Hygiene release notes](docs/release_notes/v1.3.1.md)
 - [v1.4.0 PDF.js Reader Foundation release notes](docs/release_notes/v1.4.0.md)
+- [v1.5.0 Read-only Reader Snapshot Vertical Slice release notes](docs/release_notes/v1.5.0.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -295,6 +297,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.5.0-reader-snapshot-readonly-vertical-slice
+
+- Adds strict `GET /papers/{paper_id}/reader` adaptation over the existing domain snapshot builder.
+- Loads paper, PDF availability, persisted-note content, canonical note header, and saved baseline in one frontend request.
+- Shows the saved note as selectable plain text beside the existing PDF.js Reader with separate empty, warning, missing-PDF, not-found, and unavailable states.
+- Adds no write API, editor, autosave, dependency, storage migration, or PDF.js/Range behavior change.
 
 ### v1.4.0-pdfjs-reader-foundation
 

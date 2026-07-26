@@ -2,6 +2,23 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.0-reader-snapshot-readonly-vertical-slice
+
+- [x] Runtime, frontend package/lockfile, README, canonical manifest, and release-note surfaces identify the v1.5.0 runtime target while the immutable released baseline remains v1.4.0.
+- [x] `GET /papers/{paper_id}/reader` calls the existing snapshot builder once and returns strict allowlisted paper, note, baseline, warning, and PDF-state fields.
+- [x] Exact persisted-note whitespace and line endings survive API adaptation; API code performs no note reread or hash recomputation.
+- [x] Unknown paper and builder failure use generic 404/503 responses; absent note, unreadable note, and missing PDF remain successful snapshot states.
+- [x] The same-origin bridge admits only the exact Reader GET route, excludes subpaths and write methods, and never forwards Range to JSON.
+- [x] The web Reader uses one snapshot request, keeps stale paper data out during transitions, and presents selectable plain text without raw HTML insertion.
+- [x] The PDF.js component, worker lifecycle, same-origin PDF URL, byte Range semantics, and managed-root containment remain unchanged.
+- [x] Before the compatibility correction, the native fallback displayed the same managed PDF successfully.
+- [x] Browser inspection confirmed HTTP 206, `application/pdf`, correct `Content-Range`/`Accept-Ranges`, `%PDF` starting bytes, and matching file size through the API and bridge.
+- [x] The legacy PDF.js main/worker build rendered the real PDF first page successfully in Chrome 131 with Vinext dev.
+- [x] Reader diagnostics showed Document loads 1, Page renders 1, and Render cancellations 0.
+- [x] No write API, editor, autosave, metadata mutation, storage migration, dependency, project/tag API, OCR, or cloud behavior is added.
+- [ ] User-performed runtime validation still covers persisted-note pairing, note absence/read failure, missing PDF, paper transition, and API restart without mutation.
+- [ ] v1.5.0 PR, hosted CI, tag, GitHub Release, and post-merge evidence remain open until separately observed.
+
 ## v1.4.3-release-state-truth-repair
 
 - [x] Reader aggregate status is derived from VERIFIED and NOT VERIFIED child states.
