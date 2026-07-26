@@ -2,53 +2,56 @@
 
 # Current Release Status
 
-Canonical manifest: [`tracker_sync_status.json`](tracker_sync_status.json), schema 3.0.
-Rendered as of 2026-07-25.
+Canonical manifest: [`tracker_sync_status.json`](tracker_sync_status.json), schema 4.0.
+Rendered as of 2026-07-26.
 
 ## Release identity
 
 - Product version: `1.4.0`
 - Release name: `v1.4.0-pdfjs-reader-foundation`
 - Implementation state: **VERIFIED**
+- Immutable baseline commit: `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`
 - Next milestone: **DOCUMENTED ONLY** — Reader runtime verification and future read-only hardening
 
 ## Current state summary
 
 | Area | Status | Evidence |
 |---|---|---|
-| Implementation | VERIFIED | The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are merged into main. (2026-07-25; PR #4 merge history) |
-| PR #4 | VERIFIED | Merged into `main` at `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`. |
-| v1.4.0 tag | VERIFIED | Tag targets `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`. |
-| PR-head GitHub Actions | VERIFIED | Run `30145836293`; Python and frontend jobs succeeded. |
+| v1.4.0 implementation baseline | VERIFIED | The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline. (2026-07-25; v1.4.0 implementation and historical validation record) |
+| PR #5 control-plane change | VERIFIED | Merged into `main` at `ab01f79558facceaf9ff2e38a5a37fc3d329d481`. |
+| v1.4.0 tag | VERIFIED | Tag targets immutable baseline `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`. |
+| PR-head GitHub Actions | VERIFIED | Run `30151090974`; Python and frontend jobs succeeded. |
 | Post-merge `main` GitHub Actions | NOT VERIFIED | No repository-accessible evidence proves a separate post-merge main workflow run. |
 | Reader runtime | PARTIALLY VERIFIED | Passed and pending checks are separated below. |
 | Streamlit regression | NOT VERIFIED | No separate Streamlit regression result is recorded for the current release state. |
 | GitHub Release publication | NOT VERIFIED | No GitHub Release publication evidence is recorded; tag existence is not publication evidence. |
 | Clean-PC restore | NOT VERIFIED | Recurring operational procedure; no rehearsal is claimed. |
 
-## Source-control state
+## Immutable baseline and completed change
 
-- Verified `main` commit: `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`.
-- PR #4: [https://github.com/Lilshawn-LSY/BluePrintReboot/pull/4](https://github.com/Lilshawn-LSY/BluePrintReboot/pull/4); head `e3dffd7de5cad1540227eb14f0fdac1178dde665`, merge `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`.
+- Product baseline commit: `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`.
+- PR #5: [https://github.com/Lilshawn-LSY/BluePrintReboot/pull/5](https://github.com/Lilshawn-LSY/BluePrintReboot/pull/5); head `d9e763a52e78ae76838a24bdc961b83eb855f9e0`, merge `ab01f79558facceaf9ff2e38a5a37fc3d329d481`.
 - Tag `v1.4.0` is verified at `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`.
 - Tag existence is source-control evidence only. It does not imply GitHub Release publication.
+- Repository HEAD observation: **DOCUMENTED ONLY**; committed SHA is intentionally `null`, and `required_invariant` is `false`.
+- Generated evidence does not become stale when the commit containing it is merged.
 
 ## Automated validation
 
 | Check | Status | Scope | Counts | Evidence |
 |---|---|---|---|---|
-| Pr Head CI | VERIFIED | PR #4 head commit | 2 jobs passed, 0 jobs failed | The PR-head workflow completed successfully for both Python and frontend jobs. (2026-07-25; GitHub Actions run 30145836293) |
+| Pr Head CI | VERIFIED | PR #5 head commit | 2 jobs passed, 0 jobs failed | The PR #5 head workflow completed successfully for both Python and frontend jobs. (2026-07-25; GitHub Actions run 30151090974) |
 | Post Merge Main CI | NOT VERIFIED | post-merge main commit | Not recorded | No repository-accessible evidence proves a separate post-merge main workflow run. (2026-07-25; repository evidence audit) |
-| Local Smoke | VERIFIED | offline repository readiness smoke | Conflicting records: 97 passed, 1 warnings, 0 failed (v1.4.0 lifecycle-repair validation record); 98 passed, 0 warnings, 0 failed (v1.4.0 foundation validation record) | Smoke execution success is verified because both records report zero failures; their pass and warning counts conflict. (2026-07-25; conflicting committed v1.4.0 smoke records) |
-| Full pytest | VERIFIED | full Python test suite | 526 passed, 0 failed, 0 skipped | The full Python suite completed without failures or skips. (2026-07-25; v1.4.0 lifecycle-repair validation record) |
+| Local Smoke | VERIFIED | offline repository readiness smoke | 101 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 101 passed, 0 warnings, and 0 failed. (2026-07-26; v1.4.2 local validation) |
+| Full pytest | VERIFIED | full Python test suite | 533 passed, 0 failed, 0 skipped | The current full Python suite completed with 533 passed. (2026-07-26; v1.4.2 local validation) |
 | Focused Pdf Api | VERIFIED | managed PDF API contracts | 13 passed, 0 failed | The focused managed-PDF API contract suite passed. (2026-07-25; v1.4.0 focused API validation record) |
 | Focused Release Version | VERIFIED | release and version contracts before convergence | 24 passed, 0 failed | The pre-convergence focused release and version contract suite passed. (2026-07-25; v1.4.0 focused release validation record) |
-| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-07-25; v1.4.0 lifecycle-repair validation record) |
-| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-07-25; v1.4.0 lifecycle-repair validation record) |
-| Frontend Node Tests | VERIFIED | frontend Node test suite after lifecycle repair | 30 passed, 0 failed, 0 skipped, 0 cancelled | All frontend Node tests passed after the lifecycle repair. (2026-07-25; v1.4.0 lifecycle-repair validation record) |
+| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-07-26; v1.4.2 local validation) |
+| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-07-26; v1.4.2 local validation) |
+| Frontend Node Tests | VERIFIED | frontend Node test suite after lifecycle repair | 30 passed, 0 failed, 0 skipped, 0 cancelled | All 30 frontend Node tests passed. (2026-07-26; v1.4.2 local validation) |
 | Repository Hygiene | VERIFIED | tracked repository entries only | 226 entries inspected, 0 violations | Tracked-entry hygiene passed without reading user-data contents. (2026-07-25; v1.4.0 lifecycle-repair validation record) |
 
-The smoke result is VERIFIED because both committed records report zero failures. Its pass/warning counts remain explicitly unresolved; no value is selected silently.
+The current smoke result is 101 passed, 0 warnings, 0 failed. The two conflicting v1.4.0 records remain historical evidence and do not override this current result.
 
 ## Reader manual validation
 
@@ -77,8 +80,14 @@ Aggregate state: **PARTIALLY VERIFIED**.
 
 ## Unresolved evidence
 
-- Smoke pass/warning count: **NOT VERIFIED**. One successful record reports 97 passed and 1 optional warning; another reports 98 passed and no warnings.
 - Post-merge `main` workflow: **NOT VERIFIED**. No repository-accessible evidence proves a separate post-merge main workflow run.
 - API offline/restart recovery, large-PDF behavior, detailed Range inspection, and separate Streamlit regression remain **NOT VERIFIED**.
+
+## Historical conflicting smoke evidence
+
+- 97 passed, 1 warnings, 0 failed (2026-07-25; v1.4.0 lifecycle-repair validation record).
+- 98 passed, 0 warnings, 0 failed (2026-07-21; v1.4.0 foundation validation record).
+
+These records remain conflicting historical v1.4.0 evidence. They are not the latest smoke result.
 
 Historical release notes remain historical evidence. They are not inputs for current-state inference when the canonical manifest has a current field.

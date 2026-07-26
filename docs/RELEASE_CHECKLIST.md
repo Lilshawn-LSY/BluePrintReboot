@@ -2,6 +2,16 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.4.2-post-merge-evidence-and-reader-runtime-closure
+
+- [x] The immutable v1.4.0 product baseline commit and tag are independent from later control-plane changes.
+- [x] Completed PR #5 merge and PR-head CI evidence are structurally independent from mutable repository HEAD and unverified post-merge `main` CI.
+- [x] Repository HEAD is nullable, observational, and never required to equal the commit containing the manifest.
+- [x] Tag existence and GitHub Release publication remain independent evidence fields.
+- [x] Current smoke evidence is distinct from preserved historical conflicting v1.4.0 records.
+- [x] Generated status and tracker export have deterministic, stale-output, status-control, and privacy regressions.
+- [ ] Pending manual Reader, Streamlit, and clean-PC checks remain open until user-performed evidence is supplied.
+
 ## v1.4.0-pdfjs-reader-foundation
 
 - [x] Runtime, frontend package, lockfile, visible shell labels, README, tracker, and release-note version surfaces identify v1.4.0.

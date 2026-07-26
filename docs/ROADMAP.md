@@ -1,6 +1,6 @@
 # BluePrintReboot Roadmap
 
-Stable roadmap last edited: 2026-07-25
+Stable roadmap last edited: 2026-07-26
 
 Current release evidence is not duplicated here. See the generated [Current Release Status](CURRENT_RELEASE_STATUS.md), derived from the canonical machine-readable manifest.
 
@@ -16,6 +16,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.3.0 added the first safe read-only Reader/PDF vertical slice: a managed-file PDF endpoint, a streaming same-origin bridge, Paper Detail navigation, and a dedicated browser-native Reader route.
 - v1.3.1 converges source-control, hosted-CI, manual-regression, restore, and publication state; removes the accidental tracked console-output artifact; adds a tracked-entry hygiene gate; and makes the external tracker handoff deterministic.
 - v1.4.0 makes PDF.js the primary web Reader, bundles its worker locally, adds bounded navigation/zoom/error/fallback behavior, and instruments document/render lifecycle without changing the secure PDF API or Streamlit writes.
+- v1.4.2 makes release evidence non-self-invalidating by separating the immutable product baseline, completed control-plane change evidence, and non-invariant repository observations.
 
 ## Decision gates
 
@@ -30,6 +31,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | Post-merge `main` hosted CI | Closed | GitHub Actions run `29641792069` tested merge commit `9663c8cd052a2fa106382630afff7dcd9cfda421`; Python and frontend jobs succeeded. |
 | v1.3.1 repository hygiene and state contracts | Verified locally | Focused tests 40 passed; hygiene passed; smoke 94/0/0; full pytest 524 passed; deterministic export, `npm ci`, lint, production build, and 14 Node tests passed. |
 | v1.4.0 PDF.js Reader foundation | Canonical current state | Implementation, source control, automated/manual validation, tag, publication, and recurring operations are rendered from the [Current Release Status](CURRENT_RELEASE_STATUS.md). |
+| v1.4.2 release-state closure | Canonical current state | Schema 4.0 and all current verification boundaries are rendered from the [Current Release Status](CURRENT_RELEASE_STATUS.md), without a committed mutable-HEAD invariant. |
 
 ## Next product milestone
 
