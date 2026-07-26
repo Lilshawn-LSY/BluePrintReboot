@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Mapping, TypedDict
 
 from services.library_health import run_library_health_check
+from services.paper_metadata_mutation import normalized_web_metadata, paper_metadata_revision
 from services.reading_note_template import reading_note_header_values
 from storage.extracted_text_store import extracted_text_path
 from storage.index_store import read_index_snapshot
@@ -76,6 +77,8 @@ class PaperDetail(PaperListItem):
 
 class ReaderSnapshot(TypedDict):
     paper: PaperDetail
+    editable_metadata: dict[str, str]
+    metadata_revision: str
     pdf_state: str
     saved_note_available: bool
     saved_note_content: str
@@ -303,7 +306,8 @@ def build_reader_snapshot(
     record = dataframe[dataframe["paper_id"] == paper_id].iloc[0].to_dict()
     note_path = Path(notes_dir) / f"{paper_id}.md"
     note_read_warning = ""
-    if note_path.is_file():
+    note_exists = note_path.is_file()
+    if note_exists:
         try:
             saved_note = note_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -312,7 +316,8 @@ def build_reader_snapshot(
     else:
         saved_note = ""
     baseline = {
-        "sha256": hashlib.sha256(saved_note.encode("utf-8")).hexdigest() if saved_note else "",
+        "exists": note_exists,
+        "sha256": hashlib.sha256(saved_note.encode("utf-8")).hexdigest(),
         "size_bytes": len(saved_note.encode("utf-8")),
     }
     warnings = list(detail["recoverable_warnings"])
@@ -321,8 +326,10 @@ def build_reader_snapshot(
     unavailable_reason = "PDF file is missing." if detail["missing_pdf"] else ""
     return {
         "paper": detail,
+        "editable_metadata": normalized_web_metadata(record),
+        "metadata_revision": paper_metadata_revision(record),
         "pdf_state": "missing" if detail["missing_pdf"] else "available",
-        "saved_note_available": bool(saved_note),
+        "saved_note_available": note_exists and not bool(note_read_warning),
         "saved_note_content": saved_note,
         "canonical_note_header": reading_note_header_values(record),
         "saved_note_baseline": baseline,

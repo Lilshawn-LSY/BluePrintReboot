@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from pydantic import Field
+
+from ingest.doi import is_probable_doi, normalize_doi
 
 
 class StrictResponseModel(BaseModel):
@@ -133,14 +136,27 @@ class ReaderNoteHeader(StrictResponseModel):
 class ReaderNoteBaseline(StrictResponseModel):
     """Identity of the exact saved note bytes returned in the snapshot."""
 
-    sha256: str = Field(pattern=r"^(?:|[0-9a-f]{64})$")
+    exists: bool
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     size_bytes: int = Field(ge=0)
+
+
+class EditablePaperMetadata(StrictResponseModel):
+    title: str
+    authors: str
+    year: str
+    journal: str
+    doi: str
+    abstract: str
+    keywords: str
 
 
 class ReaderSnapshotResponse(StrictResponseModel):
     """One coherent, read-only Reader load from the domain snapshot builder."""
 
     paper: PaperDetail
+    editable_metadata: EditablePaperMetadata
+    metadata_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     pdf_state: ReaderPdfState
     saved_note_available: bool
     saved_note_content: str
@@ -148,6 +164,116 @@ class ReaderSnapshotResponse(StrictResponseModel):
     saved_note_baseline: ReaderNoteBaseline
     warnings: list[str]
     unavailable_reason: str
+
+
+class StrictRequestModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class MetadataChanges(StrictRequestModel):
+    title: str | None = None
+    authors: str | None = None
+    year: str | None = None
+    journal: str | None = None
+    doi: str | None = None
+    abstract: str | None = None
+    keywords: str | None = None
+
+    @field_validator(
+        "title",
+        "authors",
+        "year",
+        "journal",
+        "doi",
+        "abstract",
+        "keywords",
+        mode="before",
+    )
+    @classmethod
+    def validate_string_and_size(cls, value: Any, info) -> str:
+        if not isinstance(value, str):
+            raise ValueError("Metadata values must be strings.")
+        limits = {
+            "title": 1_000,
+            "authors": 5_000,
+            "year": 4,
+            "journal": 1_000,
+            "doi": 2_048,
+            "abstract": 100_000,
+            "keywords": 10_000,
+        }
+        if len(value) > limits[info.field_name]:
+            raise ValueError("Metadata value is too large.")
+        return value
+
+    @field_validator("year")
+    @classmethod
+    def validate_year(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = value.strip()
+        if normalized and (
+            len(normalized) != 4
+            or not normalized.isdigit()
+            or not 1000 <= int(normalized) <= 2100
+        ):
+            raise ValueError("Year must be empty or a reasonable four-digit year.")
+        return value
+
+    @field_validator("doi")
+    @classmethod
+    def validate_doi(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = normalize_doi(value)
+        if normalized and not is_probable_doi(normalized):
+            raise ValueError("DOI is not valid.")
+        return value
+
+    @model_validator(mode="after")
+    def validate_present_fields(self) -> "MetadataChanges":
+        if not self.model_fields_set:
+            raise ValueError("At least one metadata change is required.")
+        if any(getattr(self, field_name) is None for field_name in self.model_fields_set):
+            raise ValueError("Metadata values must be strings.")
+        return self
+
+
+class MetadataCommandRequest(StrictRequestModel):
+    changes: MetadataChanges
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class PersistedReadingNote(StrictResponseModel):
+    exists: bool
+    content: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    size_bytes: int = Field(ge=0)
+
+
+class MetadataCommandResponse(StrictResponseModel):
+    status: Literal["saved", "no_op"]
+    metadata: EditablePaperMetadata
+    metadata_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    changed_fields: list[
+        Literal["title", "authors", "year", "journal", "doi", "abstract", "keywords"]
+    ]
+    note_header_status: Literal["updated", "unchanged", "not_present", "not_required"]
+    canonical_note_header: ReaderNoteHeader
+    canonical_note_header_text: str
+    reading_note: PersistedReadingNote
+
+
+class ReadingNoteCommandRequest(StrictRequestModel):
+    content: str = Field(max_length=2_000_000)
+    expected_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ReadingNoteCommandResponse(StrictResponseModel):
+    status: Literal["created", "saved", "no_op"]
+    content: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    size_bytes: int = Field(ge=0)
 
 
 class PaginatedPaperList(StrictResponseModel):

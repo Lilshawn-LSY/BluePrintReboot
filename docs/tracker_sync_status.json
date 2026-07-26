@@ -1,7 +1,7 @@
 {
-  "schema_version": "4.0",
-  "product_version": "1.5.0",
-  "release_name": "v1.5.0-reader-snapshot-readonly-vertical-slice",
+  "schema_version": "5.0",
+  "product_version": "1.5.1",
+  "release_name": "v1.5.1-reader-write-vertical-slice",
   "as_of": "2026-07-26",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
       "counts": {
-        "passed": 102,
+        "passed": 105,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 local validation",
-        "summary": "The current offline repository readiness smoke completed with 102 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.1 local validation",
+        "summary": "The current offline repository readiness smoke completed with 105 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 564,
+        "passed": 582,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 local validation",
-        "summary": "The current full Python suite completed with 564 passed."
+        "reference": "v1.5.1 local validation",
+        "summary": "The current full Python suite completed with 582 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -149,6 +149,20 @@
         "summary": "The focused Reader Snapshot schema, adapter, route, failure-state, and privacy suite passed."
       }
     },
+    "focused_reader_commands": {
+      "status": "VERIFIED",
+      "scope": "Reader metadata and Reading Note command contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_reader_commands.py -q",
+      "counts": {
+        "passed": 17,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-26",
+        "reference": "v1.5.1 focused Reader command validation",
+        "summary": "The focused command schema, concurrency, normalization, canonicalization, failure-injection, rollback, and privacy suite passed."
+      }
+    },
     "focused_pdf_api": {
       "status": "VERIFIED",
       "scope": "managed PDF API contracts",
@@ -159,7 +173,7 @@
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 focused PDF regression",
+        "reference": "v1.5.1 focused PDF regression",
         "summary": "The focused managed-PDF API contract suite passed unchanged."
       }
     },
@@ -173,8 +187,36 @@
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 focused release validation",
+        "reference": "v1.5.1 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
+      }
+    },
+    "release_reconciliation": {
+      "status": "VERIFIED",
+      "scope": "canonical release-state reconciliation contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_release_state_reconciliation.py -q",
+      "counts": {
+        "passed": 26,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-26",
+        "reference": "v1.5.1 local release reconciliation",
+        "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
+      }
+    },
+    "tracker_export": {
+      "status": "VERIFIED",
+      "scope": "deterministic external-tracker export contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_tracker_export.py -q",
+      "counts": {
+        "passed": 8,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-26",
+        "reference": "v1.5.1 local tracker export validation",
+        "summary": "The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed."
       }
     },
     "frontend_lint": {
@@ -184,7 +226,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 local validation",
+        "reference": "v1.5.1 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -195,7 +237,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 local validation",
+        "reference": "v1.5.1 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -204,15 +246,31 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm test",
       "counts": {
-        "passed": 32,
+        "passed": 43,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 local validation",
-        "summary": "All 32 frontend Node tests passed."
+        "reference": "v1.5.1 local validation",
+        "summary": "All 43 frontend Node tests passed."
+      }
+    },
+    "frontend_reader_commands": {
+      "status": "VERIFIED",
+      "scope": "Reader editor state and exact command bridge allowlist",
+      "command": "node --test tests/api-bridge.test.mjs tests/reader-editor-state.test.mjs",
+      "counts": {
+        "passed": 23,
+        "failed": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "evidence": {
+        "date": "2026-07-26",
+        "reference": "v1.5.1 focused frontend Reader command validation",
+        "summary": "The exact bridge method/path allowlist and Reader editor state, draft preservation, header refresh, conflict, and transition suites passed."
       }
     },
     "repository_hygiene": {
@@ -220,12 +278,12 @@
       "scope": "tracked repository entries only",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 231,
+        "entries_inspected": 233,
         "violations": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.0 local smoke validation",
+        "reference": "v1.5.1 local smoke validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -349,8 +407,98 @@
       "status": "PARTIALLY VERIFIED",
       "evidence": {
         "date": "2026-07-26",
-        "reference": "Chrome 131 and Vinext dev browser validation",
-        "summary": "Native fallback and API/bridge PDF delivery were sound; the legacy PDF.js build rendered page one with one document load, one page render, and zero render cancellations, while persisted-note and restart scenarios remain open."
+        "reference": "Chrome 131 validation and user-performed local v1.5.1 Reader write runtime validation",
+        "summary": "Native fallback, API/bridge PDF delivery, first-page rendering, persisted-note/PDF pairing, absent-note clean state, paper transition, and API restart recovery have runtime evidence; unreadable-note and missing-PDF scenarios remain open."
+      }
+    },
+    "reader_write_runtime": {
+      "status": "PARTIALLY VERIFIED",
+      "evidence": {
+        "date": "2026-07-26",
+        "reference": "User-performed local v1.5.1 Reader write runtime validation",
+        "summary": "User-performed validation verified Reader pairing, explicit saves and reloads, canonical header refresh, conflict recovery, restart recovery, transition behavior, clean empty new-paper state, and cross-surface visibility; unreadable-note and missing-PDF scenarios remain NOT VERIFIED."
+      },
+      "checks": {
+        "persisted_note_correct_pdf": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "The Reader displayed the correct managed PDF, metadata, and persisted Reading Note together."
+          }
+        },
+        "absent_note": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "A newly locally synchronized paper with no persisted note opened with a clean empty editor and no stale state from another paper."
+          }
+        },
+        "unreadable_note_warning": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for the unreadable-note warning."
+          }
+        },
+        "missing_pdf": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for the missing-PDF state."
+          }
+        },
+        "different_paper_transition": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "Unsaved-change cancellation and deliberate paper transition followed their intended behavior; explicit browser refresh discarded the unsaved draft under the documented no-persistence policy."
+          }
+        },
+        "api_offline_restart_recovery": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "API restart followed by Reader reload recovery succeeded."
+          }
+        },
+        "metadata_save_reload": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "All seven supported metadata fields saved and survived reload; title, authors, year, and DOI changes refreshed the canonical Reading Note header without damaging its body."
+          }
+        },
+        "reading_note_save_reload": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "Reading Note edits saved, survived browser reload, and were visible in Streamlit."
+          }
+        },
+        "two_stale_browser_sessions": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "Stale Reading Note and metadata writes from a second browser tab returned conflicts, preserved the newer persisted results and stale drafts, and supported explicit reload, re-edit, and save."
+          }
+        },
+        "streamlit_web_visibility": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-26",
+            "reference": "User-performed local v1.5.1 Reader write runtime validation",
+            "summary": "Metadata and Reading Note changes were visible in all four Streamlit-to-web and web-to-Streamlit directions."
+          }
+        }
       }
     }
   },
@@ -390,17 +538,18 @@
       "automated_validation.pr_head_ci",
       "automated_validation.post_merge_main_ci",
       "manual_validation.reader_snapshot_runtime",
+      "manual_validation.reader_write_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
     ]
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "Reader Snapshot runtime validation and a separately approved write-command boundary",
+    "name": "Unreadable-note and missing-PDF runtime validation",
     "evidence": {
-      "date": "2026-07-25",
+      "date": "2026-07-26",
       "reference": "docs/ROADMAP.md",
-      "summary": "Validate the v1.5.0 read-only companion with approved local data, then design any future mutation behind a separately approved command boundary."
+      "summary": "Validate the remaining unreadable persisted-note warning and missing managed-PDF states with approved local data while keeping broader write features outside the current scope."
     }
   },
   "historical_evidence": {
@@ -481,9 +630,9 @@
       {
         "task_id": "R-005",
         "status": "VERIFIED",
-        "evidence": "Reader state-machine and note-state tests cover explicit save and draft preservation.",
-        "disposition": "Use this contract as the parity floor for future writes.",
-        "last_verified": "2026-07-25"
+        "evidence": "Reader state-machine tests cover explicit save, optimistic concurrency, and draft preservation.",
+        "disposition": "Use this contract as the parity floor for later bounded writes.",
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-006",
@@ -495,9 +644,9 @@
       {
         "task_id": "R-007",
         "status": "VERIFIED",
-        "evidence": "Read-only health and library endpoints have strict schemas and failure-state tests.",
-        "disposition": "Keep mutation behind a future command boundary.",
-        "last_verified": "2026-07-25"
+        "evidence": "Health and library read endpoints retain strict schemas and failure-state tests beside bounded Reader commands.",
+        "disposition": "Keep read models separate from command services.",
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-008",
@@ -516,9 +665,9 @@
       {
         "task_id": "R-010",
         "status": "VERIFIED",
-        "evidence": "The desktop shell, typed client, shared components, and read-only bridge are implemented and tested.",
-        "disposition": "Treat the shell as migration infrastructure, not write parity.",
-        "last_verified": "2026-07-25"
+        "evidence": "The desktop shell, typed client, shared components, and exact command bridge allowlist are implemented and tested.",
+        "disposition": "Keep bridge methods and paths explicitly bounded.",
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-011",
@@ -544,7 +693,7 @@
       {
         "task_id": "R-014",
         "status": "VERIFIED",
-        "evidence": "Schema 4.0 separates the immutable product baseline, completed PR evidence, and non-invariant repository observations.",
+        "evidence": "Schema 5.0 separates the immutable product baseline, local Reader command evidence, manual checks, and non-invariant repository observations.",
         "disposition": "Keep repository HEAD observational so committed evidence cannot invalidate itself.",
         "last_verified": "2026-07-26"
       },
@@ -580,15 +729,15 @@
         "task_id": "R-019",
         "status": "VERIFIED",
         "evidence": "The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline.",
-        "disposition": "Keep advanced PDF.js layers and write features deferred.",
+        "disposition": "Keep advanced PDF.js layers and broader write features deferred.",
         "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-020",
-        "status": "DOCUMENTED ONLY",
-        "evidence": "The API remains GET-only and no single write-command boundary is implemented.",
-        "disposition": "Design one tested command service before exposing web mutations.",
-        "last_verified": "2026-07-25"
+        "status": "VERIFIED",
+        "evidence": "Two separate Reader command services have strict schemas, stale-write protection, rollback tests, and exact bridge allowlisting.",
+        "disposition": "Preserve the two-command boundary and exclude combined save or autosave.",
+        "last_verified": "2026-07-26"
       },
       {
         "task_id": "R-021",

@@ -1,8 +1,33 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.5.0-reader-snapshot-readonly-vertical-slice`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+Required before and after Codex-assisted release work, including `v1.5.1-reader-write-vertical-slice`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
+
+## v1.5.1 Reader Write Vertical Slice
+
+- [x] Validate strict metadata/note request and response schemas, bounded values, exact field allowlist, malformed requests, and privacy-safe 422 responses.
+- [x] Validate deterministic metadata revision and explicit absent-note empty-byte SHA-256 semantics.
+- [x] Confirm stale metadata and note commands return 409 with byte-for-byte zero mutation.
+- [x] Confirm DOI normalization, metadata no-op, note no-op, note create/save, canonical header refresh, and exact user section-body preservation.
+- [x] Inject index failure and note failure; confirm controlled 503 and original persistent-state recovery.
+- [x] Confirm routes depend on a disposable command service and tests do not access real user data.
+- [x] Confirm the bridge allows only PATCH metadata and PUT reading-note, rejects encoded path tricks/wrong methods, forwards JSON, strips Range, streams PDF unchanged, and maps upstream failure safely.
+- [x] Confirm metadata/note draft states remain independent and conflicts/errors never fabricate success or erase drafts.
+- [x] Confirm dirty note header refresh retains its body and advances the saved hash, and paper transitions initialize isolated state.
+- [x] Regress Reader Snapshot GET, PDF API/Range, PDF.js lifecycle, Streamlit metadata/note saving, release reconciliation, tracker export, and repository hygiene.
+- [x] Persisted note, metadata, and the correct managed PDF are displayed together.
+- [x] A newly synchronized paper without a persisted note opens with a clean empty editor and no stale prior-paper state.
+- [ ] Unreadable-note warning.
+- [ ] Missing PDF.
+- [x] Unsaved-change cancellation and deliberate transition between different papers follow their intended behavior.
+- [x] API restart and reload recovery.
+- [x] All seven supported metadata fields save and survive reload.
+- [x] Title, authors, year, and DOI refresh the canonical note header without damaging the note body.
+- [x] Reading Note edits save, survive browser reload, and appear in Streamlit.
+- [x] Stale Reading Note and metadata writes from a second browser tab conflict without newer-result or draft loss and allow explicit reload, re-edit, and save.
+- [x] Metadata and Reading Note changes are visible in all four Streamlit/web directions.
+- [x] Explicit browser refresh discards unsaved web drafts under the accepted no-autosave and no-browser-local-draft-persistence policy.
 
 ## v1.5.0 Read-only Reader Snapshot Vertical Slice
 

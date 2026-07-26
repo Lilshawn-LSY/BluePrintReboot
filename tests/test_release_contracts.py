@@ -28,12 +28,12 @@ def test_version_contract_is_consistent() -> None:
     readme = read_text("README.md")
     manifest = read_manifest()
 
-    assert APP_VERSION == "1.5.0"
+    assert APP_VERSION == "1.5.1"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.5.0-reader-snapshot-readonly-vertical-slice"
+    assert manifest["release_name"] == "v1.5.1-reader-write-vertical-slice"
     assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
     assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
@@ -75,11 +75,11 @@ def test_current_frontend_launch_instructions_use_one_canonical_url() -> None:
     assert "http://localhost:3000" not in launcher
 
 
-def test_schema_four_manifest_is_the_current_release_authority() -> None:
+def test_schema_five_manifest_is_the_current_release_authority() -> None:
     manifest = read_manifest()
 
     validate_manifest(manifest)
-    assert manifest["schema_version"] == "4.0"
+    assert manifest["schema_version"] == "5.0"
     assert manifest["controlled_statuses"] == [
         "VERIFIED",
         "PARTIALLY VERIFIED",
@@ -98,7 +98,18 @@ def test_schema_four_manifest_is_the_current_release_authority() -> None:
     assert manifest["manual_validation"]["reader_runtime"]["status"] == "VERIFIED"
     assert manifest["manual_validation"]["streamlit_regression"]["status"] == "VERIFIED"
     assert manifest["manual_validation"]["reader_snapshot_runtime"]["status"] == "PARTIALLY VERIFIED"
+    assert manifest["manual_validation"]["reader_write_runtime"]["status"] == "PARTIALLY VERIFIED"
+    assert {
+        check_id
+        for check_id, item in manifest["manual_validation"]["reader_write_runtime"]["checks"].items()
+        if item["status"] == "NOT VERIFIED"
+    } == {"unreadable_note_warning", "missing_pdf"}
+    assert {
+        item["status"]
+        for item in manifest["manual_validation"]["reader_write_runtime"]["checks"].values()
+    } == {"VERIFIED", "NOT VERIFIED"}
     assert "manual_validation.reader_snapshot_runtime" in manifest["unresolved_evidence"]["items"]
+    assert "manual_validation.reader_write_runtime" in manifest["unresolved_evidence"]["items"]
     assert manifest["recurring_operational_procedures"]["clean_pc_restore"]["status"] == "NOT VERIFIED"
     assert manifest["publication_state"]["github_release"]["status"] == "NOT VERIFIED"
 

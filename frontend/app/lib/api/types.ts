@@ -71,12 +71,25 @@ export interface ReaderNoteHeader {
 }
 
 export interface ReaderNoteBaseline {
+  exists: boolean;
   sha256: string;
   size_bytes: number;
 }
 
+export interface EditablePaperMetadata {
+  title: string;
+  authors: string;
+  year: string;
+  journal: string;
+  doi: string;
+  abstract: string;
+  keywords: string;
+}
+
 export interface ReaderSnapshot {
   paper: PaperDetail;
+  editable_metadata: EditablePaperMetadata;
+  metadata_revision: string;
   pdf_state: ReaderPdfState;
   saved_note_available: boolean;
   saved_note_content: string;
@@ -84,6 +97,31 @@ export interface ReaderSnapshot {
   saved_note_baseline: ReaderNoteBaseline;
   warnings: string[];
   unavailable_reason: string;
+}
+
+export interface PersistedReadingNote {
+  exists: boolean;
+  content: string;
+  sha256: string;
+  size_bytes: number;
+}
+
+export interface MetadataCommandResponse {
+  status: "saved" | "no_op";
+  metadata: EditablePaperMetadata;
+  metadata_revision: string;
+  changed_fields: Array<keyof EditablePaperMetadata>;
+  note_header_status: "updated" | "unchanged" | "not_present" | "not_required";
+  canonical_note_header: ReaderNoteHeader;
+  canonical_note_header_text: string;
+  reading_note: PersistedReadingNote;
+}
+
+export interface ReadingNoteCommandResponse {
+  status: "created" | "saved" | "no_op";
+  content: string;
+  sha256: string;
+  size_bytes: number;
 }
 
 export interface PaginatedPaperList {

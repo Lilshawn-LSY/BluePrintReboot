@@ -19,7 +19,12 @@ export function useApiResource<T>(key: string, loader: () => Promise<T>): Resour
       .then((data) => { if (active) setState({ status: "success", data, resourceKey: key }); })
       .catch((error: unknown) => {
         if (!active) return;
-        if (error instanceof ApiClientError) setState({ status: error.kind, message: error.message, resourceKey: key });
+        if (error instanceof ApiClientError) {
+          const status = error.kind === "unavailable" || error.kind === "not-found"
+            ? error.kind
+            : "error";
+          setState({ status, message: error.message, resourceKey: key });
+        }
         else setState({ status: "error", message: "An unexpected frontend error occurred.", resourceKey: key });
       });
     return () => { active = false; };

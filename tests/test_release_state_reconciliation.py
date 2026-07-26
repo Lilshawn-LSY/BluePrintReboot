@@ -165,6 +165,39 @@ def test_all_verified_reader_children_reject_partially_verified_aggregate() -> N
         validate_manifest(manifest)
 
 
+def test_reader_write_manual_checks_preserve_the_two_unverified_scenarios() -> None:
+    manifest = read_manifest()
+    runtime = manifest["manual_validation"]["reader_write_runtime"]
+
+    assert runtime["status"] == "PARTIALLY VERIFIED"
+    assert len(runtime["checks"]) == 10
+    assert {
+        check_id
+        for check_id, item in runtime["checks"].items()
+        if item["status"] == "NOT VERIFIED"
+    } == {"unreadable_note_warning", "missing_pdf"}
+    assert {
+        check_id
+        for check_id, item in runtime["checks"].items()
+        if item["status"] == "VERIFIED"
+    } == {
+        "persisted_note_correct_pdf",
+        "absent_note",
+        "different_paper_transition",
+        "api_offline_restart_recovery",
+        "metadata_save_reload",
+        "reading_note_save_reload",
+        "two_stale_browser_sessions",
+        "streamlit_web_visibility",
+    }
+    validate_manifest(manifest)
+
+    fabricated = copy.deepcopy(manifest)
+    fabricated["manual_validation"]["reader_write_runtime"]["status"] = "VERIFIED"
+    with pytest.raises(ReleaseStateError, match="aggregate status must derive"):
+        validate_manifest(fabricated)
+
+
 @pytest.mark.parametrize(
     "summary",
     [

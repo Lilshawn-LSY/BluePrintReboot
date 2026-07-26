@@ -48,7 +48,7 @@ test("all required routes render inside the shared shell", async () => {
   }
 });
 
-test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer", async () => {
+test("uses a bounded PDF.js Reader with independent metadata and Reading Note commands", async () => {
   const [detail, readerView, reader, adapter, controller, client, shell, packageJson, packageLock, workerSource, workerDeclaration] = await Promise.all([
     readFile(new URL("../app/views/PaperDetailView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
@@ -66,16 +66,20 @@ test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer",
   assert.match(detail, /Open Reader/);
   assert.match(detail, /encodeURIComponent\(resource\.data\.paper_id\)/);
   assert.match(detail, /Reader unavailable/);
-  assert.match(readerView, /title=\{resource\.data\.paper\.title\}/);
-  assert.match(readerView, /Read-only context/);
-  assert.match(readerView, /Saved Reading Note/);
+  assert.match(readerView, /title=\{editor\.metadata\.draft\.title \|\| snapshot\.paper\.title\}/);
+  assert.match(readerView, /Paper metadata/);
+  assert.match(readerView, /Complete Reading Note/);
+  assert.match(readerView, /Save Metadata/);
+  assert.match(readerView, /Save Reading Note/);
+  assert.match(readerView, /Reload current metadata/);
+  assert.match(readerView, /Reload current Reading Note/);
   assert.match(readerView, /Back to Paper Detail/);
   assert.match(readerView, /Loading Reader snapshot/);
   assert.match(readerView, /Managed PDF missing/);
   assert.match(readerView, /<PdfJsReader paperId=\{snapshot\.paper\.paper_id\}/);
-  assert.match(readerView, /snapshot\.saved_note_content/);
+  assert.match(readerView, /current\.saved_note_content/);
   assert.match(readerView, /saved_note_unavailable/);
-  assert.match(readerView, /pre className="reader-note__content"/);
+  assert.match(readerView, /reader-note__textarea/);
   assert.doesNotMatch(readerView, /<object\b/);
   assert.match(reader, /<canvas\b/);
   assert.match(reader, /Previous PDF page/);
@@ -94,8 +98,9 @@ test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer",
   assert.match(reader, /NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1"/);
   assert.match(reader, /lifecycleGenerationRef/);
   assert.match(reader, /observeLifecyclePromise\(controller\.destroy\(\), "cleanup"\)/);
-  assert.match(readerView, /write action remain in Streamlit|write actions remain in Streamlit/);
-  assert.doesNotMatch(readerView, /<textarea|contentEditable|dangerouslySetInnerHTML|autosave|annotation|highlight/i);
+  assert.match(readerView, /apiClient\.saveReaderMetadata/);
+  assert.match(readerView, /apiClient\.saveReadingNote/);
+  assert.doesNotMatch(readerView, /contentEditable|dangerouslySetInnerHTML|autosave|annotation|highlight/i);
   assert.match(client, /getReaderSnapshot/);
   assert.match(client, /\/papers\/\$\{encodeURIComponent\(paperId\)\}\/reader/);
   assert.match(client, /\/papers\/\$\{encodeURIComponent\(paperId\)\}\/pdf/);
@@ -116,8 +121,8 @@ test("uses a bounded PDF.js Reader as the primary read-only same-origin viewer",
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /return "Reader"/);
-  assert.match(shell, /v1\.5\.0 · read-only shell/);
-  assert.doesNotMatch(shell, /v1\.4\.0 · read-only shell/);
+  assert.match(shell, /v1\.5\.1/);
+  assert.doesNotMatch(shell, /v1\.5\.0/);
 });
 
 test("production build contains the repository-local PDF.js worker asset", async () => {
@@ -136,12 +141,13 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
   assert.doesNotMatch(readerView, /apiClient\.getPaper\(paperId\)/);
   assert.match(resourceHook, /if \(state\.resourceKey !== key\) return \{ status: "loading" \}/);
   assert.match(readerView, /snapshot\.pdf_state === "missing"/);
-  assert.match(readerView, /snapshot\.saved_note_available/);
-  assert.match(readerView, /No persisted Reading Note exists/);
+  assert.match(readerView, /saved_note_baseline\.exists/);
+  assert.match(readerView, /No persisted note exists/);
   assert.match(readerView, /persisted note could not be read/);
   assert.match(readerView, /Retry local API/);
-  assert.match(readerView, /<ReaderPdf snapshot=\{resource\.data\}/);
-  assert.match(readerView, /<SavedNoteCompanion snapshot=\{resource\.data\}/);
+  assert.match(readerView, /<ReaderPdf snapshot=\{snapshot\}/);
+  assert.match(readerView, /<ReaderWorkspace key=\{resource\.data\.paper\.paper_id\}/);
+  assert.match(readerView, /Discard unsaved Reader changes/);
 });
 
 test("keeps tokens, API access, and page views separated", async () => {

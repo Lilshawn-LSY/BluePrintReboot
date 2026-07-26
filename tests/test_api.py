@@ -138,17 +138,30 @@ def test_provider_failure_is_generic_and_private(endpoint: str, builder_name: st
         assert private_value not in serialized
 
 
-def test_openapi_has_only_intended_application_paths_and_read_methods() -> None:
+def test_openapi_has_only_intended_application_paths_and_methods() -> None:
     application = create_app()
     paths = application.openapi()["paths"]
 
-    assert set(paths) == {"/health", "/library/status", "/papers", "/papers/{paper_id}", "/papers/{paper_id}/reader", "/papers/{paper_id}/pdf"}
-    assert all(set(operations) == {"get"} for operations in paths.values())
-    unsafe_methods = {"POST", "PUT", "PATCH", "DELETE"}
-    assert not any(
-        unsafe_methods & (getattr(route, "methods", None) or set())
-        for route in application.routes
-    )
+    assert set(paths) == {
+        "/health",
+        "/library/status",
+        "/papers",
+        "/papers/{paper_id}",
+        "/papers/{paper_id}/reader",
+        "/papers/{paper_id}/pdf",
+        "/papers/{paper_id}/metadata",
+        "/papers/{paper_id}/reading-note",
+    }
+    assert {path: set(operations) for path, operations in paths.items()} == {
+        "/health": {"get"},
+        "/library/status": {"get"},
+        "/papers": {"get"},
+        "/papers/{paper_id}": {"get"},
+        "/papers/{paper_id}/reader": {"get"},
+        "/papers/{paper_id}/pdf": {"get"},
+        "/papers/{paper_id}/metadata": {"patch"},
+        "/papers/{paper_id}/reading-note": {"put"},
+    }
 
 
 def test_providers_delegate_to_existing_read_model_builders(monkeypatch) -> None:

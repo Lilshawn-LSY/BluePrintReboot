@@ -166,14 +166,29 @@ def test_unavailable_file_returns_generic_503_without_path() -> None:
     assert str(private_path) not in response.text
 
 
-def test_pdf_route_preserves_existing_get_only_api_surface() -> None:
+def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> None:
     application = create_app()
     paths = application.openapi()["paths"]
 
     existing = {"/health", "/library/status", "/papers", "/papers/{paper_id}"}
     assert existing <= set(paths)
-    assert set(paths) == {*existing, "/papers/{paper_id}/pdf", "/papers/{paper_id}/reader"}
-    assert all(set(operations) == {"get"} for operations in paths.values())
+    assert set(paths) == {
+        *existing,
+        "/papers/{paper_id}/pdf",
+        "/papers/{paper_id}/reader",
+        "/papers/{paper_id}/metadata",
+        "/papers/{paper_id}/reading-note",
+    }
+    assert set(paths["/papers/{paper_id}/metadata"]) == {"patch"}
+    assert set(paths["/papers/{paper_id}/reading-note"]) == {"put"}
+    assert all(
+        set(operations) == {"get"}
+        for path, operations in paths.items()
+        if path not in {
+            "/papers/{paper_id}/metadata",
+            "/papers/{paper_id}/reading-note",
+        }
+    )
     assert not any(
         {"POST", "PUT", "PATCH", "DELETE"} & (getattr(route, "methods", None) or set())
         for route in application.routes

@@ -11,6 +11,7 @@ from api import dependencies
 from api.adapters import PaperContractError, adapt_reader_snapshot
 from api.main import UNAVAILABLE_DETAIL, create_app
 from api.schemas import ReaderSnapshotResponse
+from services.paper_metadata_mutation import paper_metadata_revision
 
 
 def reader_snapshot(
@@ -21,6 +22,15 @@ def reader_snapshot(
     warnings: list[str] | None = None,
 ) -> dict[str, object]:
     note_bytes = note.encode("utf-8")
+    editable_metadata = {
+        "title": "Reader Snapshot Paper",
+        "authors": "Example Author",
+        "year": "2026",
+        "journal": "Journal of Read-only Contracts",
+        "doi": "",
+        "abstract": "Stored abstract.",
+        "keywords": "snapshot",
+    }
     return {
         "paper": {
             "paper_id": paper_id,
@@ -49,6 +59,8 @@ def reader_snapshot(
             "recoverable_warnings": ["missing_pdf"] if missing_pdf else [],
             "filepath": "private/storage/value.pdf",
         },
+        "editable_metadata": editable_metadata,
+        "metadata_revision": paper_metadata_revision(editable_metadata),
         "pdf_state": "missing" if missing_pdf else "available",
         "saved_note_available": bool(note),
         "saved_note_content": note,
@@ -64,7 +76,8 @@ def reader_snapshot(
             "internal_note_path": "private/storage/value.md",
         },
         "saved_note_baseline": {
-            "sha256": hashlib.sha256(note_bytes).hexdigest() if note else "",
+            "exists": bool(note),
+            "sha256": hashlib.sha256(note_bytes).hexdigest(),
             "size_bytes": len(note_bytes),
             "internal_revision": "not-public",
         },
@@ -102,7 +115,7 @@ def test_reader_snapshot_returns_exact_saved_note_and_allowlisted_nested_fields(
         "first_author",
         "tags",
     }
-    assert set(body["saved_note_baseline"]) == {"sha256", "size_bytes"}
+    assert set(body["saved_note_baseline"]) == {"exists", "sha256", "size_bytes"}
     assert "filepath" not in body["paper"]
     assert "private" not in response.text
 
@@ -113,7 +126,11 @@ def test_reader_snapshot_missing_note_is_a_successful_empty_read_state() -> None
     assert response.status_code == 200
     assert response.json()["saved_note_available"] is False
     assert response.json()["saved_note_content"] == ""
-    assert response.json()["saved_note_baseline"] == {"sha256": "", "size_bytes": 0}
+    assert response.json()["saved_note_baseline"] == {
+        "exists": False,
+        "sha256": hashlib.sha256(b"").hexdigest(),
+        "size_bytes": 0,
+    }
 
 
 def test_reader_snapshot_missing_pdf_and_present_note_are_independent_success_states() -> None:
