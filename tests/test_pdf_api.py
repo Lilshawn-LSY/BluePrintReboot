@@ -172,7 +172,7 @@ def test_pdf_route_preserves_existing_get_only_api_surface() -> None:
 
     existing = {"/health", "/library/status", "/papers", "/papers/{paper_id}"}
     assert existing <= set(paths)
-    assert set(paths) == {*existing, "/papers/{paper_id}/pdf"}
+    assert set(paths) == {*existing, "/papers/{paper_id}/pdf", "/papers/{paper_id}/reader"}
     assert all(set(operations) == {"get"} for operations in paths.values())
     assert not any(
         {"POST", "PUT", "PATCH", "DELETE"} & (getattr(route, "methods", None) or set())

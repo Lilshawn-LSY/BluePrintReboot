@@ -57,6 +57,35 @@ export interface PaperDetail extends PaperListItem {
   recoverable_warnings: string[];
 }
 
+export type ReaderPdfState = "available" | "missing";
+
+export interface ReaderNoteHeader {
+  template_version: string;
+  paper_id: string;
+  title: string;
+  doi: string;
+  arxiv_id: string;
+  year: string;
+  first_author: string;
+  tags: string;
+}
+
+export interface ReaderNoteBaseline {
+  sha256: string;
+  size_bytes: number;
+}
+
+export interface ReaderSnapshot {
+  paper: PaperDetail;
+  pdf_state: ReaderPdfState;
+  saved_note_available: boolean;
+  saved_note_content: string;
+  canonical_note_header: ReaderNoteHeader;
+  saved_note_baseline: ReaderNoteBaseline;
+  warnings: string[];
+  unavailable_reason: string;
+}
+
 export interface PaginatedPaperList {
   items: PaperListItem[];
   total: number;

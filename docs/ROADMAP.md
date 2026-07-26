@@ -18,6 +18,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.4.0 made PDF.js the primary web Reader, bundled its worker locally, added bounded navigation/zoom/error/fallback behavior, and instrumented document/render lifecycle without changing the secure PDF API or Streamlit writes.
 - v1.4.2 made release evidence non-self-invalidating by separating the immutable product baseline, completed control-plane change evidence, and non-invariant repository observations.
 - v1.4.3 made Reader aggregate state derive from its child evidence, permitted truthful Streamlit regression completion, rejected status/evidence contradictions, and removed mutable PR, workflow, HEAD, and exact-count assumptions from validator invariants without changing product behavior.
+- v1.5.0 connected the existing `ReaderSnapshot` builder to a strict GET contract and a single-request web Reader that shows the managed PDF with selectable persisted-note context while preserving all write and PDF lifecycle boundaries.
 
 ## Decision gates
 
@@ -32,31 +33,29 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | v1.4.0 PDF.js Reader foundation | Closed | PDF.js rendering, lifecycle cleanup, native fallback exclusivity, Range delivery, large-PDF behavior, API restart recovery, and real-PDF manual checks are complete. |
 | v1.4.2 release-state closure | Closed | Schema 4.0 separates immutable release baseline, completed change evidence, mutable observations, publication, and recurring operational procedures. |
 | v1.4.3 release-state truth repair | Closed | PR #7 merged into `main` at `b9a7fa9f550563b266a2b51a75f2472d21388dac`; PR-head GitHub Actions run `30192175145` completed successfully after local smoke 101/0/0, pytest 543, frontend lint/build, and 30 Node tests passed. |
+| v1.5.0 Reader Snapshot implementation | Closed locally | Strict schema/adapter/route, exact bridge allowlist, typed client, plain-text companion, and synthetic failure-state regressions are implemented; hosted and user-performed runtime evidence remain separate. |
 
-## Next product milestone: v1.5.0 read-only Reader Snapshot vertical slice
+## Current product milestone: v1.5.0 read-only Reader Snapshot vertical slice
 
-The next version should convert the existing `ReaderSnapshot` domain model into a complete read-only web workflow rather than adding another release-control-only patch.
+The v1.5.0 runtime target converts the existing `ReaderSnapshot` domain model into a complete read-only web workflow. It does not relabel the immutable v1.4.0 released baseline and does not claim a v1.5.0 tag, GitHub Release, pull request, merge, or hosted workflow result.
 
-### Planned product slice
+### Implemented product slice
 
-- Add strict `GET /papers/{paper_id}/reader` adaptation for the existing `build_reader_snapshot` domain builder.
-- Expose only persisted Reading Note content, canonical note-header values, PDF state, note baseline hash/size, safe warnings, and an unavailable reason.
-- Extend the centralized TypeScript client and same-origin bridge allowlist for exactly this GET route.
-- Update the web Reader to load one Reader Snapshot and present the managed PDF with persisted note context in a read-only companion panel.
-- Distinguish unknown paper, missing PDF, absent note, unreadable note, degraded project-link context, API offline, retry, and paper-transition states without fabricating content.
-- Preserve current PDF.js cancellation, Range delivery, managed-root containment, stable `paper_id`, local-only operation, and native fallback behavior.
+- Strict `GET /papers/{paper_id}/reader` adaptation calls only the existing `build_reader_snapshot` domain builder.
+- The response allowlists persisted Reading Note content, canonical note-header values, PDF state, note baseline hash/size, safe warnings, and an unavailable reason.
+- The centralized TypeScript client and same-origin bridge admit exactly this GET route; JSON requests never inherit the PDF Range policy.
+- The web Reader loads one snapshot and presents the managed PDF with selectable persisted-note text in an independent companion panel.
+- Unknown paper, missing PDF, absent note, unreadable note, API offline, retry, and paper-transition states are explicit without fabricated content.
+- PDF.js cancellation, Range delivery, managed-root containment, stable `paper_id`, local-only operation, and native fallback behavior are unchanged.
 
-### Exit gates
+### Remaining evidence gate
 
-- No note-content or private absolute path leaks beyond the explicitly approved local read-only response.
-- No write endpoint, editor, autosave, mutation coordinator, or user-data migration.
-- Reader Snapshot domain, API schema, adapter, dependency, bridge, client, rendered-state, and failure-state tests pass.
-- Existing PDF API, PDF.js lifecycle, Streamlit write workflows, smoke, full pytest, frontend lint/build, and Node tests remain green.
-- Manual validation confirms PDF and saved-note context stay synchronized across paper changes, API restart, missing-note, and missing-PDF scenarios.
+- User-performed, non-mutating validation of PDF plus saved-note context across paper changes, API restart, missing-note, unreadable-note, and missing-PDF scenarios remains NOT VERIFIED.
+- A future write-command boundary requires separate approval and design; v1.5.0 adds no editor, autosave, mutation coordinator, or storage migration.
 
-### Why this milestone is next
+### Why this slice
 
-`ReaderSnapshot` and `build_reader_snapshot` already exist and are tested at the domain layer, but the FastAPI router currently exposes paper detail and PDF bytes only. The web Reader therefore renders PDF plus limited `PaperDetail` metadata while persisted Reading Note context remains inaccessible in the web surface. This slice closes that specific architecture gap with bounded read-only risk and creates visible user value before any write-command boundary is considered.
+`ReaderSnapshot` and `build_reader_snapshot` already supplied a bounded domain aggregate. Exposing that aggregate through one strict adapter closes the web note-context gap without adding a second frontend read, duplicating storage logic, or widening the mutation surface.
 
 ## Continuing constraints
 

@@ -1,7 +1,7 @@
 {
   "schema_version": "4.0",
-  "product_version": "1.4.0",
-  "release_name": "v1.4.0-pdfjs-reader-foundation",
+  "product_version": "1.5.0",
+  "release_name": "v1.5.0-reader-snapshot-readonly-vertical-slice",
   "as_of": "2026-07-26",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
       "counts": {
-        "passed": 101,
+        "passed": 102,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.4.2 local validation",
-        "summary": "The current offline repository readiness smoke completed with 101 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.0 local validation",
+        "summary": "The current offline repository readiness smoke completed with 102 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,42 +125,56 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 543,
+        "passed": 564,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.4.2 local validation",
-        "summary": "The current full Python suite completed with 543 passed."
+        "reference": "v1.5.0 local validation",
+        "summary": "The current full Python suite completed with 564 passed."
+      }
+    },
+    "focused_reader_snapshot": {
+      "status": "VERIFIED",
+      "scope": "read-only Reader Snapshot API contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_reader_snapshot_api.py -q",
+      "counts": {
+        "passed": 21,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-26",
+        "reference": "v1.5.0 focused Reader Snapshot validation",
+        "summary": "The focused Reader Snapshot schema, adapter, route, failure-state, and privacy suite passed."
       }
     },
     "focused_pdf_api": {
       "status": "VERIFIED",
       "scope": "managed PDF API contracts",
-      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_api_pdf.py -q",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_pdf_api.py -q",
       "counts": {
         "passed": 13,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "v1.4.0 focused API validation record",
-        "summary": "The focused managed-PDF API contract suite passed."
+        "date": "2026-07-26",
+        "reference": "v1.5.0 focused PDF regression",
+        "summary": "The focused managed-PDF API contract suite passed unchanged."
       }
     },
     "focused_release_version": {
       "status": "VERIFIED",
-      "scope": "release and version contracts before convergence",
+      "scope": "release and version contracts",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_release_contracts.py -q",
       "counts": {
-        "passed": 24,
+        "passed": 9,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "v1.4.0 focused release validation record",
-        "summary": "The pre-convergence focused release and version contract suite passed."
+        "date": "2026-07-26",
+        "reference": "v1.5.0 focused release validation",
+        "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
       }
     },
     "frontend_lint": {
@@ -170,7 +184,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.4.2 local validation",
+        "reference": "v1.5.0 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -181,24 +195,24 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.4.2 local validation",
+        "reference": "v1.5.0 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
     "frontend_node_tests": {
       "status": "VERIFIED",
-      "scope": "frontend Node test suite after lifecycle repair",
+      "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm test",
       "counts": {
-        "passed": 30,
+        "passed": 32,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.4.2 local validation",
-        "summary": "All 30 frontend Node tests passed."
+        "reference": "v1.5.0 local validation",
+        "summary": "All 32 frontend Node tests passed."
       }
     },
     "repository_hygiene": {
@@ -206,12 +220,12 @@
       "scope": "tracked repository entries only",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 226,
+        "entries_inspected": 231,
         "violations": 0
       },
       "evidence": {
-        "date": "2026-07-25",
-        "reference": "v1.4.0 lifecycle-repair validation record",
+        "date": "2026-07-26",
+        "reference": "v1.5.0 local smoke validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -330,6 +344,14 @@
         "reference": "PR #6 separate Streamlit regression record",
         "summary": "A separate non-mutating Streamlit regression completed across the established reading and library surfaces."
       }
+    },
+    "reader_snapshot_runtime": {
+      "status": "PARTIALLY VERIFIED",
+      "evidence": {
+        "date": "2026-07-26",
+        "reference": "Chrome 131 and Vinext dev browser validation",
+        "summary": "Native fallback and API/bridge PDF delivery were sound; the legacy PDF.js build rendered page one with one document load, one page render, and zero render cancellations, while persisted-note and restart scenarios remain open."
+      }
     }
   },
   "publication_state": {
@@ -367,17 +389,18 @@
     "items": [
       "automated_validation.pr_head_ci",
       "automated_validation.post_merge_main_ci",
+      "manual_validation.reader_snapshot_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
     ]
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "Release-state truth preservation and future read-only hardening",
+    "name": "Reader Snapshot runtime validation and a separately approved write-command boundary",
     "evidence": {
       "date": "2026-07-25",
       "reference": "docs/ROADMAP.md",
-      "summary": "Preserve completed runtime evidence and address only separately measured Reader gaps in future work."
+      "summary": "Validate the v1.5.0 read-only companion with approved local data, then design any future mutation behind a separately approved command boundary."
     }
   },
   "historical_evidence": {

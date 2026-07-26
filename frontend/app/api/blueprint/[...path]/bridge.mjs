@@ -13,10 +13,14 @@ export function isBlueprintPdfPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "pdf";
 }
 
+export function isBlueprintReaderPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "reader";
+}
+
 export function isAllowedBlueprintPath(parts) {
   if (!Array.isArray(parts) || !parts.every((part) => typeof part === "string" && part.length > 0)) return false;
   const path = parts.join("/");
-  return path === "health" || path === "library/status" || path === "papers" || (parts.length === 2 && parts[0] === "papers") || isBlueprintPdfPath(parts);
+  return path === "health" || path === "library/status" || path === "papers" || (parts.length === 2 && parts[0] === "papers") || isBlueprintPdfPath(parts) || isBlueprintReaderPath(parts);
 }
 
 export function buildBlueprintTarget(requestUrl, parts, apiUrl) {

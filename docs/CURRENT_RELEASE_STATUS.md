@@ -7,22 +7,23 @@ Rendered as of 2026-07-26.
 
 ## Release identity
 
-- Product version: `1.4.0`
-- Release name: `v1.4.0-pdfjs-reader-foundation`
-- Implementation state: **VERIFIED**
-- Immutable baseline commit: `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`
-- Next milestone: **DOCUMENTED ONLY** — Release-state truth preservation and future read-only hardening
+- Runtime target version: `1.5.0`
+- Runtime target name: `v1.5.0-reader-snapshot-readonly-vertical-slice`
+- Immutable released baseline: `v1.4.0-pdfjs-reader-foundation` at `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`
+- Next milestone: **DOCUMENTED ONLY** — Reader Snapshot runtime validation and a separately approved write-command boundary
 
 ## Current state summary
 
 | Area | Status | Evidence |
 |---|---|---|
+| v1.5.0 local runtime target | VERIFIED | The current offline repository readiness smoke completed with 102 passed, 0 warnings, and 0 failed. (2026-07-26; v1.5.0 local validation) |
 | v1.4.0 implementation baseline | VERIFIED | The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline. (2026-07-25; v1.4.0 implementation and historical validation record) |
 | PR #6 control-plane change | VERIFIED | Merged into `main` at `7b6a17369d3987dc1c8c6527a268a1df17feedcb`. |
 | v1.4.0 tag | VERIFIED | Tag targets immutable baseline `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`. |
 | PR-head GitHub Actions | PARTIALLY VERIFIED | Run `30190817882`; Python `failure`, frontend `success`. |
 | Post-merge `main` GitHub Actions | NOT VERIFIED | No repository-accessible evidence proves a separate post-merge main workflow run. |
 | Reader runtime | VERIFIED | All listed real-PDF Reader runtime checks have completed manual evidence. |
+| v1.5.0 Reader Snapshot runtime | PARTIALLY VERIFIED | Native fallback and API/bridge PDF delivery were sound; the legacy PDF.js build rendered page one with one document load, one page render, and zero render cancellations, while persisted-note and restart scenarios remain open. |
 | Streamlit regression | VERIFIED | A separate non-mutating Streamlit regression completed across the established reading and library surfaces. |
 | GitHub Release publication | NOT VERIFIED | No GitHub Release publication evidence is recorded; tag existence is not publication evidence. |
 | Clean-PC restore | NOT VERIFIED | Recurring operational procedure; no rehearsal is claimed. |
@@ -42,16 +43,17 @@ Rendered as of 2026-07-26.
 |---|---|---|---|---|
 | Pr Head CI | PARTIALLY VERIFIED | PR #6 head commit | 1 jobs passed, 1 jobs failed | The PR #6 head workflow completed with a successful frontend job and a Python smoke-check failure. (2026-07-26; GitHub Actions run 30190817882) |
 | Post Merge Main CI | NOT VERIFIED | post-merge main commit | Not recorded | No repository-accessible evidence proves a separate post-merge main workflow run. (2026-07-25; repository evidence audit) |
-| Local Smoke | VERIFIED | offline repository readiness smoke | 101 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 101 passed, 0 warnings, and 0 failed. (2026-07-26; v1.4.2 local validation) |
-| Full pytest | VERIFIED | full Python test suite | 543 passed, 0 failed, 0 skipped | The current full Python suite completed with 543 passed. (2026-07-26; v1.4.2 local validation) |
-| Focused Pdf Api | VERIFIED | managed PDF API contracts | 13 passed, 0 failed | The focused managed-PDF API contract suite passed. (2026-07-25; v1.4.0 focused API validation record) |
-| Focused Release Version | VERIFIED | release and version contracts before convergence | 24 passed, 0 failed | The pre-convergence focused release and version contract suite passed. (2026-07-25; v1.4.0 focused release validation record) |
-| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-07-26; v1.4.2 local validation) |
-| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-07-26; v1.4.2 local validation) |
-| Frontend Node Tests | VERIFIED | frontend Node test suite after lifecycle repair | 30 passed, 0 failed, 0 skipped, 0 cancelled | All 30 frontend Node tests passed. (2026-07-26; v1.4.2 local validation) |
-| Repository Hygiene | VERIFIED | tracked repository entries only | 226 entries inspected, 0 violations | Tracked-entry hygiene passed without reading user-data contents. (2026-07-25; v1.4.0 lifecycle-repair validation record) |
+| Local Smoke | VERIFIED | offline repository readiness smoke | 102 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 102 passed, 0 warnings, and 0 failed. (2026-07-26; v1.5.0 local validation) |
+| Full pytest | VERIFIED | full Python test suite | 564 passed, 0 failed, 0 skipped | The current full Python suite completed with 564 passed. (2026-07-26; v1.5.0 local validation) |
+| Focused Reader Snapshot | VERIFIED | read-only Reader Snapshot API contracts | 21 passed, 0 failed | The focused Reader Snapshot schema, adapter, route, failure-state, and privacy suite passed. (2026-07-26; v1.5.0 focused Reader Snapshot validation) |
+| Focused Pdf Api | VERIFIED | managed PDF API contracts | 13 passed, 0 failed | The focused managed-PDF API contract suite passed unchanged. (2026-07-26; v1.5.0 focused PDF regression) |
+| Focused Release Version | VERIFIED | release and version contracts | 9 passed, 0 failed | The focused runtime-target, immutable-baseline, and release-document contract suite passed. (2026-07-26; v1.5.0 focused release validation) |
+| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-07-26; v1.5.0 local validation) |
+| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-07-26; v1.5.0 local validation) |
+| Frontend Node Tests | VERIFIED | frontend bridge, Reader, and PDF lifecycle Node suites | 32 passed, 0 failed, 0 skipped, 0 cancelled | All 32 frontend Node tests passed. (2026-07-26; v1.5.0 local validation) |
+| Repository Hygiene | VERIFIED | tracked repository entries only | 231 entries inspected, 0 violations | Tracked-entry hygiene passed without reading user-data contents. (2026-07-26; v1.5.0 local smoke validation) |
 
-The current smoke result is 101 passed, 0 warnings, 0 failed. The two conflicting v1.4.0 records remain historical evidence and do not override this current result.
+The current smoke result is 102 passed, 0 warnings, 0 failed. The two conflicting v1.4.0 records remain historical evidence and do not override this current result.
 
 ## Reader manual validation
 
@@ -82,6 +84,7 @@ Aggregate state: **VERIFIED**.
 
 - PR-head workflow: **PARTIALLY VERIFIED**. The PR #6 head workflow completed with a successful frontend job and a Python smoke-check failure.
 - Post-merge `main` workflow: **NOT VERIFIED**. No repository-accessible evidence proves a separate post-merge main workflow run.
+- v1.5.0 Reader Snapshot runtime: **PARTIALLY VERIFIED**. Native fallback and API/bridge PDF delivery were sound; the legacy PDF.js build rendered page one with one document load, one page render, and zero render cancellations, while persisted-note and restart scenarios remain open.
 - GitHub Release publication: **NOT VERIFIED**. No GitHub Release publication evidence is recorded; tag existence is not publication evidence.
 - Clean-PC restore: **NOT VERIFIED**. Readiness scripts and a checklist exist, but no genuine clean-PC restore rehearsal is recorded.
 

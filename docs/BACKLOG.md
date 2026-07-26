@@ -13,6 +13,18 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.2.2 local runtime and release-evidence closure.
 - [x] v1.3.0 safe read-only Reader/PDF vertical slice.
 - [x] v1.3.1 release-state convergence, tracked-entry hygiene, and deterministic tracker export.
+- [x] v1.5.0 read-only Reader Snapshot vertical slice implementation.
+
+## v1.5.0 read-only Reader Snapshot vertical slice
+
+- [x] Add strict nested Reader Snapshot response schemas and an allowlisting adapter that preserves exact saved-note text.
+- [x] Add GET-only `GET /papers/{paper_id}/reader` through the existing domain builder and generic 404/503 boundaries.
+- [x] Allowlist only the exact same-origin Reader path while preserving PDF binary streaming and Range forwarding.
+- [x] Switch the web Reader from paper detail to one snapshot request and show a selectable plain-text persisted-note companion.
+- [x] Keep absent note, unreadable note, missing PDF, unknown paper, offline API, retry, and paper transition distinct.
+- [x] Preserve the Streamlit write boundary, PDF.js lifecycle, managed-root containment, storage format, dependencies, and stable identity.
+- [ ] Complete user-performed, non-mutating runtime validation for real PDF/note pairing, missing-note, unreadable-note, missing-PDF, transition, and API-restart behavior.
+- [ ] Record v1.5.0 pull request, hosted CI, tag, or publication only after those events actually occur.
 
 ## v1.4.3 release-state truth repair
 

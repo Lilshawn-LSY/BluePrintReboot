@@ -1,8 +1,25 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.4.0-pdfjs-reader-foundation`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
+Required before and after Codex-assisted release work, including `v1.5.0-reader-snapshot-readonly-vertical-slice`. Use disposable fixtures for automated checks and non-mutating access for approved runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
+
+## v1.5.0 Read-only Reader Snapshot Vertical Slice
+
+- [x] Validate strict nested response schemas, exact saved-note text preservation, allowlisted header/baseline fields, malformed containers, unknown PDF state, and extra-field rejection.
+- [x] Confirm one dependency call reaches only `build_reader_snapshot`, with unknown paper 404 and private-detail-free builder failure 503.
+- [x] Cover absent note, unreadable-note warning, and missing PDF plus available note as independent HTTP 200 states.
+- [x] Confirm the API surface remains GET-only and the existing detail/PDF contracts remain present.
+- [x] Allow only exact `papers/{paper_id}/reader`, reject subpaths, safely encode paper identity/query, and exclude Range from Reader JSON requests.
+- [x] Confirm the typed client uses `/reader` and ReaderView no longer calls paper detail for Reader state.
+- [x] Confirm saved text uses a selectable pre-wrapped plain-text surface with no textarea, contenteditable, raw HTML injection, save, apply, or autosave.
+- [x] Confirm resource keys prevent stale prior-paper metadata/note display while loading a transition or retry.
+- [x] Regress the existing PDF.js controller, native fallback, binary bridge, byte Range, and GET-only behavior.
+- [x] Confirm the native fallback displayed the managed PDF before the PDF.js compatibility correction.
+- [x] Confirm the API and bridge delivered HTTP 206 `application/pdf` with correct `Content-Range`/`Accept-Ranges`, `%PDF` starting bytes, and matching file size.
+- [x] Confirm the legacy PDF.js main/worker build rendered the first page in Chrome 131 with Vinext dev.
+- [x] Confirm diagnostics reported Document loads 1, Page renders 1, and Render cancellations 0.
+- [ ] Manually validate persisted-note pairing, note absence/read failure, missing PDF, paper transition, and API restart without mutation.
 
 ## v1.4.3 Release-State Truth Repair
 

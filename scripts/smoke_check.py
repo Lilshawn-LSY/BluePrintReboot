@@ -59,6 +59,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.3.0.md",
     "docs/release_notes/v1.3.1.md",
     "docs/release_notes/v1.4.0.md",
+    "docs/release_notes/v1.5.0.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -268,13 +269,13 @@ def check_api_contract() -> SmokeCheckResult:
         if app.version != APP_VERSION:
             raise ValueError("API version does not match the runtime version")
         paths = app.openapi().get("paths", {})
-        if set(paths) != {"/health", "/library/status", "/papers", "/papers/{paper_id}", "/papers/{paper_id}/pdf"}:
+        if set(paths) != {"/health", "/library/status", "/papers", "/papers/{paper_id}", "/papers/{paper_id}/reader", "/papers/{paper_id}/pdf"}:
             raise ValueError("API application paths do not match the read-only foundation")
         if any(set(operations) != {"get"} for operations in paths.values()):
             raise ValueError("API application routes are not GET-only")
     except Exception as exc:
         return SmokeCheckResult("api:application-contract", "fail", str(exc))
-    return SmokeCheckResult("api:application-contract", "pass", f"five GET routes for {APP_VERSION}")
+    return SmokeCheckResult("api:application-contract", "pass", f"six GET routes for {APP_VERSION}")
 
 
 def check_frontend_contract(project_root: Path) -> SmokeCheckResult:

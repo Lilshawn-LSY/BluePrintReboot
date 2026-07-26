@@ -5,11 +5,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from fastapi.responses import FileResponse
 
-from api.adapters import PaperContractError, adapt_paper_detail, adapt_paper_list_item
-from api.dependencies import ReadModelUnavailable, get_health_summary, get_library_status, get_managed_pdf, get_paper_detail, get_paper_list_items
+from api.adapters import PaperContractError, adapt_paper_detail, adapt_paper_list_item, adapt_reader_snapshot
+from api.dependencies import ReadModelUnavailable, get_health_summary, get_library_status, get_managed_pdf, get_paper_detail, get_paper_list_items, get_reader_snapshot
 from api.pdf_files import ManagedPdfResult, ManagedPdfState
-from api.schemas import APIError, ArchiveStatus, HealthSummaryResponse, LibraryStatusResponse, PaginatedPaperList, PaperDetail, PaperListItem
-from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem
+from api.schemas import APIError, ArchiveStatus, HealthSummaryResponse, LibraryStatusResponse, PaginatedPaperList, PaperDetail, PaperListItem, ReaderSnapshotResponse
+from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem, ReaderSnapshot as DomainReaderSnapshot
 
 
 router = APIRouter()
@@ -92,6 +92,35 @@ def paper_detail(
         raise HTTPException(status_code=404, detail="Paper not found.")
     try:
         return adapt_paper_detail(paper)
+    except PaperContractError:
+        raise ReadModelUnavailable from None
+
+
+@router.get(
+    "/papers/{paper_id}/reader",
+    response_model=ReaderSnapshotResponse,
+    summary="Get read-only Reader snapshot",
+    description="Return paper, PDF availability, and the exact persisted Reading Note in one coherent read-only response.",
+    responses={
+        404: {
+            "model": APIError,
+            "description": "No paper has the requested identity.",
+            "content": {"application/json": {"example": {"detail": "Paper not found."}}},
+        },
+        503: {
+            "model": APIError,
+            "description": "The local Reader read model is temporarily unavailable.",
+        },
+    },
+)
+def reader_snapshot(
+    paper_id: Annotated[str, Path(min_length=1, description="Stable BluePrintReboot paper identity.")],
+    snapshot: Annotated[DomainReaderSnapshot | None, Depends(get_reader_snapshot)],
+) -> ReaderSnapshotResponse:
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail="Paper not found.")
+    try:
+        return adapt_reader_snapshot(snapshot)
     except PaperContractError:
         raise ReadModelUnavailable from None
 

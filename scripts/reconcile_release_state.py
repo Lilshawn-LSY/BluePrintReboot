@@ -26,6 +26,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/BACKLOG.md",
     "docs/checklists/regression_checklist.md",
     "docs/release_notes/v1.4.3.md",
+    "docs/release_notes/v1.5.0.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -33,6 +34,7 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "post_merge_main_ci",
         "local_smoke",
         "full_pytest",
+        "focused_reader_snapshot",
         "focused_pdf_api",
         "focused_release_version",
         "frontend_lint",
@@ -87,6 +89,7 @@ COMPLETION_EVIDENCE_PATTERNS = (
 EXPECTED_UNRESOLVED_EVIDENCE = (
     "automated_validation.pr_head_ci",
     "automated_validation.post_merge_main_ci",
+    "manual_validation.reader_snapshot_runtime",
     "publication_state.github_release",
     "recurring_operational_procedures.clean_pc_restore",
 )
@@ -192,10 +195,10 @@ def _validate_release_evidence(manifest: Mapping[str, Any]) -> None:
     baseline = _mapping(manifest.get("product_release_baseline"), "product_release_baseline")
     if baseline.get("status") != "VERIFIED":
         raise ReleaseStateError("product_release_baseline must be VERIFIED")
-    if baseline.get("product_version") != manifest["product_version"]:
-        raise ReleaseStateError("product baseline version must equal product_version")
-    if baseline.get("release_name") != manifest["release_name"]:
-        raise ReleaseStateError("product baseline release name must equal release_name")
+    if baseline.get("product_version") != "1.4.0":
+        raise ReleaseStateError("immutable product baseline version must remain 1.4.0")
+    if baseline.get("release_name") != "v1.4.0-pdfjs-reader-foundation":
+        raise ReleaseStateError("immutable product baseline release name must remain v1.4.0-pdfjs-reader-foundation")
     baseline_sha = _sha(
         baseline.get("baseline_commit_sha"),
         "product_release_baseline.baseline_commit_sha",
@@ -214,7 +217,7 @@ def _validate_release_evidence(manifest: Mapping[str, Any]) -> None:
     tag = _mapping(baseline.get("tag"), "product_release_baseline.tag")
     if tag.get("status") != "VERIFIED":
         raise ReleaseStateError("product baseline tag must be VERIFIED")
-    expected_tag = f"v{manifest['product_version']}"
+    expected_tag = f"v{baseline['product_version']}"
     if tag.get("name") != expected_tag:
         raise ReleaseStateError(f"product baseline tag name must be {expected_tag}")
     if _sha(tag.get("target_commit_sha"), "product_release_baseline.tag.target_commit_sha") != baseline_sha:
@@ -346,6 +349,12 @@ def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
     streamlit = _mapping(manual.get("streamlit_regression"), "manual_validation.streamlit_regression")
     _validate_evidence(streamlit, "manual_validation.streamlit_regression")
 
+    reader_snapshot = _mapping(
+        manual.get("reader_snapshot_runtime"),
+        "manual_validation.reader_snapshot_runtime",
+    )
+    _validate_evidence(reader_snapshot, "manual_validation.reader_snapshot_runtime")
+
 
 def _validate_publication_and_operations(manifest: Mapping[str, Any]) -> None:
     publication = _mapping(manifest.get("publication_state"), "publication_state")
@@ -433,10 +442,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.4.0":
-        raise ReleaseStateError("product_version must identify the current 1.4.0 product")
-    if manifest.get("release_name") != "v1.4.0-pdfjs-reader-foundation":
-        raise ReleaseStateError("release_name must identify the current v1.4.0 release")
+    if manifest.get("product_version") != "1.5.0":
+        raise ReleaseStateError("product_version must identify the current 1.5.0 runtime target")
+    if manifest.get("release_name") != "v1.5.0-reader-snapshot-readonly-vertical-slice":
+        raise ReleaseStateError("release_name must identify the current v1.5.0 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)
@@ -535,16 +544,16 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         "",
         "## Release identity",
         "",
-        f"- Product version: `{manifest['product_version']}`",
-        f"- Release name: `{manifest['release_name']}`",
-        f"- Implementation state: **{baseline['implementation']['status']}**",
-        f"- Immutable baseline commit: `{baseline['baseline_commit_sha']}`",
+        f"- Runtime target version: `{manifest['product_version']}`",
+        f"- Runtime target name: `{manifest['release_name']}`",
+        f"- Immutable released baseline: `{baseline['release_name']}` at `{baseline['baseline_commit_sha']}`",
         f"- Next milestone: **{manifest['next_milestone']['status']}** — {manifest['next_milestone']['name']}",
         "",
         "## Current state summary",
         "",
         "| Area | Status | Evidence |",
         "|---|---|---|",
+        f"| v{manifest['product_version']} local runtime target | {automated['local_smoke']['status']} | {_escape_cell(_evidence_summary(automated['local_smoke']))} |",
         f"| v1.4.0 implementation baseline | {baseline['implementation']['status']} | {_escape_cell(_evidence_summary(baseline['implementation']))} |",
         f"| PR #{change['number']} control-plane change | {change['status']} | Merged into `main` at `{change['merge_commit_sha']}`. |",
         f"| v1.4.0 tag | {baseline['tag']['status']} | Tag targets immutable baseline `{baseline['tag']['target_commit_sha']}`. |",
@@ -552,6 +561,7 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         f"Python `{pr_jobs['python']}`, frontend `{pr_jobs['frontend']}`. |",
         f"| Post-merge `main` GitHub Actions | {automated['post_merge_main_ci']['status']} | {_escape_cell(automated['post_merge_main_ci']['evidence']['summary'])} |",
         f"| Reader runtime | {manual['reader_runtime']['status']} | {_escape_cell(manual['reader_runtime']['evidence']['summary'])} |",
+        f"| v1.5.0 Reader Snapshot runtime | {manual['reader_snapshot_runtime']['status']} | {_escape_cell(manual['reader_snapshot_runtime']['evidence']['summary'])} |",
         f"| Streamlit regression | {manual['streamlit_regression']['status']} | {_escape_cell(manual['streamlit_regression']['evidence']['summary'])} |",
         f"| GitHub Release publication | {publication['github_release']['status']} | {_escape_cell(publication['github_release']['evidence']['summary'])} |",
         f"| Clean-PC restore | {restore['status']} | Recurring operational procedure; no rehearsal is claimed. |",
@@ -616,6 +626,8 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
             f"{automated['pr_head_ci']['evidence']['summary']}",
             f"- Post-merge `main` workflow: **{automated['post_merge_main_ci']['status']}**. "
             f"{automated['post_merge_main_ci']['evidence']['summary']}",
+            f"- v1.5.0 Reader Snapshot runtime: **{manual['reader_snapshot_runtime']['status']}**. "
+            f"{manual['reader_snapshot_runtime']['evidence']['summary']}",
             f"- GitHub Release publication: **{publication['github_release']['status']}**. "
             f"{publication['github_release']['evidence']['summary']}",
             f"- Clean-PC restore: **{restore['status']}**. {restore['evidence']['summary']}",
