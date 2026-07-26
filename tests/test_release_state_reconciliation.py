@@ -33,8 +33,8 @@ def test_schema_parsing_requires_all_top_level_fields_and_evidence() -> None:
 
     assert baseline["baseline_commit_sha"] == "09a02e3dd42fb3f0209a89be43cb7de77f0599d4"
     assert baseline["tag"]["name"] == "v1.4.0"
-    assert change["number"] == 5
-    assert change["merge_commit_sha"] == "ab01f79558facceaf9ff2e38a5a37fc3d329d481"
+    assert change["number"] == 6
+    assert change["merge_commit_sha"] == "7b6a17369d3987dc1c8c6527a268a1df17feedcb"
     assert change["merge_commit_sha"] != baseline["baseline_commit_sha"]
     assert observation["commit_sha"] is None
     assert observation["required_invariant"] is False
@@ -97,7 +97,7 @@ def test_fresh_clone_post_merge_check_rejects_stale_then_accepts_rendered_output
     assert "generated output is stale" in errors[0]
     render_output(manifest_path, output_path, validate_documents=False)
     assert check_release_state(manifest_path, output_path, validate_documents=False) == []
-    assert "ab01f79558facceaf9ff2e38a5a37fc3d329d481" in output_path.read_text(encoding="utf-8")
+    assert "7b6a17369d3987dc1c8c6527a268a1df17feedcb" in output_path.read_text(encoding="utf-8")
 
 
 def test_conflicting_smoke_evidence_is_explicit_and_not_collapsed() -> None:
@@ -119,22 +119,95 @@ def test_conflicting_smoke_evidence_is_explicit_and_not_collapsed() -> None:
         validate_manifest(collapsed)
 
 
-def test_partially_verified_reader_requires_passed_and_pending_checks() -> None:
+def test_reader_runtime_aggregate_matches_all_verified_mixed_and_all_unverified_children() -> None:
     manifest = read_manifest()
     checks = manifest["manual_validation"]["reader_runtime"]["checks"]
 
-    assert manifest["manual_validation"]["reader_runtime"]["status"] == "PARTIALLY VERIFIED"
-    assert "VERIFIED" in {item["status"] for item in checks.values()}
-    assert "NOT VERIFIED" in {item["status"] for item in checks.values()}
-    assert checks["api_offline_restart_recovery"]["status"] == "NOT VERIFIED"
-    assert checks["large_pdf_behavior"]["status"] == "NOT VERIFIED"
-    assert checks["detailed_range_inspection"]["status"] == "NOT VERIFIED"
-    assert manifest["manual_validation"]["streamlit_regression"]["status"] == "NOT VERIFIED"
+    assert manifest["manual_validation"]["reader_runtime"]["status"] == "VERIFIED"
+    assert {item["status"] for item in checks.values()} == {"VERIFIED"}
+    validate_manifest(manifest)
 
-    for item in checks.values():
-        item["status"] = "VERIFIED"
-    with pytest.raises(ReleaseStateError, match="passed and pending"):
+    mixed = copy.deepcopy(manifest)
+    mixed_reader = mixed["manual_validation"]["reader_runtime"]
+    mixed_reader["checks"]["large_pdf_behavior"]["status"] = "NOT VERIFIED"
+    mixed_reader["checks"]["large_pdf_behavior"]["evidence"]["summary"] = "No result is recorded for this check."
+    mixed_reader["status"] = "PARTIALLY VERIFIED"
+    mixed_reader["evidence"]["summary"] = "Completed and unverified child checks are represented separately."
+    mixed_tracker = next(
+        task for task in mixed["external_tracker"]["tasks"] if task["task_id"] == "R-018"
+    )
+    mixed_tracker["status"] = mixed_reader["status"]
+    mixed_tracker["evidence"] = mixed_reader["evidence"]["summary"]
+    validate_manifest(mixed)
+
+    all_unverified = copy.deepcopy(manifest)
+    all_unverified_reader = all_unverified["manual_validation"]["reader_runtime"]
+    for item in all_unverified_reader["checks"].values():
+        item["status"] = "NOT VERIFIED"
+        item["evidence"]["summary"] = "No result is recorded for this check."
+    all_unverified_reader["status"] = "NOT VERIFIED"
+    all_unverified_reader["evidence"]["summary"] = "No result is recorded for the aggregate."
+    all_unverified_tracker = next(
+        task for task in all_unverified["external_tracker"]["tasks"] if task["task_id"] == "R-018"
+    )
+    all_unverified_tracker["status"] = all_unverified_reader["status"]
+    all_unverified_tracker["evidence"] = all_unverified_reader["evidence"]["summary"]
+    validate_manifest(all_unverified)
+
+
+def test_all_verified_reader_children_reject_partially_verified_aggregate() -> None:
+    manifest = read_manifest()
+    manifest["manual_validation"]["reader_runtime"]["status"] = "PARTIALLY VERIFIED"
+
+    with pytest.raises(ReleaseStateError, match="aggregate status must be VERIFIED"):
         validate_manifest(manifest)
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "No completed record is available.",
+        "The result is not recorded.",
+        "No result is available.",
+        "This check is pending.",
+        "This check remains unverified.",
+    ],
+)
+def test_verified_evidence_rejects_incomplete_summary(summary: str) -> None:
+    verified_contradiction = read_manifest()
+    verified_contradiction["manual_validation"]["streamlit_regression"]["evidence"]["summary"] = summary
+
+    with pytest.raises(ReleaseStateError, match="contradicts VERIFIED"):
+        validate_manifest(verified_contradiction)
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "The check passed.",
+        "The check completed.",
+        "The check was verified.",
+    ],
+)
+def test_not_verified_evidence_rejects_completion_summary(summary: str) -> None:
+    not_verified_contradiction = read_manifest()
+    check = not_verified_contradiction["manual_validation"]["reader_runtime"]["checks"][
+        "large_pdf_behavior"
+    ]
+    check["status"] = "NOT VERIFIED"
+    check["evidence"]["summary"] = summary
+    not_verified_contradiction["manual_validation"]["reader_runtime"]["status"] = "PARTIALLY VERIFIED"
+
+    with pytest.raises(ReleaseStateError, match="contradicts NOT VERIFIED"):
+        validate_manifest(not_verified_contradiction)
+
+
+def test_verified_streamlit_regression_with_completion_evidence_is_valid() -> None:
+    manifest = read_manifest()
+
+    assert manifest["manual_validation"]["streamlit_regression"]["status"] == "VERIFIED"
+    assert "completed" in manifest["manual_validation"]["streamlit_regression"]["evidence"]["summary"].casefold()
+    validate_manifest(manifest)
 
 
 def test_tag_existence_does_not_imply_github_release_publication() -> None:
@@ -163,16 +236,17 @@ def test_pr_head_ci_and_post_merge_main_ci_are_distinct() -> None:
     manifest = read_manifest()
     checks = manifest["automated_validation"]
 
-    assert checks["pr_head_ci"]["status"] == "VERIFIED"
-    assert checks["pr_head_ci"]["run_id"] == "30151090974"
+    assert checks["pr_head_ci"]["status"] == "PARTIALLY VERIFIED"
+    assert checks["pr_head_ci"]["run_id"] == "30190817882"
     assert checks["pr_head_ci"]["event"] == "pull_request"
+    assert checks["pr_head_ci"]["jobs"] == {"frontend": "success", "python": "failure"}
     assert checks["pr_head_ci"]["commit_sha"] == manifest["completed_control_plane_change"]["head_commit_sha"]
     assert checks["post_merge_main_ci"]["status"] == "NOT VERIFIED"
     assert checks["post_merge_main_ci"]["commit_sha"] is None
     assert checks["post_merge_main_ci"]["run_id"] is None
 
     contradiction = copy.deepcopy(manifest)
-    contradiction["automated_validation"]["post_merge_main_ci"]["run_id"] = "30151090974"
+    contradiction["automated_validation"]["post_merge_main_ci"]["run_id"] = "30190817882"
     with pytest.raises(ReleaseStateError, match="run_id must be null"):
         validate_manifest(contradiction)
 

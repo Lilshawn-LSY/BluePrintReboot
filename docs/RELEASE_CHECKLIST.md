@@ -2,6 +2,16 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.4.3-release-state-truth-repair
+
+- [x] Reader aggregate status is derived from VERIFIED and NOT VERIFIED child states.
+- [x] Streamlit regression accepts controlled states and requires completion evidence when VERIFIED.
+- [x] Status/evidence contradiction checks are limited to canonical release-state evidence summaries.
+- [x] PR number, current repository HEAD, workflow result, and exact test counts are not validator constants.
+- [x] PR #6's frontend success and Python smoke failure are represented truthfully.
+- [x] Remaining open evidence is limited to post-merge `main` CI, GitHub Release publication, and genuine clean-PC restore.
+- [x] No product feature, API contract, storage format, dependency, or PDF Reader behavior changes.
+
 ## v1.4.2-post-merge-evidence-and-reader-runtime-closure
 
 - [x] The immutable v1.4.0 product baseline commit and tag are independent from later control-plane changes.
@@ -10,7 +20,8 @@ Current evidence is generated from the canonical manifest. Inspect [Current Rele
 - [x] Tag existence and GitHub Release publication remain independent evidence fields.
 - [x] Current smoke evidence is distinct from preserved historical conflicting v1.4.0 records.
 - [x] Generated status and tracker export have deterministic, stale-output, status-control, and privacy regressions.
-- [ ] Pending manual Reader, Streamlit, and clean-PC checks remain open until user-performed evidence is supplied.
+- [x] Reader and separate Streamlit manual evidence was supplied with PR #6 and is represented by the v1.4.3 canonical repair.
+- [ ] A genuine clean-PC restore remains open until user-performed evidence is supplied.
 
 ## v1.4.0-pdfjs-reader-foundation
 
