@@ -132,6 +132,92 @@ export interface PaginatedPaperList {
   has_more: boolean;
 }
 
+export interface ProjectListItem {
+  project_id: string;
+  name: string;
+  description: string;
+  status: string;
+  priority: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  link_count: number;
+  linked_paper_count: number;
+}
+
+export interface LinkedPaperSummary {
+  paper_id: string;
+  title: string;
+  first_author: string;
+  year: string;
+  status: string;
+  priority: string;
+  tags: string[];
+  archived: boolean;
+}
+
+export type ProjectTargetState = "available" | "orphaned" | "unavailable" | "not_applicable";
+
+export interface ProjectLinkTarget {
+  link_id: string;
+  link_type: string;
+  target_type: string;
+  target_state: ProjectTargetState;
+  paper_id: string;
+  created_at: string;
+  paper: LinkedPaperSummary | null;
+}
+
+export interface ProjectDetail extends ProjectListItem {
+  links: ProjectLinkTarget[];
+  links_total: number;
+  links_limit: number;
+  links_offset: number;
+  links_has_more: boolean;
+  orphaned_link_count: number;
+}
+
+export interface PaginatedProjectList {
+  items: ProjectListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export interface CanonicalTag {
+  canonical_key: string;
+  label: string;
+  category: string;
+  aliases: string[];
+  status: string;
+  suggestion_strength: number;
+}
+
+export interface PaginatedTagList {
+  items: CanonicalTag[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+  source_state: "canonical" | "legacy_fallback";
+}
+
+export interface CandidateSummary {
+  availability: "available" | "unavailable";
+  state: "populated" | "empty" | "unavailable";
+  source: "paper_index" | "none";
+  evaluated_paper_count: number;
+  candidate_count: number;
+  known_canonical_match_count: number;
+  quality_counts: {
+    high: number;
+    medium: number;
+    weak: number;
+    rejected: number;
+  };
+}
+
 export interface DashboardSnapshot {
   health: HealthSummary;
   library: LibraryStatus;

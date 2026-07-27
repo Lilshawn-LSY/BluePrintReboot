@@ -40,7 +40,16 @@ function hasSafeSegments(parts) {
 export function isAllowedBlueprintPath(parts) {
   if (!hasSafeSegments(parts)) return false;
   const path = parts.join("/");
-  return path === "health" || path === "library/status" || path === "papers" || (parts.length === 2 && parts[0] === "papers") || isBlueprintPdfPath(parts) || isBlueprintReaderPath(parts);
+  return path === "health"
+    || path === "library/status"
+    || path === "papers"
+    || path === "projects"
+    || path === "tags"
+    || path === "tags/summary"
+    || (parts.length === 2 && parts[0] === "papers")
+    || (parts.length === 2 && parts[0] === "projects")
+    || isBlueprintPdfPath(parts)
+    || isBlueprintReaderPath(parts);
 }
 
 export function isAllowedBlueprintRequest(method, parts) {
@@ -89,7 +98,12 @@ export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl 
       body,
       cache: "no-store",
     });
-    if (upstream.status >= 500) return Response.json({ detail: GENERIC_UNAVAILABLE_DETAIL }, { status: 503 });
+    if (upstream.status >= 500) {
+      return Response.json(
+        { detail: GENERIC_UNAVAILABLE_DETAIL },
+        { status: 503, headers: { "X-Blueprint-Error-State": "read-model-unavailable" } },
+      );
+    }
     const responseHeaders = new Headers();
     const allowedHeaders = pdfRequest ? SAFE_PDF_RESPONSE_HEADERS : ["Content-Type"];
     for (const name of allowedHeaders) {
@@ -102,7 +116,10 @@ export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl 
       headers: responseHeaders,
     });
   } catch {
-    return Response.json({ detail: GENERIC_UNAVAILABLE_DETAIL }, { status: 503 });
+    return Response.json(
+      { detail: GENERIC_UNAVAILABLE_DETAIL },
+      { status: 503, headers: { "X-Blueprint-Error-State": "api-unavailable" } },
+    );
   }
 }
 

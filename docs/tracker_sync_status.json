@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.1",
-  "release_name": "v1.5.1-reader-write-vertical-slice",
-  "as_of": "2026-07-26",
+  "product_version": "1.5.2",
+  "release_name": "v1.5.2-projects-tags-read-parity",
+  "as_of": "2026-07-27",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
       "counts": {
-        "passed": 105,
+        "passed": 106,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local validation",
-        "summary": "The current offline repository readiness smoke completed with 105 passed, 0 warnings, and 0 failed."
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local validation",
+        "summary": "The current offline repository readiness smoke completed with 106 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 582,
+        "passed": 628,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local validation",
-        "summary": "The current full Python suite completed with 582 passed."
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local validation",
+        "summary": "The current full Python suite completed with 628 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -172,9 +172,23 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 focused PDF regression",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 focused PDF regression",
         "summary": "The focused managed-PDF API contract suite passed unchanged."
+      }
+    },
+    "focused_projects_tags": {
+      "status": "VERIFIED",
+      "scope": "Projects and Tags read-model, API, privacy, and non-mutation contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_projects_tags_api.py -q",
+      "counts": {
+        "passed": 27,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "v1.5.2 focused Projects and Tags backend validation",
+        "summary": "The focused deterministic pagination, detail, orphan, fallback, corruption, privacy, OpenAPI, and read-only storage suite passed."
       }
     },
     "focused_release_version": {
@@ -186,8 +200,8 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 focused release validation",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
       }
     },
@@ -196,12 +210,12 @@
       "scope": "canonical release-state reconciliation contracts",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_release_state_reconciliation.py -q",
       "counts": {
-        "passed": 26,
+        "passed": 30,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local release reconciliation",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local release reconciliation",
         "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
       }
     },
@@ -214,8 +228,8 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local tracker export validation",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local tracker export validation",
         "summary": "The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed."
       }
     },
@@ -225,8 +239,8 @@
       "command": "npm run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local validation",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -236,8 +250,8 @@
       "command": "npm test",
       "counts": null,
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local validation",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -246,15 +260,31 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm test",
       "counts": {
-        "passed": 43,
+        "passed": 49,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local validation",
-        "summary": "All 43 frontend Node tests passed."
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local validation",
+        "summary": "All 49 frontend Node tests passed."
+      }
+    },
+    "frontend_projects_tags": {
+      "status": "VERIFIED",
+      "scope": "Projects and Tags bridge, route, rendering-source, negative-state, and compatibility contracts",
+      "command": "node --test tests/projects-tags-read-parity.test.mjs tests/api-bridge.test.mjs",
+      "counts": {
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "v1.5.2 focused Projects and Tags frontend validation",
+        "summary": "The focused exact GET bridge allowlist, real-field rendering source, shared state, retry, no-fabrication, no-write-control, and existing-view compatibility suite passed."
       }
     },
     "frontend_reader_commands": {
@@ -268,8 +298,8 @@
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 focused frontend Reader command validation",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 focused frontend Reader command validation",
         "summary": "The exact bridge method/path allowlist and Reader editor state, draft preservation, header refresh, conflict, and transition suites passed."
       }
     },
@@ -278,12 +308,12 @@
       "scope": "tracked repository entries only",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 233,
+        "entries_inspected": 241,
         "violations": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.1 local smoke validation",
+        "date": "2026-07-27",
+        "reference": "v1.5.2 local smoke validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -545,11 +575,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "Unreadable-note and missing-PDF runtime validation",
+    "name": "Settings read parity and remaining runtime validation",
     "evidence": {
-      "date": "2026-07-26",
+      "date": "2026-07-27",
       "reference": "docs/ROADMAP.md",
-      "summary": "Validate the remaining unreadable persisted-note warning and missing managed-PDF states with approved local data while keeping broader write features outside the current scope."
+      "summary": "Complete the still-deferred Settings read surface and remaining approved manual runtime checks while keeping broader Project and Tag writes outside the current scope."
     }
   },
   "historical_evidence": {
@@ -590,7 +620,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-07-26",
+    "last_reconciled": "2026-07-27",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",

@@ -63,6 +63,88 @@ class ProjectLink(StrictResponseModel):
     target_type: str
 
 
+class ProjectListItem(StrictResponseModel):
+    """Allowlisted summary of one stored Project."""
+
+    project_id: str
+    name: str
+    description: str
+    status: str
+    priority: str
+    tags: list[str]
+    created_at: str
+    updated_at: str
+    link_count: int = Field(ge=0)
+    linked_paper_count: int = Field(ge=0)
+
+
+class LinkedPaperSummary(StrictResponseModel):
+    """Bounded paper metadata embedded in a Project link."""
+
+    paper_id: str
+    title: str
+    first_author: str
+    year: str
+    status: str
+    priority: str
+    tags: list[str]
+    archived: bool
+
+
+class ProjectTargetState(str, Enum):
+    available = "available"
+    orphaned = "orphaned"
+    unavailable = "unavailable"
+    not_applicable = "not_applicable"
+
+
+class ProjectLinkTarget(StrictResponseModel):
+    link_id: str
+    link_type: str
+    target_type: str
+    target_state: ProjectTargetState
+    paper_id: str
+    created_at: str
+    paper: LinkedPaperSummary | None
+
+
+class ProjectDetail(ProjectListItem):
+    """One Project plus a bounded page of its real stored links."""
+
+    links: list[ProjectLinkTarget]
+    links_total: int = Field(ge=0)
+    links_limit: int = Field(ge=1, le=100)
+    links_offset: int = Field(ge=0)
+    links_has_more: bool
+    orphaned_link_count: int = Field(ge=0)
+
+
+class CanonicalTag(StrictResponseModel):
+    canonical_key: str
+    label: str
+    category: str
+    aliases: list[str]
+    status: str
+    suggestion_strength: int = Field(ge=0)
+
+
+class CandidateQualityCounts(StrictResponseModel):
+    high: int = Field(ge=0)
+    medium: int = Field(ge=0)
+    weak: int = Field(ge=0)
+    rejected: int = Field(ge=0)
+
+
+class CandidateSummaryResponse(StrictResponseModel):
+    availability: Literal["available", "unavailable"]
+    state: Literal["populated", "empty", "unavailable"]
+    source: Literal["paper_index", "none"]
+    evaluated_paper_count: int = Field(ge=0)
+    candidate_count: int = Field(ge=0)
+    known_canonical_match_count: int = Field(ge=0)
+    quality_counts: CandidateQualityCounts
+
+
 class PaperDetail(PaperListItem):
     """Safe read-only paper detail built from the frozen domain contract."""
 
@@ -311,6 +393,23 @@ class PaginatedPaperList(StrictResponseModel):
     limit: int = Field(ge=1, le=100)
     offset: int = Field(ge=0)
     has_more: bool = Field(description="Whether another matching item exists after this page.")
+
+
+class PaginatedProjectList(StrictResponseModel):
+    items: list[ProjectListItem]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    offset: int = Field(ge=0)
+    has_more: bool
+
+
+class PaginatedTagList(StrictResponseModel):
+    items: list[CanonicalTag]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    offset: int = Field(ge=0)
+    has_more: bool
+    source_state: Literal["canonical", "legacy_fallback"]
 
 
 class APIError(StrictResponseModel):

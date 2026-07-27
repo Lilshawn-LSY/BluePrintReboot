@@ -7,10 +7,18 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
 from api.schemas import (
+    CandidateQualityCounts,
+    CandidateSummaryResponse,
+    CanonicalTag,
     EditablePaperMetadata,
+    LinkedPaperSummary,
     PaperDetail,
     PaperListItem,
+    ProjectDetail,
     ProjectLink,
+    ProjectLinkTarget,
+    ProjectListItem,
+    ProjectTargetState,
     ReaderNoteBaseline,
     ReaderNoteHeader,
     ReaderPdfState,
@@ -20,6 +28,14 @@ from api.schemas import (
 
 class PaperContractError(ValueError):
     """A domain value cannot be represented by the public Paper API contract."""
+
+
+class ProjectContractError(ValueError):
+    """A domain value cannot be represented by the public Project API contract."""
+
+
+class TagContractError(ValueError):
+    """A domain value cannot be represented by the public Tag API contract."""
 
 
 def _required_identity(value: object, field_name: str) -> str:
@@ -80,6 +96,256 @@ def _safe_relative_path(value: object) -> str:
     if path.is_absolute() or PureWindowsPath(normalized).is_absolute() or ".." in path.parts:
         raise PaperContractError("Paper PDF path must be workspace-relative.")
     return path.as_posix()
+
+
+def _strict_text(value: object, field_name: str, error_type: type[ValueError]) -> str:
+    if not isinstance(value, str):
+        raise error_type(f"{field_name} must be a string.")
+    return value.strip()
+
+
+def _strict_string_list(
+    value: object,
+    field_name: str,
+    error_type: type[ValueError],
+) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        raise error_type(f"{field_name} must be a list.")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise error_type(f"{field_name} must contain only strings.")
+        normalized = item.strip()
+        if normalized:
+            result.append(normalized)
+    return result
+
+
+def _nonnegative_integer(
+    value: object,
+    field_name: str,
+    error_type: type[ValueError],
+) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise error_type(f"{field_name} must be a non-negative integer.")
+    return value
+
+
+def adapt_project_list_item(source: Mapping[str, Any]) -> ProjectListItem:
+    project_id = _strict_text(source.get("project_id"), "project_id", ProjectContractError)
+    name = _strict_text(source.get("name"), "name", ProjectContractError)
+    if not project_id or not name:
+        raise ProjectContractError("Project identity and name are required.")
+    return ProjectListItem(
+        project_id=project_id,
+        name=name,
+        description=_strict_text(
+            source.get("description"),
+            "description",
+            ProjectContractError,
+        ),
+        status=_strict_text(source.get("status"), "status", ProjectContractError),
+        priority=_strict_text(source.get("priority"), "priority", ProjectContractError),
+        tags=_strict_string_list(source.get("tags"), "tags", ProjectContractError),
+        created_at=_strict_text(
+            source.get("created_at"),
+            "created_at",
+            ProjectContractError,
+        ),
+        updated_at=_strict_text(
+            source.get("updated_at"),
+            "updated_at",
+            ProjectContractError,
+        ),
+        link_count=_nonnegative_integer(
+            source.get("link_count"),
+            "link_count",
+            ProjectContractError,
+        ),
+        linked_paper_count=_nonnegative_integer(
+            source.get("linked_paper_count"),
+            "linked_paper_count",
+            ProjectContractError,
+        ),
+    )
+
+
+def _adapt_linked_paper(source: Mapping[str, Any]) -> LinkedPaperSummary:
+    paper_id = _strict_text(source.get("paper_id"), "paper.paper_id", ProjectContractError)
+    if not paper_id:
+        raise ProjectContractError("Linked paper identity is required.")
+    archived = source.get("archived")
+    if not isinstance(archived, bool):
+        raise ProjectContractError("paper.archived must be boolean.")
+    return LinkedPaperSummary(
+        paper_id=paper_id,
+        title=_strict_text(source.get("title"), "paper.title", ProjectContractError),
+        first_author=_strict_text(
+            source.get("first_author"),
+            "paper.first_author",
+            ProjectContractError,
+        ),
+        year=_strict_text(source.get("year"), "paper.year", ProjectContractError),
+        status=_strict_text(source.get("status"), "paper.status", ProjectContractError),
+        priority=_strict_text(
+            source.get("priority"),
+            "paper.priority",
+            ProjectContractError,
+        ),
+        tags=_strict_string_list(source.get("tags"), "paper.tags", ProjectContractError),
+        archived=archived,
+    )
+
+
+def adapt_project_detail(
+    source: Mapping[str, Any],
+    *,
+    links_limit: int,
+    links_offset: int,
+) -> ProjectDetail:
+    base = adapt_project_list_item(source)
+    raw_links = source.get("links")
+    if not isinstance(raw_links, (list, tuple)):
+        raise ProjectContractError("Project links must be a list.")
+    links: list[ProjectLinkTarget] = []
+    for raw_link in raw_links:
+        if not isinstance(raw_link, Mapping):
+            raise ProjectContractError("Project links must be objects.")
+        try:
+            target_state = ProjectTargetState(
+                _strict_text(
+                    raw_link.get("target_state"),
+                    "link.target_state",
+                    ProjectContractError,
+                )
+            )
+        except ValueError:
+            raise ProjectContractError("Project target state is unsupported.") from None
+        raw_paper = raw_link.get("paper")
+        paper = _adapt_linked_paper(raw_paper) if isinstance(raw_paper, Mapping) else None
+        if target_state is ProjectTargetState.available and paper is None:
+            target_state = ProjectTargetState.unavailable
+        if target_state is not ProjectTargetState.available and paper is not None:
+            raise ProjectContractError("Unavailable Project targets cannot expose paper data.")
+        links.append(
+            ProjectLinkTarget(
+                link_id=_strict_text(
+                    raw_link.get("link_id"),
+                    "link.link_id",
+                    ProjectContractError,
+                ),
+                link_type=_strict_text(
+                    raw_link.get("link_type"),
+                    "link.link_type",
+                    ProjectContractError,
+                ),
+                target_type=_strict_text(
+                    raw_link.get("target_type"),
+                    "link.target_type",
+                    ProjectContractError,
+                ),
+                target_state=target_state,
+                paper_id=_strict_text(
+                    raw_link.get("paper_id"),
+                    "link.paper_id",
+                    ProjectContractError,
+                ),
+                created_at=_strict_text(
+                    raw_link.get("created_at"),
+                    "link.created_at",
+                    ProjectContractError,
+                ),
+                paper=paper,
+            )
+        )
+    links.sort(key=lambda link: (link.created_at, link.link_id))
+    page = links[links_offset : links_offset + links_limit]
+    total = len(links)
+    return ProjectDetail(
+        **base.model_dump(),
+        links=page,
+        links_total=total,
+        links_limit=links_limit,
+        links_offset=links_offset,
+        links_has_more=links_offset + len(page) < total,
+        orphaned_link_count=_nonnegative_integer(
+            source.get("orphaned_link_count"),
+            "orphaned_link_count",
+            ProjectContractError,
+        ),
+    )
+
+
+def adapt_canonical_tag(source: Mapping[str, Any]) -> CanonicalTag:
+    canonical_key = _strict_text(
+        source.get("canonical_key"),
+        "canonical_key",
+        TagContractError,
+    )
+    label = _strict_text(source.get("label"), "label", TagContractError)
+    if not canonical_key or not label:
+        raise TagContractError("Canonical tag identity and label are required.")
+    return CanonicalTag(
+        canonical_key=canonical_key,
+        label=label,
+        category=_strict_text(source.get("category"), "category", TagContractError),
+        aliases=_strict_string_list(source.get("aliases"), "aliases", TagContractError),
+        status=_strict_text(source.get("status"), "status", TagContractError),
+        suggestion_strength=_nonnegative_integer(
+            source.get("suggestion_strength"),
+            "suggestion_strength",
+            TagContractError,
+        ),
+    )
+
+
+def adapt_candidate_summary(source: Mapping[str, Any]) -> CandidateSummaryResponse:
+    quality = source.get("quality_counts")
+    if not isinstance(quality, Mapping):
+        raise TagContractError("Candidate quality counts must be an object.")
+    try:
+        return CandidateSummaryResponse(
+            availability=_strict_text(
+                source.get("availability"),
+                "availability",
+                TagContractError,
+            ),
+            state=_strict_text(source.get("state"), "state", TagContractError),
+            source=_strict_text(source.get("source"), "source", TagContractError),
+            evaluated_paper_count=_nonnegative_integer(
+                source.get("evaluated_paper_count"),
+                "evaluated_paper_count",
+                TagContractError,
+            ),
+            candidate_count=_nonnegative_integer(
+                source.get("candidate_count"),
+                "candidate_count",
+                TagContractError,
+            ),
+            known_canonical_match_count=_nonnegative_integer(
+                source.get("known_canonical_match_count"),
+                "known_canonical_match_count",
+                TagContractError,
+            ),
+            quality_counts=CandidateQualityCounts(
+                high=_nonnegative_integer(quality.get("high"), "quality.high", TagContractError),
+                medium=_nonnegative_integer(
+                    quality.get("medium"),
+                    "quality.medium",
+                    TagContractError,
+                ),
+                weak=_nonnegative_integer(quality.get("weak"), "quality.weak", TagContractError),
+                rejected=_nonnegative_integer(
+                    quality.get("rejected"),
+                    "quality.rejected",
+                    TagContractError,
+                ),
+            ),
+        )
+    except ValueError as error:
+        if isinstance(error, TagContractError):
+            raise
+        raise TagContractError("Candidate summary contains unsupported values.") from None
 
 
 def adapt_paper_list_item(source: Mapping[str, Any]) -> PaperListItem:
