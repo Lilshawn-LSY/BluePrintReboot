@@ -5,12 +5,54 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from fastapi.responses import FileResponse
 
-from api.adapters import PaperContractError, adapt_paper_detail, adapt_paper_list_item, adapt_reader_snapshot
-from api.dependencies import ReadModelUnavailable, get_health_summary, get_library_status, get_managed_pdf, get_paper_detail, get_paper_list_items, get_reader_command_service, get_reader_snapshot
+from api.adapters import (
+    PaperContractError,
+    ProjectContractError,
+    TagContractError,
+    adapt_candidate_summary,
+    adapt_canonical_tag,
+    adapt_paper_detail,
+    adapt_paper_list_item,
+    adapt_project_detail,
+    adapt_project_list_item,
+    adapt_reader_snapshot,
+)
+from api.dependencies import (
+    ReadModelUnavailable,
+    get_candidate_summary,
+    get_canonical_tags,
+    get_health_summary,
+    get_library_status,
+    get_managed_pdf,
+    get_paper_detail,
+    get_paper_list_items,
+    get_project_detail,
+    get_project_list_items,
+    get_reader_command_service,
+    get_reader_snapshot,
+)
 from api.pdf_files import ManagedPdfResult, ManagedPdfState
-from api.schemas import APIError, ArchiveStatus, HealthSummaryResponse, LibraryStatusResponse, MetadataCommandRequest, MetadataCommandResponse, PaginatedPaperList, PaperDetail, PaperListItem, ReadingNoteCommandRequest, ReadingNoteCommandResponse, ReaderSnapshotResponse
+from api.schemas import (
+    APIError,
+    ArchiveStatus,
+    CandidateSummaryResponse,
+    HealthSummaryResponse,
+    LibraryStatusResponse,
+    MetadataCommandRequest,
+    MetadataCommandResponse,
+    PaginatedPaperList,
+    PaginatedProjectList,
+    PaginatedTagList,
+    PaperDetail,
+    ReadingNoteCommandRequest,
+    ReadingNoteCommandResponse,
+    ReaderSnapshotResponse,
+    ProjectDetail,
+)
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem, ReaderSnapshot as DomainReaderSnapshot
+from services.project_read_model import ProjectDetail as DomainProjectDetail, ProjectListItem as DomainProjectListItem
 from services.reader_commands import ReaderCommandConflict, ReaderCommandNotFound, ReaderCommandService, ReaderCommandUnavailable
+from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
 
 
 router = APIRouter()
@@ -31,6 +73,122 @@ def health(summary: Annotated[HealthSummary, Depends(get_health_summary)]) -> He
 @router.get("/library/status", response_model=LibraryStatusResponse)
 def library_status(status: Annotated[LibraryStatus, Depends(get_library_status)]) -> LibraryStatus:
     return status
+
+
+@router.get(
+    "/projects",
+    response_model=PaginatedProjectList,
+    summary="List Projects",
+    description="Return a deterministic, bounded page of allowlisted Project summaries.",
+)
+def list_projects(
+    projects: Annotated[list[DomainProjectListItem], Depends(get_project_list_items)],
+    limit: Annotated[int, Query(ge=1, le=100, description="Maximum number of Projects to return (1-100).")] = 20,
+    offset: Annotated[int, Query(ge=0, description="Zero-based Project offset.")] = 0,
+) -> PaginatedProjectList:
+    try:
+        adapted = sorted(
+            (adapt_project_list_item(project) for project in projects),
+            key=lambda project: (project.name.casefold(), project.project_id),
+        )
+    except ProjectContractError:
+        raise ReadModelUnavailable from None
+    total = len(adapted)
+    items = adapted[offset : offset + limit]
+    return PaginatedProjectList(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(items) < total,
+    )
+
+
+@router.get(
+    "/projects/{project_id}",
+    response_model=ProjectDetail,
+    summary="Get Project detail",
+    description="Return one Project and a bounded page of its stored links and allowlisted paper summaries.",
+    responses={
+        404: {
+            "model": APIError,
+            "description": "No Project has the requested identity.",
+            "content": {"application/json": {"example": {"detail": "Project not found."}}},
+        },
+        503: {
+            "model": APIError,
+            "description": "The local Project read model is temporarily unavailable.",
+        },
+    },
+)
+def project_detail(
+    project_id: Annotated[str, Path(min_length=1, description="Stable Project identity.")],
+    project: Annotated[DomainProjectDetail | None, Depends(get_project_detail)],
+    links_limit: Annotated[int, Query(ge=1, le=100, description="Maximum number of Project links to return (1-100).")] = 20,
+    links_offset: Annotated[int, Query(ge=0, description="Zero-based Project-link offset.")] = 0,
+) -> ProjectDetail:
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    try:
+        return adapt_project_detail(
+            project,
+            links_limit=links_limit,
+            links_offset=links_offset,
+        )
+    except ProjectContractError:
+        raise ReadModelUnavailable from None
+
+
+@router.get(
+    "/tags",
+    response_model=PaginatedTagList,
+    summary="List canonical tags",
+    description="Return a deterministic, bounded page of the canonical Tag Book allowlist.",
+)
+def list_tags(
+    tag_result: Annotated[tuple[list[DomainCanonicalTag], bool], Depends(get_canonical_tags)],
+    limit: Annotated[int, Query(ge=1, le=100, description="Maximum number of canonical tags to return (1-100).")] = 20,
+    offset: Annotated[int, Query(ge=0, description="Zero-based canonical-tag offset.")] = 0,
+) -> PaginatedTagList:
+    tags, loaded_from_fallback = tag_result
+    try:
+        adapted = sorted(
+            (adapt_canonical_tag(tag) for tag in tags),
+            key=lambda tag: (tag.label.casefold(), tag.canonical_key),
+        )
+    except TagContractError:
+        raise ReadModelUnavailable from None
+    total = len(adapted)
+    items = adapted[offset : offset + limit]
+    return PaginatedTagList(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(items) < total,
+        source_state="legacy_fallback" if loaded_from_fallback else "canonical",
+    )
+
+
+@router.get(
+    "/tags/summary",
+    response_model=CandidateSummaryResponse,
+    summary="Get Tag candidate summary",
+    description="Return counts derived from existing local candidate evidence without exposing source content.",
+    responses={
+        503: {
+            "model": APIError,
+            "description": "The local Tag Book read model is temporarily unavailable.",
+        }
+    },
+)
+def tag_candidate_summary(
+    summary: Annotated[DomainCandidateSummary, Depends(get_candidate_summary)],
+) -> CandidateSummaryResponse:
+    try:
+        return adapt_candidate_summary(summary)
+    except TagContractError:
+        raise ReadModelUnavailable from None
 
 
 @router.get(

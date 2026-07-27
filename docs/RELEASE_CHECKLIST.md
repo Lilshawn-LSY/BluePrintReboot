@@ -2,6 +2,20 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.2-projects-tags-read-parity
+
+- [x] Runtime, package/lockfile, visible shell, README, manifest, and release-note draft identify v1.5.2 while the immutable released baseline remains v1.4.0.
+- [x] Projects and Tags GET routes use strict response schemas, service/read-model builders, adapters, deterministic ordering, and bounded pagination.
+- [x] Project detail returns allowlisted stored links and paper summaries, explicit orphan states, generic 404/422/503 behavior, and no storage paths or arbitrary dictionaries.
+- [x] Tag listing returns canonical key, label, category, aliases, status, and real strength only; primary, empty, legacy fallback, and corrupt configuration are controlled.
+- [x] Candidate summary derives fixed counts from existing deterministic data or returns an explicit unavailable state.
+- [x] Projects, Project Detail, and Tags use real API data plus loading, empty, offline, read-model error, not-found where applicable, and explicit GET retry.
+- [x] The bridge admits every new exact GET path and no Project/Tag write path; Reader commands and PDF Range behavior remain unchanged.
+- [x] Disposable tests confirm Project and Tag GETs do not modify Projects, links, Tag Book files, or candidate sources.
+- [x] R-110 and R-111 are implementation-complete; R-113 is partial for Projects/Tags; R-112 is unchanged; G2 remains open.
+- [ ] Manually confirm real Projects list, Project detail, linked-paper state, canonical Tags, aliases/category/status, empty/offline behavior, and no browsing mutation.
+- [ ] v1.5.2 PR, hosted CI, merge, tag, GitHub Release, and post-merge evidence remain open until separately observed.
+
 ## v1.5.1-reader-write-vertical-slice
 
 - [x] Runtime, package/lockfile, visible shell, README, manifest, and release notes identify v1.5.1 while the immutable released baseline remains v1.4.0.

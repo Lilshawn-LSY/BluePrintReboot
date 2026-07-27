@@ -151,6 +151,10 @@ def test_openapi_has_only_intended_application_paths_and_methods() -> None:
         "/papers/{paper_id}/pdf",
         "/papers/{paper_id}/metadata",
         "/papers/{paper_id}/reading-note",
+        "/projects",
+        "/projects/{project_id}",
+        "/tags",
+        "/tags/summary",
     }
     assert {path: set(operations) for path, operations in paths.items()} == {
         "/health": {"get"},
@@ -161,6 +165,10 @@ def test_openapi_has_only_intended_application_paths_and_methods() -> None:
         "/papers/{paper_id}/pdf": {"get"},
         "/papers/{paper_id}/metadata": {"patch"},
         "/papers/{paper_id}/reading-note": {"put"},
+        "/projects": {"get"},
+        "/projects/{project_id}": {"get"},
+        "/tags": {"get"},
+        "/tags/summary": {"get"},
     }
 
 

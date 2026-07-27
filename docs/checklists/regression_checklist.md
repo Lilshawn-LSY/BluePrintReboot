@@ -1,8 +1,26 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.5.1-reader-write-vertical-slice`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
+Required before and after Codex-assisted release work, including `v1.5.2-projects-tags-read-parity`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
+
+## v1.5.2 Projects and Tags Read Parity
+
+- [x] Validate deterministic Project ordering, empty reads, limit/offset/has-more, invalid pagination, detail, unknown identity, link pagination, and strict OpenAPI schemas.
+- [x] Validate linked-paper allowlists, explicit orphan targets, corrupt Projects/links storage, generic 503 responses, path exclusion, and byte/mtime non-mutation.
+- [x] Validate deterministic canonical Tag ordering/pagination, key/label/category/aliases/status/strength, empty and legacy fallback reads, candidate summary, corrupt configuration, path exclusion, and non-mutation.
+- [x] Confirm the same-origin bridge allows only the new exact GET paths, preserves query encoding, distinguishes safe offline/read-model states, and leaves command/PDF handling intact.
+- [x] Confirm Projects and Tags no longer render `DeferredWorkspaceView`; Project detail and linked papers render from typed real contracts.
+- [x] Confirm Tags renders canonical identity, aliases/category/status, real candidate counts or explicit unavailable/empty state, and no generated examples.
+- [x] Confirm shared loading, empty, offline, read-model error, not-found, and retry source contracts; no Project or Tag write control exists.
+- [x] Regress Library, Papers, Paper Detail, Reader Snapshot, Reader commands, PDF Range, Streamlit storage/service tests, release reconciliation, and repository hygiene.
+- [ ] Real Projects list visible.
+- [ ] Real Project detail visible.
+- [ ] Linked-paper available/orphan state visible.
+- [ ] Real canonical Tags and aliases/category/status visible.
+- [ ] Empty-state behavior visible with approved disposable data.
+- [ ] API-offline behavior and retry visible.
+- [ ] Browsing confirmed not to modify `projects.json`, `project_links.json`, or Tag Book configuration files.
 
 ## v1.5.1 Reader Write Vertical Slice
 

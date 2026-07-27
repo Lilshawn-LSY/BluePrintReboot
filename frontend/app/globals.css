@@ -112,6 +112,10 @@ button, input { font: inherit; }
 .state-frame { min-height: 6rem; display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); border: var(--border); border-radius: var(--radius-md); background: var(--color-surface-subtle); }
 .state-frame__icon { display: grid; place-items: center; color: var(--color-text-muted); }
 .state-frame p { margin: var(--space-1) 0 0; color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+.state-frame__action { margin-left: auto; }
+.state-retry { min-height: 2.1rem; padding: var(--space-1) var(--space-3); border: var(--border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-accent); font: inherit; font-size: var(--font-size-sm); font-weight: 650; cursor: pointer; }
+.state-retry:hover { border-color: var(--color-accent); }
+.state-retry:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-accent) 35%, transparent); outline-offset: 2px; }
 .loading-icon { animation: spin 900ms linear infinite; }
 .data-table-shell { overflow-x: auto; background: var(--color-surface); border: var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-subtle); }
 table { width: 100%; border-collapse: collapse; font-size: var(--font-size-sm); }
@@ -142,6 +146,7 @@ tbody tr:hover { background: var(--color-surface-subtle); }
 .purpose-copy { max-width: 54rem; margin: 0; color: var(--color-text-secondary); }
 .mono-id { font-family: var(--font-geist-mono), ui-monospace, monospace; }
 .muted-text { color: var(--color-text-muted); }
+.project-tag-row { margin-top: var(--space-4); }
 .paper-detail-actions { display: grid; justify-items: end; gap: var(--space-3); }
 .reader-action { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 2.25rem; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--color-accent); color: white; font-size: var(--font-size-sm); font-weight: 650; }
 .reader-action:hover { background: #345848; }

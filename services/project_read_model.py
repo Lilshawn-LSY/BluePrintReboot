@@ -1,0 +1,174 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Mapping, TypedDict
+
+from services.library_read_model import build_paper_list_items
+from storage.paths import INDEX_CSV, PROJECTS_DIR
+from storage.project_link_store import list_project_links
+from storage.project_store import list_projects
+
+
+class ProjectListItem(TypedDict):
+    project_id: str
+    name: str
+    description: str
+    status: str
+    priority: str
+    tags: list[str]
+    created_at: str
+    updated_at: str
+    link_count: int
+    linked_paper_count: int
+
+
+class LinkedPaperSummary(TypedDict):
+    paper_id: str
+    title: str
+    first_author: str
+    year: str
+    status: str
+    priority: str
+    tags: list[str]
+    archived: bool
+
+
+class ProjectLinkTarget(TypedDict):
+    link_id: str
+    link_type: str
+    target_type: str
+    target_state: str
+    paper_id: str
+    created_at: str
+    paper: LinkedPaperSummary | None
+
+
+class ProjectDetail(ProjectListItem):
+    links: list[ProjectLinkTarget]
+    orphaned_link_count: int
+
+
+def _base_project(
+    project: Mapping[str, Any],
+    links: list[Mapping[str, Any]],
+) -> ProjectListItem:
+    paper_link_count = sum(link.get("target_type") == "paper" for link in links)
+    return {
+        "project_id": str(project["id"]),
+        "name": str(project["name"]),
+        "description": str(project["description"]),
+        "status": str(project["status"]),
+        "priority": str(project["priority"]),
+        "tags": [str(tag) for tag in project["tags"]],
+        "created_at": str(project["created_at"]),
+        "updated_at": str(project["updated_at"]),
+        "link_count": len(links),
+        "linked_paper_count": paper_link_count,
+    }
+
+
+def _load_projects_and_links(
+    projects_dir: Path | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    base_dir = Path(projects_dir) if projects_dir is not None else PROJECTS_DIR
+    projects = list_projects(base_dir)
+    links = list_project_links(base_dir)
+    project_ids = [str(project["id"]) for project in projects]
+    if len(project_ids) != len(set(project_ids)):
+        raise ValueError("Project identities must be unique.")
+    link_ids = [str(link["id"]) for link in links]
+    if len(link_ids) != len(set(link_ids)):
+        raise ValueError("Project link identities must be unique.")
+    return projects, links
+
+
+def build_project_list_items(
+    *,
+    projects_dir: Path | None = None,
+) -> list[ProjectListItem]:
+    projects, links = _load_projects_and_links(projects_dir)
+    links_by_project: dict[str, list[Mapping[str, Any]]] = {}
+    for link in links:
+        links_by_project.setdefault(str(link["project_id"]), []).append(link)
+    return [
+        _base_project(project, links_by_project.get(str(project["id"]), []))
+        for project in projects
+    ]
+
+
+def _linked_paper_summary(source: Mapping[str, Any]) -> LinkedPaperSummary:
+    return {
+        "paper_id": str(source["paper_id"]),
+        "title": str(source.get("title", "")),
+        "first_author": str(source.get("first_author", "")),
+        "year": str(source.get("year", "")),
+        "status": str(source.get("status", "")),
+        "priority": str(source.get("priority", "")),
+        "tags": [str(tag) for tag in source.get("tags", [])],
+        "archived": bool(source.get("archived", False)),
+    }
+
+
+def build_project_detail(
+    project_id: str,
+    *,
+    projects_dir: Path | None = None,
+    index_csv: Path | None = None,
+) -> ProjectDetail | None:
+    projects, all_links = _load_projects_and_links(projects_dir)
+    project = next(
+        (candidate for candidate in projects if str(candidate["id"]) == project_id),
+        None,
+    )
+    if project is None:
+        return None
+
+    links = [
+        link for link in all_links
+        if str(link["project_id"]) == project_id
+    ]
+    paper_links = [link for link in links if link["target_type"] == "paper"]
+    papers_by_id: dict[str, LinkedPaperSummary] = {}
+    if paper_links:
+        paper_items = build_paper_list_items(
+            index_csv=Path(index_csv) if index_csv is not None else INDEX_CSV,
+            health_report={},
+        )
+        papers_by_id = {
+            str(item["paper_id"]): _linked_paper_summary(item)
+            for item in paper_items
+            if str(item.get("paper_id", "")).strip()
+        }
+
+    targets: list[ProjectLinkTarget] = []
+    orphaned_count = 0
+    for link in links:
+        target_type = str(link["target_type"])
+        paper_id = (
+            str(link.get("paper_id", "") or link["target_id"])
+            if target_type == "paper"
+            else ""
+        )
+        paper = papers_by_id.get(paper_id) if paper_id else None
+        if target_type == "paper":
+            target_state = "available" if paper is not None else "orphaned"
+            orphaned_count += paper is None
+        else:
+            target_state = "not_applicable"
+        targets.append(
+            {
+                "link_id": str(link["id"]),
+                "link_type": str(link["link_type"]),
+                "target_type": target_type,
+                "target_state": target_state,
+                "paper_id": paper_id,
+                "created_at": str(link["created_at"]),
+                "paper": paper,
+            }
+        )
+    targets.sort(key=lambda link: (link["created_at"], link["link_id"]))
+    return {
+        **_base_project(project, links),
+        "links": targets,
+        "orphaned_link_count": orphaned_count,
+    }

@@ -1,6 +1,6 @@
 # BluePrintReboot Backlog
 
-Stable backlog last edited: 2026-07-26
+Stable backlog last edited: 2026-07-27
 
 Current release evidence and individually addressable pending checks live in the generated [Current Release Status](CURRENT_RELEASE_STATUS.md). This backlog does not duplicate mutable counts or verification state.
 
@@ -15,6 +15,21 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.3.1 release-state convergence, tracked-entry hygiene, and deterministic tracker export.
 - [x] v1.5.0 read-only Reader Snapshot vertical slice implementation.
 - [x] v1.5.1 bounded Reader write vertical slice implementation.
+- [x] v1.5.2 Projects and Tags read parity implementation.
+
+## v1.5.2 Projects and Tags read parity
+
+- [x] Add strict paginated `GET /projects` and bounded `GET /projects/{project_id}` contracts through read-model and adapter boundaries.
+- [x] Expose allowlisted Project status, priority, tags, description, timestamps, stored link types, and linked-paper summaries.
+- [x] Keep missing linked papers as explicit orphan states; return controlled 404/422/503 responses without paths or internal exception details.
+- [x] Add strict paginated `GET /tags` and fixed `GET /tags/summary` contracts backed by the Tag Book and real candidate evidence.
+- [x] Preserve primary, empty, and legacy Tag Book reads while excluding `source_paths`, configuration locations, raw records, and write internals.
+- [x] Replace the Projects and Tags placeholders with real list/detail/table views and shared loading, empty, offline, read-model error, not-found, and retry behavior.
+- [x] Keep the same-origin bridge path allowlist exact and preserve PDF Range plus Reader command behavior.
+- [x] Add disposable backend and frontend regressions for deterministic pagination, failures, privacy, non-mutation, real fields, and absence of write controls.
+- [ ] Complete manual checks for real Project list/detail/link states, real canonical Tags, empty/offline behavior, and Project/Tag storage non-mutation.
+- [ ] Record v1.5.2 pull request, hosted CI, merge, tag, GitHub Release, or post-merge evidence only after those events occur.
+- [ ] Complete R-113 beyond Projects/Tags; Settings remains a placeholder and G2 remains open.
 
 ## v1.5.1 bounded Reader write vertical slice
 

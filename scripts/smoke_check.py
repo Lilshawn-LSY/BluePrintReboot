@@ -61,6 +61,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.4.0.md",
     "docs/release_notes/v1.5.0.md",
     "docs/release_notes/v1.5.1.md",
+    "docs/release_notes/v1.5.2.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -281,12 +282,16 @@ def check_api_contract() -> SmokeCheckResult:
             "/papers/{paper_id}/pdf": {"get"},
             "/papers/{paper_id}/metadata": {"patch"},
             "/papers/{paper_id}/reading-note": {"put"},
+            "/projects": {"get"},
+            "/projects/{project_id}": {"get"},
+            "/tags": {"get"},
+            "/tags/summary": {"get"},
         }
         if {path: set(operations) for path, operations in paths.items()} != expected_methods:
-            raise ValueError("API application paths do not match the bounded Reader command surface")
+            raise ValueError("API application paths do not match the bounded read and Reader command surface")
     except Exception as exc:
         return SmokeCheckResult("api:application-contract", "fail", str(exc))
-    return SmokeCheckResult("api:application-contract", "pass", f"six GET routes and two Reader commands for {APP_VERSION}")
+    return SmokeCheckResult("api:application-contract", "pass", f"ten GET routes and two Reader commands for {APP_VERSION}")
 
 
 def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
@@ -303,7 +308,18 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
         api_client = (frontend_root / "app/lib/api/client.ts").read_text(encoding="utf-8")
         if "SidebarNavigation" not in shell or "main-content" not in shell:
             raise ValueError("frontend application shell is incomplete")
-        for method in ("getHealth", "getLibraryStatus", "getPapers", "getPaper", "saveReaderMetadata", "saveReadingNote"):
+        for method in (
+            "getHealth",
+            "getLibraryStatus",
+            "getPapers",
+            "getPaper",
+            "getProjects",
+            "getProject",
+            "getTags",
+            "getTagSummary",
+            "saveReaderMetadata",
+            "saveReadingNote",
+        ):
             if method not in api_client:
                 raise ValueError(f"frontend API client is missing {method}")
         if "paperPdfUrl" not in api_client:
@@ -323,7 +339,7 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             raise ValueError("PDF.js lifecycle diagnostics contract is incomplete")
     except Exception as exc:
         return SmokeCheckResult("frontend:application-contract", "fail", str(exc))
-    return SmokeCheckResult("frontend:application-contract", "pass", f"eight routes share the v{APP_VERSION} shell")
+    return SmokeCheckResult("frontend:application-contract", "pass", f"nine routes share the v{APP_VERSION} shell")
 
 
 def run_smoke_check(project_root: Path = PROJECT_ROOT) -> list[SmokeCheckResult]:

@@ -16,11 +16,11 @@ import {
 
 const API_URL = "http://127.0.0.1:8000";
 
-test("allows the existing read routes plus the exact managed PDF and Reader routes", () => {
-  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"]]) {
+test("allows the bounded read routes plus the exact managed PDF and Reader routes", () => {
+  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"]]) {
     assert.equal(isAllowedBlueprintPath(parts), true, parts.join("/"));
   }
-  for (const parts of [[], ["library"], ["projects"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["papers", "paper-123", "reader", "raw"], ["health", "extra"]]) {
+  for (const parts of [[], ["library"], ["settings"], ["tags", "unknown"], ["projects", "project-123", "edit"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["papers", "paper-123", "reader", "raw"], ["health", "extra"]]) {
     assert.equal(isAllowedBlueprintPath(parts), false, parts.join("/"));
   }
   assert.equal(isBlueprintPdfPath(["papers", "paper-123", "pdf"]), true);
@@ -152,8 +152,8 @@ test("forwards the exact Reader route as JSON without a Range header", async () 
 test("returns 404 for an unlisted path without contacting the upstream API", async () => {
   let fetched = false;
   const response = await proxyBlueprintGet(
-    new Request("http://localhost/api/blueprint/projects"),
-    ["projects"],
+    new Request("http://localhost/api/blueprint/settings"),
+    ["settings"],
     { apiUrl: API_URL, fetchImpl: async () => { fetched = true; return new Response(); } },
   );
 
@@ -183,6 +183,35 @@ test("forwards query parameters and safely encodes paper ids", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(requestedUrl, `${API_URL}/papers/paper%201?view=detail`);
+});
+
+test("forwards the bounded Projects and Tags GET contracts", async () => {
+  const requests = [];
+  for (const [url, parts] of [
+    ["http://localhost/api/blueprint/projects?limit=100&offset=0", ["projects"]],
+    ["http://localhost/api/blueprint/projects/project%201?links_limit=100", ["projects", "project 1"]],
+    ["http://localhost/api/blueprint/tags?limit=100&offset=0", ["tags"]],
+    ["http://localhost/api/blueprint/tags/summary", ["tags", "summary"]],
+  ]) {
+    const response = await proxyBlueprintGet(
+      new Request(url),
+      parts,
+      {
+        apiUrl: API_URL,
+        fetchImpl: async (target, options) => {
+          requests.push([target, options.method, options.headers.get("Range")]);
+          return Response.json({ ok: true });
+        },
+      },
+    );
+    assert.equal(response.status, 200);
+  }
+  assert.deepEqual(requests, [
+    [`${API_URL}/projects?limit=100&offset=0`, "GET", null],
+    [`${API_URL}/projects/project%201?links_limit=100`, "GET", null],
+    [`${API_URL}/tags?limit=100&offset=0`, "GET", null],
+    [`${API_URL}/tags/summary`, "GET", null],
+  ]);
 });
 
 test("preserves an upstream 404 response", async () => {
@@ -301,6 +330,7 @@ test("maps upstream 5xx responses to the generic local 503", async () => {
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { detail: "Local BluePrintReboot API is unavailable." });
+  assert.equal(response.headers.get("X-Blueprint-Error-State"), "read-model-unavailable");
 });
 
 test("maps fetch failures to the generic local 503", async () => {
@@ -312,6 +342,7 @@ test("maps fetch failures to the generic local 503", async () => {
 
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { detail: "Local BluePrintReboot API is unavailable." });
+  assert.equal(response.headers.get("X-Blueprint-Error-State"), "api-unavailable");
 });
 
 test("the route exposes only GET plus the two bounded write methods", async () => {

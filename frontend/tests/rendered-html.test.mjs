@@ -39,7 +39,7 @@ test("server-renders the stable research workspace shell", async () => {
 });
 
 test("all required routes render inside the shared shell", async () => {
-  for (const path of ["/dashboard", "/library", "/papers", "/papers/example-paper", "/papers/example-paper/reader", "/projects", "/tags", "/settings"]) {
+  for (const path of ["/dashboard", "/library", "/papers", "/papers/example-paper", "/papers/example-paper/reader", "/projects", "/projects/example-project", "/tags", "/settings"]) {
     const response = await render(path);
     assert.equal(response.status, 200, path);
     const html = await response.text();
@@ -121,8 +121,8 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /return "Reader"/);
-  assert.match(shell, /v1\.5\.1/);
-  assert.doesNotMatch(shell, /v1\.5\.0/);
+  assert.match(shell, /v1\.5\.2/);
+  assert.doesNotMatch(shell, /v1\.5\.1/);
 });
 
 test("production build contains the repository-local PDF.js worker asset", async () => {
@@ -139,7 +139,7 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
   assert.match(readerView, /reader-snapshot:\$\{paperId\}:\$\{retryCount\}/);
   assert.match(readerView, /apiClient\.getReaderSnapshot\(paperId\)/);
   assert.doesNotMatch(readerView, /apiClient\.getPaper\(paperId\)/);
-  assert.match(resourceHook, /if \(state\.resourceKey !== key\) return \{ status: "loading" \}/);
+  assert.match(resourceHook, /if \(state\.resourceKey !== activeResourceKey\) return \{ status: "loading", retry \}/);
   assert.match(readerView, /snapshot\.pdf_state === "missing"/);
   assert.match(readerView, /saved_note_baseline\.exists/);
   assert.match(readerView, /No persisted note exists/);
@@ -151,12 +151,13 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
 });
 
 test("keeps tokens, API access, and page views separated", async () => {
-  const [css, client, shell, papers, project, packageJson] = await Promise.all([
+  const [css, client, shell, papers, projects, tags, packageJson] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/lib/api/client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/components/AppShell.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/views/PapersView.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/projects/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/views/ProjectsView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/views/TagsView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
@@ -168,8 +169,13 @@ test("keeps tokens, API access, and page views separated", async () => {
   assert.match(client, /getLibraryStatus/);
   assert.match(client, /getPapers/);
   assert.match(client, /getPaper/);
+  assert.match(client, /getProjects/);
+  assert.match(client, /getProject/);
+  assert.match(client, /getTags/);
+  assert.match(client, /getTagSummary/);
   assert.doesNotMatch(shell, /fetch\s*\(/);
   assert.doesNotMatch(papers, /fetch\s*\(/);
-  assert.match(project, /API not available|future read\/write project API/);
+  assert.doesNotMatch(projects, /fetch\s*\(/);
+  assert.doesNotMatch(tags, /fetch\s*\(/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton|drizzle/);
 });

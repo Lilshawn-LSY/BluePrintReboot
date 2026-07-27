@@ -1,9 +1,9 @@
-import type { DashboardSnapshot, EditablePaperMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, PaginatedPaperList, PaperDetail, ReaderSnapshot, ReadingNoteCommandResponse } from "./types";
+import type { CandidateSummary, DashboardSnapshot, EditablePaperMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, ProjectDetail, ReaderSnapshot, ReadingNoteCommandResponse } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
 export class ApiClientError extends Error {
-  constructor(message: string, public readonly kind: "unavailable" | "not-found" | "conflict" | "invalid" | "error", public readonly status?: number) {
+  constructor(message: string, public readonly kind: "unavailable" | "read-model" | "not-found" | "conflict" | "invalid" | "error", public readonly status?: number) {
     super(message);
     this.name = "ApiClientError";
   }
@@ -11,7 +11,7 @@ export class ApiClientError extends Error {
 
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "PATCH" | "PUT"; body?: object } = {},
+  options: { method?: "GET" | "PATCH" | "PUT"; body?: object; notFoundMessage?: string } = {},
 ): Promise<T> {
   let response: Response;
   try {
@@ -28,8 +28,14 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    if (response.status === 503) throw new ApiClientError("The local BluePrintReboot API is unavailable.", "unavailable", 503);
-    if (response.status === 404) throw new ApiClientError("The requested paper was not found.", "not-found", 404);
+    if (response.status === 503) {
+      const failureState = response.headers.get("X-Blueprint-Error-State");
+      if (failureState === "api-unavailable") {
+        throw new ApiClientError("The local BluePrintReboot API could not be reached.", "unavailable", 503);
+      }
+      throw new ApiClientError("The local read model could not be read. Check the local data state and retry.", "read-model", 503);
+    }
+    if (response.status === 404) throw new ApiClientError(options.notFoundMessage ?? "The requested paper was not found.", "not-found", 404);
     if (response.status === 409) throw new ApiClientError("The saved version changed. Reload the current version before retrying.", "conflict", 409);
     if (response.status === 422) throw new ApiClientError("The submitted Reader data is invalid.", "invalid", 422);
     throw new ApiClientError(`The local API returned HTTP ${response.status}.`, "error", response.status);
@@ -53,6 +59,31 @@ export const apiClient = {
     return request<PaginatedPaperList>(`/papers?${params}`);
   },
   getPaper: (paperId: string) => request<PaperDetail>(`/papers/${encodeURIComponent(paperId)}`),
+  getProjects: (options: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams({
+      limit: String(options.limit ?? 20),
+      offset: String(options.offset ?? 0),
+    });
+    return request<PaginatedProjectList>(`/projects?${params}`);
+  },
+  getProject: (projectId: string, options: { linksLimit?: number; linksOffset?: number } = {}) => {
+    const params = new URLSearchParams({
+      links_limit: String(options.linksLimit ?? 20),
+      links_offset: String(options.linksOffset ?? 0),
+    });
+    return request<ProjectDetail>(
+      `/projects/${encodeURIComponent(projectId)}?${params}`,
+      { notFoundMessage: "The requested Project was not found." },
+    );
+  },
+  getTags: (options: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams({
+      limit: String(options.limit ?? 20),
+      offset: String(options.offset ?? 0),
+    });
+    return request<PaginatedTagList>(`/tags?${params}`);
+  },
+  getTagSummary: () => request<CandidateSummary>("/tags/summary"),
   getReaderSnapshot: (paperId: string) => request<ReaderSnapshot>(`/papers/${encodeURIComponent(paperId)}/reader`),
   saveReaderMetadata: (
     paperId: string,

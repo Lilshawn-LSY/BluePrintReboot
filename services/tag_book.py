@@ -208,7 +208,12 @@ def normalize_tag_with_rules(value: Any, rules: dict[str, Any] | None = None) ->
     return text.strip("-")
 
 
-def load_tag_book(tag_book_dir: str | Path | None = None) -> dict[str, Any]:
+def load_tag_book(
+    tag_book_dir: str | Path | None = None,
+    *,
+    legacy_rule_path: str | Path | None = None,
+    legacy_canonical_tag_path: str | Path | None = None,
+) -> dict[str, Any]:
     base_dir = Path(tag_book_dir) if tag_book_dir is not None else DEFAULT_TAG_BOOK_DIR
     tag_book_path = base_dir / "tag_book.json"
     if tag_book_path.exists():
@@ -216,7 +221,13 @@ def load_tag_book(tag_book_dir: str | Path | None = None) -> dict[str, Any]:
         loaded_from = tag_book_path
         loaded_from_fallback = False
     else:
-        raw_tag_book = {"version": "compat", "tags": _legacy_tag_records()}
+        raw_tag_book = {
+            "version": "compat",
+            "tags": _legacy_tag_records(
+                rule_path=legacy_rule_path,
+                canonical_tag_path=legacy_canonical_tag_path,
+            ),
+        }
         loaded_from = None
         loaded_from_fallback = True
 
@@ -1211,9 +1222,16 @@ def _serializable_tag_record(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _legacy_tag_records() -> list[dict[str, Any]]:
-    raw_rules = _read_json(LEGACY_RULE_PATH, {})
-    raw_registry = _read_json(LEGACY_CANONICAL_TAG_PATH, {})
+def _legacy_tag_records(
+    *,
+    rule_path: str | Path | None = None,
+    canonical_tag_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    raw_rules = _read_json(Path(rule_path) if rule_path is not None else LEGACY_RULE_PATH, {})
+    raw_registry = _read_json(
+        Path(canonical_tag_path) if canonical_tag_path is not None else LEGACY_CANONICAL_TAG_PATH,
+        {},
+    )
     rules = raw_rules if isinstance(raw_rules, dict) else {}
     registry = raw_registry if isinstance(raw_registry, dict) else {}
     records: list[dict[str, Any]] = []

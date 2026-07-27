@@ -178,6 +178,10 @@ def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> No
         "/papers/{paper_id}/reader",
         "/papers/{paper_id}/metadata",
         "/papers/{paper_id}/reading-note",
+        "/projects",
+        "/projects/{project_id}",
+        "/tags",
+        "/tags/summary",
     }
     assert set(paths["/papers/{paper_id}/metadata"]) == {"patch"}
     assert set(paths["/papers/{paper_id}/reading-note"]) == {"put"}
