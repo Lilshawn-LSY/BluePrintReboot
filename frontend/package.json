@@ -1,6 +1,6 @@
 {
   "name": "blueprint-reboot-frontend",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -9,7 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/api-bridge.test.mjs tests/projects-tags-read-parity.test.mjs tests/settings-health-read-parity.test.mjs tests/pdf-reader-controller.test.mjs tests/reader-editor-state.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/api-bridge.test.mjs tests/projects-tags-read-parity.test.mjs tests/settings-health-read-parity.test.mjs tests/pdf-reader-controller.test.mjs tests/reader-editor-state.test.mjs tests/project-editor-state.test.mjs tests/project-write-paper-links.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {

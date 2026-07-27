@@ -9,6 +9,7 @@ from services import (
 )
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail, PaperListItem, ReaderSnapshot
 from services.project_read_model import ProjectDetail, ProjectListItem
+from services.project_commands import ProjectCommandService
 from services.reader_commands import ReaderCommandService
 from services.settings_read_model import SettingsSummary
 from services.tag_read_model import CandidateSummary, CanonicalTag
@@ -19,6 +20,7 @@ class ReadModelUnavailable(Exception):
 
 
 _reader_command_service = ReaderCommandService()
+_project_command_service = ProjectCommandService()
 
 
 def get_health_summary() -> HealthSummary:
@@ -100,3 +102,7 @@ def get_settings_summary() -> SettingsSummary:
 
 def get_reader_command_service() -> ReaderCommandService:
     return _reader_command_service
+
+
+def get_project_command_service() -> ProjectCommandService:
+    return _project_command_service

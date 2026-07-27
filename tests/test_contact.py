@@ -4,7 +4,7 @@ from config.contact import APP_VERSION, DEFAULT_CONTACT_EMAIL, build_blueprint_u
 
 
 def test_app_version_is_v1_5_3() -> None:
-    assert APP_VERSION == "1.5.3"
+    assert APP_VERSION == "1.5.4"
 
 
 def test_contact_email_prefers_crossref_mailto(monkeypatch) -> None:

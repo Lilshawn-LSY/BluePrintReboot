@@ -1,6 +1,6 @@
 # BluePrintReboot frontend
 
-The v1.5.3 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. Settings now consumes one strict, bounded, read-only summary for application, workspace, lightweight data-integrity, and backup-readiness facts. Projects, Project Detail, and Tags retain their real local GET contracts, and the Reader retains separate explicit saves for seven bibliographic fields and the persisted Reading Note. The established Streamlit interface remains available for the complete local workflow and every maintenance action.
+The v1.5.4 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. Projects now supports explicit creation, allowlisted metadata edit/save/cancel, one-way archive, and adding or removing links to existing Papers. Optimistic Project and link revisions preserve drafts or selections on conflicts and failures. There is no autosave, Project delete/unarchive, Note Block command, Tag write, or Settings write. The Reader retains its separate explicit metadata and Reading Note saves.
 
 ## Local development
 
@@ -11,7 +11,7 @@ Start FastAPI from the repository root, then start the frontend:
 .\scripts\run_frontend.ps1
 ```
 
-The frontend uses a strictly allowlisted same-origin server bridge to `http://127.0.0.1:8000` by default. The bridge permits the bounded Health, Library, Papers, Reader, Projects, Tags, and exact Settings summary GET routes plus only metadata PATCH and Reading Note PUT. Copy `.env.example` to `.env.local` only when the API address needs to change.
+The frontend uses a strictly allowlisted same-origin server bridge to `http://127.0.0.1:8000` by default. In addition to bounded GETs and the two Reader commands, the bridge permits only POST `/projects`, PATCH `/projects/{project_id}`, POST `/projects/{project_id}/archive`, POST `/projects/{project_id}/paper-links`, and DELETE `/projects/{project_id}/paper-links/{link_id}`. Copy `.env.example` to `.env.local` only when the API address needs to change.
 
 ## Commands
 
@@ -22,4 +22,4 @@ npm test
 npm run lint
 ```
 
-The shell remains navigable when FastAPI is offline and displays explicit unavailable states. Settings distinguishes verified zeroes from unavailable diagnostics, keeps partial section warnings visible, and offers only the shared GET retry. It contains no configuration, backup, restore, repair, debug, or data-removal controls.
+The shell remains navigable when FastAPI is offline and displays explicit unavailable states. Failed and conflicting Project commands never erase the current draft. Archived Project detail remains readable but has no Project edit, archive, add-link, or unlink controls. The Paper picker comes from the real bounded Paper collection and never fabricates records.

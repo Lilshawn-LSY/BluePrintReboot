@@ -8,11 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.3-settings-health-read-parity**.
+Current runtime target: **v1.5.4-project-write-paper-links**.
 
-v1.5.3 replaces the final Settings placeholder with `GET /settings/summary` and a real read-only Settings view. The response contains only canonical version/API state, bounded workspace counts, six stable lightweight integrity counts with explicit unavailable states, and safe backup-snapshot presence/last-updated evidence. It never returns paths, filenames, hashes, environment or host details, raw errors, configuration, manifests, or private records.
+v1.5.4 adds the first bounded Project write slice: explicit Project creation, allowlisted metadata updates, one-way archive, and add/remove commands for links to existing Papers. Project and link commands use workspace locking, reload-after-lock optimistic revisions, atomic replacement, rollback verification, and strict private-safe API contracts. There is no Project deletion, unarchive, Tag write, Note Block command, autosave, or bulk mutation.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.3. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit write workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.4. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -45,7 +45,7 @@ Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the 
 
 ## Bounded Local API
 
-Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while exactly two Reader command routes remain the mutation boundary. Project, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
+Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while two Reader commands and five Project/Paper-link commands form the exact mutation boundary. Project, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
 
 Start it from Windows PowerShell:
 
@@ -66,6 +66,11 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Reading Note command: `PUT http://127.0.0.1:8000/papers/{paper_id}/reading-note`
 - Project collection: [http://127.0.0.1:8000/projects](http://127.0.0.1:8000/projects)
 - Project detail: `GET http://127.0.0.1:8000/projects/{project_id}`
+- Create Project: `POST http://127.0.0.1:8000/projects`
+- Update Project metadata: `PATCH http://127.0.0.1:8000/projects/{project_id}`
+- Archive Project: `POST http://127.0.0.1:8000/projects/{project_id}/archive`
+- Add existing Paper link: `POST http://127.0.0.1:8000/projects/{project_id}/paper-links`
+- Remove Paper link: `DELETE http://127.0.0.1:8000/projects/{project_id}/paper-links/{link_id}`
 - Canonical Tags: [http://127.0.0.1:8000/tags](http://127.0.0.1:8000/tags)
 - Tag candidate summary: [http://127.0.0.1:8000/tags/summary](http://127.0.0.1:8000/tags/summary)
 - Safe Settings summary: [http://127.0.0.1:8000/settings/summary](http://127.0.0.1:8000/settings/summary)
@@ -77,6 +82,8 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 `GET /settings/summary` has no query or write surface. It returns four strict sections: Application, Workspace, Data integrity, and Backup readiness. Its lightweight reader caps file discovery, index rows, per-file JSON reads, and total JSON bytes per request; checks only file presence and app-owned metadata; and never hashes or parses PDFs, extracts text, opens snapshot archives, verifies restores, or writes cache/report/status files. Missing diagnostics use `state: "unavailable"` with `count: null`, which is distinct from a verified zero.
 
 Metadata requests contain `changes` plus `expected_revision`. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
+
+Project update/archive requests use `expected_revision`; Paper-link add/remove requests use `expected_links_revision`. Both tokens are deterministic SHA-256 revisions over the complete relevant stored state. Commands acquire the shared workspace write lock, reload after lock acquisition, reject stale state without mutation, and verify persisted output. Project create/update/archive touch only Project storage; Paper-link commands touch only link storage. Archive preserves existing links and is not deletion.
 
 The equivalent direct command is `python -m uvicorn api.main:app --host 127.0.0.1 --port 8000` when the repository environment is active.
 
@@ -104,7 +111,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
 
 If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
-Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags, and Settings use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. Settings keeps partial section warnings visible, distinguishes unavailable diagnostics from verified zeroes, and exposes no action controls. The Reader makes one Snapshot request for paper and persisted-note context, exposes only the two bounded explicit saves, and uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL with a PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser. The shell remains navigable when FastAPI is offline.
+Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags, and Settings use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. Projects provides an explicit create form. Active Project detail provides explicit edit/save/cancel/archive and a bounded picker for existing Papers; conflicts and offline failures preserve drafts or selections, duplicate links report an honest unchanged result, unlink requires confirmation, and archived Projects retain read detail without write controls. Settings remains read-only. The Reader retains its two bounded explicit saves, with the PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser.
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
@@ -252,6 +259,7 @@ Foundation release documents:
 - [v1.5.1 Reader Write Vertical Slice release notes](docs/release_notes/v1.5.1.md)
 - [v1.5.2 Projects and Tags Read Parity release-note draft](docs/release_notes/v1.5.2.md)
 - [v1.5.3 Settings and Health Safe Read Parity release-note draft](docs/release_notes/v1.5.3.md)
+- [v1.5.4 Project Write and Paper–Project Link Commands release-note draft](docs/release_notes/v1.5.4.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)

@@ -25,6 +25,22 @@ export function isBlueprintReadingNotePath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "reading-note";
 }
 
+export function isBlueprintProjectPath(parts) {
+  return Array.isArray(parts) && parts.length === 2 && parts[0] === "projects";
+}
+
+export function isBlueprintProjectArchivePath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "projects" && parts[2] === "archive";
+}
+
+export function isBlueprintProjectPaperLinksPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "projects" && parts[2] === "paper-links";
+}
+
+export function isBlueprintProjectPaperLinkPath(parts) {
+  return Array.isArray(parts) && parts.length === 4 && parts[0] === "projects" && parts[2] === "paper-links";
+}
+
 function hasSafeSegments(parts) {
   return Array.isArray(parts) && parts.every((part) => (
     typeof part === "string"
@@ -57,8 +73,16 @@ export function isAllowedBlueprintRequest(method, parts) {
   const normalizedMethod = String(method || "").toUpperCase();
   if (!hasSafeSegments(parts)) return false;
   if (normalizedMethod === "GET") return isAllowedBlueprintPath(parts);
-  if (normalizedMethod === "PATCH") return isBlueprintMetadataPath(parts);
+  if (normalizedMethod === "POST") {
+    return (parts.length === 1 && parts[0] === "projects")
+      || isBlueprintProjectArchivePath(parts)
+      || isBlueprintProjectPaperLinksPath(parts);
+  }
+  if (normalizedMethod === "PATCH") {
+    return isBlueprintMetadataPath(parts) || isBlueprintProjectPath(parts);
+  }
   if (normalizedMethod === "PUT") return isBlueprintReadingNotePath(parts);
+  if (normalizedMethod === "DELETE") return isBlueprintProjectPaperLinkPath(parts);
   return false;
 }
 
@@ -75,7 +99,7 @@ export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl 
 
   const target = buildBlueprintTarget(request.url, parts, apiUrl);
   const pdfRequest = request.method === "GET" && isBlueprintPdfPath(parts);
-  const commandRequest = request.method === "PATCH" || request.method === "PUT";
+  const commandRequest = ["POST", "PATCH", "PUT", "DELETE"].includes(request.method);
   const requestHeaders = new Headers({ Accept: pdfRequest ? "application/pdf" : "application/json" });
   const range = request.headers.get("Range");
   if (pdfRequest && range) requestHeaders.set("Range", range);
@@ -102,7 +126,14 @@ export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl 
     if (upstream.status >= 500) {
       return Response.json(
         { detail: GENERIC_UNAVAILABLE_DETAIL },
-        { status: 503, headers: { "X-Blueprint-Error-State": "read-model-unavailable" } },
+        {
+          status: 503,
+          headers: {
+            "X-Blueprint-Error-State": commandRequest
+              ? "command-unavailable"
+              : "read-model-unavailable",
+          },
+        },
       );
     }
     const responseHeaders = new Headers();

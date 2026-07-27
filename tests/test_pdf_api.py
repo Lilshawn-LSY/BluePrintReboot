@@ -180,21 +180,17 @@ def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> No
         "/papers/{paper_id}/reading-note",
         "/projects",
         "/projects/{project_id}",
+        "/projects/{project_id}/archive",
+        "/projects/{project_id}/paper-links",
+        "/projects/{project_id}/paper-links/{link_id}",
         "/settings/summary",
         "/tags",
         "/tags/summary",
     }
     assert set(paths["/papers/{paper_id}/metadata"]) == {"patch"}
     assert set(paths["/papers/{paper_id}/reading-note"]) == {"put"}
-    assert all(
-        set(operations) == {"get"}
-        for path, operations in paths.items()
-        if path not in {
-            "/papers/{paper_id}/metadata",
-            "/papers/{paper_id}/reading-note",
-        }
-    )
-    assert not any(
-        {"POST", "PUT", "PATCH", "DELETE"} & (getattr(route, "methods", None) or set())
-        for route in application.routes
-    )
+    assert set(paths["/projects"]) == {"get", "post"}
+    assert set(paths["/projects/{project_id}"]) == {"get", "patch"}
+    assert set(paths["/projects/{project_id}/archive"]) == {"post"}
+    assert set(paths["/projects/{project_id}/paper-links"]) == {"post"}
+    assert set(paths["/projects/{project_id}/paper-links/{link_id}"]) == {"delete"}

@@ -28,12 +28,12 @@ def test_version_contract_is_consistent() -> None:
     readme = read_text("README.md")
     manifest = read_manifest()
 
-    assert APP_VERSION == "1.5.3"
+    assert APP_VERSION == "1.5.4"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.5.3-settings-health-read-parity"
+    assert manifest["release_name"] == "v1.5.4-project-write-paper-links"
     assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
     assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
@@ -99,6 +99,7 @@ def test_schema_five_manifest_is_the_current_release_authority() -> None:
     assert manifest["manual_validation"]["streamlit_regression"]["status"] == "VERIFIED"
     assert manifest["manual_validation"]["reader_snapshot_runtime"]["status"] == "PARTIALLY VERIFIED"
     assert manifest["manual_validation"]["reader_write_runtime"]["status"] == "PARTIALLY VERIFIED"
+    assert manifest["manual_validation"]["project_write_runtime"]["status"] == "NOT VERIFIED"
     assert {
         check_id
         for check_id, item in manifest["manual_validation"]["reader_write_runtime"]["checks"].items()
@@ -110,6 +111,7 @@ def test_schema_five_manifest_is_the_current_release_authority() -> None:
     } == {"VERIFIED", "NOT VERIFIED"}
     assert "manual_validation.reader_snapshot_runtime" in manifest["unresolved_evidence"]["items"]
     assert "manual_validation.reader_write_runtime" in manifest["unresolved_evidence"]["items"]
+    assert "manual_validation.project_write_runtime" in manifest["unresolved_evidence"]["items"]
     assert manifest["recurring_operational_procedures"]["clean_pc_restore"]["status"] == "NOT VERIFIED"
     assert manifest["publication_state"]["github_release"]["status"] == "NOT VERIFIED"
 
@@ -144,6 +146,8 @@ def test_generated_current_status_is_the_only_volatile_document_surface() -> Non
     assert "| Post-merge `main` GitHub Actions | NOT VERIFIED |" in current_status
     assert "| Reader runtime | VERIFIED |" in current_status
     assert "| Streamlit regression | VERIFIED |" in current_status
+    assert "v1.5.4 Project write manual validation" in current_status
+    assert "Aggregate state: **NOT VERIFIED**" in current_status
     smoke_counts = read_manifest()["automated_validation"]["local_smoke"]["counts"]
     assert (
         f"{smoke_counts['passed']} passed, {smoke_counts['warnings']} warnings, "
@@ -193,5 +197,6 @@ def test_release_documents_contain_no_private_absolute_user_path() -> None:
         "docs/tracker_sync_status.json",
         "docs/CURRENT_RELEASE_STATUS.md",
         "docs/release_notes/v1.4.0.md",
+        "docs/release_notes/v1.5.4.md",
     ):
         assert private_user_path.search(read_text(relative_path)) is None

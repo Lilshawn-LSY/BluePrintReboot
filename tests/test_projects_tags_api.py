@@ -29,6 +29,7 @@ def project_item(project_id: str, name: str) -> dict[str, object]:
         "tags": ["research"],
         "created_at": "2026-01-01T00:00:00+00:00",
         "updated_at": "2026-01-02T00:00:00+00:00",
+        "project_revision": "a" * 64,
         "link_count": 1,
         "linked_paper_count": 1,
         "storage_path": "C:/private/projects.json",
@@ -71,6 +72,7 @@ def project_detail(project_id: str) -> dict[str, object]:
         ],
         "link_count": 2,
         "linked_paper_count": 2,
+        "links_revision": "b" * 64,
         "orphaned_link_count": 1,
     }
 
@@ -611,7 +613,10 @@ def test_openapi_documents_all_new_get_contracts() -> None:
     assert paths["/projects/{project_id}"]["get"]["responses"]["404"]["content"]["application/json"]["schema"]["$ref"].endswith("/APIError")
     assert paths["/tags"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/PaginatedTagList")
     assert paths["/tags/summary"]["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith("/CandidateSummaryResponse")
-    assert set(paths["/projects"]) == {"get"}
-    assert set(paths["/projects/{project_id}"]) == {"get"}
+    assert set(paths["/projects"]) == {"get", "post"}
+    assert set(paths["/projects/{project_id}"]) == {"get", "patch"}
+    assert set(paths["/projects/{project_id}/archive"]) == {"post"}
+    assert set(paths["/projects/{project_id}/paper-links"]) == {"post"}
+    assert set(paths["/projects/{project_id}/paper-links/{link_id}"]) == {"delete"}
     assert set(paths["/tags"]) == {"get"}
     assert set(paths["/tags/summary"]) == {"get"}

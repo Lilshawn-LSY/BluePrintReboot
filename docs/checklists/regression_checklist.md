@@ -1,8 +1,28 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.5.3-settings-health-read-parity`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
+Required before and after Codex-assisted release work, including `v1.5.4-project-write-paper-links`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
+
+## v1.5.4 Project Write and Paper–Project Link Commands
+
+- [x] Validate create defaults, generated stable UUID identity, bounded fields, strict unknown/immutable-field rejection, and private-safe validation errors.
+- [x] Validate allowlisted update, deterministic no-op, one-way archive, repeat archive, link preservation, archived update rejection, and stale Project revision zero-mutation behavior.
+- [x] Validate exact duplicate Paper links as unchanged, distinct allowed link types, existing-Paper validation, archived add rejection, stale link revision behavior, and orphan Paper-link removal.
+- [x] Validate link removal cannot address a missing, cross-Project, or Note Block link and touches only link storage.
+- [x] Inject serialization, atomic replacement, and post-write verification failure and confirm exact original bytes/timestamps are restored.
+- [x] Validate workspace lock contention, reload-after-lock behavior, generic 404/409/422/503 responses, and no private detail leakage.
+- [x] Confirm exact API/bridge methods and paths; reject Project delete/unarchive, Note Block targets, encoded path tricks, wrong methods, and non-JSON command bodies.
+- [x] Confirm explicit create/edit/save/cancel/archive/add/remove source workflows, real bounded Paper selection, draft preservation, conflict reload, duplicate truthfulness, confirmations, and archived-control absence.
+- [x] Regress Project/Tag/Settings reads, Reader commands, managed PDF Range, Streamlit storage/service behavior, release reconciliation, tracker export, and repository hygiene.
+- [ ] Create a real Project in the web UI and verify it appears in Streamlit and survives reload.
+- [ ] Edit every allowlisted Project field in the web UI and verify Streamlit/web convergence after reload.
+- [ ] Link an existing Paper, confirm it in both interfaces, repeat the exact add and confirm unchanged behavior, then remove the link without deleting the Paper.
+- [ ] Archive a Project, confirm its links remain readable and all Project write controls are absent.
+- [ ] Produce a second-tab stale Project and stale link conflict, confirm no newer state is overwritten, preserve the draft/selection, then reload and retry.
+- [ ] Stop/restart FastAPI during a dirty draft and a link selection; confirm explicit unavailable/retry behavior without draft loss or false success.
+- [ ] Inspect browser Network responses for absence of paths, filenames, raw errors, internal dictionaries, private records, and submitted draft echo.
+- [ ] Confirm Note Block reads/writes/link commands, Project delete/unarchive, Tag writes, Settings writes, autosave, bulk actions, and drag/drop remain absent.
 
 ## v1.5.3 Settings and Health Safe Read Parity
 

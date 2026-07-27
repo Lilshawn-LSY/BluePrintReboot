@@ -30,6 +30,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/release_notes/v1.5.1.md",
     "docs/release_notes/v1.5.2.md",
     "docs/release_notes/v1.5.3.md",
+    "docs/release_notes/v1.5.4.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -42,6 +43,8 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "focused_pdf_api",
         "focused_projects_tags",
         "focused_settings",
+        "focused_project_commands",
+        "focused_project_paper_links",
         "focused_release_version",
         "release_reconciliation",
         "tracker_export",
@@ -51,6 +54,7 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "frontend_projects_tags",
         "frontend_settings",
         "frontend_reader_commands",
+        "frontend_project_commands",
         "repository_hygiene",
     }
 )
@@ -82,6 +86,18 @@ REQUIRED_READER_WRITE_MANUAL_CHECKS = frozenset(
         "reading_note_save_reload",
         "two_stale_browser_sessions",
         "streamlit_web_visibility",
+    }
+)
+REQUIRED_PROJECT_WRITE_MANUAL_CHECKS = frozenset(
+    {
+        "create_reload_streamlit_visibility",
+        "metadata_round_trip",
+        "paper_link_add_duplicate_remove",
+        "archive_preserves_links",
+        "project_revision_conflict",
+        "link_revision_conflict",
+        "api_restart_draft_recovery",
+        "network_privacy",
     }
 )
 PRIVATE_VALUE_PATTERNS = (
@@ -116,6 +132,7 @@ EXPECTED_UNRESOLVED_EVIDENCE = (
     "automated_validation.post_merge_main_ci",
     "manual_validation.reader_snapshot_runtime",
     "manual_validation.reader_write_runtime",
+    "manual_validation.project_write_runtime",
     "publication_state.github_release",
     "recurring_operational_procedures.clean_pc_restore",
 )
@@ -411,6 +428,36 @@ def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
         )
     _validate_evidence(reader_write, "manual_validation.reader_write_runtime")
 
+    project_write = _mapping(
+        manual.get("project_write_runtime"),
+        "manual_validation.project_write_runtime",
+    )
+    project_checks = _mapping(
+        project_write.get("checks"),
+        "manual_validation.project_write_runtime.checks",
+    )
+    if set(project_checks) != REQUIRED_PROJECT_WRITE_MANUAL_CHECKS:
+        missing = sorted(REQUIRED_PROJECT_WRITE_MANUAL_CHECKS - set(project_checks))
+        extra = sorted(set(project_checks) - REQUIRED_PROJECT_WRITE_MANUAL_CHECKS)
+        raise ReleaseStateError(
+            f"Project write runtime checks differ; missing={missing}, extra={extra}"
+        )
+    for check_id, raw_item in project_checks.items():
+        item = _mapping(
+            raw_item,
+            f"manual_validation.project_write_runtime.checks.{check_id}",
+        )
+        _validate_evidence(
+            item,
+            f"manual_validation.project_write_runtime.checks.{check_id}",
+        )
+    expected_project_status = derive_reader_runtime_status(project_checks)
+    if project_write.get("status") != expected_project_status:
+        raise ReleaseStateError(
+            "Project write runtime aggregate status must derive from its child checks"
+        )
+    _validate_evidence(project_write, "manual_validation.project_write_runtime")
+
 
 def _validate_publication_and_operations(manifest: Mapping[str, Any]) -> None:
     publication = _mapping(manifest.get("publication_state"), "publication_state")
@@ -498,10 +545,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.5.3":
-        raise ReleaseStateError("product_version must identify the current 1.5.3 runtime target")
-    if manifest.get("release_name") != "v1.5.3-settings-health-read-parity":
-        raise ReleaseStateError("release_name must identify the current v1.5.3 runtime target")
+    if manifest.get("product_version") != "1.5.4":
+        raise ReleaseStateError("product_version must identify the current 1.5.4 runtime target")
+    if manifest.get("release_name") != "v1.5.4-project-write-paper-links":
+        raise ReleaseStateError("release_name must identify the current v1.5.4 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)
@@ -683,6 +730,21 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## v1.5.4 Project write manual validation",
+            "",
+            f"Aggregate state: **{manual['project_write_runtime']['status']}**.",
+            "",
+            "| Check | Status | Evidence |",
+            "|---|---|---|",
+        ]
+    )
+    for check_id, item in manual["project_write_runtime"]["checks"].items():
+        label = check_id.replace("_", " ").capitalize()
+        lines.append(f"| {label} | {item['status']} | {_escape_cell(_evidence_summary(item))} |")
+
+    lines.extend(
+        [
+            "",
             "## Publication and recurring operations",
             "",
             f"- GitHub Release: **{publication['github_release']['status']}**. "
@@ -702,6 +764,8 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
             f"{manual['reader_snapshot_runtime']['evidence']['summary']}",
             f"- v1.5.1 Reader write runtime: **{manual['reader_write_runtime']['status']}**. "
             f"{manual['reader_write_runtime']['evidence']['summary']}",
+            f"- v1.5.4 Project write runtime: **{manual['project_write_runtime']['status']}**. "
+            f"{manual['project_write_runtime']['evidence']['summary']}",
             f"- GitHub Release publication: **{publication['github_release']['status']}**. "
             f"{publication['github_release']['evidence']['summary']}",
             f"- Clean-PC restore: **{restore['status']}**. {restore['evidence']['summary']}",

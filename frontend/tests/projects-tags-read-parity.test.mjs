@@ -40,7 +40,10 @@ test("Projects renders real collection fields and bounded linked-paper detail", 
   assert.match(projectDetail, /Linked paper unavailable/);
   assert.match(client, /links_limit/);
   assert.match(client, /links_offset/);
-  assert.doesNotMatch(projects + projectDetail, /<button\b|Create Project|Edit Project|Archive Project|Delete Project|Unlink paper/);
+  assert.match(projects, /Create Project/);
+  assert.match(projectDetail, /Edit Project/);
+  assert.match(projectDetail, /Archive Project/);
+  assert.doesNotMatch(projects + projectDetail, /Delete Project/);
 });
 
 test("Tags renders canonical identity, label, category, aliases, status, and real summary counts", async () => {

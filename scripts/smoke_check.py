@@ -29,6 +29,7 @@ REQUIRED_FILES = (
     "api/routes.py",
     "api/schemas.py",
     "services/settings_read_model.py",
+    "services/project_commands.py",
     "requirements.txt",
     "README.md",
     "docs/BLUEPRINT_PRINCIPLES.md",
@@ -64,6 +65,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.5.1.md",
     "docs/release_notes/v1.5.2.md",
     "docs/release_notes/v1.5.3.md",
+    "docs/release_notes/v1.5.4.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -85,6 +87,9 @@ REQUIRED_FILES = (
     "frontend/app/papers/[paperId]/reader/page.tsx",
     "frontend/app/views/ReaderView.tsx",
     "frontend/app/views/SettingsView.tsx",
+    "frontend/app/views/ProjectsView.tsx",
+    "frontend/app/views/ProjectDetailView.tsx",
+    "frontend/app/lib/projects/editor-state.mjs",
     "frontend/app/components/PdfJsReader.tsx",
     "frontend/app/lib/pdf/pdfjs-adapter.ts",
     "frontend/app/lib/pdf/reader-controller.mjs",
@@ -286,17 +291,24 @@ def check_api_contract() -> SmokeCheckResult:
             "/papers/{paper_id}/pdf": {"get"},
             "/papers/{paper_id}/metadata": {"patch"},
             "/papers/{paper_id}/reading-note": {"put"},
-            "/projects": {"get"},
-            "/projects/{project_id}": {"get"},
+            "/projects": {"get", "post"},
+            "/projects/{project_id}": {"get", "patch"},
+            "/projects/{project_id}/archive": {"post"},
+            "/projects/{project_id}/paper-links": {"post"},
+            "/projects/{project_id}/paper-links/{link_id}": {"delete"},
             "/tags": {"get"},
             "/tags/summary": {"get"},
             "/settings/summary": {"get"},
         }
         if {path: set(operations) for path, operations in paths.items()} != expected_methods:
-            raise ValueError("API application paths do not match the bounded read and Reader command surface")
+            raise ValueError("API application paths do not match the bounded read and command surface")
     except Exception as exc:
         return SmokeCheckResult("api:application-contract", "fail", str(exc))
-    return SmokeCheckResult("api:application-contract", "pass", f"eleven GET routes and two Reader commands for {APP_VERSION}")
+    return SmokeCheckResult(
+        "api:application-contract",
+        "pass",
+        f"eleven GET routes, two Reader commands, and five Project commands for {APP_VERSION}",
+    )
 
 
 def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
@@ -325,6 +337,11 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             "getSettingsSummary",
             "saveReaderMetadata",
             "saveReadingNote",
+            "createProject",
+            "updateProject",
+            "archiveProject",
+            "addProjectPaperLink",
+            "removeProjectPaperLink",
         ):
             if method not in api_client:
                 raise ValueError(f"frontend API client is missing {method}")

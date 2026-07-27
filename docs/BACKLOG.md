@@ -17,6 +17,21 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.1 bounded Reader write vertical slice implementation.
 - [x] v1.5.2 Projects and Tags read parity implementation.
 - [x] v1.5.3 Settings and health safe read parity implementation.
+- [x] v1.5.4 Project write and Paper–Project link command implementation.
+
+## v1.5.4 Project write and Paper–Project link commands
+
+- [x] Add a strict service boundary for Project create, allowlisted metadata update, and one-way archive.
+- [x] Add existing-Paper link and exact-link removal commands without adding Paper or Note Block mutation.
+- [x] Use separate complete-state Project and link revisions, shared workspace locking, reload-after-lock checks, atomic replacement, persisted-state verification, and exact-byte rollback.
+- [x] Add only the five exact command routes and private-safe 404/409/422/503 responses.
+- [x] Extend the same-origin bridge with exact method/path pairs and retain Reader/PDF/Settings/Tag behavior.
+- [x] Add explicit create/edit/save/cancel/archive/add/remove frontend workflows with draft preservation, honest duplicate/no-op results, confirmations, and archived read-only detail.
+- [x] Add disposable concurrency, no-op, rollback, isolation, privacy, bridge, state, rendering-source, and regression coverage.
+- [x] Mark R130 and R131 complete; keep R132 deferred and R133 partial.
+- [ ] Complete real-data Project create/edit/archive/link/unlink, cross-surface, conflict, offline/restart, archived-read, and Network-privacy checks before closing G4.
+- [ ] Keep v1.6 expansion deferred until G4 evidence closes and scope is separately approved.
+- [ ] Record v1.5.4 pull request, hosted CI, merge, tag, GitHub Release, or post-merge evidence only after those events occur.
 
 ## v1.5.3 Settings and health safe read parity
 

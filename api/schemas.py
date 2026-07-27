@@ -74,6 +74,7 @@ class ProjectListItem(StrictResponseModel):
     tags: list[str]
     created_at: str
     updated_at: str
+    project_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     link_count: int = Field(ge=0)
     linked_paper_count: int = Field(ge=0)
 
@@ -116,7 +117,49 @@ class ProjectDetail(ProjectListItem):
     links_limit: int = Field(ge=1, le=100)
     links_offset: int = Field(ge=0)
     links_has_more: bool
+    links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     orphaned_link_count: int = Field(ge=0)
+
+
+class ProjectCommandState(StrictResponseModel):
+    project_id: str
+    name: str
+    description: str
+    status: Literal["active", "paused", "done", "archived"]
+    priority: Literal["low", "normal", "high"]
+    tags: list[str]
+    created_at: str
+    updated_at: str
+    project_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    link_count: int = Field(ge=0)
+    linked_paper_count: int = Field(ge=0)
+
+
+class PaperLinkCommandState(StrictResponseModel):
+    link_id: str
+    project_id: str
+    paper_id: str
+    link_type: Literal[
+        "related",
+        "background",
+        "key_reference",
+        "supports_project",
+        "raises_question",
+        "idea_for_project",
+    ]
+    created_at: str
+
+
+class ProjectCommandResponse(StrictResponseModel):
+    status: Literal["created", "saved", "no_op", "archived", "already_archived"]
+    project: ProjectCommandState
+
+
+class PaperLinkCommandResponse(StrictResponseModel):
+    status: Literal["created", "unchanged", "removed"]
+    project: ProjectCommandState
+    link: PaperLinkCommandState
 
 
 class CanonicalTag(StrictResponseModel):
@@ -333,6 +376,100 @@ class ReaderSnapshotResponse(StrictResponseModel):
 
 class StrictRequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class ProjectTagsMixin:
+    @field_validator("tags", mode="before", check_fields=False)
+    @classmethod
+    def validate_tags(cls, value: Any) -> list[str]:
+        if not isinstance(value, list) or len(value) > 25:
+            raise ValueError("Project tags must be a bounded list.")
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("Project tags must contain only strings.")
+            tag = item.strip()
+            if not tag or len(tag) > 100:
+                raise ValueError("Project tags must be non-empty and at most 100 characters.")
+            if tag not in normalized:
+                normalized.append(tag)
+        return normalized
+
+
+class CreateProjectRequest(ProjectTagsMixin, StrictRequestModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=5_000)
+    status: Literal["active", "paused", "done"] = "active"
+    priority: Literal["low", "normal", "high"] = "normal"
+    tags: list[str] = Field(default_factory=list, max_length=25)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Project name must not be empty.")
+        return normalized
+
+
+class ProjectChanges(ProjectTagsMixin, StrictRequestModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=5_000)
+    status: Literal["active", "paused", "done"] | None = None
+    priority: Literal["low", "normal", "high"] | None = None
+    tags: list[str] | None = Field(default=None, max_length=25)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Project name must not be empty.")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_present_fields(self) -> "ProjectChanges":
+        if not self.model_fields_set:
+            raise ValueError("At least one Project change is required.")
+        if any(getattr(self, field_name) is None for field_name in self.model_fields_set):
+            raise ValueError("Project changes cannot be null.")
+        return self
+
+
+class UpdateProjectRequest(StrictRequestModel):
+    changes: ProjectChanges
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class ArchiveProjectRequest(StrictRequestModel):
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class AddPaperLinkRequest(StrictRequestModel):
+    paper_id: str = Field(min_length=1, max_length=200)
+    link_type: Literal[
+        "related",
+        "background",
+        "key_reference",
+        "supports_project",
+        "raises_question",
+        "idea_for_project",
+    ] = "related"
+    expected_links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("paper_id")
+    @classmethod
+    def validate_paper_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Paper identity must not be empty.")
+        return normalized
+
+
+class RemovePaperLinkRequest(StrictRequestModel):
+    expected_links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class MetadataChanges(StrictRequestModel):

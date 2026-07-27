@@ -4,7 +4,7 @@ Stable roadmap last edited: 2026-07-27
 
 Current release evidence is not duplicated here. See the generated [Current Release Status](CURRENT_RELEASE_STATUS.md), derived from the canonical machine-readable manifest. This roadmap records stable architecture, closed decision gates, and the next approved product direction rather than mutable repository observations.
 
-BluePrintReboot is a local-first, single-user research workspace with an established Streamlit application, a read-model FastAPI layer with two bounded Reader commands, and a TypeScript frontend shell. These are implemented architecture, not future placeholders.
+BluePrintReboot is a local-first, single-user research workspace with an established Streamlit application, a bounded FastAPI layer with two Reader commands and five Project/Paper-link commands, and a TypeScript frontend shell. These are implemented architecture, not future placeholders.
 
 ## Implemented architecture
 
@@ -22,6 +22,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.5.1 adds separate metadata and Reading Note commands, optimistic concurrency, transactional metadata/header consistency, and independent web editors while preserving the v1.5.0 read/PDF/Streamlit contracts.
 - v1.5.2 adds bounded Projects and Tags GET contracts, real Projects/Project Detail/Tags views, explicit orphan and candidate-availability states, and shared retry behavior without adding Project or Tag writes.
 - v1.5.3 adds one bounded safe Settings summary, a real four-section Settings view, explicit zero-versus-unavailable diagnostics, and backup-evidence presence without adding Settings, health, backup, restore, or repair writes.
+- v1.5.4 adds explicit Project create/update/archive and existing-Paper link/unlink commands with separate Project/link revisions, shared locking, atomic replacement, rollback verification, and draft-preserving frontend workflows.
 
 ## Decision gates
 
@@ -40,35 +41,37 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | v1.5.1 Reader write implementation | Closed locally | Two strict command routes, deterministic concurrency baselines, rollback coverage, exact bridge allowlisting, accessible editors, and disposable-fixture regressions are implemented; user-performed write/runtime evidence is partially verified while hosted evidence remains separate. |
 | v1.5.2 Projects and Tags read parity | Closed locally | Strict list/detail/tag/summary schemas, service/adapters, deterministic pagination, orphan handling, exact bridge paths, real views, negative states, and read-only regressions are implemented; manual and hosted evidence remain separate. |
 | v1.5.3 Settings and health safe read parity | Closed locally | A capped lightweight read model, strict adapter/schema, exact bridge path, real Settings view, partial states, privacy checks, and non-mutation regressions are implemented; manual and hosted evidence remain separate. |
+| v1.5.4 Project write and Paper–Project links | Closed locally | Five strict command routes, optimistic revisions, lock/reload atomicity, failure rollback, exact bridge paths, explicit UI actions, and disposable regressions are implemented; manual and hosted evidence remain separate. |
 
-## Current product milestone: v1.5.3 Settings and health safe read parity
+## Current product milestone: v1.5.4 Project write and Paper–Project link commands
 
-The v1.5.3 runtime target completes the remaining Settings portion of frontend read parity. It does not relabel the immutable v1.4.0 released baseline and does not claim a v1.5.3 tag, GitHub Release, pull request, merge, or hosted workflow result.
+The v1.5.4 runtime target adds the first web Project mutation slice without broadening into Project deletion, unarchive, Note Block commands, Tag governance, Settings writes, bulk workflows, or schema migration. It does not relabel the immutable v1.4.0 released baseline and does not claim v1.5.4 publication or hosted evidence.
 
 ### Implemented product slice
 
-- `GET /settings/summary` exposes only canonical version/API state, bounded aggregate store counts, stable integrity-code counts, and safe snapshot presence/last-updated evidence.
-- A dedicated lightweight reader caps discovered entries, index rows, per-file JSON reads, and total JSON bytes per request and performs no PDF hashing/parsing, text extraction, archive verification, repair, backup, restore, cache rebuild, or write.
-- Invalid or unreadable component diagnostics remain successful section-level warnings with `count: null`; only complete construction or strict-contract failure uses the generic 503 boundary.
-- `/settings` reuses the current shell, panels, tables, badges, typography, loading/empty/offline/error states, and shared GET retry pattern.
-- The existing Paper/Library/Reader/Project/Tag contracts, the two Reader commands, PDF.js lifecycle and Range delivery, stable identities, local-only operation, and complete Streamlit Settings workflow remain unchanged.
+- `POST /projects`, `PATCH /projects/{project_id}`, and `POST /projects/{project_id}/archive` allow only bounded Project metadata and preserve server-owned identity/timestamps.
+- `POST /projects/{project_id}/paper-links` and `DELETE /projects/{project_id}/paper-links/{link_id}` act only on existing Paper targets and never create, update, archive, or delete a Paper.
+- `project_revision` and `links_revision` are deterministic complete-state tokens. Commands acquire the shared lock, reload state, reject stale requests before writing, atomically replace only the owning store, reload/verify, and restore original bytes and timestamps after injected failure.
+- The frontend exposes only explicit create/edit/save/cancel/archive/add/remove actions. Conflicts and offline failures preserve drafts or selections; duplicate exact links return an unchanged result; archived Projects remain readable with write controls absent.
+- Reader, PDF Range, Tags, Settings, Streamlit storage formats, stable identities, local-only operation, and dependency versions remain unchanged.
 
 ### Remaining evidence gate
 
-- User-performed runtime checks for real Application/Workspace/integrity/backup summaries, API-offline retry, browser response privacy, and browsing non-mutation remain NOT VERIFIED.
+- User-performed real-data parity checks for create/edit/archive, add/remove Paper links, reload persistence, cross-surface visibility, conflict recovery, API-offline recovery, archived read behavior, and private-safe Network responses remain NOT VERIFIED.
 - The unreadable persisted-note warning and missing managed-PDF Reader scenarios remain NOT VERIFIED pending separate evidence.
 - Pull request, hosted CI, merge, tag, GitHub Release, post-merge, and clean-PC restore evidence remain separate and unclaimed.
 
 ### Roadmap item status
 
-| Item | Status after v1.5.3 implementation |
+| Item | Status after v1.5.4 implementation |
 |---|---|
-| R-110 Projects read parity | Implementation complete; actual release closure remains pending where separately tracked. |
-| R-111 Tags/Tag Book read parity | Implementation complete; actual release closure remains pending where separately tracked. |
-| R-112 Settings and health safe read parity | Implementation complete; actual release closure remains pending where separately tracked. |
-| R-113 shared frontend states | Implementation complete across the approved frontend read surfaces. |
-| G2 Frontend read parity | Implementation complete; actual release evidence remains pending where separately tracked. |
+| R130 Project command service and API | Complete. |
+| R131 web Project metadata and Paper-link workflows | Complete. |
+| R132 Note Block read/write/link commands | Deferred. |
+| R133 cross-surface Project command evidence | Partially complete: automated disposable coverage is complete; real runtime parity evidence remains open. |
+| G4 Project write parity | Open pending the required manual and hosted evidence. |
+| v1.6 broader write expansion | Deferred until G4 evidence closes and scope is separately approved. |
 
 ## Continuing constraints
 
-No autosave, combined save endpoint, Project write, Tag governance/write, Settings write, configuration editing, automatic backup, automatic duplicate merge/deletion, automatic repair, database migration, OCR, LLM tagging, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of tests and validation evidence. Broader UI polish remains deferred.
+No autosave, combined save endpoint, Project deletion/unarchive, Note Block write/link command, Tag governance/write, Settings write, configuration editing, automatic backup, automatic duplicate merge/deletion, automatic repair, database migration, OCR, LLM tagging, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of tests and validation evidence. Broader UI polish and v1.6 scope remain deferred.
