@@ -766,6 +766,12 @@ def render_output(
     return destination
 
 
+def _normalize_newlines(content: bytes) -> str:
+    """Decode UTF-8 and normalize only CRLF/lone-CR line endings to LF."""
+
+    return content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def check_release_state(
     manifest_path: Path = MANIFEST_PATH,
     output_path: Path = OUTPUT_PATH,
@@ -778,12 +784,17 @@ def check_release_state(
         validate_manifest(manifest)
         if validate_documents:
             validate_current_documents(Path(manifest_path).resolve().parents[1], manifest)
-        expected = render_current_status(manifest).encode("utf-8")
+        expected = render_current_status(manifest)
         destination = Path(output_path)
         if not destination.is_file():
             errors.append(f"generated output is missing: {destination.name}")
-        elif destination.read_bytes() != expected:
-            errors.append(f"generated output is stale: {destination.name}; run --render")
+        else:
+            try:
+                actual = _normalize_newlines(destination.read_bytes())
+            except UnicodeDecodeError:
+                actual = ""
+            if actual != expected:
+                errors.append(f"generated output is stale: {destination.name}; run --render")
     except (OSError, json.JSONDecodeError, ReleaseStateError) as exc:
         errors.append(str(exc))
     return errors

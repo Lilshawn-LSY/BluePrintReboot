@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
 
 from services.paper_metadata_mutation import (
@@ -108,7 +109,30 @@ def _persistent_command_lock(index_csv: Path):
         raise ReaderCommandUnavailable from None
 
 
+def _is_valid_paper_identity(paper_id: str) -> bool:
+    """Return whether an identity is one filename component on POSIX and Windows."""
+
+    if not paper_id or paper_id in {".", ".."}:
+        return False
+    if "/" in paper_id or "\\" in paper_id:
+        return False
+    if any(unicodedata.category(character) == "Cc" for character in paper_id):
+        return False
+
+    posix_path = PurePosixPath(paper_id)
+    windows_path = PureWindowsPath(paper_id)
+    if posix_path.is_absolute() or windows_path.is_absolute():
+        return False
+    if windows_path.drive or windows_path.root:
+        return False
+    return posix_path.parts == (paper_id,) and windows_path.parts == (paper_id,)
+
+
 def _safe_note_path(record: dict[str, str], notes_dir: Path) -> Path:
+    paper_id = record.get("paper_id", "")
+    if not _is_valid_paper_identity(paper_id):
+        raise ReaderCommandUnavailable from None
+
     root = Path(notes_dir).resolve(strict=False)
     candidate = note_path_for(record, Path(notes_dir)).resolve(strict=False)
     try:
@@ -116,7 +140,7 @@ def _safe_note_path(record: dict[str, str], notes_dir: Path) -> Path:
     except ValueError:
         raise ReaderCommandUnavailable from None
     if candidate.parent != root:
-        raise ReaderCommandUnavailable
+        raise ReaderCommandUnavailable from None
     return candidate
 
 

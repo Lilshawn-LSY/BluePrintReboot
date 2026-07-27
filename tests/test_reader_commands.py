@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+from urllib.parse import quote
 
 import pandas as pd
 import pytest
@@ -10,6 +11,7 @@ from pydantic import ValidationError
 
 from api import dependencies
 from api.main import INVALID_REQUEST_DETAIL, create_app
+from api.routes import COMMAND_UNAVAILABLE_DETAIL
 from api.schemas import MetadataCommandRequest
 from services.paper_metadata_mutation import paper_metadata_revision
 from services.reader_commands import (
@@ -24,18 +26,23 @@ from storage.index_store import INDEX_COLUMNS, save_index
 from storage.workspace_lock import workspace_write_lock
 
 
-def _workspace(tmp_path: Path, *, with_note: bool = True) -> tuple[Path, Path, dict[str, str]]:
+def _workspace(
+    tmp_path: Path,
+    *,
+    with_note: bool = True,
+    paper_id: str = "paper-1",
+) -> tuple[Path, Path, dict[str, str]]:
     index_csv = tmp_path / "data" / "paper_index.csv"
     notes_dir = tmp_path / "notes"
     papers_dir = tmp_path / "papers"
     notes_dir.mkdir(parents=True)
     papers_dir.mkdir()
-    pdf_path = papers_dir / "paper-1.pdf"
+    pdf_path = papers_dir / f"{paper_id}.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n")
     record = {column: "" for column in INDEX_COLUMNS}
     record.update(
         {
-            "paper_id": "paper-1",
+            "paper_id": paper_id,
             "filename": pdf_path.name,
             "filepath": str(pdf_path.resolve()),
             "title": "Original title",
@@ -49,7 +56,7 @@ def _workspace(tmp_path: Path, *, with_note: bool = True) -> tuple[Path, Path, d
             "status": "reading",
             "reading_priority": "normal",
             "is_archived": "false",
-            "note_path": str((notes_dir / "paper-1.md").resolve()),
+            "note_path": str((notes_dir / f"{paper_id}.md").resolve()),
         }
     )
     save_index(pd.DataFrame([record]), index_csv)
@@ -58,12 +65,21 @@ def _workspace(tmp_path: Path, *, with_note: bool = True) -> tuple[Path, Path, d
             "## Raw Notes\n",
             "## Raw Notes\n\nExact user body  \nSecond body line\n",
         )
-        (notes_dir / "paper-1.md").write_text(note, encoding="utf-8", newline="")
+        (notes_dir / f"{paper_id}.md").write_text(note, encoding="utf-8", newline="")
     return index_csv, notes_dir, record
 
 
-def _service(tmp_path: Path, *, with_note: bool = True) -> tuple[ReaderCommandService, Path, Path, dict[str, str]]:
-    index_csv, notes_dir, record = _workspace(tmp_path, with_note=with_note)
+def _service(
+    tmp_path: Path,
+    *,
+    with_note: bool = True,
+    paper_id: str = "paper-1",
+) -> tuple[ReaderCommandService, Path, Path, dict[str, str]]:
+    index_csv, notes_dir, record = _workspace(
+        tmp_path,
+        with_note=with_note,
+        paper_id=paper_id,
+    )
     return ReaderCommandService(index_csv=index_csv, notes_dir=notes_dir), index_csv, notes_dir, record
 
 
@@ -398,21 +414,129 @@ def test_unknown_paper_is_generic_404(tmp_path: Path) -> None:
         service.save_metadata("unknown", {"title": "x"}, "0" * 64)
 
 
-def test_note_path_is_contained_even_for_a_malicious_index_identity(tmp_path: Path) -> None:
+MALICIOUS_PAPER_IDENTITIES = (
+    "",
+    "../escape",
+    "..\\escape",
+    "child/note",
+    "child\\note",
+    "/absolute",
+    "C:\\escape",
+    "C:/escape",
+    "C:escape",
+    "\\\\server\\share\\escape",
+    ".",
+    "..",
+    "control\x1fidentity",
+)
+
+
+def _workspace_file_bytes(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file()
+    }
+
+
+def _encoded_path_segment(value: str) -> str:
+    return "".join(f"%{byte:02X}" for byte in value.encode("utf-8"))
+
+
+@pytest.mark.parametrize(
+    "paper_id",
+    MALICIOUS_PAPER_IDENTITIES,
+    ids=(
+        "empty",
+        "posix-parent",
+        "windows-parent",
+        "posix-nested",
+        "windows-nested",
+        "posix-absolute",
+        "windows-drive-backslash",
+        "windows-drive-slash",
+        "windows-drive-relative",
+        "windows-unc",
+        "dot",
+        "dot-dot",
+        "control-character",
+    ),
+)
+def test_reader_writes_reject_cross_platform_path_identities_without_mutation_or_disclosure(
+    tmp_path: Path,
+    paper_id: str,
+) -> None:
     service, index_csv, notes, record = _service(tmp_path)
     dataframe = pd.read_csv(index_csv, dtype=str).fillna("")
-    dataframe.loc[0, "paper_id"] = "..\\escape"
+    dataframe.loc[0, "paper_id"] = paper_id
     save_index(dataframe, index_csv)
-    escaped_record = {**record, "paper_id": "..\\escape"}
+    malicious_record = {**record, "paper_id": paper_id}
+    before = _workspace_file_bytes(tmp_path)
+    private_note_draft = "submitted private Reading Note draft"
+    private_metadata_draft = "submitted private metadata draft"
 
-    with pytest.raises(ReaderCommandUnavailable):
-        service.save_reading_note("..\\escape", "private draft", EMPTY_NOTE_SHA256)
-    with pytest.raises(ReaderCommandUnavailable):
+    with pytest.raises(ReaderCommandUnavailable) as note_error:
+        service.save_reading_note(paper_id, private_note_draft, EMPTY_NOTE_SHA256)
+    with pytest.raises(ReaderCommandUnavailable) as metadata_error:
         service.save_metadata(
-            "..\\escape",
-            {"title": "private metadata"},
-            paper_metadata_revision(escaped_record),
+            paper_id,
+            {"title": private_metadata_draft},
+            paper_metadata_revision(malicious_record),
         )
+    assert str(note_error.value) == ""
+    assert str(metadata_error.value) == ""
 
-    assert not (tmp_path / "escape.md").exists()
+    client = _client(service)
+    encoded_id = _encoded_path_segment(paper_id)
+    responses = (
+        client.put(
+            f"/papers/{encoded_id}/reading-note",
+            json={"content": private_note_draft, "expected_sha256": EMPTY_NOTE_SHA256},
+        ),
+        client.patch(
+            f"/papers/{encoded_id}/metadata",
+            json={
+                "changes": {"title": private_metadata_draft},
+                "expected_revision": paper_metadata_revision(malicious_record),
+            },
+        ),
+    )
+    for response in responses:
+        assert response.status_code in {404, 503}
+        if response.status_code == 503:
+            assert response.json() == {"detail": COMMAND_UNAVAILABLE_DETAIL}
+        else:
+            assert response.json()["detail"] in {"Not Found", "Paper not found."}
+        assert private_note_draft not in response.text
+        assert private_metadata_draft not in response.text
+        assert quote(str(tmp_path)) not in response.text
+        assert str(tmp_path) not in response.text
+
+    assert _workspace_file_bytes(tmp_path) == before
     assert (notes / "paper-1.md").is_file()
+
+
+@pytest.mark.parametrize(
+    "paper_id",
+    ("paper-1", "example-paper-0123456789", "deep-learning-abcdef1234"),
+)
+def test_reader_writes_accept_representative_generated_paper_identities(
+    tmp_path: Path,
+    paper_id: str,
+) -> None:
+    service, _index_csv, notes, record = _service(tmp_path, paper_id=paper_id)
+
+    metadata = service.save_metadata(
+        paper_id,
+        {"title": "Updated title"},
+        paper_metadata_revision(record),
+    )
+    note = service.save_reading_note(
+        paper_id,
+        f"{metadata.reading_note.content}\nAccepted body\n",
+        metadata.reading_note.sha256,
+    )
+
+    assert metadata.status == "saved"
+    assert note.status == "saved"
+    assert "Accepted body" in (notes / f"{paper_id}.md").read_text(encoding="utf-8")

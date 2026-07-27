@@ -81,8 +81,54 @@ def test_render_is_deterministic_and_idempotent(tmp_path: Path) -> None:
 
     assert first == second
     assert first == render_current_status(read_manifest()).encode("utf-8")
+    assert b"\r" not in first
     assert b"Generated evidence does not become stale" in first
     assert b"Verified `main` commit" not in first
+
+
+@pytest.mark.parametrize(
+    "line_ending",
+    (b"\n", b"\r\n", b"\r"),
+    ids=("lf", "crlf", "lone-cr"),
+)
+def test_check_accepts_only_equivalent_newline_representations(
+    tmp_path: Path,
+    line_ending: bytes,
+) -> None:
+    manifest_path = tmp_path / "tracker_sync_status.json"
+    output_path = tmp_path / "CURRENT_RELEASE_STATUS.md"
+    manifest_path.write_bytes(MANIFEST_PATH.read_bytes())
+    expected = render_current_status(read_manifest()).encode("utf-8")
+    output_path.write_bytes(expected.replace(b"\n", line_ending))
+
+    assert check_release_state(manifest_path, output_path, validate_documents=False) == []
+
+
+def test_check_rejects_text_drift_and_missing_output(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "tracker_sync_status.json"
+    output_path = tmp_path / "CURRENT_RELEASE_STATUS.md"
+    manifest_path.write_bytes(MANIFEST_PATH.read_bytes())
+    expected = render_current_status(read_manifest()).encode("utf-8")
+
+    assert "generated output is missing" in check_release_state(
+        manifest_path,
+        output_path,
+        validate_documents=False,
+    )[0]
+
+    output_path.write_bytes(expected + b"actual content drift\n")
+    assert "generated output is stale" in check_release_state(
+        manifest_path,
+        output_path,
+        validate_documents=False,
+    )[0]
+
+    output_path.write_bytes(b"\xff")
+    assert "generated output is stale" in check_release_state(
+        manifest_path,
+        output_path,
+        validate_documents=False,
+    )[0]
 
 
 def test_fresh_clone_post_merge_check_rejects_stale_then_accepts_rendered_output(tmp_path: Path) -> None:
