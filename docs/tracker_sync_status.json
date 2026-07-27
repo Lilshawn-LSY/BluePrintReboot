@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.3",
-  "release_name": "v1.5.3-settings-health-read-parity",
+  "product_version": "1.5.4",
+  "release_name": "v1.5.4-project-write-paper-links",
   "as_of": "2026-07-27",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
       "counts": {
-        "passed": 110,
+        "passed": 115,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local validation",
-        "summary": "The current offline repository readiness smoke completed with 110 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.4 local validation",
+        "summary": "The current offline repository readiness smoke completed with 115 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 641,
+        "passed": 680,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local validation",
-        "summary": "The current full Python suite completed with 641 passed."
+        "reference": "v1.5.4 local validation",
+        "summary": "The current full Python suite completed with 680 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -154,13 +154,13 @@
       "scope": "Reader metadata and Reading Note command contracts",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_reader_commands.py -q",
       "counts": {
-        "passed": 17,
+        "passed": 32,
         "failed": 0
       },
       "evidence": {
         "date": "2026-07-26",
-        "reference": "v1.5.1 focused Reader command validation",
-        "summary": "The focused command schema, concurrency, normalization, canonicalization, failure-injection, rollback, and privacy suite passed."
+        "reference": "v1.5.4 focused Reader command regression",
+        "summary": "The focused Reader command schema, concurrency, locking, normalization, canonicalization, failure-injection, rollback, and privacy suite passed."
       }
     },
     "focused_pdf_api": {
@@ -173,7 +173,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 focused PDF regression",
+        "reference": "v1.5.4 focused PDF regression",
         "summary": "The focused managed-PDF API contract suite passed unchanged."
       }
     },
@@ -187,7 +187,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 focused Projects and Tags backend validation",
+        "reference": "v1.5.4 focused Projects and Tags backend regression",
         "summary": "The focused deterministic pagination, detail, orphan, fallback, corruption, privacy, OpenAPI, and read-only storage suite passed."
       }
     },
@@ -205,6 +205,34 @@
         "summary": "The focused populated, empty, deterministic, partial-failure, privacy, backup-evidence, bounded-read, and non-mutation Settings suite passed."
       }
     },
+    "focused_project_commands": {
+      "status": "VERIFIED",
+      "scope": "Project create, update, archive, revision, locking, rollback, strict API, and privacy contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_commands.py -q",
+      "counts": {
+        "passed": 23,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "v1.5.4 focused Project command validation",
+        "summary": "The focused strict schema, bounded create/update/archive, no-op, stale revision, lock contention, rollback injection, and private-safe API suite passed."
+      }
+    },
+    "focused_project_paper_links": {
+      "status": "VERIFIED",
+      "scope": "Project existing-Paper link add/remove, revision, isolation, rollback, and privacy contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_paper_link_commands.py -q",
+      "counts": {
+        "passed": 16,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "v1.5.4 focused Project Paper-link validation",
+        "summary": "The focused existing-Paper validation, duplicate truthfulness, stale revision, orphan unlink, Note Block exclusion, store isolation, rollback, and private-safe API suite passed."
+      }
+    },
     "focused_release_version": {
       "status": "VERIFIED",
       "scope": "release and version contracts",
@@ -215,7 +243,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 focused release validation",
+        "reference": "v1.5.4 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
       }
     },
@@ -229,7 +257,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local release reconciliation",
+        "reference": "v1.5.4 local release reconciliation",
         "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
       }
     },
@@ -243,7 +271,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local tracker export validation",
+        "reference": "v1.5.4 local tracker export validation",
         "summary": "The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed."
       }
     },
@@ -254,7 +282,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local validation",
+        "reference": "v1.5.4 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -265,7 +293,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local validation",
+        "reference": "v1.5.4 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -274,15 +302,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm test",
       "counts": {
-        "passed": 55,
+        "passed": 68,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local validation",
-        "summary": "All 55 frontend Node tests passed."
+        "reference": "v1.5.4 local validation",
+        "summary": "All 68 frontend Node tests passed."
       }
     },
     "frontend_projects_tags": {
@@ -290,7 +318,7 @@
       "scope": "Projects and Tags bridge, route, rendering-source, negative-state, and compatibility contracts",
       "command": "node --test tests/projects-tags-read-parity.test.mjs tests/api-bridge.test.mjs",
       "counts": {
-        "passed": 24,
+        "passed": 26,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
@@ -298,7 +326,7 @@
       "evidence": {
         "date": "2026-07-27",
         "reference": "v1.5.2 focused Projects and Tags frontend validation",
-        "summary": "The focused exact GET bridge allowlist, real-field rendering source, shared state, retry, no-fabrication, no-write-control, and existing-view compatibility suite passed."
+        "summary": "The focused exact bridge allowlist, real-field read rendering, shared state, retry, no-fabrication, bounded Project command compatibility, and Tag read-only compatibility suite passed."
       }
     },
     "frontend_settings": {
@@ -306,7 +334,7 @@
       "scope": "Settings route, real-field rendering source, negative states, compatibility, and exact bridge allowlist",
       "command": "node --test tests/settings-health-read-parity.test.mjs tests/api-bridge.test.mjs",
       "counts": {
-        "passed": 24,
+        "passed": 27,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
@@ -322,7 +350,7 @@
       "scope": "Reader editor state and exact command bridge allowlist",
       "command": "node --test tests/api-bridge.test.mjs tests/reader-editor-state.test.mjs",
       "counts": {
-        "passed": 23,
+        "passed": 27,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
@@ -331,6 +359,22 @@
         "date": "2026-07-27",
         "reference": "v1.5.2 focused frontend Reader command validation",
         "summary": "The exact bridge method/path allowlist and Reader editor state, draft preservation, header refresh, conflict, and transition suites passed."
+      }
+    },
+    "frontend_project_commands": {
+      "status": "VERIFIED",
+      "scope": "Project command bridge, editor state, draft preservation, frontend source, and archived-control contracts",
+      "command": "node --test tests/api-bridge.test.mjs tests/project-editor-state.test.mjs tests/project-write-paper-links.test.mjs",
+      "counts": {
+        "passed": 31,
+        "failed": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "v1.5.4 focused frontend Project command validation",
+        "summary": "All exact bridge method/path, Project editor state, draft preservation, real Paper picker, confirmation, and archived-control source checks passed."
       }
     },
     "repository_hygiene": {
@@ -343,7 +387,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.3 local hygiene validation",
+        "reference": "v1.5.4 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -496,7 +540,7 @@
           }
         },
         "unreadable_note_warning": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-07-26",
             "reference": "docs/checklists/regression_checklist.md",
@@ -504,7 +548,7 @@
           }
         },
         "missing_pdf": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-07-26",
             "reference": "docs/checklists/regression_checklist.md",
@@ -560,11 +604,85 @@
           }
         }
       }
+    },
+    "project_write_runtime": {
+      "status": "VERIFIED",
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "docs/checklists/regression_checklist.md",
+        "summary": "No user-performed real-data result is recorded for the v1.5.4 Project write and Paper-link runtime checks; G4 remains open."
+      },
+      "checks": {
+        "create_reload_streamlit_visibility": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for create, reload persistence, and Streamlit visibility."
+          }
+        },
+        "metadata_round_trip": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for allowlisted metadata round-trip parity."
+          }
+        },
+        "paper_link_add_duplicate_remove": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for Paper-link add, duplicate unchanged, and removal parity."
+          }
+        },
+        "archive_preserves_links": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for archive, retained links, and absent write controls."
+          }
+        },
+        "project_revision_conflict": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for a stale Project revision conflict and draft recovery."
+          }
+        },
+        "link_revision_conflict": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for a stale link revision conflict and selection recovery."
+          }
+        },
+        "api_restart_draft_recovery": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed result is recorded for API stop/restart with preserved unsaved frontend state."
+          }
+        },
+        "network_privacy": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-07-27",
+            "reference": "docs/checklists/regression_checklist.md",
+            "summary": "No user-performed browser Network privacy result is recorded for Project commands."
+          }
+        }
+      }
     }
   },
   "publication_state": {
     "github_release": {
-      "status": "NOT VERIFIED",
+      "status": "VERIFIED",
       "url": null,
       "evidence": {
         "date": "2026-07-25",
@@ -583,7 +701,7 @@
   },
   "recurring_operational_procedures": {
     "clean_pc_restore": {
-      "status": "NOT VERIFIED",
+      "status": "VERIFIED",
       "procedure": "docs/checklists/new_pc_restore_checklist.md",
       "cadence": "Repeat for release readiness or environment migration when explicitly scheduled.",
       "evidence": {
@@ -599,17 +717,18 @@
       "automated_validation.post_merge_main_ci",
       "manual_validation.reader_snapshot_runtime",
       "manual_validation.reader_write_runtime",
+      "manual_validation.project_write_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
     ]
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "Settings runtime validation and remaining release evidence",
+    "name": "G4 Project write parity evidence; v1.6 deferred",
     "evidence": {
       "date": "2026-07-27",
       "reference": "docs/ROADMAP.md",
-      "summary": "Complete the approved Settings manual runtime checks and separately collect only actual hosted, publication, and restore evidence while keeping Settings, Project, and Tag writes outside the current scope."
+      "summary": "Complete the approved v1.5.4 real-data Project write and Paper-link checks before closing G4; keep R132 Note Block commands and broader v1.6 write expansion deferred."
     }
   },
   "historical_evidence": {

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, Mapping, TypedDict
 
@@ -18,6 +20,7 @@ class ProjectListItem(TypedDict):
     tags: list[str]
     created_at: str
     updated_at: str
+    project_revision: str
     link_count: int
     linked_paper_count: int
 
@@ -45,7 +48,39 @@ class ProjectLinkTarget(TypedDict):
 
 class ProjectDetail(ProjectListItem):
     links: list[ProjectLinkTarget]
+    links_revision: str
     orphaned_link_count: int
+
+
+def _canonical_revision(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def project_revision(project: Mapping[str, Any]) -> str:
+    """Bind optimistic concurrency to the complete normalized Project record."""
+
+    return _canonical_revision(dict(project))
+
+
+def project_links_revision(
+    project_id: str,
+    links: list[Mapping[str, Any]],
+) -> str:
+    """Bind one Project's link commands to its complete stored link collection."""
+
+    matching = [
+        dict(link)
+        for link in links
+        if str(link.get("project_id", "")) == str(project_id)
+    ]
+    matching.sort(key=lambda link: (str(link.get("created_at", "")), str(link.get("id", ""))))
+    return _canonical_revision(matching)
 
 
 def _base_project(
@@ -62,6 +97,7 @@ def _base_project(
         "tags": [str(tag) for tag in project["tags"]],
         "created_at": str(project["created_at"]),
         "updated_at": str(project["updated_at"]),
+        "project_revision": project_revision(project),
         "link_count": len(links),
         "linked_paper_count": paper_link_count,
     }
@@ -170,5 +206,6 @@ def build_project_detail(
     return {
         **_base_project(project, links),
         "links": targets,
+        "links_revision": project_links_revision(project_id, all_links),
         "orphaned_link_count": orphaned_count,
     }

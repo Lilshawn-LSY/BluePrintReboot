@@ -7,16 +7,16 @@ Rendered as of 2026-07-27.
 
 ## Release identity
 
-- Runtime target version: `1.5.3`
-- Runtime target name: `v1.5.3-settings-health-read-parity`
+- Runtime target version: `1.5.4`
+- Runtime target name: `v1.5.4-project-write-paper-links`
 - Immutable released baseline: `v1.4.0-pdfjs-reader-foundation` at `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`
-- Next milestone: **DOCUMENTED ONLY** — Settings runtime validation and remaining release evidence
+- Next milestone: **DOCUMENTED ONLY** — G4 Project write parity evidence; v1.6 deferred
 
 ## Current state summary
 
 | Area | Status | Evidence |
 |---|---|---|
-| v1.5.3 local runtime target | VERIFIED | The current offline repository readiness smoke completed with 110 passed, 0 warnings, and 0 failed. (2026-07-27; v1.5.3 local validation) |
+| v1.5.4 local runtime target | VERIFIED | The current offline repository readiness smoke completed with 115 passed, 0 warnings, and 0 failed. (2026-07-27; v1.5.4 local validation) |
 | v1.4.0 implementation baseline | VERIFIED | The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline. (2026-07-25; v1.4.0 implementation and historical validation record) |
 | PR #6 control-plane change | VERIFIED | Merged into `main` at `7b6a17369d3987dc1c8c6527a268a1df17feedcb`. |
 | v1.4.0 tag | VERIFIED | Tag targets immutable baseline `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`. |
@@ -44,25 +44,28 @@ Rendered as of 2026-07-27.
 |---|---|---|---|---|
 | Pr Head CI | PARTIALLY VERIFIED | PR #6 head commit | 1 jobs passed, 1 jobs failed | The PR #6 head workflow completed with a successful frontend job and a Python smoke-check failure. (2026-07-26; GitHub Actions run 30190817882) |
 | Post Merge Main CI | NOT VERIFIED | post-merge main commit | Not recorded | No repository-accessible evidence proves a separate post-merge main workflow run. (2026-07-25; repository evidence audit) |
-| Local Smoke | VERIFIED | offline repository readiness smoke | 110 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 110 passed, 0 warnings, and 0 failed. (2026-07-27; v1.5.3 local validation) |
-| Full pytest | VERIFIED | full Python test suite | 641 passed, 0 failed, 0 skipped | The current full Python suite completed with 641 passed. (2026-07-27; v1.5.3 local validation) |
+| Local Smoke | VERIFIED | offline repository readiness smoke | 115 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 115 passed, 0 warnings, and 0 failed. (2026-07-27; v1.5.4 local validation) |
+| Full pytest | VERIFIED | full Python test suite | 680 passed, 0 failed, 0 skipped | The current full Python suite completed with 680 passed. (2026-07-27; v1.5.4 local validation) |
 | Focused Reader Snapshot | VERIFIED | read-only Reader Snapshot API contracts | 21 passed, 0 failed | The focused Reader Snapshot schema, adapter, route, failure-state, and privacy suite passed. (2026-07-26; v1.5.0 focused Reader Snapshot validation) |
-| Focused Reader Commands | VERIFIED | Reader metadata and Reading Note command contracts | 17 passed, 0 failed | The focused command schema, concurrency, normalization, canonicalization, failure-injection, rollback, and privacy suite passed. (2026-07-26; v1.5.1 focused Reader command validation) |
-| Focused Pdf Api | VERIFIED | managed PDF API contracts | 13 passed, 0 failed | The focused managed-PDF API contract suite passed unchanged. (2026-07-27; v1.5.2 focused PDF regression) |
-| Focused Projects Tags | VERIFIED | Projects and Tags read-model, API, privacy, and non-mutation contracts | 27 passed, 0 failed | The focused deterministic pagination, detail, orphan, fallback, corruption, privacy, OpenAPI, and read-only storage suite passed. (2026-07-27; v1.5.2 focused Projects and Tags backend validation) |
+| Focused Reader Commands | VERIFIED | Reader metadata and Reading Note command contracts | 32 passed, 0 failed | The focused Reader command schema, concurrency, locking, normalization, canonicalization, failure-injection, rollback, and privacy suite passed. (2026-07-26; v1.5.4 focused Reader command regression) |
+| Focused Pdf Api | VERIFIED | managed PDF API contracts | 13 passed, 0 failed | The focused managed-PDF API contract suite passed unchanged. (2026-07-27; v1.5.4 focused PDF regression) |
+| Focused Projects Tags | VERIFIED | Projects and Tags read-model, API, privacy, and non-mutation contracts | 27 passed, 0 failed | The focused deterministic pagination, detail, orphan, fallback, corruption, privacy, OpenAPI, and read-only storage suite passed. (2026-07-27; v1.5.4 focused Projects and Tags backend regression) |
 | Focused Settings | VERIFIED | safe Settings read-model, API, privacy, bounded-execution, and non-mutation contracts | 13 passed, 0 failed | The focused populated, empty, deterministic, partial-failure, privacy, backup-evidence, bounded-read, and non-mutation Settings suite passed. (2026-07-27; v1.5.3 focused Settings backend validation) |
-| Focused Release Version | VERIFIED | release and version contracts | 9 passed, 0 failed | The focused runtime-target, immutable-baseline, and release-document contract suite passed. (2026-07-27; v1.5.3 focused release validation) |
-| Release Reconciliation | VERIFIED | canonical release-state reconciliation contracts | 30 passed, 0 failed | Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed. (2026-07-27; v1.5.3 local release reconciliation) |
-| Tracker Export | VERIFIED | deterministic external-tracker export contracts | 8 passed, 0 failed | The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed. (2026-07-27; v1.5.3 local tracker export validation) |
-| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-07-27; v1.5.3 local validation) |
-| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-07-27; v1.5.3 local validation) |
-| Frontend Node Tests | VERIFIED | frontend bridge, Reader, and PDF lifecycle Node suites | 55 passed, 0 failed, 0 skipped, 0 cancelled | All 55 frontend Node tests passed. (2026-07-27; v1.5.3 local validation) |
-| Frontend Projects Tags | VERIFIED | Projects and Tags bridge, route, rendering-source, negative-state, and compatibility contracts | 24 passed, 0 failed, 0 skipped, 0 cancelled | The focused exact GET bridge allowlist, real-field rendering source, shared state, retry, no-fabrication, no-write-control, and existing-view compatibility suite passed. (2026-07-27; v1.5.2 focused Projects and Tags frontend validation) |
-| Frontend Settings | VERIFIED | Settings route, real-field rendering source, negative states, compatibility, and exact bridge allowlist | 24 passed, 0 failed, 0 skipped, 0 cancelled | The focused four-section rendering source, zero-versus-unavailable, shared-state, retry, no-action, no-fabrication, compatibility, and exact GET bridge suite passed. (2026-07-27; v1.5.3 focused Settings frontend validation) |
-| Frontend Reader Commands | VERIFIED | Reader editor state and exact command bridge allowlist | 23 passed, 0 failed, 0 skipped, 0 cancelled | The exact bridge method/path allowlist and Reader editor state, draft preservation, header refresh, conflict, and transition suites passed. (2026-07-27; v1.5.2 focused frontend Reader command validation) |
-| Repository Hygiene | VERIFIED | tracked repository entries only | 255 entries inspected, 0 violations | Tracked-entry hygiene passed without reading user-data contents. (2026-07-27; v1.5.3 local hygiene validation) |
+| Focused Project Commands | VERIFIED | Project create, update, archive, revision, locking, rollback, strict API, and privacy contracts | 23 passed, 0 failed | The focused strict schema, bounded create/update/archive, no-op, stale revision, lock contention, rollback injection, and private-safe API suite passed. (2026-07-27; v1.5.4 focused Project command validation) |
+| Focused Project Paper Links | VERIFIED | Project existing-Paper link add/remove, revision, isolation, rollback, and privacy contracts | 16 passed, 0 failed | The focused existing-Paper validation, duplicate truthfulness, stale revision, orphan unlink, Note Block exclusion, store isolation, rollback, and private-safe API suite passed. (2026-07-27; v1.5.4 focused Project Paper-link validation) |
+| Focused Release Version | VERIFIED | release and version contracts | 9 passed, 0 failed | The focused runtime-target, immutable-baseline, and release-document contract suite passed. (2026-07-27; v1.5.4 focused release validation) |
+| Release Reconciliation | VERIFIED | canonical release-state reconciliation contracts | 30 passed, 0 failed | Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed. (2026-07-27; v1.5.4 local release reconciliation) |
+| Tracker Export | VERIFIED | deterministic external-tracker export contracts | 8 passed, 0 failed | The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed. (2026-07-27; v1.5.4 local tracker export validation) |
+| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-07-27; v1.5.4 local validation) |
+| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-07-27; v1.5.4 local validation) |
+| Frontend Node Tests | VERIFIED | frontend bridge, Reader, and PDF lifecycle Node suites | 68 passed, 0 failed, 0 skipped, 0 cancelled | All 68 frontend Node tests passed. (2026-07-27; v1.5.4 local validation) |
+| Frontend Projects Tags | VERIFIED | Projects and Tags bridge, route, rendering-source, negative-state, and compatibility contracts | 26 passed, 0 failed, 0 skipped, 0 cancelled | The focused exact bridge allowlist, real-field read rendering, shared state, retry, no-fabrication, bounded Project command compatibility, and Tag read-only compatibility suite passed. (2026-07-27; v1.5.2 focused Projects and Tags frontend validation) |
+| Frontend Settings | VERIFIED | Settings route, real-field rendering source, negative states, compatibility, and exact bridge allowlist | 27 passed, 0 failed, 0 skipped, 0 cancelled | The focused four-section rendering source, zero-versus-unavailable, shared-state, retry, no-action, no-fabrication, compatibility, and exact GET bridge suite passed. (2026-07-27; v1.5.3 focused Settings frontend validation) |
+| Frontend Reader Commands | VERIFIED | Reader editor state and exact command bridge allowlist | 27 passed, 0 failed, 0 skipped, 0 cancelled | The exact bridge method/path allowlist and Reader editor state, draft preservation, header refresh, conflict, and transition suites passed. (2026-07-27; v1.5.2 focused frontend Reader command validation) |
+| Frontend Project Commands | VERIFIED | Project command bridge, editor state, draft preservation, frontend source, and archived-control contracts | 31 passed, 0 failed, 0 skipped, 0 cancelled | All exact bridge method/path, Project editor state, draft preservation, real Paper picker, confirmation, and archived-control source checks passed. (2026-07-27; v1.5.4 focused frontend Project command validation) |
+| Repository Hygiene | VERIFIED | tracked repository entries only | 255 entries inspected, 0 violations | Tracked-entry hygiene passed without reading user-data contents. (2026-07-27; v1.5.4 local hygiene validation) |
 
-The current smoke result is 110 passed, 0 warnings, 0 failed. The two conflicting v1.4.0 records remain historical evidence and do not override this current result.
+The current smoke result is 115 passed, 0 warnings, 0 failed. The two conflicting v1.4.0 records remain historical evidence and do not override this current result.
 
 ## Reader manual validation
 
@@ -100,6 +103,21 @@ Aggregate state: **PARTIALLY VERIFIED**.
 | Two stale browser sessions | VERIFIED | Stale Reading Note and metadata writes from a second browser tab returned conflicts, preserved the newer persisted results and stale drafts, and supported explicit reload, re-edit, and save. (2026-07-26; User-performed local v1.5.1 Reader write runtime validation) |
 | Streamlit web visibility | VERIFIED | Metadata and Reading Note changes were visible in all four Streamlit-to-web and web-to-Streamlit directions. (2026-07-26; User-performed local v1.5.1 Reader write runtime validation) |
 
+## v1.5.4 Project write manual validation
+
+Aggregate state: **NOT VERIFIED**.
+
+| Check | Status | Evidence |
+|---|---|---|
+| Create reload streamlit visibility | NOT VERIFIED | No user-performed result is recorded for create, reload persistence, and Streamlit visibility. (2026-07-27; docs/checklists/regression_checklist.md) |
+| Metadata round trip | NOT VERIFIED | No user-performed result is recorded for allowlisted metadata round-trip parity. (2026-07-27; docs/checklists/regression_checklist.md) |
+| Paper link add duplicate remove | NOT VERIFIED | No user-performed result is recorded for Paper-link add, duplicate unchanged, and removal parity. (2026-07-27; docs/checklists/regression_checklist.md) |
+| Archive preserves links | NOT VERIFIED | No user-performed result is recorded for archive, retained links, and absent write controls. (2026-07-27; docs/checklists/regression_checklist.md) |
+| Project revision conflict | NOT VERIFIED | No user-performed result is recorded for a stale Project revision conflict and draft recovery. (2026-07-27; docs/checklists/regression_checklist.md) |
+| Link revision conflict | NOT VERIFIED | No user-performed result is recorded for a stale link revision conflict and selection recovery. (2026-07-27; docs/checklists/regression_checklist.md) |
+| Api restart draft recovery | NOT VERIFIED | No user-performed result is recorded for API stop/restart with preserved unsaved frontend state. (2026-07-27; docs/checklists/regression_checklist.md) |
+| Network privacy | NOT VERIFIED | No user-performed browser Network privacy result is recorded for Project commands. (2026-07-27; docs/checklists/regression_checklist.md) |
+
 ## Publication and recurring operations
 
 - GitHub Release: **NOT VERIFIED**. No GitHub Release publication evidence is recorded; tag existence is not publication evidence.
@@ -112,6 +130,7 @@ Aggregate state: **PARTIALLY VERIFIED**.
 - Post-merge `main` workflow: **NOT VERIFIED**. No repository-accessible evidence proves a separate post-merge main workflow run.
 - v1.5.0 Reader Snapshot runtime: **PARTIALLY VERIFIED**. Native fallback, API/bridge PDF delivery, first-page rendering, persisted-note/PDF pairing, absent-note clean state, paper transition, and API restart recovery have runtime evidence; unreadable-note and missing-PDF scenarios remain open.
 - v1.5.1 Reader write runtime: **PARTIALLY VERIFIED**. User-performed validation verified Reader pairing, explicit saves and reloads, canonical header refresh, conflict recovery, restart recovery, transition behavior, clean empty new-paper state, and cross-surface visibility; unreadable-note and missing-PDF scenarios remain NOT VERIFIED.
+- v1.5.4 Project write runtime: **NOT VERIFIED**. No user-performed real-data result is recorded for the v1.5.4 Project write and Paper-link runtime checks; G4 remains open.
 - GitHub Release publication: **NOT VERIFIED**. No GitHub Release publication evidence is recorded; tag existence is not publication evidence.
 - Clean-PC restore: **NOT VERIFIED**. Readiness scripts and a checklist exist, but no genuine clean-PC restore rehearsal is recorded.
 

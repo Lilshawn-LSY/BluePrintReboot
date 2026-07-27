@@ -2,6 +2,20 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.4-project-write-paper-links
+
+- [x] Runtime, package/lockfile, visible shell, README, manifest, and release-note draft identify v1.5.4 while the immutable released baseline remains v1.4.0.
+- [x] Project create/update/archive and Paper-link add/remove delegate through one strict command-service boundary.
+- [x] Metadata is bounded and allowlisted; archive is one-way; server identity/timestamps are protected; Project deletion and unarchive are absent.
+- [x] Existing-Paper link commands fix `target_type` to `paper`, validate Project/Paper identities, return honest duplicate results, and exclude Note Block targets.
+- [x] Separate Project/link revisions, shared lock acquisition, reload-after-lock conflict checks, atomic replacement, verification, and exact-byte rollback are covered.
+- [x] The API and bridge admit only the five exact command method/path pairs with controlled private-safe errors.
+- [x] The frontend uses explicit create/edit/save/cancel/archive/add/remove actions, preserves drafts/selections on failure, confirms archive/unlink, and hides write controls for archived Projects.
+- [x] Disposable backend/frontend tests cover strictness, stale/no-op behavior, lock contention, rollback injection, store isolation, privacy, bridge allowlisting, and regressions.
+- [x] R130 and R131 are complete; R132 is deferred; R133 is partial; G4 remains open; v1.6 expansion remains deferred.
+- [ ] Manually confirm real-data web/Streamlit parity, persistence, conflict recovery, offline/restart recovery, archived read behavior, and private-safe Network responses.
+- [ ] v1.5.4 PR, hosted CI, merge, tag, GitHub Release, and post-merge evidence remain open until separately observed.
+
 ## v1.5.3-settings-health-read-parity
 
 - [x] Runtime, package/lockfile, visible shell, README, manifest, and release-note draft identify v1.5.3 while the immutable released baseline remains v1.4.0.

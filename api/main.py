@@ -29,10 +29,18 @@ def create_app() -> FastAPI:
         request: Request,
         exception: RequestValidationError,
     ) -> JSONResponse:
-        if not (
+        reader_command = (
             request.url.path.endswith("/metadata")
             or request.url.path.endswith("/reading-note")
-        ):
+        )
+        project_command = (
+            request.method in {"POST", "PATCH", "DELETE"}
+            and (
+                request.url.path == "/projects"
+                or request.url.path.startswith("/projects/")
+            )
+        )
+        if not (reader_command or project_command):
             return await request_validation_exception_handler(request, exception)
         return JSONResponse(
             status_code=422,

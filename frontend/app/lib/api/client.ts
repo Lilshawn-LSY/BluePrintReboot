@@ -1,4 +1,4 @@
-import type { CandidateSummary, DashboardSnapshot, EditablePaperMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, ProjectDetail, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
+import type { CandidateSummary, DashboardSnapshot, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -11,7 +11,7 @@ export class ApiClientError extends Error {
 
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "PATCH" | "PUT"; body?: object; notFoundMessage?: string } = {},
+  options: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: object; notFoundMessage?: string } = {},
 ): Promise<T> {
   let response: Response;
   try {
@@ -33,11 +33,14 @@ async function request<T>(
       if (failureState === "api-unavailable") {
         throw new ApiClientError("The local BluePrintReboot API could not be reached.", "unavailable", 503);
       }
+      if (failureState === "command-unavailable") {
+        throw new ApiClientError("The local command could not be completed. Retry after checking the API.", "error", 503);
+      }
       throw new ApiClientError("The local read model could not be read. Check the local data state and retry.", "read-model", 503);
     }
     if (response.status === 404) throw new ApiClientError(options.notFoundMessage ?? "The requested paper was not found.", "not-found", 404);
     if (response.status === 409) throw new ApiClientError("The saved version changed. Reload the current version before retrying.", "conflict", 409);
-    if (response.status === 422) throw new ApiClientError("The submitted Reader data is invalid.", "invalid", 422);
+    if (response.status === 422) throw new ApiClientError("The submitted command data is invalid.", "invalid", 422);
     throw new ApiClientError(`The local API returned HTTP ${response.status}.`, "error", response.status);
   }
   return response.json() as Promise<T>;
@@ -76,6 +79,59 @@ export const apiClient = {
       { notFoundMessage: "The requested Project was not found." },
     );
   },
+  createProject: (project: EditableProjectMetadata) => request<ProjectCommandResponse>(
+    "/projects",
+    { method: "POST", body: project },
+  ),
+  updateProject: (
+    projectId: string,
+    changes: Partial<EditableProjectMetadata>,
+    expectedRevision: string,
+  ) => request<ProjectCommandResponse>(
+    `/projects/${encodeURIComponent(projectId)}`,
+    {
+      method: "PATCH",
+      body: { changes, expected_revision: expectedRevision },
+      notFoundMessage: "The requested Project was not found.",
+    },
+  ),
+  archiveProject: (projectId: string, expectedRevision: string) => request<ProjectCommandResponse>(
+    `/projects/${encodeURIComponent(projectId)}/archive`,
+    {
+      method: "POST",
+      body: { expected_revision: expectedRevision },
+      notFoundMessage: "The requested Project was not found.",
+    },
+  ),
+  addProjectPaperLink: (
+    projectId: string,
+    paperId: string,
+    linkType: ProjectLinkType,
+    expectedLinksRevision: string,
+  ) => request<PaperLinkCommandResponse>(
+    `/projects/${encodeURIComponent(projectId)}/paper-links`,
+    {
+      method: "POST",
+      body: {
+        paper_id: paperId,
+        link_type: linkType,
+        expected_links_revision: expectedLinksRevision,
+      },
+      notFoundMessage: "The requested Project or Paper was not found.",
+    },
+  ),
+  removeProjectPaperLink: (
+    projectId: string,
+    linkId: string,
+    expectedLinksRevision: string,
+  ) => request<PaperLinkCommandResponse>(
+    `/projects/${encodeURIComponent(projectId)}/paper-links/${encodeURIComponent(linkId)}`,
+    {
+      method: "DELETE",
+      body: { expected_links_revision: expectedLinksRevision },
+      notFoundMessage: "The requested Project or Paper link was not found.",
+    },
+  ),
   getTags: (options: { limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams({
       limit: String(options.limit ?? 20),

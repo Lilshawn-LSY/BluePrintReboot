@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="top-bar__separator" aria-hidden="true">/</span>
             <strong>{currentTitle(pathname)}</strong>
           </div>
-          <span className="version-label">v1.5.3 · Settings and health reads</span>
+          <span className="version-label">v1.5.4 · Project commands</span>
         </header>
         <main id="main-content" className="main-content">{children}</main>
       </div>

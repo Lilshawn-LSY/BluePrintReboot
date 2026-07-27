@@ -13,7 +13,9 @@ from api.adapters import (
     adapt_candidate_summary,
     adapt_canonical_tag,
     adapt_paper_detail,
+    adapt_paper_link_command_result,
     adapt_paper_list_item,
+    adapt_project_command_result,
     adapt_project_detail,
     adapt_project_list_item,
     adapt_reader_snapshot,
@@ -29,6 +31,7 @@ from api.dependencies import (
     get_paper_detail,
     get_paper_list_items,
     get_project_detail,
+    get_project_command_service,
     get_project_list_items,
     get_reader_command_service,
     get_reader_snapshot,
@@ -37,6 +40,8 @@ from api.dependencies import (
 from api.pdf_files import ManagedPdfResult, ManagedPdfState
 from api.schemas import (
     APIError,
+    AddPaperLinkRequest,
+    ArchiveProjectRequest,
     ArchiveStatus,
     CandidateSummaryResponse,
     HealthSummaryResponse,
@@ -47,14 +52,27 @@ from api.schemas import (
     PaginatedProjectList,
     PaginatedTagList,
     PaperDetail,
+    PaperLinkCommandResponse,
+    ProjectCommandResponse,
+    CreateProjectRequest,
+    RemovePaperLinkRequest,
     ReadingNoteCommandRequest,
     ReadingNoteCommandResponse,
     ReaderSnapshotResponse,
     SettingsSummaryResponse,
     ProjectDetail,
+    UpdateProjectRequest,
 )
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem, ReaderSnapshot as DomainReaderSnapshot
 from services.project_read_model import ProjectDetail as DomainProjectDetail, ProjectListItem as DomainProjectListItem
+from services.project_commands import (
+    ProjectArchivedConflict,
+    ProjectCommandConflict,
+    ProjectCommandInvalid,
+    ProjectCommandNotFound,
+    ProjectCommandService,
+    ProjectCommandUnavailable,
+)
 from services.reader_commands import ReaderCommandConflict, ReaderCommandNotFound, ReaderCommandService, ReaderCommandUnavailable
 from services.settings_read_model import SettingsSummary as DomainSettingsSummary
 from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
@@ -68,6 +86,10 @@ PDF_UNAVAILABLE_DETAIL = "Managed PDF is temporarily unavailable."
 COMMAND_CONFLICT_DETAIL = "The saved Reader state changed. Reload the current version before retrying."
 COMMAND_UNAVAILABLE_DETAIL = "The Reader command could not be completed."
 COMMAND_INVALID_DETAIL = "Request validation failed."
+PROJECT_COMMAND_CONFLICT_DETAIL = "The saved Project state changed. Reload the current version before retrying."
+PROJECT_ARCHIVED_DETAIL = "Archived Projects do not allow this command."
+PROJECT_COMMAND_UNAVAILABLE_DETAIL = "The Project command could not be completed."
+PROJECT_COMMAND_NOT_FOUND_DETAIL = "The requested Project, Paper, or Paper link was not found."
 
 
 @router.get("/health", response_model=HealthSummaryResponse)
@@ -133,6 +155,38 @@ def list_projects(
     )
 
 
+@router.post(
+    "/projects",
+    response_model=ProjectCommandResponse,
+    summary="Create Project",
+    description="Explicitly create one Project with a server-generated stable identity.",
+    responses={
+        422: {"model": APIError, "description": "The Project fields are invalid."},
+        503: {"model": APIError, "description": "The Project could not be persisted consistently."},
+    },
+)
+def create_project(
+    request: CreateProjectRequest,
+    commands: Annotated[ProjectCommandService, Depends(get_project_command_service)],
+) -> ProjectCommandResponse:
+    try:
+        result = commands.create_project(
+            name=request.name,
+            description=request.description,
+            status=request.status,
+            priority=request.priority,
+            tags=request.tags,
+        )
+        return adapt_project_command_result(result)
+    except ProjectCommandInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except (ProjectCommandUnavailable, ProjectContractError):
+        raise HTTPException(
+            status_code=503,
+            detail=PROJECT_COMMAND_UNAVAILABLE_DETAIL,
+        ) from None
+
+
 @router.get(
     "/projects/{project_id}",
     response_model=ProjectDetail,
@@ -166,6 +220,170 @@ def project_detail(
         )
     except ProjectContractError:
         raise ReadModelUnavailable from None
+
+
+@router.patch(
+    "/projects/{project_id}",
+    response_model=ProjectCommandResponse,
+    summary="Update Project",
+    description="Explicitly update allowlisted Project metadata when its revision still matches.",
+    responses={
+        404: {"model": APIError, "description": "The Project identity is unknown."},
+        409: {"model": APIError, "description": "The Project is stale or archived."},
+        422: {"model": APIError, "description": "The Project fields are invalid or unsupported."},
+        503: {"model": APIError, "description": "The Project could not be persisted consistently."},
+    },
+)
+def update_project(
+    request: UpdateProjectRequest,
+    project_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[ProjectCommandService, Depends(get_project_command_service)],
+) -> ProjectCommandResponse:
+    try:
+        result = commands.update_project(
+            project_id,
+            request.changes.model_dump(exclude_unset=True),
+            request.expected_revision,
+        )
+        return adapt_project_command_result(result)
+    except ProjectCommandNotFound:
+        raise HTTPException(status_code=404, detail="Project not found.") from None
+    except ProjectArchivedConflict:
+        raise HTTPException(status_code=409, detail=PROJECT_ARCHIVED_DETAIL) from None
+    except ProjectCommandConflict:
+        raise HTTPException(
+            status_code=409,
+            detail=PROJECT_COMMAND_CONFLICT_DETAIL,
+        ) from None
+    except ProjectCommandInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except (ProjectCommandUnavailable, ProjectContractError):
+        raise HTTPException(
+            status_code=503,
+            detail=PROJECT_COMMAND_UNAVAILABLE_DETAIL,
+        ) from None
+
+
+@router.post(
+    "/projects/{project_id}/archive",
+    response_model=ProjectCommandResponse,
+    summary="Archive Project",
+    description="Explicitly archive one Project without deleting it or any linked data.",
+    responses={
+        404: {"model": APIError, "description": "The Project identity is unknown."},
+        409: {"model": APIError, "description": "The Project revision is stale."},
+        422: {"model": APIError, "description": "The archive request is invalid."},
+        503: {"model": APIError, "description": "The Project could not be archived consistently."},
+    },
+)
+def archive_project(
+    request: ArchiveProjectRequest,
+    project_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[ProjectCommandService, Depends(get_project_command_service)],
+) -> ProjectCommandResponse:
+    try:
+        result = commands.archive_project(project_id, request.expected_revision)
+        return adapt_project_command_result(result)
+    except ProjectCommandNotFound:
+        raise HTTPException(status_code=404, detail="Project not found.") from None
+    except ProjectCommandConflict:
+        raise HTTPException(
+            status_code=409,
+            detail=PROJECT_COMMAND_CONFLICT_DETAIL,
+        ) from None
+    except (ProjectCommandUnavailable, ProjectContractError):
+        raise HTTPException(
+            status_code=503,
+            detail=PROJECT_COMMAND_UNAVAILABLE_DETAIL,
+        ) from None
+
+
+@router.post(
+    "/projects/{project_id}/paper-links",
+    response_model=PaperLinkCommandResponse,
+    summary="Add Paper link to Project",
+    description="Explicitly add one existing Paper with one allowlisted link type.",
+    responses={
+        404: {"model": APIError, "description": "The Project or Paper is unknown."},
+        409: {"model": APIError, "description": "The link collection is stale or the Project is archived."},
+        422: {"model": APIError, "description": "The Paper-link request is invalid."},
+        503: {"model": APIError, "description": "The Paper link could not be persisted consistently."},
+    },
+)
+def add_project_paper_link(
+    request: AddPaperLinkRequest,
+    project_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[ProjectCommandService, Depends(get_project_command_service)],
+) -> PaperLinkCommandResponse:
+    try:
+        result = commands.add_paper_link(
+            project_id,
+            paper_id=request.paper_id,
+            link_type=request.link_type,
+            expected_links_revision=request.expected_links_revision,
+        )
+        return adapt_paper_link_command_result(result)
+    except ProjectCommandNotFound:
+        raise HTTPException(
+            status_code=404,
+            detail=PROJECT_COMMAND_NOT_FOUND_DETAIL,
+        ) from None
+    except ProjectArchivedConflict:
+        raise HTTPException(status_code=409, detail=PROJECT_ARCHIVED_DETAIL) from None
+    except ProjectCommandConflict:
+        raise HTTPException(
+            status_code=409,
+            detail=PROJECT_COMMAND_CONFLICT_DETAIL,
+        ) from None
+    except ProjectCommandInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except (ProjectCommandUnavailable, ProjectContractError):
+        raise HTTPException(
+            status_code=503,
+            detail=PROJECT_COMMAND_UNAVAILABLE_DETAIL,
+        ) from None
+
+
+@router.delete(
+    "/projects/{project_id}/paper-links/{link_id}",
+    response_model=PaperLinkCommandResponse,
+    summary="Remove Paper link from Project",
+    description="Explicitly remove one exact Paper link without changing the Paper or Project.",
+    responses={
+        404: {"model": APIError, "description": "The Project or exact Paper link is unknown."},
+        409: {"model": APIError, "description": "The Project link collection is stale."},
+        422: {"model": APIError, "description": "The unlink request is invalid."},
+        503: {"model": APIError, "description": "The Paper link could not be removed consistently."},
+    },
+)
+def remove_project_paper_link(
+    request: RemovePaperLinkRequest,
+    project_id: Annotated[str, Path(min_length=1, max_length=200)],
+    link_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[ProjectCommandService, Depends(get_project_command_service)],
+) -> PaperLinkCommandResponse:
+    try:
+        result = commands.remove_paper_link(
+            project_id,
+            link_id,
+            expected_links_revision=request.expected_links_revision,
+        )
+        return adapt_paper_link_command_result(result)
+    except ProjectCommandNotFound:
+        raise HTTPException(
+            status_code=404,
+            detail=PROJECT_COMMAND_NOT_FOUND_DETAIL,
+        ) from None
+    except ProjectCommandConflict:
+        raise HTTPException(
+            status_code=409,
+            detail=PROJECT_COMMAND_CONFLICT_DETAIL,
+        ) from None
+    except (ProjectCommandUnavailable, ProjectContractError):
+        raise HTTPException(
+            status_code=503,
+            detail=PROJECT_COMMAND_UNAVAILABLE_DETAIL,
+        ) from None
 
 
 @router.get(

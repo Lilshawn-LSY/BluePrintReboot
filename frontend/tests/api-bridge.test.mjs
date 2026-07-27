@@ -8,6 +8,10 @@ import {
   isAllowedBlueprintRequest,
   isBlueprintMetadataPath,
   isBlueprintPdfPath,
+  isBlueprintProjectArchivePath,
+  isBlueprintProjectPaperLinkPath,
+  isBlueprintProjectPaperLinksPath,
+  isBlueprintProjectPath,
   isBlueprintReaderPath,
   isBlueprintReadingNotePath,
   proxyBlueprintGet,
@@ -50,6 +54,35 @@ test("allows only the exact method and path pairs for Reader commands", () => {
   }
 });
 
+test("allows only the exact method and path pairs for Project commands", () => {
+  const allowed = [
+    ["POST", ["projects"]],
+    ["PATCH", ["projects", "project-1"]],
+    ["POST", ["projects", "project-1", "archive"]],
+    ["POST", ["projects", "project-1", "paper-links"]],
+    ["DELETE", ["projects", "project-1", "paper-links", "link-1"]],
+  ];
+  for (const [method, parts] of allowed) {
+    assert.equal(isAllowedBlueprintRequest(method, parts), true, `${method} ${parts.join("/")}`);
+  }
+  for (const [method, parts] of [
+    ["DELETE", ["projects", "project-1"]],
+    ["PUT", ["projects", "project-1"]],
+    ["PATCH", ["projects"]],
+    ["POST", ["projects", "project-1"]],
+    ["DELETE", ["projects", "project-1", "paper-links"]],
+    ["POST", ["projects", "project-1", "note-block-links"]],
+    ["DELETE", ["projects", "project-1", "note-block-links", "note-1"]],
+    ["POST", ["projects", "project-1", "unarchive"]],
+  ]) {
+    assert.equal(isAllowedBlueprintRequest(method, parts), false, `${method} ${parts.join("/")}`);
+  }
+  assert.equal(isBlueprintProjectPath(["projects", "project-1"]), true);
+  assert.equal(isBlueprintProjectArchivePath(["projects", "project-1", "archive"]), true);
+  assert.equal(isBlueprintProjectPaperLinksPath(["projects", "project-1", "paper-links"]), true);
+  assert.equal(isBlueprintProjectPaperLinkPath(["projects", "project-1", "paper-links", "link-1"]), true);
+});
+
 test("rejects decoded and encoded path tricks before contacting upstream", async () => {
   for (const parts of [
     ["papers", "..", "metadata"],
@@ -58,11 +91,13 @@ test("rejects decoded and encoded path tricks before contacting upstream", async
     ["papers", "paper\\other", "metadata"],
     ["papers", "paper%2Fother", "metadata"],
     ["papers", "%252e%252e", "reading-note"],
+    ["projects", "project/other", "archive"],
+    ["projects", "project-1", "paper-links", "link%2Fother"],
   ]) {
     let fetched = false;
     const response = await proxyBlueprintRequest(
       new Request("http://localhost/api/blueprint/rejected", {
-        method: parts[2] === "metadata" ? "PATCH" : "PUT",
+        method: parts[0] === "projects" ? (parts.length === 4 ? "DELETE" : "POST") : parts[2] === "metadata" ? "PATCH" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: "{}",
       }),
@@ -71,6 +106,41 @@ test("rejects decoded and encoded path tricks before contacting upstream", async
     );
     assert.equal(response.status, 404, parts.join("/"));
     assert.equal(fetched, false, parts.join("/"));
+  }
+});
+
+test("forwards every exact Project command with its JSON body", async () => {
+  const requests = [
+    ["POST", ["projects"], { name: "New Project", description: "", status: "active", priority: "normal", tags: [] }],
+    ["PATCH", ["projects", "project 1"], { changes: { name: "Renamed" }, expected_revision: "a".repeat(64) }],
+    ["POST", ["projects", "project 1", "archive"], { expected_revision: "b".repeat(64) }],
+    ["POST", ["projects", "project 1", "paper-links"], { paper_id: "paper 1", link_type: "related", expected_links_revision: "c".repeat(64) }],
+    ["DELETE", ["projects", "project 1", "paper-links", "link 1"], { expected_links_revision: "d".repeat(64) }],
+  ];
+  for (const [method, parts, body] of requests) {
+    let requestedUrl;
+    const payload = JSON.stringify(body);
+    const response = await proxyBlueprintRequest(
+      new Request(`http://localhost/api/blueprint/${parts.join("/")}`, {
+        method,
+        headers: { "Content-Type": "application/json", Range: "bytes=0-10" },
+        body: payload,
+      }),
+      parts,
+      {
+        apiUrl: API_URL,
+        fetchImpl: async (url, options) => {
+          requestedUrl = url;
+          assert.equal(options.method, method);
+          assert.equal(options.headers.get("Content-Type"), "application/json");
+          assert.equal(options.headers.get("Range"), null);
+          assert.equal(options.body, payload);
+          return Response.json({ status: "ok" });
+        },
+      },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(requestedUrl, `${API_URL}/${parts.map(encodeURIComponent).join("/")}`);
   }
 });
 
@@ -339,6 +409,24 @@ test("maps upstream 5xx responses to the generic local 503", async () => {
   assert.equal(response.headers.get("X-Blueprint-Error-State"), "read-model-unavailable");
 });
 
+test("maps Project command 5xx responses to a private-safe command state", async () => {
+  const response = await proxyBlueprintRequest(
+    new Request("http://localhost/api/blueprint/projects/project-1/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expected_revision: "a".repeat(64) }),
+    }),
+    ["projects", "project-1", "archive"],
+    {
+      apiUrl: API_URL,
+      fetchImpl: async () => Response.json({ detail: "private path and error" }, { status: 500 }),
+    },
+  );
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { detail: "Local BluePrintReboot API is unavailable." });
+  assert.equal(response.headers.get("X-Blueprint-Error-State"), "command-unavailable");
+});
+
 test("maps fetch failures to the generic local 503", async () => {
   const response = await proxyBlueprintGet(
     new Request("http://localhost/api/blueprint/library/status"),
@@ -351,12 +439,14 @@ test("maps fetch failures to the generic local 503", async () => {
   assert.equal(response.headers.get("X-Blueprint-Error-State"), "api-unavailable");
 });
 
-test("the route exposes only GET plus the two bounded write methods", async () => {
+test("the route exposes GET plus only the bounded command methods", async () => {
   const route = await readFile(new URL("../app/api/blueprint/[...path]/route.ts", import.meta.url), "utf8");
   const bridge = await readFile(new URL("../app/api/blueprint/[...path]/bridge.mjs", import.meta.url), "utf8");
   assert.match(route, /export async function GET\b/);
+  assert.match(route, /export async function POST\b/);
   assert.match(route, /export async function PATCH\b/);
   assert.match(route, /export async function PUT\b/);
-  assert.doesNotMatch(route, /export (?:async )?function (?:POST|DELETE)\b/);
+  assert.match(route, /export async function DELETE\b/);
+  assert.doesNotMatch(route, /export (?:async )?function (?:HEAD|OPTIONS)\b/);
   assert.doesNotMatch(bridge, /await upstream\.(?:text|json|arrayBuffer)\(/);
 });

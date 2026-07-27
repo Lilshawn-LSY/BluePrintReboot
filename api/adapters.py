@@ -15,7 +15,11 @@ from api.schemas import (
     EditablePaperMetadata,
     LinkedPaperSummary,
     PaperDetail,
+    PaperLinkCommandResponse,
+    PaperLinkCommandState,
     PaperListItem,
+    ProjectCommandResponse,
+    ProjectCommandState,
     ProjectDetail,
     ProjectLink,
     ProjectLinkTarget,
@@ -32,6 +36,10 @@ from api.schemas import (
     SettingsSummaryResponse,
     SettingsWorkspaceResource,
     SettingsWorkspaceSection,
+)
+from services.project_commands import (
+    PaperLinkCommandResult as DomainPaperLinkCommandResult,
+    ProjectCommandResult as DomainProjectCommandResult,
 )
 
 
@@ -159,6 +167,16 @@ def _strict_text(value: object, field_name: str, error_type: type[ValueError]) -
     return value.strip()
 
 
+def _strict_untrimmed_text(
+    value: object,
+    field_name: str,
+    error_type: type[ValueError],
+) -> str:
+    if not isinstance(value, str):
+        raise error_type(f"{field_name} must be a string.")
+    return value
+
+
 def _strict_string_list(
     value: object,
     field_name: str,
@@ -186,6 +204,17 @@ def _nonnegative_integer(
     return value
 
 
+def _strict_revision(
+    value: object,
+    field_name: str,
+    error_type: type[ValueError],
+) -> str:
+    revision = _strict_text(value, field_name, error_type)
+    if re.fullmatch(r"[0-9a-f]{64}", revision) is None:
+        raise error_type(f"{field_name} must be a deterministic revision.")
+    return revision
+
+
 def adapt_project_list_item(source: Mapping[str, Any]) -> ProjectListItem:
     project_id = _strict_text(source.get("project_id"), "project_id", ProjectContractError)
     name = _strict_text(source.get("name"), "name", ProjectContractError)
@@ -194,7 +223,7 @@ def adapt_project_list_item(source: Mapping[str, Any]) -> ProjectListItem:
     return ProjectListItem(
         project_id=project_id,
         name=name,
-        description=_strict_text(
+        description=_strict_untrimmed_text(
             source.get("description"),
             "description",
             ProjectContractError,
@@ -210,6 +239,11 @@ def adapt_project_list_item(source: Mapping[str, Any]) -> ProjectListItem:
         updated_at=_strict_text(
             source.get("updated_at"),
             "updated_at",
+            ProjectContractError,
+        ),
+        project_revision=_strict_revision(
+            source.get("project_revision"),
+            "project_revision",
             ProjectContractError,
         ),
         link_count=_nonnegative_integer(
@@ -323,12 +357,129 @@ def adapt_project_detail(
         links_limit=links_limit,
         links_offset=links_offset,
         links_has_more=links_offset + len(page) < total,
+        links_revision=_strict_revision(
+            source.get("links_revision"),
+            "links_revision",
+            ProjectContractError,
+        ),
         orphaned_link_count=_nonnegative_integer(
             source.get("orphaned_link_count"),
             "orphaned_link_count",
             ProjectContractError,
         ),
     )
+
+
+def _adapt_project_command_state(source) -> ProjectCommandState:
+    return ProjectCommandState(
+        project_id=_strict_text(
+            source.project_id,
+            "project.project_id",
+            ProjectContractError,
+        ),
+        name=_strict_text(source.name, "project.name", ProjectContractError),
+        description=_strict_untrimmed_text(
+            source.description,
+            "project.description",
+            ProjectContractError,
+        ),
+        status=_strict_text(source.status, "project.status", ProjectContractError),
+        priority=_strict_text(
+            source.priority,
+            "project.priority",
+            ProjectContractError,
+        ),
+        tags=_strict_string_list(
+            source.tags,
+            "project.tags",
+            ProjectContractError,
+        ),
+        created_at=_strict_text(
+            source.created_at,
+            "project.created_at",
+            ProjectContractError,
+        ),
+        updated_at=_strict_text(
+            source.updated_at,
+            "project.updated_at",
+            ProjectContractError,
+        ),
+        project_revision=_strict_revision(
+            source.project_revision,
+            "project.project_revision",
+            ProjectContractError,
+        ),
+        links_revision=_strict_revision(
+            source.links_revision,
+            "project.links_revision",
+            ProjectContractError,
+        ),
+        link_count=_nonnegative_integer(
+            source.link_count,
+            "project.link_count",
+            ProjectContractError,
+        ),
+        linked_paper_count=_nonnegative_integer(
+            source.linked_paper_count,
+            "project.linked_paper_count",
+            ProjectContractError,
+        ),
+    )
+
+
+def adapt_project_command_result(
+    result: DomainProjectCommandResult,
+) -> ProjectCommandResponse:
+    try:
+        return ProjectCommandResponse(
+            status=result.status,
+            project=_adapt_project_command_state(result.project),
+        )
+    except ValueError:
+        raise ProjectContractError(
+            "Project command result contains unsupported values."
+        ) from None
+
+
+def adapt_paper_link_command_result(
+    result: DomainPaperLinkCommandResult,
+) -> PaperLinkCommandResponse:
+    try:
+        return PaperLinkCommandResponse(
+            status=result.status,
+            project=_adapt_project_command_state(result.project),
+            link=PaperLinkCommandState(
+                link_id=_strict_text(
+                    result.link.link_id,
+                    "link.link_id",
+                    ProjectContractError,
+                ),
+                project_id=_strict_text(
+                    result.link.project_id,
+                    "link.project_id",
+                    ProjectContractError,
+                ),
+                paper_id=_strict_text(
+                    result.link.paper_id,
+                    "link.paper_id",
+                    ProjectContractError,
+                ),
+                link_type=_strict_text(
+                    result.link.link_type,
+                    "link.link_type",
+                    ProjectContractError,
+                ),
+                created_at=_strict_text(
+                    result.link.created_at,
+                    "link.created_at",
+                    ProjectContractError,
+                ),
+            ),
+        )
+    except ValueError:
+        raise ProjectContractError(
+            "Paper link command result contains unsupported values."
+        ) from None
 
 
 def adapt_canonical_tag(source: Mapping[str, Any]) -> CanonicalTag:

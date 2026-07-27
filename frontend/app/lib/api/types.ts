@@ -136,11 +136,12 @@ export interface ProjectListItem {
   project_id: string;
   name: string;
   description: string;
-  status: string;
-  priority: string;
+  status: ProjectStatus;
+  priority: ProjectPriority;
   tags: string[];
   created_at: string;
   updated_at: string;
+  project_revision: string;
   link_count: number;
   linked_paper_count: number;
 }
@@ -174,7 +175,55 @@ export interface ProjectDetail extends ProjectListItem {
   links_limit: number;
   links_offset: number;
   links_has_more: boolean;
+  links_revision: string;
   orphaned_link_count: number;
+}
+
+export type ProjectStatus = "active" | "paused" | "done" | "archived";
+export type EditableProjectStatus = Exclude<ProjectStatus, "archived">;
+export type ProjectPriority = "low" | "normal" | "high";
+export type ProjectLinkType = "related" | "background" | "key_reference" | "supports_project" | "raises_question" | "idea_for_project";
+
+export interface EditableProjectMetadata {
+  name: string;
+  description: string;
+  status: EditableProjectStatus;
+  priority: ProjectPriority;
+  tags: string[];
+}
+
+export interface ProjectCommandState {
+  project_id: string;
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  priority: ProjectPriority;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  project_revision: string;
+  links_revision: string;
+  link_count: number;
+  linked_paper_count: number;
+}
+
+export interface ProjectCommandResponse {
+  status: "created" | "saved" | "no_op" | "archived" | "already_archived";
+  project: ProjectCommandState;
+}
+
+export interface PaperLinkCommandState {
+  link_id: string;
+  project_id: string;
+  paper_id: string;
+  link_type: ProjectLinkType;
+  created_at: string;
+}
+
+export interface PaperLinkCommandResponse {
+  status: "created" | "unchanged" | "removed";
+  project: ProjectCommandState;
+  link: PaperLinkCommandState;
 }
 
 export interface PaginatedProjectList {
