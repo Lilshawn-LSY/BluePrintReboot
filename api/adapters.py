@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from collections.abc import Mapping
+from datetime import datetime
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
@@ -23,6 +25,13 @@ from api.schemas import (
     ReaderNoteHeader,
     ReaderPdfState,
     ReaderSnapshotResponse,
+    SettingsApplicationSection,
+    SettingsBackupReadinessSection,
+    SettingsDataIntegritySection,
+    SettingsIntegrityIssue,
+    SettingsSummaryResponse,
+    SettingsWorkspaceResource,
+    SettingsWorkspaceSection,
 )
 
 
@@ -36,6 +45,52 @@ class ProjectContractError(ValueError):
 
 class TagContractError(ValueError):
     """A domain value cannot be represented by the public Tag API contract."""
+
+
+class SettingsContractError(ValueError):
+    """A domain value cannot be represented by the public Settings API contract."""
+
+
+_SETTINGS_RESOURCE_METADATA = {
+    "papers": ("Papers", "indexed papers"),
+    "notes": ("Notes", "Reading Notes"),
+    "projects": ("Projects", "Projects"),
+    "tags": ("Tags", "canonical Tags"),
+    "note_blocks": ("Note blocks", "note blocks"),
+    "project_links": ("Project links", "Project links"),
+}
+_SETTINGS_ISSUE_GUIDANCE = {
+    "missing_pdfs": {
+        "severity": "warning",
+        "explanation": "Indexed paper records whose managed PDF was not found.",
+        "next_action": "Run the Streamlit Library Health Check before reconnecting or removing any record.",
+    },
+    "unindexed_pdfs": {
+        "severity": "warning",
+        "explanation": "Managed PDFs that do not have a paper-index record.",
+        "next_action": "Use the existing Streamlit scan workflow to review unindexed PDFs.",
+    },
+    "orphan_notes": {
+        "severity": "warning",
+        "explanation": "Reading Note files without a matching paper identity.",
+        "next_action": "Review and preserve orphan notes in the Streamlit health workflow.",
+    },
+    "orphan_note_blocks": {
+        "severity": "warning",
+        "explanation": "Note-block files without a matching paper identity.",
+        "next_action": "Review and preserve orphan note blocks in the Streamlit health workflow.",
+    },
+    "orphan_project_links": {
+        "severity": "warning",
+        "explanation": "Project links whose stored Project, paper, or note-block target is missing.",
+        "next_action": "Review orphan Project links in Streamlit before unlinking or reattaching anything.",
+    },
+    "corrupt_json": {
+        "severity": "error",
+        "explanation": "App-owned JSON stores that are invalid or have an unsupported top-level shape.",
+        "next_action": "Do not overwrite affected state; use the Streamlit recovery workflow and a backup copy.",
+    },
+}
 
 
 def _required_identity(value: object, field_name: str) -> str:
@@ -346,6 +401,217 @@ def adapt_candidate_summary(source: Mapping[str, Any]) -> CandidateSummaryRespon
         if isinstance(error, TagContractError):
             raise
         raise TagContractError("Candidate summary contains unsupported values.") from None
+
+
+def _settings_mapping(value: object, field_name: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise SettingsContractError(f"{field_name} must be an object.")
+    return value
+
+
+def _settings_state(
+    value: object,
+    field_name: str,
+    allowed: set[str],
+) -> str:
+    state = _strict_text(value, field_name, SettingsContractError)
+    if state not in allowed:
+        raise SettingsContractError(f"{field_name} is unsupported.")
+    return state
+
+
+def _settings_count(source: Mapping[str, Any], field_name: str) -> tuple[str, int | None]:
+    state = _settings_state(
+        source.get("state"),
+        f"{field_name}.state",
+        {"healthy", "warning", "unavailable", "empty"},
+    )
+    count = source.get("count")
+    if state == "unavailable":
+        if count is not None:
+            raise SettingsContractError(f"{field_name}.count must be null when unavailable.")
+        return state, None
+    return state, _nonnegative_integer(
+        count,
+        f"{field_name}.count",
+        SettingsContractError,
+    )
+
+
+def _workspace_section_state(resources: list[SettingsWorkspaceResource]) -> str:
+    states = [resource.state for resource in resources]
+    if all(state == "unavailable" for state in states):
+        return "unavailable"
+    if any(state in {"warning", "unavailable"} for state in states):
+        return "warning"
+    if all(state == "empty" for state in states):
+        return "empty"
+    return "healthy"
+
+
+def _workspace_resource_summary(code: str, state: str, count: int | None) -> str:
+    _label, noun = _SETTINGS_RESOURCE_METADATA[code]
+    if state == "unavailable":
+        return f"The {noun} count is unavailable."
+    if state == "empty":
+        return f"No {noun} are currently stored."
+    if state == "warning":
+        return f"{count} {noun} are stored; review the integrity summary."
+    return f"{count} {noun} are available."
+
+
+def _integrity_section_state(issues: list[SettingsIntegrityIssue]) -> str:
+    states = [issue.state for issue in issues]
+    if all(state == "unavailable" for state in states):
+        return "unavailable"
+    if any(state in {"warning", "unavailable"} for state in states):
+        return "warning"
+    return "healthy"
+
+
+def _safe_version(value: object) -> str:
+    version = _strict_text(value, "application.product_version", SettingsContractError)
+    if len(version) > 64 or not re.fullmatch(
+        r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?",
+        version,
+    ):
+        raise SettingsContractError("The canonical product version is invalid.")
+    return version
+
+
+def _safe_utc_timestamp(value: object) -> str:
+    timestamp = _strict_text(value, "backup_readiness.last_updated_at", SettingsContractError)
+    if len(timestamp) > 40 or not timestamp.endswith("Z"):
+        raise SettingsContractError("The backup timestamp is invalid.")
+    try:
+        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        raise SettingsContractError("The backup timestamp is invalid.") from None
+    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
+        raise SettingsContractError("The backup timestamp must be UTC.")
+    return timestamp
+
+
+def adapt_settings_summary(source: Mapping[str, Any]) -> SettingsSummaryResponse:
+    application = _settings_mapping(source.get("application"), "application")
+    workspace_source = _settings_mapping(source.get("workspace"), "workspace")
+    integrity_source = _settings_mapping(
+        source.get("data_integrity"),
+        "data_integrity",
+    )
+    backup_source = _settings_mapping(
+        source.get("backup_readiness"),
+        "backup_readiness",
+    )
+
+    version = _safe_version(application.get("product_version"))
+    api_state = _settings_state(
+        application.get("api_state"),
+        "application.api_state",
+        {"available"},
+    )
+    resources: list[SettingsWorkspaceResource] = []
+    for code, (label, _noun) in _SETTINGS_RESOURCE_METADATA.items():
+        state, count = _settings_count(
+            _settings_mapping(workspace_source.get(code), f"workspace.{code}"),
+            f"workspace.{code}",
+        )
+        resources.append(
+            SettingsWorkspaceResource(
+                code=code,
+                label=label,
+                state=state,
+                count=count,
+                summary=_workspace_resource_summary(code, state, count),
+            )
+        )
+    workspace_state = _workspace_section_state(resources)
+    workspace_summaries = {
+        "healthy": "Available workspace stores are readable.",
+        "warning": "Some workspace data or lightweight diagnostics need attention.",
+        "unavailable": "Workspace counts are temporarily unavailable.",
+        "empty": "The workspace stores are empty.",
+    }
+
+    issues: list[SettingsIntegrityIssue] = []
+    for code, guidance in _SETTINGS_ISSUE_GUIDANCE.items():
+        state, count = _settings_count(
+            _settings_mapping(
+                integrity_source.get(code),
+                f"data_integrity.{code}",
+            ),
+            f"data_integrity.{code}",
+        )
+        if state == "empty":
+            raise SettingsContractError("Integrity state cannot be empty.")
+        issues.append(
+            SettingsIntegrityIssue(
+                code=code,
+                state=state,
+                count=count,
+                severity=guidance["severity"],
+                explanation=guidance["explanation"],
+                next_action=guidance["next_action"],
+            )
+        )
+    integrity_state = _integrity_section_state(issues)
+    integrity_summaries = {
+        "healthy": "All available lightweight integrity checks report zero issues.",
+        "warning": "Some lightweight integrity checks found issues or are unavailable.",
+        "unavailable": "Lightweight integrity diagnostics are temporarily unavailable.",
+    }
+
+    backup_state = _settings_state(
+        backup_source.get("state"),
+        "backup_readiness.state",
+        {"healthy", "warning", "unavailable"},
+    )
+    snapshot_available = backup_source.get("snapshot_available")
+    last_updated_at = backup_source.get("last_updated_at")
+    if backup_state == "healthy":
+        if snapshot_available is not True:
+            raise SettingsContractError("Healthy backup evidence must be present.")
+        safe_last_updated_at = _safe_utc_timestamp(last_updated_at)
+        backup_summary = "Backup snapshot evidence is available."
+    elif backup_state == "warning":
+        if snapshot_available is not False or last_updated_at is not None:
+            raise SettingsContractError("Absent backup evidence must not include a timestamp.")
+        safe_last_updated_at = None
+        backup_summary = "No backup snapshot evidence is available."
+    else:
+        if snapshot_available is not None or last_updated_at is not None:
+            raise SettingsContractError("Unavailable backup evidence must use null values.")
+        safe_last_updated_at = None
+        backup_summary = "Backup snapshot evidence is temporarily unavailable."
+
+    try:
+        return SettingsSummaryResponse(
+            application=SettingsApplicationSection(
+                state="healthy",
+                product_version=version,
+                api_state=api_state,
+                api_contract_version=version,
+                summary="The local read-only API is available.",
+            ),
+            workspace=SettingsWorkspaceSection(
+                state=workspace_state,
+                resources=resources,
+                summary=workspace_summaries[workspace_state],
+            ),
+            data_integrity=SettingsDataIntegritySection(
+                state=integrity_state,
+                issues=issues,
+                summary=integrity_summaries[integrity_state],
+            ),
+            backup_readiness=SettingsBackupReadinessSection(
+                state=backup_state,
+                snapshot_available=snapshot_available,
+                last_updated_at=safe_last_updated_at,
+                summary=backup_summary,
+            ),
+        )
+    except ValueError:
+        raise SettingsContractError("Settings summary contains unsupported values.") from None
 
 
 def adapt_paper_list_item(source: Mapping[str, Any]) -> PaperListItem:

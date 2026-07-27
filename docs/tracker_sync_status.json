@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.2",
-  "release_name": "v1.5.2-projects-tags-read-parity",
+  "product_version": "1.5.3",
+  "release_name": "v1.5.3-settings-health-read-parity",
   "as_of": "2026-07-27",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
       "counts": {
-        "passed": 106,
+        "passed": 110,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local validation",
-        "summary": "The current offline repository readiness smoke completed with 106 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.3 local validation",
+        "summary": "The current offline repository readiness smoke completed with 110 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 628,
+        "passed": 641,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local validation",
-        "summary": "The current full Python suite completed with 628 passed."
+        "reference": "v1.5.3 local validation",
+        "summary": "The current full Python suite completed with 641 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -191,6 +191,20 @@
         "summary": "The focused deterministic pagination, detail, orphan, fallback, corruption, privacy, OpenAPI, and read-only storage suite passed."
       }
     },
+    "focused_settings": {
+      "status": "VERIFIED",
+      "scope": "safe Settings read-model, API, privacy, bounded-execution, and non-mutation contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_settings_api.py -q",
+      "counts": {
+        "passed": 13,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "v1.5.3 focused Settings backend validation",
+        "summary": "The focused populated, empty, deterministic, partial-failure, privacy, backup-evidence, bounded-read, and non-mutation Settings suite passed."
+      }
+    },
     "focused_release_version": {
       "status": "VERIFIED",
       "scope": "release and version contracts",
@@ -201,7 +215,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 focused release validation",
+        "reference": "v1.5.3 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
       }
     },
@@ -215,7 +229,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local release reconciliation",
+        "reference": "v1.5.3 local release reconciliation",
         "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
       }
     },
@@ -229,7 +243,7 @@
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local tracker export validation",
+        "reference": "v1.5.3 local tracker export validation",
         "summary": "The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed."
       }
     },
@@ -240,7 +254,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local validation",
+        "reference": "v1.5.3 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -251,7 +265,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local validation",
+        "reference": "v1.5.3 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -260,15 +274,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm test",
       "counts": {
-        "passed": 49,
+        "passed": 55,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local validation",
-        "summary": "All 49 frontend Node tests passed."
+        "reference": "v1.5.3 local validation",
+        "summary": "All 55 frontend Node tests passed."
       }
     },
     "frontend_projects_tags": {
@@ -285,6 +299,22 @@
         "date": "2026-07-27",
         "reference": "v1.5.2 focused Projects and Tags frontend validation",
         "summary": "The focused exact GET bridge allowlist, real-field rendering source, shared state, retry, no-fabrication, no-write-control, and existing-view compatibility suite passed."
+      }
+    },
+    "frontend_settings": {
+      "status": "VERIFIED",
+      "scope": "Settings route, real-field rendering source, negative states, compatibility, and exact bridge allowlist",
+      "command": "node --test tests/settings-health-read-parity.test.mjs tests/api-bridge.test.mjs",
+      "counts": {
+        "passed": 24,
+        "failed": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "evidence": {
+        "date": "2026-07-27",
+        "reference": "v1.5.3 focused Settings frontend validation",
+        "summary": "The focused four-section rendering source, zero-versus-unavailable, shared-state, retry, no-action, no-fabrication, compatibility, and exact GET bridge suite passed."
       }
     },
     "frontend_reader_commands": {
@@ -308,12 +338,12 @@
       "scope": "tracked repository entries only",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 241,
+        "entries_inspected": 255,
         "violations": 0
       },
       "evidence": {
         "date": "2026-07-27",
-        "reference": "v1.5.2 local smoke validation",
+        "reference": "v1.5.3 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -575,11 +605,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "Settings read parity and remaining runtime validation",
+    "name": "Settings runtime validation and remaining release evidence",
     "evidence": {
       "date": "2026-07-27",
       "reference": "docs/ROADMAP.md",
-      "summary": "Complete the still-deferred Settings read surface and remaining approved manual runtime checks while keeping broader Project and Tag writes outside the current scope."
+      "summary": "Complete the approved Settings manual runtime checks and separately collect only actual hosted, publication, and restore evidence while keeping Settings, Project, and Tag writes outside the current scope."
     }
   },
   "historical_evidence": {

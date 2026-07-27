@@ -46,6 +46,7 @@ export function isAllowedBlueprintPath(parts) {
     || path === "projects"
     || path === "tags"
     || path === "tags/summary"
+    || path === "settings/summary"
     || (parts.length === 2 && parts[0] === "papers")
     || (parts.length === 2 && parts[0] === "projects")
     || isBlueprintPdfPath(parts)

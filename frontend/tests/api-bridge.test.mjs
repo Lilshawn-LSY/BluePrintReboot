@@ -17,7 +17,7 @@ import {
 const API_URL = "http://127.0.0.1:8000";
 
 test("allows the bounded read routes plus the exact managed PDF and Reader routes", () => {
-  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"]]) {
+  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["settings", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"]]) {
     assert.equal(isAllowedBlueprintPath(parts), true, parts.join("/"));
   }
   for (const parts of [[], ["library"], ["settings"], ["tags", "unknown"], ["projects", "project-123", "edit"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["papers", "paper-123", "reader", "raw"], ["health", "extra"]]) {
@@ -41,6 +41,10 @@ test("allows only the exact method and path pairs for Reader commands", () => {
     ["DELETE", ["papers", "paper-1", "reading-note"]],
     ["PATCH", ["papers", "paper-1", "reader"]],
     ["GET", ["papers", "paper-1", "metadata"]],
+    ["POST", ["settings", "summary"]],
+    ["PUT", ["settings", "summary"]],
+    ["PATCH", ["settings", "summary"]],
+    ["DELETE", ["settings", "summary"]],
   ]) {
     assert.equal(isAllowedBlueprintRequest(method, parts), false, `${method} ${parts.join("/")}`);
   }
@@ -185,13 +189,14 @@ test("forwards query parameters and safely encodes paper ids", async () => {
   assert.equal(requestedUrl, `${API_URL}/papers/paper%201?view=detail`);
 });
 
-test("forwards the bounded Projects and Tags GET contracts", async () => {
+test("forwards the bounded Projects, Tags, and Settings GET contracts", async () => {
   const requests = [];
   for (const [url, parts] of [
     ["http://localhost/api/blueprint/projects?limit=100&offset=0", ["projects"]],
     ["http://localhost/api/blueprint/projects/project%201?links_limit=100", ["projects", "project 1"]],
     ["http://localhost/api/blueprint/tags?limit=100&offset=0", ["tags"]],
     ["http://localhost/api/blueprint/tags/summary", ["tags", "summary"]],
+    ["http://localhost/api/blueprint/settings/summary", ["settings", "summary"]],
   ]) {
     const response = await proxyBlueprintGet(
       new Request(url),
@@ -211,6 +216,7 @@ test("forwards the bounded Projects and Tags GET contracts", async () => {
     [`${API_URL}/projects/project%201?links_limit=100`, "GET", null],
     [`${API_URL}/tags?limit=100&offset=0`, "GET", null],
     [`${API_URL}/tags/summary`, "GET", null],
+    [`${API_URL}/settings/summary`, "GET", null],
   ]);
 });
 

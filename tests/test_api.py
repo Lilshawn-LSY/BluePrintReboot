@@ -155,6 +155,7 @@ def test_openapi_has_only_intended_application_paths_and_methods() -> None:
         "/projects/{project_id}",
         "/tags",
         "/tags/summary",
+        "/settings/summary",
     }
     assert {path: set(operations) for path, operations in paths.items()} == {
         "/health": {"get"},
@@ -169,6 +170,7 @@ def test_openapi_has_only_intended_application_paths_and_methods() -> None:
         "/projects/{project_id}": {"get"},
         "/tags": {"get"},
         "/tags/summary": {"get"},
+        "/settings/summary": {"get"},
     }
 
 

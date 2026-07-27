@@ -28,6 +28,7 @@ REQUIRED_FILES = (
     "api/pdf_files.py",
     "api/routes.py",
     "api/schemas.py",
+    "services/settings_read_model.py",
     "requirements.txt",
     "README.md",
     "docs/BLUEPRINT_PRINCIPLES.md",
@@ -62,6 +63,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.5.0.md",
     "docs/release_notes/v1.5.1.md",
     "docs/release_notes/v1.5.2.md",
+    "docs/release_notes/v1.5.3.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -82,6 +84,7 @@ REQUIRED_FILES = (
     "frontend/app/papers/[paperId]/page.tsx",
     "frontend/app/papers/[paperId]/reader/page.tsx",
     "frontend/app/views/ReaderView.tsx",
+    "frontend/app/views/SettingsView.tsx",
     "frontend/app/components/PdfJsReader.tsx",
     "frontend/app/lib/pdf/pdfjs-adapter.ts",
     "frontend/app/lib/pdf/reader-controller.mjs",
@@ -120,6 +123,7 @@ KEY_MODULES = (
     "services.pdf_inbox",
     "services.paper_file_hygiene",
     "services.reading_note_template",
+    "services.settings_read_model",
     "services.tag_book",
 )
 
@@ -286,12 +290,13 @@ def check_api_contract() -> SmokeCheckResult:
             "/projects/{project_id}": {"get"},
             "/tags": {"get"},
             "/tags/summary": {"get"},
+            "/settings/summary": {"get"},
         }
         if {path: set(operations) for path, operations in paths.items()} != expected_methods:
             raise ValueError("API application paths do not match the bounded read and Reader command surface")
     except Exception as exc:
         return SmokeCheckResult("api:application-contract", "fail", str(exc))
-    return SmokeCheckResult("api:application-contract", "pass", f"ten GET routes and two Reader commands for {APP_VERSION}")
+    return SmokeCheckResult("api:application-contract", "pass", f"eleven GET routes and two Reader commands for {APP_VERSION}")
 
 
 def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
@@ -317,6 +322,7 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             "getProject",
             "getTags",
             "getTagSummary",
+            "getSettingsSummary",
             "saveReaderMetadata",
             "saveReadingNote",
         ):

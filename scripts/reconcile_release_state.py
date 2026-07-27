@@ -29,6 +29,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/release_notes/v1.5.0.md",
     "docs/release_notes/v1.5.1.md",
     "docs/release_notes/v1.5.2.md",
+    "docs/release_notes/v1.5.3.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -40,6 +41,7 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "focused_reader_commands",
         "focused_pdf_api",
         "focused_projects_tags",
+        "focused_settings",
         "focused_release_version",
         "release_reconciliation",
         "tracker_export",
@@ -47,6 +49,7 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "frontend_production_build",
         "frontend_node_tests",
         "frontend_projects_tags",
+        "frontend_settings",
         "frontend_reader_commands",
         "repository_hygiene",
     }
@@ -495,10 +498,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.5.2":
-        raise ReleaseStateError("product_version must identify the current 1.5.2 runtime target")
-    if manifest.get("release_name") != "v1.5.2-projects-tags-read-parity":
-        raise ReleaseStateError("release_name must identify the current v1.5.2 runtime target")
+    if manifest.get("product_version") != "1.5.3":
+        raise ReleaseStateError("product_version must identify the current 1.5.3 runtime target")
+    if manifest.get("release_name") != "v1.5.3-settings-health-read-parity":
+        raise ReleaseStateError("release_name must identify the current v1.5.3 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)

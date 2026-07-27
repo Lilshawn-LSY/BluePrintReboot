@@ -21,6 +21,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.5.0 connected the existing `ReaderSnapshot` builder to a strict GET contract and a single-request web Reader that shows the managed PDF with selectable persisted-note context while preserving all write and PDF lifecycle boundaries.
 - v1.5.1 adds separate metadata and Reading Note commands, optimistic concurrency, transactional metadata/header consistency, and independent web editors while preserving the v1.5.0 read/PDF/Streamlit contracts.
 - v1.5.2 adds bounded Projects and Tags GET contracts, real Projects/Project Detail/Tags views, explicit orphan and candidate-availability states, and shared retry behavior without adding Project or Tag writes.
+- v1.5.3 adds one bounded safe Settings summary, a real four-section Settings view, explicit zero-versus-unavailable diagnostics, and backup-evidence presence without adding Settings, health, backup, restore, or repair writes.
 
 ## Decision gates
 
@@ -38,36 +39,36 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | v1.5.0 Reader Snapshot implementation | Closed locally | Strict schema/adapter/route, exact bridge allowlist, typed client, plain-text companion, and synthetic failure-state regressions are implemented; hosted and user-performed runtime evidence remain separate. |
 | v1.5.1 Reader write implementation | Closed locally | Two strict command routes, deterministic concurrency baselines, rollback coverage, exact bridge allowlisting, accessible editors, and disposable-fixture regressions are implemented; user-performed write/runtime evidence is partially verified while hosted evidence remains separate. |
 | v1.5.2 Projects and Tags read parity | Closed locally | Strict list/detail/tag/summary schemas, service/adapters, deterministic pagination, orphan handling, exact bridge paths, real views, negative states, and read-only regressions are implemented; manual and hosted evidence remain separate. |
+| v1.5.3 Settings and health safe read parity | Closed locally | A capped lightweight read model, strict adapter/schema, exact bridge path, real Settings view, partial states, privacy checks, and non-mutation regressions are implemented; manual and hosted evidence remain separate. |
 
-## Current product milestone: v1.5.2 Projects and Tags read parity
+## Current product milestone: v1.5.3 Settings and health safe read parity
 
-The v1.5.2 runtime target completes the Projects and Tags portion of frontend read parity. It does not relabel the immutable v1.4.0 released baseline and does not claim a v1.5.2 tag, GitHub Release, pull request, merge, or hosted workflow result.
+The v1.5.3 runtime target completes the remaining Settings portion of frontend read parity. It does not relabel the immutable v1.4.0 released baseline and does not claim a v1.5.3 tag, GitHub Release, pull request, merge, or hosted workflow result.
 
 ### Implemented product slice
 
-- `GET /projects` and `GET /projects/{project_id}` expose only allowlisted Project values, bounded pagination, deterministic ordering, stored link types, and bounded paper summaries.
-- Missing linked papers remain explicit orphan states; corrupt Projects, links, index, or contract-invalid values use the generic local 503 boundary without paths or exception details.
-- `GET /tags` exposes canonical key, label, category, aliases, status, and stored suggestion strength without source paths or write-oriented Tag Book internals.
-- `GET /tags/summary` exposes only fixed counts from existing paper-index/service evidence or an explicit unavailable state when no readable source exists.
-- `/projects`, `/projects/{project_id}`, and `/tags` reuse the current shell, panels, tables, badges, typography, loading/empty/offline/error/not-found states, and GET retry pattern.
-- The existing Paper/Library/Reader GETs, the two Reader commands, PDF.js lifecycle and Range delivery, stable identities, local-only operation, and Streamlit Project/Tag workflows remain unchanged.
+- `GET /settings/summary` exposes only canonical version/API state, bounded aggregate store counts, stable integrity-code counts, and safe snapshot presence/last-updated evidence.
+- A dedicated lightweight reader caps discovered entries, index rows, per-file JSON reads, and total JSON bytes per request and performs no PDF hashing/parsing, text extraction, archive verification, repair, backup, restore, cache rebuild, or write.
+- Invalid or unreadable component diagnostics remain successful section-level warnings with `count: null`; only complete construction or strict-contract failure uses the generic 503 boundary.
+- `/settings` reuses the current shell, panels, tables, badges, typography, loading/empty/offline/error states, and shared GET retry pattern.
+- The existing Paper/Library/Reader/Project/Tag contracts, the two Reader commands, PDF.js lifecycle and Range delivery, stable identities, local-only operation, and complete Streamlit Settings workflow remain unchanged.
 
 ### Remaining evidence gate
 
-- User-performed runtime checks for a real Projects list/detail, linked-paper states, canonical Tags, aliases/category/status, empty/offline behavior, and storage non-mutation remain NOT VERIFIED.
+- User-performed runtime checks for real Application/Workspace/integrity/backup summaries, API-offline retry, browser response privacy, and browsing non-mutation remain NOT VERIFIED.
 - The unreadable persisted-note warning and missing managed-PDF Reader scenarios remain NOT VERIFIED pending separate evidence.
 - Pull request, hosted CI, merge, tag, GitHub Release, post-merge, and clean-PC restore evidence remain separate and unclaimed.
 
 ### Roadmap item status
 
-| Item | Status after v1.5.2 implementation |
+| Item | Status after v1.5.3 implementation |
 |---|---|
 | R-110 Projects read parity | Implementation complete; actual release closure remains pending where separately tracked. |
 | R-111 Tags/Tag Book read parity | Implementation complete; actual release closure remains pending where separately tracked. |
-| R-112 | Unchanged. |
-| R-113 shared frontend states | Partially complete for Projects and Tags only; Settings remains a placeholder. |
-| G2 Frontend read parity | Open until Settings and the full shared-state scope are complete. |
+| R-112 Settings and health safe read parity | Implementation complete; actual release closure remains pending where separately tracked. |
+| R-113 shared frontend states | Implementation complete across the approved frontend read surfaces. |
+| G2 Frontend read parity | Implementation complete; actual release evidence remains pending where separately tracked. |
 
 ## Continuing constraints
 
-No autosave, combined save endpoint, Project write, Tag governance/write, automatic duplicate merge/deletion, automatic repair, database migration, OCR, LLM tagging, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of tests and validation evidence. Settings and UI polish remain deferred.
+No autosave, combined save endpoint, Project write, Tag governance/write, Settings write, configuration editing, automatic backup, automatic duplicate merge/deletion, automatic repair, database migration, OCR, LLM tagging, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of tests and validation evidence. Broader UI polish remains deferred.

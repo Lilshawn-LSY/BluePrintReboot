@@ -2,6 +2,20 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.3-settings-health-read-parity
+
+- [x] Runtime, package/lockfile, visible shell, README, manifest, and release-note draft identify v1.5.3 while the immutable released baseline remains v1.4.0.
+- [x] `GET /settings/summary` uses a dedicated lightweight read model plus strict adapter/schema/dependency/route boundaries.
+- [x] Application, Workspace, Data integrity, and Backup readiness expose only canonical or aggregate safe values.
+- [x] File discovery, index rows, per-file JSON reads, and total JSON bytes per request are capped; Settings performs no PDF hashing/parsing, extraction, archive verification, repair, backup, restore, cache rebuild, or write.
+- [x] Component failures remain section-level warnings/unavailable states; verified zeroes remain distinct from unavailable null counts.
+- [x] The Settings page uses the established shell and shared loading, empty, offline, controlled error, partial warning, and retry behavior.
+- [x] The bridge admits only exact GET `/settings/summary`; no Settings/action/write route or control was added.
+- [x] Disposable tests cover real aggregates, corruption, privacy, determinism, backup presence/absence, no-heavy-binary reads, and byte/mtime non-mutation.
+- [x] R-112, R-113, and G2 frontend read-parity implementation are complete; actual release evidence remains separately tracked.
+- [ ] Manually confirm real Application/Workspace/integrity/backup values, offline retry, private-detail-free Network response, and browsing non-mutation.
+- [ ] v1.5.3 PR, hosted CI, merge, tag, GitHub Release, and post-merge evidence remain open until separately observed.
+
 ## v1.5.2-projects-tags-read-parity
 
 - [x] Runtime, package/lockfile, visible shell, README, manifest, and release-note draft identify v1.5.2 while the immutable released baseline remains v1.4.0.

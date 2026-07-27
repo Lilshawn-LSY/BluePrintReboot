@@ -180,6 +180,7 @@ def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> No
         "/papers/{paper_id}/reading-note",
         "/projects",
         "/projects/{project_id}",
+        "/settings/summary",
         "/tags",
         "/tags/summary",
     }

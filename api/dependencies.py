@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from api.pdf_files import ManagedPdfResult, resolve_managed_pdf
-from services import library_read_model, project_read_model, tag_read_model
+from services import (
+    library_read_model,
+    project_read_model,
+    settings_read_model,
+    tag_read_model,
+)
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail, PaperListItem, ReaderSnapshot
 from services.project_read_model import ProjectDetail, ProjectListItem
 from services.reader_commands import ReaderCommandService
+from services.settings_read_model import SettingsSummary
 from services.tag_read_model import CandidateSummary, CanonicalTag
 
 
@@ -81,6 +87,13 @@ def get_canonical_tags() -> tuple[list[CanonicalTag], bool]:
 def get_candidate_summary() -> CandidateSummary:
     try:
         return tag_read_model.build_candidate_summary()
+    except Exception:
+        raise ReadModelUnavailable from None
+
+
+def get_settings_summary() -> SettingsSummary:
+    try:
+        return settings_read_model.build_settings_summary()
     except Exception:
         raise ReadModelUnavailable from None
 

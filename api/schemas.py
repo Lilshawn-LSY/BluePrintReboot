@@ -145,6 +145,89 @@ class CandidateSummaryResponse(StrictResponseModel):
     quality_counts: CandidateQualityCounts
 
 
+class SettingsWorkspaceResource(StrictResponseModel):
+    code: Literal[
+        "papers",
+        "notes",
+        "projects",
+        "tags",
+        "note_blocks",
+        "project_links",
+    ]
+    label: str
+    state: Literal["healthy", "warning", "unavailable", "empty"]
+    count: int | None = Field(default=None, ge=0)
+    summary: str
+
+    @model_validator(mode="after")
+    def validate_count_state(self) -> "SettingsWorkspaceResource":
+        if self.state == "unavailable" and self.count is not None:
+            raise ValueError("Unavailable workspace counts must be null.")
+        if self.state != "unavailable" and self.count is None:
+            raise ValueError("Available workspace counts must be numeric.")
+        if self.state == "empty" and self.count != 0:
+            raise ValueError("Empty workspace counts must be zero.")
+        return self
+
+
+class SettingsApplicationSection(StrictResponseModel):
+    state: Literal["healthy"]
+    product_version: str
+    api_state: Literal["available"]
+    api_contract_version: str
+    summary: str
+
+
+class SettingsWorkspaceSection(StrictResponseModel):
+    state: Literal["healthy", "warning", "unavailable", "empty"]
+    resources: list[SettingsWorkspaceResource]
+    summary: str
+
+
+class SettingsIntegrityIssue(StrictResponseModel):
+    code: Literal[
+        "missing_pdfs",
+        "unindexed_pdfs",
+        "orphan_notes",
+        "orphan_note_blocks",
+        "orphan_project_links",
+        "corrupt_json",
+    ]
+    state: Literal["healthy", "warning", "unavailable"]
+    count: int | None = Field(default=None, ge=0)
+    severity: Literal["warning", "error"]
+    explanation: str
+    next_action: str
+
+    @model_validator(mode="after")
+    def validate_count_state(self) -> "SettingsIntegrityIssue":
+        if self.state == "unavailable" and self.count is not None:
+            raise ValueError("Unavailable integrity counts must be null.")
+        if self.state != "unavailable" and self.count is None:
+            raise ValueError("Available integrity counts must be numeric.")
+        return self
+
+
+class SettingsDataIntegritySection(StrictResponseModel):
+    state: Literal["healthy", "warning", "unavailable"]
+    issues: list[SettingsIntegrityIssue]
+    summary: str
+
+
+class SettingsBackupReadinessSection(StrictResponseModel):
+    state: Literal["healthy", "warning", "unavailable"]
+    snapshot_available: bool | None
+    last_updated_at: str | None
+    summary: str
+
+
+class SettingsSummaryResponse(StrictResponseModel):
+    application: SettingsApplicationSection
+    workspace: SettingsWorkspaceSection
+    data_integrity: SettingsDataIntegritySection
+    backup_readiness: SettingsBackupReadinessSection
+
+
 class PaperDetail(PaperListItem):
     """Safe read-only paper detail built from the frozen domain contract."""
 
