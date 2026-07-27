@@ -2,6 +2,31 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.1-reader-write-vertical-slice
+
+- [x] Runtime, package/lockfile, visible shell, README, manifest, and release notes identify v1.5.1 while the immutable released baseline remains v1.4.0.
+- [x] Metadata PATCH and Reading Note PUT remain separate and delegate through a command service.
+- [x] Metadata allowlists exactly seven fields, normalizes through existing domain logic, bounds values, and rejects unknown or malformed fields.
+- [x] Metadata revisions use stable normalized serialization; note commands use exact UTF-8 SHA-256, with an explicit absent-note baseline.
+- [x] Stale commands return generic 409 responses and perform zero mutation.
+- [x] Coupled index/header failures restore original persistent state; note saves retain atomic replacement and prior-file-on-failure behavior.
+- [x] The bridge admits only the exact two command method/path pairs, forwards JSON correctly, and keeps Range PDF-only.
+- [x] Metadata and note editors have separate explicit saves and Clean, Dirty, Saving, Saved, Conflict, and Error states.
+- [x] Dirty drafts survive conflicts, failures, metadata header refresh, and PDF failures; intentional replacement requires explicit action.
+- [x] PDF document identity is not changed by either save flow, and v1.5.0 GET/PDF/Range plus Streamlit regressions remain covered.
+- [x] Persisted note, metadata, and the correct managed PDF are manually confirmed together.
+- [x] A newly synchronized paper without a persisted note opens with a clean empty editor and no stale prior-paper state.
+- [ ] Unreadable-note warning is manually confirmed.
+- [ ] Missing-PDF behavior is manually confirmed.
+- [x] Unsaved-change cancellation and deliberate transition between papers are manually confirmed without stale editor content.
+- [x] API restart followed by Reader reload recovery is manually confirmed.
+- [x] All seven supported metadata fields save and survive reload; title, authors, year, and DOI refresh the canonical note header without damaging its body.
+- [x] Reading Note edits save, survive browser reload, and appear in Streamlit.
+- [x] Stale Reading Note and metadata writes from a second tab conflict without newer-result or draft loss and support explicit reload, re-edit, and save.
+- [x] Metadata and Reading Note changes are manually visible in all four Streamlit/web directions.
+- [x] Explicit browser refresh discards unsaved drafts under the accepted no-autosave and no-browser-local-draft-persistence policy.
+- [ ] v1.5.1 PR, hosted CI, merge, tag, GitHub Release, and post-merge evidence remain open until separately observed.
+
 ## v1.5.0-reader-snapshot-readonly-vertical-slice
 
 - [x] Runtime, frontend package/lockfile, README, canonical manifest, and release-note surfaces identify the v1.5.0 runtime target while the immutable released baseline remains v1.4.0.
@@ -16,7 +41,7 @@ Current evidence is generated from the canonical manifest. Inspect [Current Rele
 - [x] The legacy PDF.js main/worker build rendered the real PDF first page successfully in Chrome 131 with Vinext dev.
 - [x] Reader diagnostics showed Document loads 1, Page renders 1, and Render cancellations 0.
 - [x] No write API, editor, autosave, metadata mutation, storage migration, dependency, project/tag API, OCR, or cloud behavior is added.
-- [ ] User-performed runtime validation still covers persisted-note pairing, note absence/read failure, missing PDF, paper transition, and API restart without mutation.
+- [ ] User-performed runtime validation still covers unreadable-note and missing-PDF states; persisted-note pairing, note absence, paper transition, and API restart now have v1.5.1 runtime evidence.
 - [ ] v1.5.0 PR, hosted CI, tag, GitHub Release, and post-merge evidence remain open until separately observed.
 
 ## v1.4.3-release-state-truth-repair

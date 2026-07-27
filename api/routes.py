@@ -6,10 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from fastapi.responses import FileResponse
 
 from api.adapters import PaperContractError, adapt_paper_detail, adapt_paper_list_item, adapt_reader_snapshot
-from api.dependencies import ReadModelUnavailable, get_health_summary, get_library_status, get_managed_pdf, get_paper_detail, get_paper_list_items, get_reader_snapshot
+from api.dependencies import ReadModelUnavailable, get_health_summary, get_library_status, get_managed_pdf, get_paper_detail, get_paper_list_items, get_reader_command_service, get_reader_snapshot
 from api.pdf_files import ManagedPdfResult, ManagedPdfState
-from api.schemas import APIError, ArchiveStatus, HealthSummaryResponse, LibraryStatusResponse, PaginatedPaperList, PaperDetail, PaperListItem, ReaderSnapshotResponse
+from api.schemas import APIError, ArchiveStatus, HealthSummaryResponse, LibraryStatusResponse, MetadataCommandRequest, MetadataCommandResponse, PaginatedPaperList, PaperDetail, PaperListItem, ReadingNoteCommandRequest, ReadingNoteCommandResponse, ReaderSnapshotResponse
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem, ReaderSnapshot as DomainReaderSnapshot
+from services.reader_commands import ReaderCommandConflict, ReaderCommandNotFound, ReaderCommandService, ReaderCommandUnavailable
 
 
 router = APIRouter()
@@ -17,6 +18,9 @@ router = APIRouter()
 PDF_MISSING_DETAIL = "Managed PDF not found."
 PDF_INVALID_DETAIL = "Managed PDF path is invalid."
 PDF_UNAVAILABLE_DETAIL = "Managed PDF is temporarily unavailable."
+COMMAND_CONFLICT_DETAIL = "The saved Reader state changed. Reload the current version before retrying."
+COMMAND_UNAVAILABLE_DETAIL = "The Reader command could not be completed."
+COMMAND_INVALID_DETAIL = "Request validation failed."
 
 
 @router.get("/health", response_model=HealthSummaryResponse)
@@ -123,6 +127,97 @@ def reader_snapshot(
         return adapt_reader_snapshot(snapshot)
     except PaperContractError:
         raise ReadModelUnavailable from None
+
+
+@router.patch(
+    "/papers/{paper_id}/metadata",
+    response_model=MetadataCommandResponse,
+    summary="Save Reader paper metadata",
+    description=(
+        "Explicitly save the allowlisted bibliographic metadata fields when the supplied "
+        "deterministic metadata revision still matches."
+    ),
+    responses={
+        404: {"model": APIError, "description": "No paper has the requested identity."},
+        409: {"model": APIError, "description": "The metadata revision is stale."},
+        422: {"model": APIError, "description": "The request is invalid or contains an unsupported field."},
+        503: {"model": APIError, "description": "The persistent command could not complete consistently."},
+    },
+)
+def save_reader_metadata(
+    request: MetadataCommandRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200, description="Stable BluePrintReboot paper identity.")],
+    commands: Annotated[ReaderCommandService, Depends(get_reader_command_service)],
+) -> MetadataCommandResponse:
+    try:
+        result = commands.save_metadata(
+            paper_id,
+            request.changes.model_dump(exclude_unset=True),
+            request.expected_revision,
+        )
+    except ReaderCommandNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except ReaderCommandConflict:
+        raise HTTPException(status_code=409, detail=COMMAND_CONFLICT_DETAIL) from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except ReaderCommandUnavailable:
+        raise HTTPException(status_code=503, detail=COMMAND_UNAVAILABLE_DETAIL) from None
+    return MetadataCommandResponse(
+        status=result.status,
+        metadata=result.metadata,
+        metadata_revision=result.metadata_revision,
+        changed_fields=list(result.changed_fields),
+        note_header_status=result.note_header_status,
+        canonical_note_header=result.canonical_note_header,
+        canonical_note_header_text=result.canonical_note_header_text,
+        reading_note={
+            "exists": result.reading_note.exists,
+            "content": result.reading_note.content,
+            "sha256": result.reading_note.sha256,
+            "size_bytes": result.reading_note.size_bytes,
+        },
+    )
+
+
+@router.put(
+    "/papers/{paper_id}/reading-note",
+    response_model=ReadingNoteCommandResponse,
+    summary="Save Reader Reading Note",
+    description=(
+        "Explicitly save the complete Reading Note after canonicalizing its header against "
+        "current paper metadata, provided the persisted SHA-256 baseline still matches."
+    ),
+    responses={
+        404: {"model": APIError, "description": "No paper has the requested identity."},
+        409: {"model": APIError, "description": "The persisted Reading Note hash is stale."},
+        422: {"model": APIError, "description": "The request is invalid."},
+        503: {"model": APIError, "description": "The persistent command could not complete consistently."},
+    },
+)
+def save_reader_reading_note(
+    request: ReadingNoteCommandRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200, description="Stable BluePrintReboot paper identity.")],
+    commands: Annotated[ReaderCommandService, Depends(get_reader_command_service)],
+) -> ReadingNoteCommandResponse:
+    try:
+        result = commands.save_reading_note(
+            paper_id,
+            request.content,
+            request.expected_sha256,
+        )
+    except ReaderCommandNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except ReaderCommandConflict:
+        raise HTTPException(status_code=409, detail=COMMAND_CONFLICT_DETAIL) from None
+    except ReaderCommandUnavailable:
+        raise HTTPException(status_code=503, detail=COMMAND_UNAVAILABLE_DETAIL) from None
+    return ReadingNoteCommandResponse(
+        status=result.status,
+        content=result.content,
+        sha256=result.sha256,
+        size_bytes=result.size_bytes,
+    )
 
 
 @router.get(

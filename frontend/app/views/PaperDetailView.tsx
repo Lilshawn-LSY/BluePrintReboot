@@ -40,7 +40,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
                 <div><dt>Profile</dt><dd>{resource.data.profile_available ? "Available" : "Unavailable"}</dd></div>
                 <div><dt>Projects</dt><dd>{resource.data.project_links.length}</dd></div>
               </dl>
-              <p className="deferred-note">Notes, metadata changes, and all write actions remain in Streamlit in v1.5.0.</p>
+              <p className="deferred-note">Open Reader for bounded metadata and Reading Note saves. Other write and maintenance actions remain in Streamlit.</p>
             </DetailPanel>
           </div>
           <Section title="Abstract"><div className="abstract-text">{resource.data.abstract || <span className="muted-text">No abstract is stored for this paper.</span>}</div></Section>

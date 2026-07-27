@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import math
 from collections.abc import Mapping
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
 from api.schemas import (
+    EditablePaperMetadata,
     PaperDetail,
     PaperListItem,
     ProjectLink,
@@ -173,8 +175,8 @@ def adapt_reader_snapshot(source: Mapping[str, Any]) -> ReaderSnapshotResponse:
     if not isinstance(saved_note_available, bool):
         raise PaperContractError("Reader saved_note_available must be boolean.")
     saved_note_content = _strict_string(source.get("saved_note_content"), "saved_note_content")
-    if saved_note_available is not bool(saved_note_content):
-        raise PaperContractError("Reader saved note availability conflicts with saved content.")
+    if not saved_note_available and saved_note_content:
+        raise PaperContractError("Reader unavailable saved note cannot expose content.")
     unavailable_reason = _strict_string(source.get("unavailable_reason"), "unavailable_reason")
 
     paper = adapt_paper_detail(paper_source)
@@ -199,20 +201,53 @@ def adapt_reader_snapshot(source: Mapping[str, Any]) -> ReaderSnapshotResponse:
     if header.paper_id != paper.paper_id:
         raise PaperContractError("Reader canonical note identity conflicts with paper identity.")
 
+    metadata_source = source.get("editable_metadata")
+    if not isinstance(metadata_source, Mapping):
+        raise PaperContractError("Reader editable_metadata must be an object.")
+    editable_metadata = EditablePaperMetadata(
+        title=_strict_string(metadata_source.get("title"), "editable_metadata.title"),
+        authors=_strict_string(metadata_source.get("authors"), "editable_metadata.authors"),
+        year=_strict_string(metadata_source.get("year"), "editable_metadata.year"),
+        journal=_strict_string(metadata_source.get("journal"), "editable_metadata.journal"),
+        doi=_strict_string(metadata_source.get("doi"), "editable_metadata.doi"),
+        abstract=_strict_string(metadata_source.get("abstract"), "editable_metadata.abstract"),
+        keywords=_strict_string(metadata_source.get("keywords"), "editable_metadata.keywords"),
+    )
+    metadata_revision = _strict_string(source.get("metadata_revision"), "metadata_revision")
+    if len(metadata_revision) != 64 or any(
+        character not in "0123456789abcdef" for character in metadata_revision
+    ):
+        raise PaperContractError("Reader metadata_revision must be a lowercase SHA-256 value.")
+
+    note_exists = baseline_source.get("exists")
+    if not isinstance(note_exists, bool):
+        raise PaperContractError("Reader saved_note_baseline.exists must be boolean.")
     sha256 = _strict_string(baseline_source.get("sha256"), "saved_note_baseline.sha256")
     size_bytes = baseline_source.get("size_bytes")
     if isinstance(size_bytes, bool) or not isinstance(size_bytes, int) or size_bytes < 0:
         raise PaperContractError("Reader saved_note_baseline.size_bytes must be a non-negative integer.")
-    if sha256 and (len(sha256) != 64 or any(character not in "0123456789abcdef" for character in sha256)):
+    if len(sha256) != 64 or any(character not in "0123456789abcdef" for character in sha256):
         raise PaperContractError("Reader saved_note_baseline.sha256 must be a lowercase SHA-256 value.")
+    if saved_note_available and not note_exists:
+        raise PaperContractError("Reader saved note availability conflicts with note existence.")
+    if saved_note_available:
+        encoded = saved_note_content.encode("utf-8")
+        if size_bytes != len(encoded) or sha256 != hashlib.sha256(encoded).hexdigest():
+            raise PaperContractError("Reader saved note baseline conflicts with saved content.")
 
     return ReaderSnapshotResponse(
         paper=paper,
+        editable_metadata=editable_metadata,
+        metadata_revision=metadata_revision,
         pdf_state=pdf_state,
         saved_note_available=saved_note_available,
         saved_note_content=saved_note_content,
         canonical_note_header=header,
-        saved_note_baseline=ReaderNoteBaseline(sha256=sha256, size_bytes=size_bytes),
+        saved_note_baseline=ReaderNoteBaseline(
+            exists=note_exists,
+            sha256=sha256,
+            size_bytes=size_bytes,
+        ),
         warnings=_reader_warnings(source.get("warnings")),
         unavailable_reason=unavailable_reason,
     )

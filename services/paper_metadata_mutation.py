@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,12 +18,22 @@ from services.reader_state_keys import (
 )
 from services.reading_note_template import refresh_reading_note_header
 from storage.index_store import CROSSREF_ACCEPT_COLUMNS, EDITABLE_METADATA_COLUMNS, load_index, save_index
-from storage.note_store import refresh_note_header
+from storage.note_store import note_path_for, refresh_note_header
 from storage.paths import INDEX_CSV, NOTES_DIR
+from storage.workspace_lock import workspace_write_lock
 
 
 CANONICAL_NOTE_HEADER_FIELDS = frozenset({"title", "authors", "year", "doi", "tags"})
 MUTABLE_METADATA_FIELDS = frozenset({*EDITABLE_METADATA_COLUMNS, *CROSSREF_ACCEPT_COLUMNS})
+WEB_EDITABLE_METADATA_FIELDS = (
+    "title",
+    "authors",
+    "year",
+    "journal",
+    "doi",
+    "abstract",
+    "keywords",
+)
 
 
 @dataclass(frozen=True)
@@ -45,13 +58,37 @@ class MetadataMutationResult:
         return asdict(self)
 
 
-def _normalize_change(field_name: str, value: object) -> str:
-    text = str(value or "").strip()
+def normalize_paper_metadata_value(field_name: str, value: object) -> str:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        text = ""
+    else:
+        text = str(value).strip()
     if field_name == "doi":
         return normalize_doi(text)
     if field_name == "tags":
         return merge_tags("", [item.strip() for item in text.split(",") if item.strip()])
     return text
+
+
+def normalized_web_metadata(record: dict[str, object]) -> dict[str, str]:
+    """Return the stable, web-editable metadata projection used by reads and commands."""
+
+    return {
+        field_name: normalize_paper_metadata_value(field_name, record.get(field_name, ""))
+        for field_name in WEB_EDITABLE_METADATA_FIELDS
+    }
+
+
+def paper_metadata_revision(record: dict[str, object]) -> str:
+    """Hash a path-free, deterministic serialization of the normalized web fields."""
+
+    payload = json.dumps(
+        normalized_web_metadata(record),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def _record(dataframe, paper_id: str) -> dict[str, str] | None:
@@ -61,13 +98,14 @@ def _record(dataframe, paper_id: str) -> dict[str, str] | None:
     return {str(key): str(value) for key, value in matches.iloc[0].fillna("").to_dict().items()}
 
 
-def apply_paper_metadata_change(
+def _apply_paper_metadata_change_unlocked(
     paper_id: str,
     changes: dict[str, object],
     *,
     session_state: MutableMapping[str, object] | None = None,
     index_csv: Path = INDEX_CSV,
     notes_dir: Path = NOTES_DIR,
+    create_missing_note: bool = True,
 ) -> MetadataMutationResult:
     dataframe = load_index(index_csv)
     current = _record(dataframe, paper_id)
@@ -75,7 +113,7 @@ def apply_paper_metadata_change(
         return MetadataMutationResult(paper_id=paper_id, status="missing_paper", paper_found=False, index_updated=False)
 
     normalized = {
-        field_name: _normalize_change(field_name, value)
+        field_name: normalize_paper_metadata_value(field_name, value)
         for field_name, value in changes.items()
         if field_name in MUTABLE_METADATA_FIELDS
     }
@@ -117,6 +155,17 @@ def apply_paper_metadata_change(
             paper_found=True,
             index_updated=True,
             changed_fields=tuple(effective),
+            updated_record=updated,
+        )
+
+    if not create_missing_note and not note_path_for(updated, notes_dir).is_file():
+        return MetadataMutationResult(
+            paper_id=paper_id,
+            status="applied",
+            paper_found=True,
+            index_updated=True,
+            changed_fields=tuple(effective),
+            note_sync="not_present",
             updated_record=updated,
         )
 
@@ -180,3 +229,31 @@ def apply_paper_metadata_change(
         draft_dirty=False,
         updated_record=updated,
     )
+
+
+def apply_paper_metadata_change(
+    paper_id: str,
+    changes: dict[str, object],
+    *,
+    session_state: MutableMapping[str, object] | None = None,
+    index_csv: Path = INDEX_CSV,
+    notes_dir: Path = NOTES_DIR,
+    create_missing_note: bool = True,
+) -> MetadataMutationResult:
+    """Apply a metadata mutation under the workspace-wide local write lock."""
+
+    index_path = Path(index_csv).resolve(strict=False)
+    workspace_root = (
+        index_path.parent.parent
+        if index_path.parent.name.casefold() == "data"
+        else index_path.parent
+    )
+    with workspace_write_lock(workspace_root):
+        return _apply_paper_metadata_change_unlocked(
+            paper_id,
+            changes,
+            session_state=session_state,
+            index_csv=index_csv,
+            notes_dir=notes_dir,
+            create_missing_note=create_missing_note,
+        )

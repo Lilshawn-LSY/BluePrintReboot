@@ -2,7 +2,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { buildBlueprintTarget, isAllowedBlueprintPath, isBlueprintPdfPath, isBlueprintReaderPath, proxyBlueprintGet } from "../app/api/blueprint/[...path]/bridge.mjs";
+import {
+  buildBlueprintTarget,
+  isAllowedBlueprintPath,
+  isAllowedBlueprintRequest,
+  isBlueprintMetadataPath,
+  isBlueprintPdfPath,
+  isBlueprintReaderPath,
+  isBlueprintReadingNotePath,
+  proxyBlueprintGet,
+  proxyBlueprintRequest,
+} from "../app/api/blueprint/[...path]/bridge.mjs";
 
 const API_URL = "http://127.0.0.1:8000";
 
@@ -17,6 +27,106 @@ test("allows the existing read routes plus the exact managed PDF and Reader rout
   assert.equal(isBlueprintPdfPath(["papers", "paper-123"]), false);
   assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader"]), true);
   assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader", "raw"]), false);
+  assert.equal(isBlueprintMetadataPath(["papers", "paper-123", "metadata"]), true);
+  assert.equal(isBlueprintReadingNotePath(["papers", "paper-123", "reading-note"]), true);
+});
+
+test("allows only the exact method and path pairs for Reader commands", () => {
+  assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "metadata"]), true);
+  assert.equal(isAllowedBlueprintRequest("PUT", ["papers", "paper-1", "reading-note"]), true);
+  for (const [method, parts] of [
+    ["PUT", ["papers", "paper-1", "metadata"]],
+    ["PATCH", ["papers", "paper-1", "reading-note"]],
+    ["POST", ["papers", "paper-1", "metadata"]],
+    ["DELETE", ["papers", "paper-1", "reading-note"]],
+    ["PATCH", ["papers", "paper-1", "reader"]],
+    ["GET", ["papers", "paper-1", "metadata"]],
+  ]) {
+    assert.equal(isAllowedBlueprintRequest(method, parts), false, `${method} ${parts.join("/")}`);
+  }
+});
+
+test("rejects decoded and encoded path tricks before contacting upstream", async () => {
+  for (const parts of [
+    ["papers", "..", "metadata"],
+    ["papers", ".", "reading-note"],
+    ["papers", "paper/other", "metadata"],
+    ["papers", "paper\\other", "metadata"],
+    ["papers", "paper%2Fother", "metadata"],
+    ["papers", "%252e%252e", "reading-note"],
+  ]) {
+    let fetched = false;
+    const response = await proxyBlueprintRequest(
+      new Request("http://localhost/api/blueprint/rejected", {
+        method: parts[2] === "metadata" ? "PATCH" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      }),
+      parts,
+      { apiUrl: API_URL, fetchImpl: async () => { fetched = true; return new Response(); } },
+    );
+    assert.equal(response.status, 404, parts.join("/"));
+    assert.equal(fetched, false, parts.join("/"));
+  }
+});
+
+test("forwards command JSON bodies and Content-Type without forwarding Range", async () => {
+  const payload = JSON.stringify({ changes: { title: "Exact draft" }, expected_revision: "a".repeat(64) });
+  let requestedUrl;
+  const response = await proxyBlueprintRequest(
+    new Request("http://localhost/api/blueprint/papers/paper%201/metadata", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json; charset=utf-8", Range: "bytes=0-10" },
+      body: payload,
+    }),
+    ["papers", "paper 1", "metadata"],
+    {
+      apiUrl: API_URL,
+      fetchImpl: async (url, options) => {
+        requestedUrl = url;
+        assert.equal(options.method, "PATCH");
+        assert.equal(options.headers.get("Accept"), "application/json");
+        assert.equal(options.headers.get("Content-Type"), "application/json; charset=utf-8");
+        assert.equal(options.headers.get("Range"), null);
+        assert.equal(options.body, payload);
+        return Response.json({ status: "saved" });
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(requestedUrl, `${API_URL}/papers/paper%201/metadata`);
+});
+
+test("rejects command bodies without JSON Content-Type", async () => {
+  let fetched = false;
+  const response = await proxyBlueprintRequest(
+    new Request("http://localhost/api/blueprint/papers/paper-1/reading-note", {
+      method: "PUT",
+      headers: { "Content-Type": "text/plain" },
+      body: "private draft",
+    }),
+    ["papers", "paper-1", "reading-note"],
+    { apiUrl: API_URL, fetchImpl: async () => { fetched = true; return new Response(); } },
+  );
+  assert.equal(response.status, 415);
+  assert.equal(fetched, false);
+});
+
+test("maps command body read failures to a controlled local 503", async () => {
+  let fetched = false;
+  const response = await proxyBlueprintRequest(
+    {
+      method: "PUT",
+      url: "http://localhost/api/blueprint/papers/paper-1/reading-note",
+      headers: new Headers({ "Content-Type": "application/json" }),
+      text: async () => { throw new Error("private body read failure"); },
+    },
+    ["papers", "paper-1", "reading-note"],
+    { apiUrl: API_URL, fetchImpl: async () => { fetched = true; return new Response(); } },
+  );
+  assert.equal(response.status, 503);
+  assert.equal(fetched, false);
+  assert.deepEqual(await response.json(), { detail: "Local BluePrintReboot API is unavailable." });
 });
 
 test("forwards the exact Reader route as JSON without a Range header", async () => {
@@ -204,10 +314,12 @@ test("maps fetch failures to the generic local 503", async () => {
   assert.deepEqual(await response.json(), { detail: "Local BluePrintReboot API is unavailable." });
 });
 
-test("the route exposes GET only and no write method", async () => {
+test("the route exposes only GET plus the two bounded write methods", async () => {
   const route = await readFile(new URL("../app/api/blueprint/[...path]/route.ts", import.meta.url), "utf8");
   const bridge = await readFile(new URL("../app/api/blueprint/[...path]/bridge.mjs", import.meta.url), "utf8");
   assert.match(route, /export async function GET\b/);
-  assert.doesNotMatch(route, /export (?:async )?function (?:POST|PUT|PATCH|DELETE)\b/);
+  assert.match(route, /export async function PATCH\b/);
+  assert.match(route, /export async function PUT\b/);
+  assert.doesNotMatch(route, /export (?:async )?function (?:POST|DELETE)\b/);
   assert.doesNotMatch(bridge, /await upstream\.(?:text|json|arrayBuffer)\(/);
 });

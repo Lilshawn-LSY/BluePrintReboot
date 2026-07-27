@@ -10,7 +10,7 @@ from typing import Any, Iterable, Mapping, Sequence
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = PROJECT_ROOT / "docs" / "tracker_sync_status.json"
 OUTPUT_PATH = PROJECT_ROOT / "docs" / "CURRENT_RELEASE_STATUS.md"
-SCHEMA_VERSION = "4.0"
+SCHEMA_VERSION = "5.0"
 CONTROLLED_STATUSES = (
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -27,6 +27,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/checklists/regression_checklist.md",
     "docs/release_notes/v1.4.3.md",
     "docs/release_notes/v1.5.0.md",
+    "docs/release_notes/v1.5.1.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -35,11 +36,15 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "local_smoke",
         "full_pytest",
         "focused_reader_snapshot",
+        "focused_reader_commands",
         "focused_pdf_api",
         "focused_release_version",
+        "release_reconciliation",
+        "tracker_export",
         "frontend_lint",
         "frontend_production_build",
         "frontend_node_tests",
+        "frontend_reader_commands",
         "repository_hygiene",
     }
 )
@@ -57,6 +62,20 @@ REQUIRED_MANUAL_CHECKS = frozenset(
         "api_offline_restart_recovery",
         "large_pdf_behavior",
         "detailed_range_inspection",
+    }
+)
+REQUIRED_READER_WRITE_MANUAL_CHECKS = frozenset(
+    {
+        "persisted_note_correct_pdf",
+        "absent_note",
+        "unreadable_note_warning",
+        "missing_pdf",
+        "different_paper_transition",
+        "api_offline_restart_recovery",
+        "metadata_save_reload",
+        "reading_note_save_reload",
+        "two_stale_browser_sessions",
+        "streamlit_web_visibility",
     }
 )
 PRIVATE_VALUE_PATTERNS = (
@@ -90,6 +109,7 @@ EXPECTED_UNRESOLVED_EVIDENCE = (
     "automated_validation.pr_head_ci",
     "automated_validation.post_merge_main_ci",
     "manual_validation.reader_snapshot_runtime",
+    "manual_validation.reader_write_runtime",
     "publication_state.github_release",
     "recurring_operational_procedures.clean_pc_restore",
 )
@@ -355,6 +375,36 @@ def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
     )
     _validate_evidence(reader_snapshot, "manual_validation.reader_snapshot_runtime")
 
+    reader_write = _mapping(
+        manual.get("reader_write_runtime"),
+        "manual_validation.reader_write_runtime",
+    )
+    write_checks = _mapping(
+        reader_write.get("checks"),
+        "manual_validation.reader_write_runtime.checks",
+    )
+    if set(write_checks) != REQUIRED_READER_WRITE_MANUAL_CHECKS:
+        missing = sorted(REQUIRED_READER_WRITE_MANUAL_CHECKS - set(write_checks))
+        extra = sorted(set(write_checks) - REQUIRED_READER_WRITE_MANUAL_CHECKS)
+        raise ReleaseStateError(
+            f"Reader write runtime checks differ; missing={missing}, extra={extra}"
+        )
+    for check_id, raw_item in write_checks.items():
+        item = _mapping(
+            raw_item,
+            f"manual_validation.reader_write_runtime.checks.{check_id}",
+        )
+        _validate_evidence(
+            item,
+            f"manual_validation.reader_write_runtime.checks.{check_id}",
+        )
+    expected_write_status = derive_reader_runtime_status(write_checks)
+    if reader_write.get("status") != expected_write_status:
+        raise ReleaseStateError(
+            "Reader write runtime aggregate status must derive from its child checks"
+        )
+    _validate_evidence(reader_write, "manual_validation.reader_write_runtime")
+
 
 def _validate_publication_and_operations(manifest: Mapping[str, Any]) -> None:
     publication = _mapping(manifest.get("publication_state"), "publication_state")
@@ -442,10 +492,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.5.0":
-        raise ReleaseStateError("product_version must identify the current 1.5.0 runtime target")
-    if manifest.get("release_name") != "v1.5.0-reader-snapshot-readonly-vertical-slice":
-        raise ReleaseStateError("release_name must identify the current v1.5.0 runtime target")
+    if manifest.get("product_version") != "1.5.1":
+        raise ReleaseStateError("product_version must identify the current 1.5.1 runtime target")
+    if manifest.get("release_name") != "v1.5.1-reader-write-vertical-slice":
+        raise ReleaseStateError("release_name must identify the current v1.5.1 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)
@@ -562,6 +612,7 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         f"| Post-merge `main` GitHub Actions | {automated['post_merge_main_ci']['status']} | {_escape_cell(automated['post_merge_main_ci']['evidence']['summary'])} |",
         f"| Reader runtime | {manual['reader_runtime']['status']} | {_escape_cell(manual['reader_runtime']['evidence']['summary'])} |",
         f"| v1.5.0 Reader Snapshot runtime | {manual['reader_snapshot_runtime']['status']} | {_escape_cell(manual['reader_snapshot_runtime']['evidence']['summary'])} |",
+        f"| v1.5.1 Reader write runtime | {manual['reader_write_runtime']['status']} | {_escape_cell(manual['reader_write_runtime']['evidence']['summary'])} |",
         f"| Streamlit regression | {manual['streamlit_regression']['status']} | {_escape_cell(manual['streamlit_regression']['evidence']['summary'])} |",
         f"| GitHub Release publication | {publication['github_release']['status']} | {_escape_cell(publication['github_release']['evidence']['summary'])} |",
         f"| Clean-PC restore | {restore['status']} | Recurring operational procedure; no rehearsal is claimed. |",
@@ -611,6 +662,21 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## v1.5.1 Reader write manual validation",
+            "",
+            f"Aggregate state: **{manual['reader_write_runtime']['status']}**.",
+            "",
+            "| Check | Status | Evidence |",
+            "|---|---|---|",
+        ]
+    )
+    for check_id, item in manual["reader_write_runtime"]["checks"].items():
+        label = check_id.replace("_", " ").capitalize()
+        lines.append(f"| {label} | {item['status']} | {_escape_cell(_evidence_summary(item))} |")
+
+    lines.extend(
+        [
+            "",
             "## Publication and recurring operations",
             "",
             f"- GitHub Release: **{publication['github_release']['status']}**. "
@@ -628,6 +694,8 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
             f"{automated['post_merge_main_ci']['evidence']['summary']}",
             f"- v1.5.0 Reader Snapshot runtime: **{manual['reader_snapshot_runtime']['status']}**. "
             f"{manual['reader_snapshot_runtime']['evidence']['summary']}",
+            f"- v1.5.1 Reader write runtime: **{manual['reader_write_runtime']['status']}**. "
+            f"{manual['reader_write_runtime']['evidence']['summary']}",
             f"- GitHub Release publication: **{publication['github_release']['status']}**. "
             f"{publication['github_release']['evidence']['summary']}",
             f"- Clean-PC restore: **{restore['status']}**. {restore['evidence']['summary']}",
@@ -698,6 +766,12 @@ def render_output(
     return destination
 
 
+def _normalize_newlines(content: bytes) -> str:
+    """Decode UTF-8 and normalize only CRLF/lone-CR line endings to LF."""
+
+    return content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def check_release_state(
     manifest_path: Path = MANIFEST_PATH,
     output_path: Path = OUTPUT_PATH,
@@ -710,12 +784,17 @@ def check_release_state(
         validate_manifest(manifest)
         if validate_documents:
             validate_current_documents(Path(manifest_path).resolve().parents[1], manifest)
-        expected = render_current_status(manifest).encode("utf-8")
+        expected = render_current_status(manifest)
         destination = Path(output_path)
         if not destination.is_file():
             errors.append(f"generated output is missing: {destination.name}")
-        elif destination.read_bytes() != expected:
-            errors.append(f"generated output is stale: {destination.name}; run --render")
+        else:
+            try:
+                actual = _normalize_newlines(destination.read_bytes())
+            except UnicodeDecodeError:
+                actual = ""
+            if actual != expected:
+                errors.append(f"generated output is stale: {destination.name}; run --render")
     except (OSError, json.JSONDecodeError, ReleaseStateError) as exc:
         errors.append(str(exc))
     return errors

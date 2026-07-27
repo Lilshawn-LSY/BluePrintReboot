@@ -14,6 +14,21 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.3.0 safe read-only Reader/PDF vertical slice.
 - [x] v1.3.1 release-state convergence, tracked-entry hygiene, and deterministic tracker export.
 - [x] v1.5.0 read-only Reader Snapshot vertical slice implementation.
+- [x] v1.5.1 bounded Reader write vertical slice implementation.
+
+## v1.5.1 bounded Reader write vertical slice
+
+- [x] Add independent metadata PATCH and Reading Note PUT command-service boundaries; do not add a combined save.
+- [x] Expose only title, authors, year, journal, DOI, abstract, and keywords with strict bounded schemas and unknown-field rejection.
+- [x] Add deterministic metadata revisions and explicit absent-note SHA-256 semantics; reject stale commands with zero mutation.
+- [x] Canonicalize Reading Note headers while preserving user section bodies and atomic replacement behavior.
+- [x] Restore the original index and note after injected coupled metadata/header failures.
+- [x] Extend the same-origin bridge with an exact method/path allowlist and keep Range forwarding PDF-only.
+- [x] Add accessible independent editors, draft-preserving conflict/error handling, explicit reload, and paper-transition warnings.
+- [x] Preserve the v1.5.0 Reader Snapshot, PDF.js lifecycle, managed PDF API, stable identity, local-only binding, and Streamlit workflows.
+- [x] Record user-performed Reader pairing, absent-note clean state, save/reload, canonical-header, conflict, restart, transition, and cross-surface visibility evidence.
+- [ ] Perform the unreadable persisted-note warning and missing managed-PDF manual scenarios.
+- [ ] Record v1.5.1 pull request, hosted CI, merge, tag, GitHub Release, or post-merge evidence only after those events occur.
 
 ## v1.5.0 read-only Reader Snapshot vertical slice
 
@@ -23,7 +38,7 @@ Current release evidence and individually addressable pending checks live in the
 - [x] Switch the web Reader from paper detail to one snapshot request and show a selectable plain-text persisted-note companion.
 - [x] Keep absent note, unreadable note, missing PDF, unknown paper, offline API, retry, and paper transition distinct.
 - [x] Preserve the Streamlit write boundary, PDF.js lifecycle, managed-root containment, storage format, dependencies, and stable identity.
-- [ ] Complete user-performed, non-mutating runtime validation for real PDF/note pairing, missing-note, unreadable-note, missing-PDF, transition, and API-restart behavior.
+- [ ] Complete user-performed runtime validation for unreadable-note and missing-PDF behavior; correct PDF/note pairing, absent note, transition, and API restart now have v1.5.1 evidence.
 - [ ] Record v1.5.0 pull request, hosted CI, tag, or publication only after those events actually occur.
 
 ## v1.4.3 release-state truth repair
