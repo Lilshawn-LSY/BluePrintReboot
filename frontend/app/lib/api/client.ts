@@ -1,4 +1,4 @@
-import type { CandidateSummary, DashboardSnapshot, EditablePaperMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, ProjectDetail, ReaderSnapshot, ReadingNoteCommandResponse } from "./types";
+import type { CandidateSummary, DashboardSnapshot, EditablePaperMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, ProjectDetail, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -84,6 +84,7 @@ export const apiClient = {
     return request<PaginatedTagList>(`/tags?${params}`);
   },
   getTagSummary: () => request<CandidateSummary>("/tags/summary"),
+  getSettingsSummary: () => request<SettingsSummary>("/settings/summary"),
   getReaderSnapshot: (paperId: string) => request<ReaderSnapshot>(`/papers/${encodeURIComponent(paperId)}/reader`),
   saveReaderMetadata: (
     paperId: string,

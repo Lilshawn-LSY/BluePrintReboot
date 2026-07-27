@@ -16,6 +16,19 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.0 read-only Reader Snapshot vertical slice implementation.
 - [x] v1.5.1 bounded Reader write vertical slice implementation.
 - [x] v1.5.2 Projects and Tags read parity implementation.
+- [x] v1.5.3 Settings and health safe read parity implementation.
+
+## v1.5.3 Settings and health safe read parity
+
+- [x] Add strict `GET /settings/summary` Application, Workspace, Data integrity, and Backup readiness sections through read-model, adapter, schema, dependency, and route boundaries.
+- [x] Cap entry discovery, index rows, per-file JSON reads, and total JSON bytes per request; perform no PDF hashing/parsing, text extraction, archive verification, cache rebuild, repair, backup, restore, or write.
+- [x] Expose only canonical version/API state, aggregate store counts, stable issue-code counts, and safe snapshot presence/last-updated evidence.
+- [x] Keep partial failures at section/item level and distinguish verified zeroes from unavailable diagnostics with null counts.
+- [x] Replace the Settings placeholder with a real typed view using shared loading, empty, offline, controlled error, partial warning, and retry behavior.
+- [x] Keep the bridge allowlist exact and add no configuration, backup, restore, repair, debug, Project, Tag, or Note-link controls.
+- [x] Add disposable privacy, determinism, corruption, backup-presence, non-mutation, no-heavy-read, frontend-source, and bridge regressions.
+- [ ] Complete manual checks for real Application/Workspace/integrity/backup summaries, offline retry, browser-response privacy, and browsing non-mutation.
+- [ ] Record v1.5.3 pull request, hosted CI, merge, tag, GitHub Release, or post-merge evidence only after those events occur.
 
 ## v1.5.2 Projects and Tags read parity
 
@@ -29,7 +42,7 @@ Current release evidence and individually addressable pending checks live in the
 - [x] Add disposable backend and frontend regressions for deterministic pagination, failures, privacy, non-mutation, real fields, and absence of write controls.
 - [ ] Complete manual checks for real Project list/detail/link states, real canonical Tags, empty/offline behavior, and Project/Tag storage non-mutation.
 - [ ] Record v1.5.2 pull request, hosted CI, merge, tag, GitHub Release, or post-merge evidence only after those events occur.
-- [ ] Complete R-113 beyond Projects/Tags; Settings remains a placeholder and G2 remains open.
+- [x] R-113 and G2 implementation were completed by v1.5.3; actual release evidence remains separately tracked.
 
 ## v1.5.1 bounded Reader write vertical slice
 

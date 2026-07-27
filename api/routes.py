@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from api.adapters import (
     PaperContractError,
     ProjectContractError,
+    SettingsContractError,
     TagContractError,
     adapt_candidate_summary,
     adapt_canonical_tag,
@@ -16,6 +17,7 @@ from api.adapters import (
     adapt_project_detail,
     adapt_project_list_item,
     adapt_reader_snapshot,
+    adapt_settings_summary,
 )
 from api.dependencies import (
     ReadModelUnavailable,
@@ -30,6 +32,7 @@ from api.dependencies import (
     get_project_list_items,
     get_reader_command_service,
     get_reader_snapshot,
+    get_settings_summary,
 )
 from api.pdf_files import ManagedPdfResult, ManagedPdfState
 from api.schemas import (
@@ -47,11 +50,13 @@ from api.schemas import (
     ReadingNoteCommandRequest,
     ReadingNoteCommandResponse,
     ReaderSnapshotResponse,
+    SettingsSummaryResponse,
     ProjectDetail,
 )
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem, ReaderSnapshot as DomainReaderSnapshot
 from services.project_read_model import ProjectDetail as DomainProjectDetail, ProjectListItem as DomainProjectListItem
 from services.reader_commands import ReaderCommandConflict, ReaderCommandNotFound, ReaderCommandService, ReaderCommandUnavailable
+from services.settings_read_model import SettingsSummary as DomainSettingsSummary
 from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
 
 
@@ -73,6 +78,30 @@ def health(summary: Annotated[HealthSummary, Depends(get_health_summary)]) -> He
 @router.get("/library/status", response_model=LibraryStatusResponse)
 def library_status(status: Annotated[LibraryStatus, Depends(get_library_status)]) -> LibraryStatus:
     return status
+
+
+@router.get(
+    "/settings/summary",
+    response_model=SettingsSummaryResponse,
+    summary="Get safe Settings summary",
+    description=(
+        "Return bounded application, workspace, data-integrity, and backup-readiness "
+        "facts without exposing paths, records, hashes, environment data, or actions."
+    ),
+    responses={
+        503: {
+            "model": APIError,
+            "description": "The safe Settings read model is temporarily unavailable.",
+        }
+    },
+)
+def settings_summary(
+    summary: Annotated[DomainSettingsSummary, Depends(get_settings_summary)],
+) -> SettingsSummaryResponse:
+    try:
+        return adapt_settings_summary(summary)
+    except SettingsContractError:
+        raise ReadModelUnavailable from None
 
 
 @router.get(

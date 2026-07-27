@@ -218,6 +218,51 @@ export interface CandidateSummary {
   };
 }
 
+export type SettingsState = "healthy" | "warning" | "unavailable" | "empty";
+
+export interface SettingsWorkspaceResource {
+  code: "papers" | "notes" | "projects" | "tags" | "note_blocks" | "project_links";
+  label: string;
+  state: SettingsState;
+  count: number | null;
+  summary: string;
+}
+
+export interface SettingsIntegrityIssue {
+  code: "missing_pdfs" | "unindexed_pdfs" | "orphan_notes" | "orphan_note_blocks" | "orphan_project_links" | "corrupt_json";
+  state: "healthy" | "warning" | "unavailable";
+  count: number | null;
+  severity: "warning" | "error";
+  explanation: string;
+  next_action: string;
+}
+
+export interface SettingsSummary {
+  application: {
+    state: "healthy";
+    product_version: string;
+    api_state: "available";
+    api_contract_version: string;
+    summary: string;
+  };
+  workspace: {
+    state: SettingsState;
+    resources: SettingsWorkspaceResource[];
+    summary: string;
+  };
+  data_integrity: {
+    state: "healthy" | "warning" | "unavailable";
+    issues: SettingsIntegrityIssue[];
+    summary: string;
+  };
+  backup_readiness: {
+    state: "healthy" | "warning" | "unavailable";
+    snapshot_available: boolean | null;
+    last_updated_at: string | null;
+    summary: string;
+  };
+}
+
 export interface DashboardSnapshot {
   health: HealthSummary;
   library: LibraryStatus;

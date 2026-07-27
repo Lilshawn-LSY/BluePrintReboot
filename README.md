@@ -8,11 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.2-projects-tags-read-parity**.
+Current runtime target: **v1.5.3-settings-health-read-parity**.
 
-v1.5.2 replaces the Projects and Tags frontend placeholders with strict local GET contracts and real read-only views. Projects expose deterministic pagination, stable detail, stored link types, bounded paper summaries, and explicit orphan states. Tags expose canonical label/key/category/aliases/status/strength plus a counts-only candidate summary derived from existing paper-index evidence. Loading, empty, offline, corrupt-read-model, not-found, and retry behavior remain controlled.
+v1.5.3 replaces the final Settings placeholder with `GET /settings/summary` and a real read-only Settings view. The response contains only canonical version/API state, bounded workspace counts, six stable lightweight integrity counts with explicit unavailable states, and safe backup-snapshot presence/last-updated evidence. It never returns paths, filenames, hashes, environment or host details, raw errors, configuration, manifests, or private records.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.2. The v1.5.1 Reader commands, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit write workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.3. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit write workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -45,7 +45,7 @@ Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the 
 
 ## Bounded Local API
 
-Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while exactly two Reader command routes remain the mutation boundary. Project and Tag GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, or configuration changes.
+Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while exactly two Reader command routes remain the mutation boundary. Project, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
 
 Start it from Windows PowerShell:
 
@@ -68,10 +68,13 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Project detail: `GET http://127.0.0.1:8000/projects/{project_id}`
 - Canonical Tags: [http://127.0.0.1:8000/tags](http://127.0.0.1:8000/tags)
 - Tag candidate summary: [http://127.0.0.1:8000/tags/summary](http://127.0.0.1:8000/tags/summary)
+- Safe Settings summary: [http://127.0.0.1:8000/settings/summary](http://127.0.0.1:8000/settings/summary)
 
 `GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), and `archive_status` (`active`, `archived`, or `all`; default `active`). Results are ordered by case-insensitive title and then stable `paper_id`.
 
 `GET /projects` and `GET /tags` accept `limit` (1-100, default 20) and `offset` (default 0). Projects are ordered by case-insensitive name then stable `project_id`; Tags are ordered by case-insensitive label then canonical key. `GET /projects/{project_id}` accepts `links_limit` (1-100, default 20) and `links_offset` (default 0). Missing linked papers remain successful detail reads with `target_state: "orphaned"` and no invented paper metadata. Tag summary counts are derived from real deterministic service output; a missing or unreadable candidate source is an explicit unavailable state.
+
+`GET /settings/summary` has no query or write surface. It returns four strict sections: Application, Workspace, Data integrity, and Backup readiness. Its lightweight reader caps file discovery, index rows, per-file JSON reads, and total JSON bytes per request; checks only file presence and app-owned metadata; and never hashes or parses PDFs, extracts text, opens snapshot archives, verifies restores, or writes cache/report/status files. Missing diagnostics use `state: "unavailable"` with `count: null`, which is distinct from a verified zero.
 
 Metadata requests contain `changes` plus `expected_revision`. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
 
@@ -101,7 +104,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
 
 If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
-Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, and Tags use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. The Reader makes one Snapshot request for paper and persisted-note context, exposes only the two bounded explicit saves, and uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL with a PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser. Settings remains an honest placeholder. The shell remains navigable when FastAPI is offline.
+Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags, and Settings use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. Settings keeps partial section warnings visible, distinguishes unavailable diagnostics from verified zeroes, and exposes no action controls. The Reader makes one Snapshot request for paper and persisted-note context, exposes only the two bounded explicit saves, and uses the same-origin `/api/blueprint/papers/{paper_id}/pdf` URL with a PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser. The shell remains navigable when FastAPI is offline.
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
@@ -191,12 +194,14 @@ Crossref enrichment requires the base dependencies `requests`, `urllib3`, and `c
 
 ## Maintenance/Backup Workflow
 
-Settings is organized into four sections:
+The established Streamlit Settings workflow is organized into four action-capable sections:
 
 - **System** - app/runtime information, workspace paths, extraction backends, and index details.
 - **Library Maintenance** - Library Health Check, Tag Book, Drive Inbox Import, and Paper Hygiene.
 - **External Services** - Crossref Diagnostics, dependency versions, and proxy/network status.
 - **Backup** - light/full Backup Snapshot controls and manifest summaries.
+
+The web Settings page is intentionally separate and read-only. It presents Application, Workspace, Data integrity, and Backup readiness summaries from the safe API, then directs users back to Streamlit for configuration, health actions, backup creation, restore, or repair.
 
 Library Health Check reports missing/unindexed PDFs, duplicate identities, incomplete metadata, orphan records, structured app-owned corruption, quarantine state, backup concerns, noncanonical paths, and stale caches. Exact duplicate ignores are persistent, reversible, and bound to workspace-relative path plus SHA-256. No duplicate action automatically merges or deletes PDFs or linked user state.
 
@@ -246,6 +251,7 @@ Foundation release documents:
 - [v1.5.0 Read-only Reader Snapshot Vertical Slice release notes](docs/release_notes/v1.5.0.md)
 - [v1.5.1 Reader Write Vertical Slice release notes](docs/release_notes/v1.5.1.md)
 - [v1.5.2 Projects and Tags Read Parity release-note draft](docs/release_notes/v1.5.2.md)
+- [v1.5.3 Settings and Health Safe Read Parity release-note draft](docs/release_notes/v1.5.3.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)

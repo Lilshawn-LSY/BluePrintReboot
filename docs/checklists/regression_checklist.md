@@ -1,8 +1,26 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.5.2-projects-tags-read-parity`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
+Required before and after Codex-assisted release work, including `v1.5.3-settings-health-read-parity`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
+
+## v1.5.3 Settings and Health Safe Read Parity
+
+- [x] Validate populated, empty, deterministic, canonical-version, aggregate-state, real-issue, backup-present, and backup-absent summaries.
+- [x] Validate verified zero versus unavailable null counts, partial component failure, corrupt JSON summaries, and generic complete-failure 503.
+- [x] Confirm no response contains local paths, filenames, hashes, usernames, hostnames, environment values, secrets, tokens, private records, raw errors, or arbitrary internal dictionaries.
+- [x] Confirm Settings GET preserves bytes and modification times and creates no cache, report, backup, status, or repair file.
+- [x] Confirm the lightweight reader caps discovery/row/byte work and never opens PDF or snapshot content.
+- [x] Confirm `/settings` renders all four typed sections with loading, empty, offline, controlled error, partial warning, and retry behavior.
+- [x] Confirm unavailable diagnostics never render as zero and no write/action control or fabricated sample/history exists.
+- [x] Confirm the bridge allows exactly GET `/settings/summary`, rejects every unlisted method/path, and preserves existing Reader/PDF/Project/Tag behavior.
+- [ ] Real Application information visible.
+- [ ] Real Workspace summary visible.
+- [ ] Real integrity summary visible.
+- [ ] Safe backup readiness visible.
+- [ ] API-offline and retry behavior visible.
+- [ ] Browser Network response contains no private path, hash, secret, raw error, or private record.
+- [ ] Browsing Settings does not modify user-data or backup files.
 
 ## v1.5.2 Projects and Tags Read Parity
 

@@ -28,12 +28,12 @@ def test_version_contract_is_consistent() -> None:
     readme = read_text("README.md")
     manifest = read_manifest()
 
-    assert APP_VERSION == "1.5.2"
+    assert APP_VERSION == "1.5.3"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.5.2-projects-tags-read-parity"
+    assert manifest["release_name"] == "v1.5.3-settings-health-read-parity"
     assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
     assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
