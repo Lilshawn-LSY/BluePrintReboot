@@ -7,12 +7,16 @@ from fastapi.responses import FileResponse
 
 from api.adapters import (
     PaperContractError,
+    NoteBlockContractError,
     ProjectContractError,
     SettingsContractError,
     TagContractError,
     adapt_candidate_summary,
     adapt_canonical_tag,
     adapt_paper_detail,
+    adapt_note_block_collection,
+    adapt_note_block_command_result,
+    adapt_note_block_link_command_result,
     adapt_paper_link_command_result,
     adapt_paper_list_item,
     adapt_project_command_result,
@@ -28,6 +32,8 @@ from api.dependencies import (
     get_health_summary,
     get_library_status,
     get_managed_pdf,
+    get_note_block_collection,
+    get_note_block_command_service,
     get_paper_detail,
     get_paper_list_items,
     get_project_detail,
@@ -40,6 +46,7 @@ from api.dependencies import (
 from api.pdf_files import ManagedPdfResult, ManagedPdfState
 from api.schemas import (
     APIError,
+    AddNoteBlockLinkRequest,
     AddPaperLinkRequest,
     ArchiveProjectRequest,
     ArchiveStatus,
@@ -48,6 +55,9 @@ from api.schemas import (
     LibraryStatusResponse,
     MetadataCommandRequest,
     MetadataCommandResponse,
+    NoteBlockCollectionResponse,
+    NoteBlockCommandResponse,
+    NoteBlockLinkCommandResponse,
     PaginatedPaperList,
     PaginatedProjectList,
     PaginatedTagList,
@@ -56,15 +66,26 @@ from api.schemas import (
     ProjectCommandResponse,
     CreateProjectRequest,
     RemovePaperLinkRequest,
+    RemoveNoteBlockLinkRequest,
     ReadingNoteCommandRequest,
     ReadingNoteCommandResponse,
     ReaderSnapshotResponse,
     SettingsSummaryResponse,
     ProjectDetail,
     UpdateProjectRequest,
+    CreateNoteBlockRequest,
+    UpdateNoteBlockRequest,
 )
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem, ReaderSnapshot as DomainReaderSnapshot
 from services.project_read_model import ProjectDetail as DomainProjectDetail, ProjectListItem as DomainProjectListItem
+from services.note_block_read_model import NoteBlockCollection as DomainNoteBlockCollection
+from services.note_block_commands import (
+    NoteBlockCommandConflict,
+    NoteBlockCommandInvalid,
+    NoteBlockCommandNotFound,
+    NoteBlockCommandService,
+    NoteBlockCommandUnavailable,
+)
 from services.project_commands import (
     ProjectArchivedConflict,
     ProjectCommandConflict,
@@ -90,6 +111,9 @@ PROJECT_COMMAND_CONFLICT_DETAIL = "The saved Project state changed. Reload the c
 PROJECT_ARCHIVED_DETAIL = "Archived Projects do not allow this command."
 PROJECT_COMMAND_UNAVAILABLE_DETAIL = "The Project command could not be completed."
 PROJECT_COMMAND_NOT_FOUND_DETAIL = "The requested Project, Paper, or Paper link was not found."
+NOTE_BLOCK_COMMAND_CONFLICT_DETAIL = "The saved Note Block collection changed. Reload the current collection before retrying."
+NOTE_BLOCK_COMMAND_UNAVAILABLE_DETAIL = "The Note Block command could not be completed."
+NOTE_BLOCK_COMMAND_NOT_FOUND_DETAIL = "The requested Paper or Note Block was not found."
 
 
 @router.get("/health", response_model=HealthSummaryResponse)
@@ -386,6 +410,97 @@ def remove_project_paper_link(
         ) from None
 
 
+@router.post(
+    "/projects/{project_id}/note-block-links",
+    response_model=NoteBlockLinkCommandResponse,
+    summary="Add Note Block link to Project",
+    description="Explicitly link one existing Paper-owned Note Block to one writable Project.",
+    responses={
+        404: {"model": APIError, "description": "The Project, Paper, or Note Block is unknown."},
+        409: {"model": APIError, "description": "The link collection is stale or the Project is archived."},
+        422: {"model": APIError, "description": "The Note Block link request is invalid."},
+        503: {"model": APIError, "description": "The Note Block link could not be persisted consistently."},
+    },
+)
+def add_project_note_block_link(
+    request: AddNoteBlockLinkRequest,
+    project_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[ProjectCommandService, Depends(get_project_command_service)],
+) -> NoteBlockLinkCommandResponse:
+    try:
+        result = commands.add_note_block_link(
+            project_id,
+            paper_id=request.paper_id,
+            note_block_id=request.note_block_id,
+            link_type=request.link_type,
+            expected_links_revision=request.expected_links_revision,
+        )
+        return adapt_note_block_link_command_result(result)
+    except ProjectCommandNotFound:
+        raise HTTPException(
+            status_code=404,
+            detail=PROJECT_COMMAND_NOT_FOUND_DETAIL,
+        ) from None
+    except ProjectArchivedConflict:
+        raise HTTPException(status_code=409, detail=PROJECT_ARCHIVED_DETAIL) from None
+    except ProjectCommandConflict:
+        raise HTTPException(
+            status_code=409,
+            detail=PROJECT_COMMAND_CONFLICT_DETAIL,
+        ) from None
+    except ProjectCommandInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except (ProjectCommandUnavailable, ProjectContractError):
+        raise HTTPException(
+            status_code=503,
+            detail=PROJECT_COMMAND_UNAVAILABLE_DETAIL,
+        ) from None
+
+
+@router.delete(
+    "/projects/{project_id}/note-block-links/{link_id}",
+    response_model=NoteBlockLinkCommandResponse,
+    summary="Remove Note Block link from Project",
+    description="Explicitly remove one exact Note Block link without changing its Project, Paper, or Note Block.",
+    responses={
+        404: {"model": APIError, "description": "The Project or exact Note Block link is unknown."},
+        409: {"model": APIError, "description": "The Project link collection is stale or archived."},
+        422: {"model": APIError, "description": "The unlink request is invalid."},
+        503: {"model": APIError, "description": "The Note Block link could not be removed consistently."},
+    },
+)
+def remove_project_note_block_link(
+    request: RemoveNoteBlockLinkRequest,
+    project_id: Annotated[str, Path(min_length=1, max_length=200)],
+    link_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[ProjectCommandService, Depends(get_project_command_service)],
+) -> NoteBlockLinkCommandResponse:
+    try:
+        result = commands.remove_note_block_link(
+            project_id,
+            link_id,
+            expected_links_revision=request.expected_links_revision,
+        )
+        return adapt_note_block_link_command_result(result)
+    except ProjectCommandNotFound:
+        raise HTTPException(
+            status_code=404,
+            detail=PROJECT_COMMAND_NOT_FOUND_DETAIL,
+        ) from None
+    except ProjectArchivedConflict:
+        raise HTTPException(status_code=409, detail=PROJECT_ARCHIVED_DETAIL) from None
+    except ProjectCommandConflict:
+        raise HTTPException(
+            status_code=409,
+            detail=PROJECT_COMMAND_CONFLICT_DETAIL,
+        ) from None
+    except (ProjectCommandUnavailable, ProjectContractError):
+        raise HTTPException(
+            status_code=503,
+            detail=PROJECT_COMMAND_UNAVAILABLE_DETAIL,
+        ) from None
+
+
 @router.get(
     "/tags",
     response_model=PaginatedTagList,
@@ -532,6 +647,99 @@ def reader_snapshot(
         return adapt_reader_snapshot(snapshot)
     except PaperContractError:
         raise ReadModelUnavailable from None
+
+
+@router.get(
+    "/papers/{paper_id}/note-blocks",
+    response_model=NoteBlockCollectionResponse,
+    summary="List structured Note Blocks",
+    description="Return the complete bounded stored-order Note Block collection and its deterministic revision.",
+    responses={
+        404: {"model": APIError, "description": "No Paper has the requested identity."},
+        503: {"model": APIError, "description": "The Note Block storage is corrupt or unavailable."},
+    },
+)
+def note_block_collection(
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    collection: Annotated[DomainNoteBlockCollection | None, Depends(get_note_block_collection)],
+) -> NoteBlockCollectionResponse:
+    if collection is None:
+        raise HTTPException(status_code=404, detail="Paper not found.")
+    try:
+        return adapt_note_block_collection(collection)
+    except NoteBlockContractError:
+        raise ReadModelUnavailable from None
+
+
+@router.post(
+    "/papers/{paper_id}/note-blocks",
+    response_model=NoteBlockCommandResponse,
+    summary="Create structured Note Block",
+    description="Explicitly append one server-owned Note Block when the complete collection revision matches.",
+    responses={
+        404: {"model": APIError, "description": "The Paper identity is unknown."},
+        409: {"model": APIError, "description": "The Note Block collection revision is stale."},
+        422: {"model": APIError, "description": "The Note Block fields are invalid or unsupported."},
+        503: {"model": APIError, "description": "The Note Block could not be persisted consistently."},
+    },
+)
+def create_note_block(
+    request: CreateNoteBlockRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[NoteBlockCommandService, Depends(get_note_block_command_service)],
+) -> NoteBlockCommandResponse:
+    try:
+        content = request.model_dump(exclude={"expected_revision"})
+        result = commands.create_note_block(
+            paper_id,
+            content,
+            request.expected_revision,
+        )
+        return adapt_note_block_command_result(result)
+    except NoteBlockCommandNotFound:
+        raise HTTPException(status_code=404, detail=NOTE_BLOCK_COMMAND_NOT_FOUND_DETAIL) from None
+    except NoteBlockCommandConflict:
+        raise HTTPException(status_code=409, detail=NOTE_BLOCK_COMMAND_CONFLICT_DETAIL) from None
+    except NoteBlockCommandInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except (NoteBlockCommandUnavailable, NoteBlockContractError):
+        raise HTTPException(status_code=503, detail=NOTE_BLOCK_COMMAND_UNAVAILABLE_DETAIL) from None
+
+
+@router.patch(
+    "/papers/{paper_id}/note-blocks/{block_id}",
+    response_model=NoteBlockCommandResponse,
+    summary="Update structured Note Block",
+    description="Explicitly update allowlisted Note Block content when the complete collection revision matches.",
+    responses={
+        404: {"model": APIError, "description": "The Paper or Note Block identity is unknown."},
+        409: {"model": APIError, "description": "The Note Block collection revision is stale."},
+        422: {"model": APIError, "description": "The Note Block changes are invalid or unsupported."},
+        503: {"model": APIError, "description": "The Note Block could not be persisted consistently."},
+    },
+)
+def update_note_block(
+    request: UpdateNoteBlockRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    block_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[NoteBlockCommandService, Depends(get_note_block_command_service)],
+) -> NoteBlockCommandResponse:
+    try:
+        result = commands.update_note_block(
+            paper_id,
+            block_id,
+            request.changes.model_dump(exclude_unset=True),
+            request.expected_revision,
+        )
+        return adapt_note_block_command_result(result)
+    except NoteBlockCommandNotFound:
+        raise HTTPException(status_code=404, detail=NOTE_BLOCK_COMMAND_NOT_FOUND_DETAIL) from None
+    except NoteBlockCommandConflict:
+        raise HTTPException(status_code=409, detail=NOTE_BLOCK_COMMAND_CONFLICT_DETAIL) from None
+    except NoteBlockCommandInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except (NoteBlockCommandUnavailable, NoteBlockContractError):
+        raise HTTPException(status_code=503, detail=NOTE_BLOCK_COMMAND_UNAVAILABLE_DETAIL) from None
 
 
 @router.patch(

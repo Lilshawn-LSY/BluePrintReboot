@@ -99,6 +99,51 @@ export interface ReaderSnapshot {
   unavailable_reason: string;
 }
 
+export type NoteBlockType = "summary" | "claim" | "method" | "evidence" | "question" | "idea" | "limitation";
+
+export interface EditableNoteBlockContent {
+  block_type: NoteBlockType;
+  title: string;
+  text: string;
+  page: string;
+  figure: string;
+  quote: string;
+  tags: string[];
+}
+
+export interface NoteBlock extends EditableNoteBlockContent {
+  id: string;
+  paper_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NoteBlockProjectLink {
+  link_id: string;
+  project_id: string;
+  project_name: string;
+  project_status: ProjectStatus | "unavailable";
+  note_block_id: string;
+  link_type: ProjectLinkType;
+  links_revision: string;
+}
+
+export interface NoteBlockCollection {
+  source_paper: { paper_id: string; title: string };
+  items: NoteBlock[];
+  total: number;
+  note_blocks_revision: string;
+  project_links: NoteBlockProjectLink[];
+  project_links_state: "available" | "unavailable";
+}
+
+export interface NoteBlockCommandResponse {
+  status: "created" | "saved" | "no_op";
+  block: NoteBlock;
+  note_blocks_revision: string;
+  total: number;
+}
+
 export interface PersistedReadingNote {
   exists: boolean;
   content: string;
@@ -157,16 +202,30 @@ export interface LinkedPaperSummary {
   archived: boolean;
 }
 
-export type ProjectTargetState = "available" | "orphaned" | "unavailable" | "not_applicable";
+export type ProjectTargetState = "available" | "orphaned" | "orphaned_note_block" | "orphaned_paper" | "unavailable" | "not_applicable";
+
+export interface LinkedNoteBlockSummary {
+  block_id: string;
+  paper_id: string;
+  source_paper_title: string;
+  block_type: NoteBlockType;
+  title: string;
+  text_preview: string;
+  page: string;
+  figure: string;
+  tags: string[];
+}
 
 export interface ProjectLinkTarget {
   link_id: string;
   link_type: string;
   target_type: string;
+  target_id: string;
   target_state: ProjectTargetState;
   paper_id: string;
   created_at: string;
   paper: LinkedPaperSummary | null;
+  note_block: LinkedNoteBlockSummary | null;
 }
 
 export interface ProjectDetail extends ProjectListItem {
@@ -224,6 +283,21 @@ export interface PaperLinkCommandResponse {
   status: "created" | "unchanged" | "removed";
   project: ProjectCommandState;
   link: PaperLinkCommandState;
+}
+
+export interface NoteBlockLinkCommandState {
+  link_id: string;
+  project_id: string;
+  paper_id: string;
+  note_block_id: string;
+  link_type: ProjectLinkType;
+  created_at: string;
+}
+
+export interface NoteBlockLinkCommandResponse {
+  status: "created" | "unchanged" | "removed";
+  project: ProjectCommandState;
+  link: NoteBlockLinkCommandState;
 }
 
 export interface PaginatedProjectList {

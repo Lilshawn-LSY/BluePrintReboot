@@ -189,6 +189,12 @@ tbody tr:hover { background: var(--color-surface-subtle); }
 .reader-field select:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-accent) 35%, transparent); outline-offset: 1px; border-color: var(--color-accent); }
 .project-link-form { display: grid; grid-template-columns: minmax(15rem, 1fr) minmax(12rem, 0.45fr) auto; align-items: end; gap: var(--space-3); padding: var(--space-4); border: var(--border); border-radius: var(--radius-md); background: var(--color-surface); }
 .project-archived-note { padding: var(--space-4); border: var(--border); border-radius: var(--radius-md); background: var(--color-surface-subtle); color: var(--color-text-secondary); }
+.note-block-list { display: grid; gap: var(--space-3); }
+.note-block-card { display: grid; gap: var(--space-3); padding: var(--space-4); border: var(--border); border-radius: var(--radius-md); background: var(--color-surface-subtle); scroll-margin-block: 5rem; }
+.note-block-card p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-block-card small { display: block; margin-top: var(--space-1); color: var(--color-text-muted); }
+.note-block-form { display: grid; gap: var(--space-3); padding-top: var(--space-4); border-top: var(--border); }
+.note-block-project-link { display: inline-flex; align-items: center; gap: var(--space-2); }
 .reader-page-field { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--color-text-secondary); font-size: var(--font-size-sm); }
 .reader-page-field input { width: 4.5rem; min-height: 2.25rem; padding: var(--space-1) var(--space-2); border: var(--border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font: inherit; text-align: center; }
 .reader-zoom-value { min-width: 3.5rem; color: var(--color-text-secondary); font-size: var(--font-size-sm); text-align: center; }

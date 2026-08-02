@@ -121,8 +121,10 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /return "Reader"/);
-  assert.match(shell, /v1\.5\.4/);
-  assert.doesNotMatch(shell, /v1\.5\.3/);
+  assert.equal(JSON.parse(packageJson).version, "1.5.5");
+  assert.match(shell, /packageMetadata\.version/);
+  assert.match(shell, /Local workspace/);
+  assert.doesNotMatch(shell, /v1\.5\.4|Project commands/);
 });
 
 test("production build contains the repository-local PDF.js worker asset", async () => {

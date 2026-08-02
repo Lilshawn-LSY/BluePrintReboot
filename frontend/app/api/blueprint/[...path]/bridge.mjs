@@ -25,6 +25,14 @@ export function isBlueprintReadingNotePath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "reading-note";
 }
 
+export function isBlueprintNoteBlocksPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "note-blocks";
+}
+
+export function isBlueprintNoteBlockPath(parts) {
+  return Array.isArray(parts) && parts.length === 4 && parts[0] === "papers" && parts[2] === "note-blocks";
+}
+
 export function isBlueprintProjectPath(parts) {
   return Array.isArray(parts) && parts.length === 2 && parts[0] === "projects";
 }
@@ -39,6 +47,14 @@ export function isBlueprintProjectPaperLinksPath(parts) {
 
 export function isBlueprintProjectPaperLinkPath(parts) {
   return Array.isArray(parts) && parts.length === 4 && parts[0] === "projects" && parts[2] === "paper-links";
+}
+
+export function isBlueprintProjectNoteBlockLinksPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "projects" && parts[2] === "note-block-links";
+}
+
+export function isBlueprintProjectNoteBlockLinkPath(parts) {
+  return Array.isArray(parts) && parts.length === 4 && parts[0] === "projects" && parts[2] === "note-block-links";
 }
 
 function hasSafeSegments(parts) {
@@ -66,7 +82,8 @@ export function isAllowedBlueprintPath(parts) {
     || (parts.length === 2 && parts[0] === "papers")
     || (parts.length === 2 && parts[0] === "projects")
     || isBlueprintPdfPath(parts)
-    || isBlueprintReaderPath(parts);
+    || isBlueprintReaderPath(parts)
+    || isBlueprintNoteBlocksPath(parts);
 }
 
 export function isAllowedBlueprintRequest(method, parts) {
@@ -76,13 +93,17 @@ export function isAllowedBlueprintRequest(method, parts) {
   if (normalizedMethod === "POST") {
     return (parts.length === 1 && parts[0] === "projects")
       || isBlueprintProjectArchivePath(parts)
-      || isBlueprintProjectPaperLinksPath(parts);
+      || isBlueprintProjectPaperLinksPath(parts)
+      || isBlueprintProjectNoteBlockLinksPath(parts)
+      || isBlueprintNoteBlocksPath(parts);
   }
   if (normalizedMethod === "PATCH") {
-    return isBlueprintMetadataPath(parts) || isBlueprintProjectPath(parts);
+    return isBlueprintMetadataPath(parts) || isBlueprintProjectPath(parts) || isBlueprintNoteBlockPath(parts);
   }
   if (normalizedMethod === "PUT") return isBlueprintReadingNotePath(parts);
-  if (normalizedMethod === "DELETE") return isBlueprintProjectPaperLinkPath(parts);
+  if (normalizedMethod === "DELETE") {
+    return isBlueprintProjectPaperLinkPath(parts) || isBlueprintProjectNoteBlockLinkPath(parts);
+  }
   return false;
 }
 

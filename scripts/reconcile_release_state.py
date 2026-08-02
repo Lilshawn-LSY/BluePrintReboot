@@ -31,6 +31,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/release_notes/v1.5.2.md",
     "docs/release_notes/v1.5.3.md",
     "docs/release_notes/v1.5.4.md",
+    "docs/release_notes/v1.5.5.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -45,6 +46,9 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "focused_settings",
         "focused_project_commands",
         "focused_project_paper_links",
+        "focused_note_block_read",
+        "focused_note_block_commands",
+        "focused_project_note_block_links",
         "focused_release_version",
         "release_reconciliation",
         "tracker_export",
@@ -55,6 +59,7 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "frontend_settings",
         "frontend_reader_commands",
         "frontend_project_commands",
+        "frontend_note_blocks",
         "repository_hygiene",
     }
 )
@@ -100,6 +105,19 @@ REQUIRED_PROJECT_WRITE_MANUAL_CHECKS = frozenset(
         "network_privacy",
     }
 )
+REQUIRED_NOTE_BLOCK_WRITE_MANUAL_CHECKS = frozenset(
+    {
+        "read_existing_empty_states",
+        "create_reload_streamlit_visibility",
+        "update_round_trip",
+        "note_block_revision_conflict",
+        "project_link_add_duplicate_unlink",
+        "link_revision_conflict",
+        "orphan_navigation_archived_controls",
+        "api_restart_draft_recovery",
+        "network_privacy",
+    }
+)
 PRIVATE_VALUE_PATTERNS = (
     re.compile(r"(?<![A-Za-z])[A-Za-z]:[\\/]"),
     re.compile(r"/(?:Users|home)/", re.IGNORECASE),
@@ -132,7 +150,6 @@ EXPECTED_UNRESOLVED_EVIDENCE = (
     "automated_validation.post_merge_main_ci",
     "manual_validation.reader_snapshot_runtime",
     "manual_validation.reader_write_runtime",
-    "manual_validation.project_write_runtime",
     "publication_state.github_release",
     "recurring_operational_procedures.clean_pc_restore",
 )
@@ -458,6 +475,36 @@ def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
         )
     _validate_evidence(project_write, "manual_validation.project_write_runtime")
 
+    note_block_write = _mapping(
+        manual.get("note_block_write_runtime"),
+        "manual_validation.note_block_write_runtime",
+    )
+    note_block_checks = _mapping(
+        note_block_write.get("checks"),
+        "manual_validation.note_block_write_runtime.checks",
+    )
+    if set(note_block_checks) != REQUIRED_NOTE_BLOCK_WRITE_MANUAL_CHECKS:
+        missing = sorted(REQUIRED_NOTE_BLOCK_WRITE_MANUAL_CHECKS - set(note_block_checks))
+        extra = sorted(set(note_block_checks) - REQUIRED_NOTE_BLOCK_WRITE_MANUAL_CHECKS)
+        raise ReleaseStateError(
+            f"Note Block write runtime checks differ; missing={missing}, extra={extra}"
+        )
+    for check_id, raw_item in note_block_checks.items():
+        item = _mapping(
+            raw_item,
+            f"manual_validation.note_block_write_runtime.checks.{check_id}",
+        )
+        _validate_evidence(
+            item,
+            f"manual_validation.note_block_write_runtime.checks.{check_id}",
+        )
+    expected_note_block_status = derive_reader_runtime_status(note_block_checks)
+    if note_block_write.get("status") != expected_note_block_status:
+        raise ReleaseStateError(
+            "Note Block write runtime aggregate status must derive from its child checks"
+        )
+    _validate_evidence(note_block_write, "manual_validation.note_block_write_runtime")
+
 
 def _validate_publication_and_operations(manifest: Mapping[str, Any]) -> None:
     publication = _mapping(manifest.get("publication_state"), "publication_state")
@@ -545,10 +592,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.5.4":
-        raise ReleaseStateError("product_version must identify the current 1.5.4 runtime target")
-    if manifest.get("release_name") != "v1.5.4-project-write-paper-links":
-        raise ReleaseStateError("release_name must identify the current v1.5.4 runtime target")
+    if manifest.get("product_version") != "1.5.5":
+        raise ReleaseStateError("product_version must identify the current 1.5.5 runtime target")
+    if manifest.get("release_name") != "v1.5.5-note-block-write-project-links":
+        raise ReleaseStateError("release_name must identify the current v1.5.5 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)
@@ -666,6 +713,8 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         f"| Reader runtime | {manual['reader_runtime']['status']} | {_escape_cell(manual['reader_runtime']['evidence']['summary'])} |",
         f"| v1.5.0 Reader Snapshot runtime | {manual['reader_snapshot_runtime']['status']} | {_escape_cell(manual['reader_snapshot_runtime']['evidence']['summary'])} |",
         f"| v1.5.1 Reader write runtime | {manual['reader_write_runtime']['status']} | {_escape_cell(manual['reader_write_runtime']['evidence']['summary'])} |",
+        f"| v1.5.4 Project write runtime | {manual['project_write_runtime']['status']} | {_escape_cell(manual['project_write_runtime']['evidence']['summary'])} |",
+        f"| v1.5.5 Note Block write runtime | {manual['note_block_write_runtime']['status']} | {_escape_cell(manual['note_block_write_runtime']['evidence']['summary'])} |",
         f"| Streamlit regression | {manual['streamlit_regression']['status']} | {_escape_cell(manual['streamlit_regression']['evidence']['summary'])} |",
         f"| GitHub Release publication | {publication['github_release']['status']} | {_escape_cell(publication['github_release']['evidence']['summary'])} |",
         f"| Clean-PC restore | {restore['status']} | Recurring operational procedure; no rehearsal is claimed. |",
@@ -745,6 +794,21 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## v1.5.5 Note Block write manual validation",
+            "",
+            f"Aggregate state: **{manual['note_block_write_runtime']['status']}**.",
+            "",
+            "| Check | Status | Evidence |",
+            "|---|---|---|",
+        ]
+    )
+    for check_id, item in manual["note_block_write_runtime"]["checks"].items():
+        label = check_id.replace("_", " ").capitalize()
+        lines.append(f"| {label} | {item['status']} | {_escape_cell(_evidence_summary(item))} |")
+
+    lines.extend(
+        [
+            "",
             "## Publication and recurring operations",
             "",
             f"- GitHub Release: **{publication['github_release']['status']}**. "
@@ -764,8 +828,6 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
             f"{manual['reader_snapshot_runtime']['evidence']['summary']}",
             f"- v1.5.1 Reader write runtime: **{manual['reader_write_runtime']['status']}**. "
             f"{manual['reader_write_runtime']['evidence']['summary']}",
-            f"- v1.5.4 Project write runtime: **{manual['project_write_runtime']['status']}**. "
-            f"{manual['project_write_runtime']['evidence']['summary']}",
             f"- GitHub Release publication: **{publication['github_release']['status']}**. "
             f"{publication['github_release']['evidence']['summary']}",
             f"- Clean-PC restore: **{restore['status']}**. {restore['evidence']['summary']}",

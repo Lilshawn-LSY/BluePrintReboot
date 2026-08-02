@@ -48,7 +48,8 @@ def project_detail(project_id: str) -> dict[str, object]:
                 "paper_id": "missing-paper",
                 "created_at": "2026-01-02T00:00:00+00:00",
                 "paper": None,
-                "target_id": "private-target-field",
+                "note_block": None,
+                "target_id": "missing-paper",
             },
             {
                 "link_id": "link-a",
@@ -56,6 +57,7 @@ def project_detail(project_id: str) -> dict[str, object]:
                 "target_type": "paper",
                 "target_state": "available",
                 "paper_id": "paper-1",
+                "target_id": "paper-1",
                 "created_at": "2026-01-01T00:00:00+00:00",
                 "paper": {
                     "paper_id": "paper-1",
@@ -68,6 +70,7 @@ def project_detail(project_id: str) -> dict[str, object]:
                     "archived": False,
                     "filepath": "C:/private/paper.pdf",
                 },
+                "note_block": None,
             },
         ],
         "link_count": 2,
@@ -227,7 +230,7 @@ def test_project_detail_paginates_links_and_preserves_orphan_state() -> None:
     assert body["orphaned_link_count"] == 1
     assert body["links"][0]["target_state"] == "orphaned"
     assert body["links"][0]["paper"] is None
-    assert "target_id" not in body["links"][0]
+    assert body["links"][0]["target_id"] == "missing-paper"
 
 
 def test_project_detail_exposes_only_allowlisted_linked_paper_summary() -> None:

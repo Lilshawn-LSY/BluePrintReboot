@@ -1,4 +1,4 @@
-import type { CandidateSummary, DashboardSnapshot, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
+import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -132,6 +132,37 @@ export const apiClient = {
       notFoundMessage: "The requested Project or Paper link was not found.",
     },
   ),
+  addProjectNoteBlockLink: (
+    projectId: string,
+    paperId: string,
+    noteBlockId: string,
+    linkType: ProjectLinkType,
+    expectedLinksRevision: string,
+  ) => request<NoteBlockLinkCommandResponse>(
+    `/projects/${encodeURIComponent(projectId)}/note-block-links`,
+    {
+      method: "POST",
+      body: {
+        paper_id: paperId,
+        note_block_id: noteBlockId,
+        link_type: linkType,
+        expected_links_revision: expectedLinksRevision,
+      },
+      notFoundMessage: "The requested Project, Paper, or Note Block was not found.",
+    },
+  ),
+  removeProjectNoteBlockLink: (
+    projectId: string,
+    linkId: string,
+    expectedLinksRevision: string,
+  ) => request<NoteBlockLinkCommandResponse>(
+    `/projects/${encodeURIComponent(projectId)}/note-block-links/${encodeURIComponent(linkId)}`,
+    {
+      method: "DELETE",
+      body: { expected_links_revision: expectedLinksRevision },
+      notFoundMessage: "The requested Project or Note Block link was not found.",
+    },
+  ),
   getTags: (options: { limit?: number; offset?: number } = {}) => {
     const params = new URLSearchParams({
       limit: String(options.limit ?? 20),
@@ -142,6 +173,26 @@ export const apiClient = {
   getTagSummary: () => request<CandidateSummary>("/tags/summary"),
   getSettingsSummary: () => request<SettingsSummary>("/settings/summary"),
   getReaderSnapshot: (paperId: string) => request<ReaderSnapshot>(`/papers/${encodeURIComponent(paperId)}/reader`),
+  getNoteBlocks: (paperId: string) => request<NoteBlockCollection>(
+    `/papers/${encodeURIComponent(paperId)}/note-blocks`,
+  ),
+  createNoteBlock: (
+    paperId: string,
+    content: EditableNoteBlockContent,
+    expectedRevision: string,
+  ) => request<NoteBlockCommandResponse>(
+    `/papers/${encodeURIComponent(paperId)}/note-blocks`,
+    { method: "POST", body: { ...content, expected_revision: expectedRevision } },
+  ),
+  updateNoteBlock: (
+    paperId: string,
+    blockId: string,
+    changes: Partial<EditableNoteBlockContent>,
+    expectedRevision: string,
+  ) => request<NoteBlockCommandResponse>(
+    `/papers/${encodeURIComponent(paperId)}/note-blocks/${encodeURIComponent(blockId)}`,
+    { method: "PATCH", body: { changes, expected_revision: expectedRevision } },
+  ),
   saveReaderMetadata: (
     paperId: string,
     changes: Partial<EditablePaperMetadata>,

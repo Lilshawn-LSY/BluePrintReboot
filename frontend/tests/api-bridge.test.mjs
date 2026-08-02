@@ -7,10 +7,14 @@ import {
   isAllowedBlueprintPath,
   isAllowedBlueprintRequest,
   isBlueprintMetadataPath,
+  isBlueprintNoteBlockPath,
+  isBlueprintNoteBlocksPath,
   isBlueprintPdfPath,
   isBlueprintProjectArchivePath,
   isBlueprintProjectPaperLinkPath,
   isBlueprintProjectPaperLinksPath,
+  isBlueprintProjectNoteBlockLinkPath,
+  isBlueprintProjectNoteBlockLinksPath,
   isBlueprintProjectPath,
   isBlueprintReaderPath,
   isBlueprintReadingNotePath,
@@ -20,8 +24,8 @@ import {
 
 const API_URL = "http://127.0.0.1:8000";
 
-test("allows the bounded read routes plus the exact managed PDF and Reader routes", () => {
-  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["settings", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"]]) {
+test("allows the bounded read routes plus the exact managed PDF, Reader, and Note Block routes", () => {
+  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["settings", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"], ["papers", "paper-123", "note-blocks"]]) {
     assert.equal(isAllowedBlueprintPath(parts), true, parts.join("/"));
   }
   for (const parts of [[], ["library"], ["settings"], ["tags", "unknown"], ["projects", "project-123", "edit"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["papers", "paper-123", "reader", "raw"], ["health", "extra"]]) {
@@ -33,11 +37,15 @@ test("allows the bounded read routes plus the exact managed PDF and Reader route
   assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader", "raw"]), false);
   assert.equal(isBlueprintMetadataPath(["papers", "paper-123", "metadata"]), true);
   assert.equal(isBlueprintReadingNotePath(["papers", "paper-123", "reading-note"]), true);
+  assert.equal(isBlueprintNoteBlocksPath(["papers", "paper-123", "note-blocks"]), true);
+  assert.equal(isBlueprintNoteBlockPath(["papers", "paper-123", "note-blocks", "block-1"]), true);
 });
 
 test("allows only the exact method and path pairs for Reader commands", () => {
   assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "metadata"]), true);
   assert.equal(isAllowedBlueprintRequest("PUT", ["papers", "paper-1", "reading-note"]), true);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "note-blocks"]), true);
+  assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "note-blocks", "block-1"]), true);
   for (const [method, parts] of [
     ["PUT", ["papers", "paper-1", "metadata"]],
     ["PATCH", ["papers", "paper-1", "reading-note"]],
@@ -61,6 +69,8 @@ test("allows only the exact method and path pairs for Project commands", () => {
     ["POST", ["projects", "project-1", "archive"]],
     ["POST", ["projects", "project-1", "paper-links"]],
     ["DELETE", ["projects", "project-1", "paper-links", "link-1"]],
+    ["POST", ["projects", "project-1", "note-block-links"]],
+    ["DELETE", ["projects", "project-1", "note-block-links", "link-1"]],
   ];
   for (const [method, parts] of allowed) {
     assert.equal(isAllowedBlueprintRequest(method, parts), true, `${method} ${parts.join("/")}`);
@@ -71,8 +81,7 @@ test("allows only the exact method and path pairs for Project commands", () => {
     ["PATCH", ["projects"]],
     ["POST", ["projects", "project-1"]],
     ["DELETE", ["projects", "project-1", "paper-links"]],
-    ["POST", ["projects", "project-1", "note-block-links"]],
-    ["DELETE", ["projects", "project-1", "note-block-links", "note-1"]],
+    ["DELETE", ["projects", "project-1", "note-block-links"]],
     ["POST", ["projects", "project-1", "unarchive"]],
   ]) {
     assert.equal(isAllowedBlueprintRequest(method, parts), false, `${method} ${parts.join("/")}`);
@@ -81,6 +90,8 @@ test("allows only the exact method and path pairs for Project commands", () => {
   assert.equal(isBlueprintProjectArchivePath(["projects", "project-1", "archive"]), true);
   assert.equal(isBlueprintProjectPaperLinksPath(["projects", "project-1", "paper-links"]), true);
   assert.equal(isBlueprintProjectPaperLinkPath(["projects", "project-1", "paper-links", "link-1"]), true);
+  assert.equal(isBlueprintProjectNoteBlockLinksPath(["projects", "project-1", "note-block-links"]), true);
+  assert.equal(isBlueprintProjectNoteBlockLinkPath(["projects", "project-1", "note-block-links", "link-1"]), true);
 });
 
 test("rejects decoded and encoded path tricks before contacting upstream", async () => {
@@ -116,6 +127,8 @@ test("forwards every exact Project command with its JSON body", async () => {
     ["POST", ["projects", "project 1", "archive"], { expected_revision: "b".repeat(64) }],
     ["POST", ["projects", "project 1", "paper-links"], { paper_id: "paper 1", link_type: "related", expected_links_revision: "c".repeat(64) }],
     ["DELETE", ["projects", "project 1", "paper-links", "link 1"], { expected_links_revision: "d".repeat(64) }],
+    ["POST", ["projects", "project 1", "note-block-links"], { paper_id: "paper 1", note_block_id: "block 1", link_type: "related", expected_links_revision: "e".repeat(64) }],
+    ["DELETE", ["projects", "project 1", "note-block-links", "link 2"], { expected_links_revision: "f".repeat(64) }],
   ];
   for (const [method, parts, body] of requests) {
     let requestedUrl;
@@ -259,11 +272,12 @@ test("forwards query parameters and safely encodes paper ids", async () => {
   assert.equal(requestedUrl, `${API_URL}/papers/paper%201?view=detail`);
 });
 
-test("forwards the bounded Projects, Tags, and Settings GET contracts", async () => {
+test("forwards the bounded Projects, Note Blocks, Tags, and Settings GET contracts", async () => {
   const requests = [];
   for (const [url, parts] of [
     ["http://localhost/api/blueprint/projects?limit=100&offset=0", ["projects"]],
     ["http://localhost/api/blueprint/projects/project%201?links_limit=100", ["projects", "project 1"]],
+    ["http://localhost/api/blueprint/papers/paper%201/note-blocks", ["papers", "paper 1", "note-blocks"]],
     ["http://localhost/api/blueprint/tags?limit=100&offset=0", ["tags"]],
     ["http://localhost/api/blueprint/tags/summary", ["tags", "summary"]],
     ["http://localhost/api/blueprint/settings/summary", ["settings", "summary"]],
@@ -284,6 +298,7 @@ test("forwards the bounded Projects, Tags, and Settings GET contracts", async ()
   assert.deepEqual(requests, [
     [`${API_URL}/projects?limit=100&offset=0`, "GET", null],
     [`${API_URL}/projects/project%201?links_limit=100`, "GET", null],
+    [`${API_URL}/papers/paper%201/note-blocks`, "GET", null],
     [`${API_URL}/tags?limit=100&offset=0`, "GET", null],
     [`${API_URL}/tags/summary`, "GET", null],
     [`${API_URL}/settings/summary`, "GET", null],

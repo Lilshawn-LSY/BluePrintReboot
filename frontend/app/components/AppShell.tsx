@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import packageMetadata from "../../package.json";
 import { SidebarNavigation } from "./SidebarNavigation";
 
 const routeTitles: Record<string, string> = {
@@ -33,7 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <span className="top-bar__separator" aria-hidden="true">/</span>
             <strong>{currentTitle(pathname)}</strong>
           </div>
-          <span className="version-label">v1.5.4 · Project commands</span>
+          <span className="version-label">v{packageMetadata.version} · Local workspace</span>
         </header>
         <main id="main-content" className="main-content">{children}</main>
       </div>

@@ -32,6 +32,11 @@ def create_app() -> FastAPI:
         reader_command = (
             request.url.path.endswith("/metadata")
             or request.url.path.endswith("/reading-note")
+            or (
+                request.method in {"POST", "PATCH"}
+                and "/note-blocks" in request.url.path
+                and request.url.path.startswith("/papers/")
+            )
         )
         project_command = (
             request.method in {"POST", "PATCH", "DELETE"}

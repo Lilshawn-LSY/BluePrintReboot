@@ -3,11 +3,14 @@ from __future__ import annotations
 from api.pdf_files import ManagedPdfResult, resolve_managed_pdf
 from services import (
     library_read_model,
+    note_block_read_model,
     project_read_model,
     settings_read_model,
     tag_read_model,
 )
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail, PaperListItem, ReaderSnapshot
+from services.note_block_commands import NoteBlockCommandService
+from services.note_block_read_model import NoteBlockCollection
 from services.project_read_model import ProjectDetail, ProjectListItem
 from services.project_commands import ProjectCommandService
 from services.reader_commands import ReaderCommandService
@@ -21,6 +24,7 @@ class ReadModelUnavailable(Exception):
 
 _reader_command_service = ReaderCommandService()
 _project_command_service = ProjectCommandService()
+_note_block_command_service = NoteBlockCommandService()
 
 
 def get_health_summary() -> HealthSummary:
@@ -54,6 +58,13 @@ def get_paper_detail(paper_id: str) -> PaperDetail | None:
 def get_reader_snapshot(paper_id: str) -> ReaderSnapshot | None:
     try:
         return library_read_model.build_reader_snapshot(paper_id)
+    except Exception:
+        raise ReadModelUnavailable from None
+
+
+def get_note_block_collection(paper_id: str) -> NoteBlockCollection | None:
+    try:
+        return note_block_read_model.build_note_block_collection(paper_id)
     except Exception:
         raise ReadModelUnavailable from None
 
@@ -106,3 +117,7 @@ def get_reader_command_service() -> ReaderCommandService:
 
 def get_project_command_service() -> ProjectCommandService:
     return _project_command_service
+
+
+def get_note_block_command_service() -> NoteBlockCommandService:
+    return _note_block_command_service

@@ -48,20 +48,20 @@ test("Paper linking uses the real bounded Paper index and exact link revision", 
   assert.doesNotMatch(detail, /sample Paper|const papers\s*=\s*\[/);
 });
 
-test("unlink is confirmed and cannot delete a Paper or mutate Note Block links", async () => {
+test("Paper unlink remains confirmed and cannot delete a Paper", async () => {
   const [, detail, client] = await sources;
   assert.match(detail, /Remove the Project link/);
   assert.match(detail, /This does not delete the Paper/);
   assert.match(detail, /link\.target_type === "paper"/);
   assert.match(detail, /apiClient\.removeProjectPaperLink/);
-  assert.doesNotMatch(client, /deleteProject\s*:|deletePaper\s*:|note-block-links/);
-  assert.doesNotMatch(detail, /Add Note Block|Remove Note Block|Create Note Block/);
+  assert.doesNotMatch(client, /deleteProject\s*:|deletePaper\s*:/);
+  assert.match(client, /note-block-links/);
 });
 
 test("archived Projects retain read detail while write controls are absent", async () => {
   const [, detail] = await sources;
   assert.match(detail, /const archived = project\.status === "archived"/);
   assert.match(detail, /\{!archived \?/);
-  assert.match(detail, /stored links remain readable/);
+  assert.match(detail, /stored Paper and Note Block links remain readable/);
   assert.match(detail, /Save or cancel the metadata draft before changing Paper links/);
 });

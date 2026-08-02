@@ -27,16 +27,22 @@ def test_version_contract_is_consistent() -> None:
     lock = json.loads(read_text("frontend/package-lock.json"))
     readme = read_text("README.md")
     manifest = read_manifest()
+    shell = read_text("frontend/app/components/AppShell.tsx")
 
-    assert APP_VERSION == "1.5.4"
+    assert APP_VERSION == "1.5.5"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.5.4-project-write-paper-links"
+    assert manifest["release_name"] == "v1.5.5-note-block-write-project-links"
     assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
     assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
+    assert 'import packageMetadata from "../../package.json"' in shell
+    assert "packageMetadata.version" in shell
+    assert "Local workspace" in shell
+    assert "v1.5.4" not in shell
+    assert "Project commands" not in shell
 
 
 def test_primary_workflow_preserves_full_manual_and_automatic_gate() -> None:
@@ -99,7 +105,24 @@ def test_schema_five_manifest_is_the_current_release_authority() -> None:
     assert manifest["manual_validation"]["streamlit_regression"]["status"] == "VERIFIED"
     assert manifest["manual_validation"]["reader_snapshot_runtime"]["status"] == "PARTIALLY VERIFIED"
     assert manifest["manual_validation"]["reader_write_runtime"]["status"] == "PARTIALLY VERIFIED"
-    assert manifest["manual_validation"]["project_write_runtime"]["status"] == "NOT VERIFIED"
+    assert manifest["manual_validation"]["project_write_runtime"]["status"] == "VERIFIED"
+    assert {
+        item["status"]
+        for item in manifest["manual_validation"]["project_write_runtime"]["checks"].values()
+    } == {"VERIFIED"}
+    assert {
+        item["evidence"]["date"]
+        for item in manifest["manual_validation"]["project_write_runtime"]["checks"].values()
+    } == {"2026-08-02"}
+    assert manifest["manual_validation"]["note_block_write_runtime"]["status"] == "VERIFIED"
+    assert {
+        item["status"]
+        for item in manifest["manual_validation"]["note_block_write_runtime"]["checks"].values()
+    } == {"VERIFIED"}
+    assert {
+        item["evidence"]["date"]
+        for item in manifest["manual_validation"]["note_block_write_runtime"]["checks"].values()
+    } == {"2026-08-02"}
     assert {
         check_id
         for check_id, item in manifest["manual_validation"]["reader_write_runtime"]["checks"].items()
@@ -111,7 +134,8 @@ def test_schema_five_manifest_is_the_current_release_authority() -> None:
     } == {"VERIFIED", "NOT VERIFIED"}
     assert "manual_validation.reader_snapshot_runtime" in manifest["unresolved_evidence"]["items"]
     assert "manual_validation.reader_write_runtime" in manifest["unresolved_evidence"]["items"]
-    assert "manual_validation.project_write_runtime" in manifest["unresolved_evidence"]["items"]
+    assert "manual_validation.project_write_runtime" not in manifest["unresolved_evidence"]["items"]
+    assert "manual_validation.note_block_write_runtime" not in manifest["unresolved_evidence"]["items"]
     assert manifest["recurring_operational_procedures"]["clean_pc_restore"]["status"] == "NOT VERIFIED"
     assert manifest["publication_state"]["github_release"]["status"] == "NOT VERIFIED"
 
@@ -147,7 +171,10 @@ def test_generated_current_status_is_the_only_volatile_document_surface() -> Non
     assert "| Reader runtime | VERIFIED |" in current_status
     assert "| Streamlit regression | VERIFIED |" in current_status
     assert "v1.5.4 Project write manual validation" in current_status
-    assert "Aggregate state: **NOT VERIFIED**" in current_status
+    assert "| v1.5.4 Project write runtime | VERIFIED |" in current_status
+    assert "v1.5.5 Note Block write manual validation" in current_status
+    assert "Aggregate state: **VERIFIED**" in current_status
+    assert "- v1.5.5 Note Block write runtime:" not in current_status
     smoke_counts = read_manifest()["automated_validation"]["local_smoke"]["counts"]
     assert (
         f"{smoke_counts['passed']} passed, {smoke_counts['warnings']} warnings, "
@@ -198,5 +225,6 @@ def test_release_documents_contain_no_private_absolute_user_path() -> None:
         "docs/CURRENT_RELEASE_STATUS.md",
         "docs/release_notes/v1.4.0.md",
         "docs/release_notes/v1.5.4.md",
+        "docs/release_notes/v1.5.5.md",
     ):
         assert private_user_path.search(read_text(relative_path)) is None

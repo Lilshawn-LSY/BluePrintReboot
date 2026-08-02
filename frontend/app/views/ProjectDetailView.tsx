@@ -206,6 +206,25 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
     }
   }
 
+  async function removeNoteBlockLink(linkId: string, title: string) {
+    if (!window.confirm(`Remove the Project link to Note Block “${title}”? This does not delete the Note Block or source Paper.`)) return;
+    setLinkStatus("saving");
+    setLinkMessage("Removing Note Block link…");
+    try {
+      await apiClient.removeProjectNoteBlockLink(project.project_id, linkId, project.links_revision);
+      const refreshed = await reloadProject({ discardDraft: true });
+      if (refreshed) {
+        setLinkStatus("idle");
+        setLinkMessage("Note Block link removed. The Note Block and source Paper were not changed.");
+      } else {
+        setLinkMessage("The Note Block link was removed, but the current link list could not be reloaded. Retry reload.");
+      }
+    } catch (error) {
+      setLinkStatus(error instanceof ApiClientError && error.kind === "conflict" ? "conflict" : "error");
+      setLinkMessage(error instanceof ApiClientError ? error.message : "The Note Block link could not be removed.");
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -312,7 +331,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
           )}
         </Section>
       ) : (
-        <div className="project-archived-note">This Project is archived. Metadata editing and new Paper-link controls are unavailable; stored links remain readable.</div>
+        <div className="project-archived-note">This Project is archived. Metadata and link write controls are unavailable; stored Paper and Note Block links remain readable.</div>
       )}
       <div className="detail-grid">
         <Section title="Project metadata" description="Allowlisted values from the stored Project record.">
@@ -392,13 +411,13 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
       ) : !archived ? (
         <div className="project-archived-note">Save or cancel the metadata draft before changing Paper links.</div>
       ) : null}
-      <Section title="Linked papers" description="Stored link types and allowlisted Paper metadata; missing targets remain explicit.">
+      <Section title="Linked Papers and Note Blocks" description="Typed stored links expose bounded Paper metadata or structured Note Block summaries; missing targets remain explicit.">
         {project.links.length === 0 ? (
           <EmptyState title="No Project links" description="This Project has no stored links." />
         ) : (
           <DataTableShell label="Project links">
             <table>
-              <thead><tr><th>Paper</th><th>Link type</th><th>Target state</th><th>Author</th><th>Year</th><th>Reading status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Target</th><th>Type</th><th>Link type</th><th>Target state</th><th>Source details</th><th>Action</th></tr></thead>
               <tbody>
                 {project.links.map((link) => (
                   <tr key={link.link_id}>
@@ -408,26 +427,46 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                           {link.paper.title || "Stored title unavailable"}
                           <small className="mono-id">{link.paper.paper_id}</small>
                         </Link>
+                      ) : link.note_block ? (
+                        <Link className="paper-link" href={`/papers/${encodeURIComponent(link.note_block.paper_id)}/reader?noteBlock=${encodeURIComponent(link.note_block.block_id)}`}>
+                          {link.note_block.title || `${link.note_block.block_type} Note Block`}
+                          <small>{link.note_block.text_preview || "No text preview"}</small>
+                          <small className="mono-id">{link.note_block.block_id}</small>
+                        </Link>
                       ) : link.target_type === "paper" ? (
                         <span className="paper-link">
                           Linked paper unavailable
                           <small className="mono-id">{link.paper_id}</small>
                         </span>
+                      ) : link.target_state === "orphaned_note_block" ? (
+                        <Link className="paper-link" href={`/papers/${encodeURIComponent(link.paper_id)}/reader?noteBlock=${encodeURIComponent(link.target_id)}`}>
+                          Missing linked Note Block
+                          <small className="mono-id">{link.target_id}</small>
+                        </Link>
                       ) : (
-                        <span className="muted-text">Non-paper Project link</span>
+                        <span className="paper-link">
+                          Linked Note Block unavailable
+                          <small className="mono-id">{link.target_id}</small>
+                        </span>
                       )}
                     </td>
+                    <td><StatusBadge>{link.target_type === "note_block" ? "Note Block" : "Paper"}</StatusBadge></td>
                     <td>{link.link_type}</td>
-                    <td><StatusBadge tone={link.target_state === "available" ? "healthy" : link.target_state === "orphaned" ? "warning" : "neutral"}>{link.target_state}</StatusBadge></td>
-                    <td>{link.paper?.first_author || "Not stored"}</td>
-                    <td>{link.paper?.year || "Not stored"}</td>
-                    <td>{link.paper ? <StatusBadge>{link.paper.status || "Not stored"}</StatusBadge> : <span className="muted-text">Unavailable</span>}</td>
+                    <td><StatusBadge tone={link.target_state === "available" ? "healthy" : link.target_state.startsWith("orphaned") ? "warning" : "neutral"}>{link.target_state}</StatusBadge></td>
+                    <td>{link.paper ? `${link.paper.first_author || "Author not stored"} · ${link.paper.year || "Year not stored"}` : link.note_block ? [link.note_block.source_paper_title || link.note_block.paper_id, link.note_block.page && `Page ${link.note_block.page}`, link.note_block.figure && `Figure ${link.note_block.figure}`, link.note_block.tags.join(", ")].filter(Boolean).join(" · ") : <span className="muted-text">Unavailable</span>}</td>
                     <td>
                       {!archived && link.target_type === "paper" ? (
                         <button
                           className="reader-control reader-control--secondary"
                           type="button"
                           onClick={() => removePaperLink(link.link_id, link.paper?.title || link.paper_id)}
+                          disabled={linkStatus === "saving" || dirty}
+                        ><Unlink size={15} />Remove link</button>
+                      ) : !archived && link.target_type === "note_block" ? (
+                        <button
+                          className="reader-control reader-control--secondary"
+                          type="button"
+                          onClick={() => removeNoteBlockLink(link.link_id, link.note_block?.title || link.note_block?.block_type || link.link_id)}
                           disabled={linkStatus === "saving" || dirty}
                         ><Unlink size={15} />Remove link</button>
                       ) : <span className="muted-text">Read only</span>}

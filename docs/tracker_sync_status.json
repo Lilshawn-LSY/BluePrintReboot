@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.4",
-  "release_name": "v1.5.4-project-write-paper-links",
-  "as_of": "2026-07-27",
+  "product_version": "1.5.5",
+  "release_name": "v1.5.5-note-block-write-project-links",
+  "as_of": "2026-08-02",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
       "counts": {
-        "passed": 115,
+        "passed": 123,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local validation",
-        "summary": "The current offline repository readiness smoke completed with 115 passed, 0 warnings, and 0 failed."
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local validation",
+        "summary": "The current offline repository readiness smoke completed with 123 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
       "counts": {
-        "passed": 680,
+        "passed": 720,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local validation",
-        "summary": "The current full Python suite completed with 680 passed."
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local validation",
+        "summary": "The current full Python suite completed with 720 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -233,6 +233,48 @@
         "summary": "The focused existing-Paper validation, duplicate truthfulness, stale revision, orphan unlink, Note Block exclusion, store isolation, rollback, and private-safe API suite passed."
       }
     },
+    "focused_note_block_read": {
+      "status": "VERIFIED",
+      "scope": "structured Note Block collection, revision, privacy, and Project target resolution contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_note_block_read_model.py tests\\test_project_note_block_read_model.py -q",
+      "counts": {
+        "passed": 9,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-08-02",
+        "reference": "v1.5.5 focused Note Block read validation",
+        "summary": "The focused stored-order collection, complete-state revision, corruption, privacy, bounded preview, and explicit target-state suite passed."
+      }
+    },
+    "focused_note_block_commands": {
+      "status": "VERIFIED",
+      "scope": "structured Note Block create/update, locking, concurrency, rollback, strict API, and privacy contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_note_block_commands.py tests\\test_note_block_api.py -q",
+      "counts": {
+        "passed": 24,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-08-02",
+        "reference": "v1.5.5 focused Note Block command validation",
+        "summary": "The focused explicit create/update/no-op, strict bounds, stale revision, lock/reload, rollback, route, and private-safe error suite passed."
+      }
+    },
+    "focused_project_note_block_links": {
+      "status": "VERIFIED",
+      "scope": "Project Note Block link add/remove, identity, revision, isolation, locking, and rollback contracts",
+      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_project_note_block_link_commands.py -q",
+      "counts": {
+        "passed": 7,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-08-02",
+        "reference": "v1.5.5 focused Project Note Block link validation",
+        "summary": "The focused exact identity, duplicate, distinct type, mismatch, archive, stale revision, unlink isolation, locking, and rollback suite passed."
+      }
+    },
     "focused_release_version": {
       "status": "VERIFIED",
       "scope": "release and version contracts",
@@ -242,8 +284,8 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 focused release validation",
+        "date": "2026-08-02",
+        "reference": "v1.5.5 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
       }
     },
@@ -256,8 +298,8 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local release reconciliation",
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local release reconciliation",
         "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
       }
     },
@@ -270,8 +312,8 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local tracker export validation",
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local tracker export validation",
         "summary": "The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed."
       }
     },
@@ -281,8 +323,8 @@
       "command": "npm run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local validation",
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -292,8 +334,8 @@
       "command": "npm test",
       "counts": null,
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local validation",
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -302,15 +344,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm test",
       "counts": {
-        "passed": 68,
+        "passed": 76,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local validation",
-        "summary": "All 68 frontend Node tests passed."
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local validation",
+        "summary": "All 76 frontend Node tests passed."
       }
     },
     "frontend_projects_tags": {
@@ -377,17 +419,33 @@
         "summary": "All exact bridge method/path, Project editor state, draft preservation, real Paper picker, confirmation, and archived-control source checks passed."
       }
     },
+    "frontend_note_blocks": {
+      "status": "VERIFIED",
+      "scope": "Note Block editor state, Reader/Project workflows, exact bridge allowlist, and draft-preservation contracts",
+      "command": "node --test tests/api-bridge.test.mjs tests/note-block-editor-state.test.mjs tests/note-block-workflow.test.mjs",
+      "counts": {
+        "passed": 29,
+        "failed": 0,
+        "skipped": 0,
+        "cancelled": 0
+      },
+      "evidence": {
+        "date": "2026-08-02",
+        "reference": "v1.5.5 focused frontend Note Block validation",
+        "summary": "The focused explicit editor, conflict/offline draft retention, Paper isolation, Project linking, typed detail, navigation, and exact bridge suite passed."
+      }
+    },
     "repository_hygiene": {
       "status": "VERIFIED",
       "scope": "tracked repository entries only",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 255,
+        "entries_inspected": 262,
         "violations": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 local hygiene validation",
+        "date": "2026-08-02",
+        "reference": "v1.5.5 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -606,75 +664,157 @@
       }
     },
     "project_write_runtime": {
-      "status": "NOT VERIFIED",
+      "status": "VERIFIED",
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "docs/checklists/regression_checklist.md",
-        "summary": "No user-performed real-data result is recorded for the v1.5.4 Project write and Paper-link runtime checks; G4 remains open."
+        "date": "2026-08-02",
+        "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+        "summary": "User-performed real-data runtime validation verified Project create/edit/archive, Paper-link add/duplicate/remove, conflicts, restart recovery, cross-surface parity, and private-safe Network responses."
       },
       "checks": {
         "create_reload_streamlit_visibility": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed result is recorded for create, reload persistence, and Streamlit visibility."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "A real Project was created in the web UI, survived reload, and appeared in Streamlit."
           }
         },
         "metadata_round_trip": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed result is recorded for allowlisted metadata round-trip parity."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "Every allowlisted Project metadata field converged across the web UI and Streamlit after save and reload."
           }
         },
         "paper_link_add_duplicate_remove": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed result is recorded for Paper-link add, duplicate unchanged, and removal parity."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "A real existing Paper link appeared in both interfaces, an exact duplicate returned unchanged without another write, and unlink preserved the Paper."
           }
         },
         "archive_preserves_links": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed result is recorded for archive, retained links, and absent write controls."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "Archiving a real Project preserved its existing links and removed Project write controls."
           }
         },
         "project_revision_conflict": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed result is recorded for a stale Project revision conflict and draft recovery."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "Two browser tabs produced a stale Project revision conflict without overwriting newer state; the draft remained available for reload and retry."
           }
         },
         "link_revision_conflict": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed result is recorded for a stale link revision conflict and selection recovery."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "Two browser tabs produced a stale link revision conflict without overwriting newer links; the Paper and link-type selection survived for reload and retry."
           }
         },
         "api_restart_draft_recovery": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed result is recorded for API stop/restart with preserved unsaved frontend state."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "A dirty Project draft and link selection survived a FastAPI stop/restart, and the UI did not report false success."
           }
         },
         "network_privacy": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
-            "date": "2026-07-27",
-            "reference": "docs/checklists/regression_checklist.md",
-            "summary": "No user-performed browser Network privacy result is recorded for Project commands."
+            "date": "2026-08-02",
+            "reference": "User-performed real-data v1.5.4 Project write runtime validation",
+            "summary": "Browser Network responses exposed no local path, filename, raw exception, internal dictionary, private record, or submitted draft echo."
+          }
+        }
+      }
+    },
+    "note_block_write_runtime": {
+      "status": "VERIFIED",
+      "evidence": {
+        "date": "2026-08-02",
+        "reference": "User-performed v1.5.5 Note Block runtime validation",
+        "summary": "User-performed runtime validation verified the v1.5.5 Note Block write and Project-link workflow; orphan and unavailable states used only an approved disposable workspace."
+      },
+      "checks": {
+        "read_existing_empty_states": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "Existing and empty Note Block collections rendered correctly and stored order was preserved."
+          }
+        },
+        "create_reload_streamlit_visibility": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "Note Block creation persisted across reload and remained visible in Streamlit."
+          }
+        },
+        "update_round_trip": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "All seven allowlisted fields round-tripped across Web and Streamlit, and an exact unchanged save produced a truthful no-op."
+          }
+        },
+        "note_block_revision_conflict": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "A stale Note Block revision conflict preserved the newer state and stale draft, followed by a successful reload and retry."
+          }
+        },
+        "project_link_add_duplicate_unlink": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "Note Block-to-Project links rendered in Reader and Project Detail; exact duplicates were unchanged, different link types were distinct, source navigation opened the correct Paper and Note Block, and unlink preserved every record."
+          }
+        },
+        "link_revision_conflict": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "A stale Project-link conflict preserved the selected Project, Note Block, and link type."
+          }
+        },
+        "orphan_navigation_archived_controls": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "Archived Projects retained readable links without link-write controls; orphan and unavailable states were verified only in an approved disposable workspace."
+          }
+        },
+        "api_restart_draft_recovery": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "FastAPI stop and restart preserved dirty Note Block drafts and link selections without reporting false success."
+          }
+        },
+        "network_privacy": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-02",
+            "reference": "User-performed v1.5.5 Note Block runtime validation",
+            "summary": "Network responses exposed no local path, filename, raw exception, internal dictionary, private record or content, or submitted draft echo."
           }
         }
       }
@@ -717,18 +857,17 @@
       "automated_validation.post_merge_main_ci",
       "manual_validation.reader_snapshot_runtime",
       "manual_validation.reader_write_runtime",
-      "manual_validation.project_write_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
     ]
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "G4 Project write parity evidence; v1.6 deferred",
+    "name": "v1.5.5 hosted and publication evidence; v1.6 Reader/shared UX deferred",
     "evidence": {
-      "date": "2026-07-27",
+      "date": "2026-08-02",
       "reference": "docs/ROADMAP.md",
-      "summary": "Complete the approved v1.5.4 real-data Project write and Paper-link checks before closing G4; keep R132 Note Block commands and broader v1.6 write expansion deferred."
+      "summary": "Preserve completed local v1.5.5 runtime evidence while keeping hosted CI, merge, tag, publication, clean-PC restore, and the deferred v1.6 Reader/shared UX work separately evidenced."
     }
   },
   "historical_evidence": {
@@ -769,7 +908,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-07-27",
+    "last_reconciled": "2026-08-02",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",
@@ -844,9 +983,9 @@
       {
         "task_id": "R-010",
         "status": "VERIFIED",
-        "evidence": "The desktop shell, typed client, shared components, and exact command bridge allowlist are implemented and tested.",
+        "evidence": "The desktop shell, typed client, shared components, and exact read, command, and Note Block bridge allowlists are implemented and tested.",
         "disposition": "Keep bridge methods and paths explicitly bounded.",
-        "last_verified": "2026-07-26"
+        "last_verified": "2026-08-02"
       },
       {
         "task_id": "R-011",
@@ -872,9 +1011,9 @@
       {
         "task_id": "R-014",
         "status": "VERIFIED",
-        "evidence": "Schema 5.0 separates the immutable product baseline, local Reader command evidence, manual checks, and non-invariant repository observations.",
+        "evidence": "Schema 5.0 separates the immutable product baseline, local automated evidence, versioned manual checks, and non-invariant repository observations.",
         "disposition": "Keep repository HEAD observational so committed evidence cannot invalidate itself.",
-        "last_verified": "2026-07-26"
+        "last_verified": "2026-08-02"
       },
       {
         "task_id": "R-015",
@@ -914,9 +1053,9 @@
       {
         "task_id": "R-020",
         "status": "VERIFIED",
-        "evidence": "Two separate Reader command services have strict schemas, stale-write protection, rollback tests, and exact bridge allowlisting.",
-        "disposition": "Preserve the two-command boundary and exclude combined save or autosave.",
-        "last_verified": "2026-07-26"
+        "evidence": "Reader metadata and Reading Note commands plus the independent structured Note Block service have strict schemas, stale-write protection, rollback tests, and exact bridge allowlisting.",
+        "disposition": "Preserve independent command boundaries and exclude combined save or autosave.",
+        "last_verified": "2026-08-02"
       },
       {
         "task_id": "R-021",
