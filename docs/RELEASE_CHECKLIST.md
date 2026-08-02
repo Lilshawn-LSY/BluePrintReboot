@@ -2,6 +2,21 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.5-note-block-write-project-links
+
+- [x] Runtime, package/lockfile, README, manifest, release-note draft, and generated status identify v1.5.5 while the immutable released baseline remains v1.4.0.
+- [x] The stored-order Note Block collection exposes only canonical content, server-owned identity/timestamps, source Paper identity, total, safe Project links, and a deterministic complete-state revision.
+- [x] Create/update form an independent command boundary with strict fields and bounds, explicit save, no-op detection, stale-revision zero mutation, shared locking, reload-after-lock, atomic verification, and rollback.
+- [x] Note Block Project-link add/unlink validates exact Project/Paper/block identities, archived state, allowed link type, duplicate truthfulness, stale link revision, and store isolation.
+- [x] Project Detail distinguishes available, missing-block, missing-Paper, and unavailable targets and never auto-deletes or repairs an orphan link.
+- [x] Reader Metadata, Reading Note, and Note Block drafts remain independent; conflict/offline states preserve drafts and selections; Paper transitions isolate Note Block state.
+- [x] The frontend uses explicit create/edit/save/cancel/reload/link/unlink actions, bounded Project selection, unlink confirmation, stable Reader navigation, and archived Project control absence.
+- [x] API, bridge, and TypeScript contracts admit only exact methods/paths and JSON commands; encoded paths, unlisted subpaths, arbitrary dictionaries, and private error details remain excluded.
+- [x] Disposable focused/full Python and frontend regressions cover strictness, concurrency, rollback, privacy, target states, navigation, draft preservation, and unchanged Reader/PDF/Project/Paper-link behavior.
+- [x] User-performed real-data v1.5.5 Note Block and Project-link runtime checks were recorded as VERIFIED on 2026-08-02.
+- [ ] Hosted CI, merge to `main`, v1.5.5 tag, GitHub Release, and post-merge `main` CI remain open until separately observed.
+- [ ] Note Block delete/reorder, drag-and-drop, PDF selection/highlight, automatic block creation, autosave, combined save, and broader writes remain excluded.
+
 ## v1.5.4-project-write-paper-links
 
 - [x] Runtime, package/lockfile, visible shell, README, manifest, and release-note draft identify v1.5.4 while the immutable released baseline remains v1.4.0.
@@ -12,8 +27,8 @@ Current evidence is generated from the canonical manifest. Inspect [Current Rele
 - [x] The API and bridge admit only the five exact command method/path pairs with controlled private-safe errors.
 - [x] The frontend uses explicit create/edit/save/cancel/archive/add/remove actions, preserves drafts/selections on failure, confirms archive/unlink, and hides write controls for archived Projects.
 - [x] Disposable backend/frontend tests cover strictness, stale/no-op behavior, lock contention, rollback injection, store isolation, privacy, bridge allowlisting, and regressions.
-- [x] R130 and R131 are complete; R132 is deferred; R133 is partial; G4 remains open; v1.6 expansion remains deferred.
-- [ ] Manually confirm real-data web/Streamlit parity, persistence, conflict recovery, offline/restart recovery, archived read behavior, and private-safe Network responses.
+- [x] R130 and R131 are complete; the specified local R133/G4 Project runtime parity evidence is recorded; R132 proceeds in v1.5.5; broader v1.6 expansion remains deferred.
+- [x] User-performed real-data web/Streamlit parity, persistence, conflict recovery, offline/restart recovery, archived read behavior, and private-safe Network responses were recorded on 2026-08-02.
 - [ ] v1.5.4 PR, hosted CI, merge, tag, GitHub Release, and post-merge evidence remain open until separately observed.
 
 ## v1.5.3-settings-health-read-parity

@@ -30,6 +30,8 @@ REQUIRED_FILES = (
     "api/schemas.py",
     "services/settings_read_model.py",
     "services/project_commands.py",
+    "services/note_block_commands.py",
+    "services/note_block_read_model.py",
     "requirements.txt",
     "README.md",
     "docs/BLUEPRINT_PRINCIPLES.md",
@@ -66,6 +68,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.5.2.md",
     "docs/release_notes/v1.5.3.md",
     "docs/release_notes/v1.5.4.md",
+    "docs/release_notes/v1.5.5.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -89,6 +92,9 @@ REQUIRED_FILES = (
     "frontend/app/views/SettingsView.tsx",
     "frontend/app/views/ProjectsView.tsx",
     "frontend/app/views/ProjectDetailView.tsx",
+    "frontend/app/components/NoteBlocksWorkspace.tsx",
+    "frontend/app/lib/note-blocks/editor-state.mjs",
+    "frontend/app/lib/note-blocks/editor-state.d.mts",
     "frontend/app/lib/projects/editor-state.mjs",
     "frontend/app/components/PdfJsReader.tsx",
     "frontend/app/lib/pdf/pdfjs-adapter.ts",
@@ -130,6 +136,8 @@ KEY_MODULES = (
     "services.reading_note_template",
     "services.settings_read_model",
     "services.tag_book",
+    "services.note_block_commands",
+    "services.note_block_read_model",
 )
 
 
@@ -291,11 +299,15 @@ def check_api_contract() -> SmokeCheckResult:
             "/papers/{paper_id}/pdf": {"get"},
             "/papers/{paper_id}/metadata": {"patch"},
             "/papers/{paper_id}/reading-note": {"put"},
+            "/papers/{paper_id}/note-blocks": {"get", "post"},
+            "/papers/{paper_id}/note-blocks/{block_id}": {"patch"},
             "/projects": {"get", "post"},
             "/projects/{project_id}": {"get", "patch"},
             "/projects/{project_id}/archive": {"post"},
             "/projects/{project_id}/paper-links": {"post"},
             "/projects/{project_id}/paper-links/{link_id}": {"delete"},
+            "/projects/{project_id}/note-block-links": {"post"},
+            "/projects/{project_id}/note-block-links/{link_id}": {"delete"},
             "/tags": {"get"},
             "/tags/summary": {"get"},
             "/settings/summary": {"get"},
@@ -307,7 +319,7 @@ def check_api_contract() -> SmokeCheckResult:
     return SmokeCheckResult(
         "api:application-contract",
         "pass",
-        f"eleven GET routes, two Reader commands, and five Project commands for {APP_VERSION}",
+        f"twelve GET routes, four Reader commands, and seven Project commands for {APP_VERSION}",
     )
 
 
@@ -325,6 +337,10 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
         api_client = (frontend_root / "app/lib/api/client.ts").read_text(encoding="utf-8")
         if "SidebarNavigation" not in shell or "main-content" not in shell:
             raise ValueError("frontend application shell is incomplete")
+        if "packageMetadata.version" not in shell or "Local workspace" not in shell:
+            raise ValueError("frontend application shell does not use the current package version")
+        if "v1.5.4" in shell or "Project commands" in shell:
+            raise ValueError("frontend application shell retains the stale v1.5.4 feature label")
         for method in (
             "getHealth",
             "getLibraryStatus",

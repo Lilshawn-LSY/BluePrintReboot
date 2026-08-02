@@ -13,7 +13,15 @@ from api.schemas import (
     CandidateSummaryResponse,
     CanonicalTag,
     EditablePaperMetadata,
+    LinkedNoteBlockSummary,
     LinkedPaperSummary,
+    NoteBlockCollectionResponse,
+    NoteBlockCommandResponse,
+    NoteBlockItem,
+    NoteBlockLinkCommandResponse,
+    NoteBlockLinkCommandState,
+    NoteBlockProjectLink,
+    NoteBlockSourcePaper,
     PaperDetail,
     PaperLinkCommandResponse,
     PaperLinkCommandState,
@@ -38,9 +46,11 @@ from api.schemas import (
     SettingsWorkspaceSection,
 )
 from services.project_commands import (
+    NoteBlockLinkCommandResult as DomainNoteBlockLinkCommandResult,
     PaperLinkCommandResult as DomainPaperLinkCommandResult,
     ProjectCommandResult as DomainProjectCommandResult,
 )
+from services.note_block_commands import NoteBlockCommandResult as DomainNoteBlockCommandResult
 
 
 class PaperContractError(ValueError):
@@ -49,6 +59,10 @@ class PaperContractError(ValueError):
 
 class ProjectContractError(ValueError):
     """A domain value cannot be represented by the public Project API contract."""
+
+
+class NoteBlockContractError(ValueError):
+    """A domain value cannot be represented by the public Note Block API contract."""
 
 
 class TagContractError(ValueError):
@@ -286,6 +300,36 @@ def _adapt_linked_paper(source: Mapping[str, Any]) -> LinkedPaperSummary:
     )
 
 
+def _adapt_linked_note_block(source: Mapping[str, Any]) -> LinkedNoteBlockSummary:
+    return LinkedNoteBlockSummary(
+        block_id=_strict_text(source.get("block_id"), "note_block.block_id", ProjectContractError),
+        paper_id=_strict_text(source.get("paper_id"), "note_block.paper_id", ProjectContractError),
+        source_paper_title=_strict_untrimmed_text(
+            source.get("source_paper_title"),
+            "note_block.source_paper_title",
+            ProjectContractError,
+        ),
+        block_type=_strict_text(
+            source.get("block_type"),
+            "note_block.block_type",
+            ProjectContractError,
+        ),
+        title=_strict_untrimmed_text(source.get("title"), "note_block.title", ProjectContractError),
+        text_preview=_strict_untrimmed_text(
+            source.get("text_preview"),
+            "note_block.text_preview",
+            ProjectContractError,
+        ),
+        page=_strict_untrimmed_text(source.get("page"), "note_block.page", ProjectContractError),
+        figure=_strict_untrimmed_text(
+            source.get("figure"),
+            "note_block.figure",
+            ProjectContractError,
+        ),
+        tags=_strict_string_list(source.get("tags"), "note_block.tags", ProjectContractError),
+    )
+
+
 def adapt_project_detail(
     source: Mapping[str, Any],
     *,
@@ -312,10 +356,29 @@ def adapt_project_detail(
             raise ProjectContractError("Project target state is unsupported.") from None
         raw_paper = raw_link.get("paper")
         paper = _adapt_linked_paper(raw_paper) if isinstance(raw_paper, Mapping) else None
-        if target_state is ProjectTargetState.available and paper is None:
-            target_state = ProjectTargetState.unavailable
-        if target_state is not ProjectTargetState.available and paper is not None:
-            raise ProjectContractError("Unavailable Project targets cannot expose paper data.")
+        raw_note_block = raw_link.get("note_block")
+        note_block = (
+            _adapt_linked_note_block(raw_note_block)
+            if isinstance(raw_note_block, Mapping)
+            else None
+        )
+        target_type = _strict_text(
+            raw_link.get("target_type"),
+            "link.target_type",
+            ProjectContractError,
+        )
+        if target_type == "paper":
+            if target_state is ProjectTargetState.available and paper is None:
+                target_state = ProjectTargetState.unavailable
+            if note_block is not None:
+                raise ProjectContractError("Paper targets cannot expose Note Block data.")
+        elif target_type == "note_block":
+            if target_state is ProjectTargetState.available and note_block is None:
+                target_state = ProjectTargetState.unavailable
+            if paper is not None:
+                raise ProjectContractError("Note Block targets cannot expose Paper-detail data.")
+        if target_state is not ProjectTargetState.available and (paper is not None or note_block is not None):
+            raise ProjectContractError("Unavailable Project targets cannot expose resolved data.")
         links.append(
             ProjectLinkTarget(
                 link_id=_strict_text(
@@ -328,9 +391,10 @@ def adapt_project_detail(
                     "link.link_type",
                     ProjectContractError,
                 ),
-                target_type=_strict_text(
-                    raw_link.get("target_type"),
-                    "link.target_type",
+                target_type=target_type,
+                target_id=_strict_text(
+                    raw_link.get("target_id"),
+                    "link.target_id",
                     ProjectContractError,
                 ),
                 target_state=target_state,
@@ -345,6 +409,7 @@ def adapt_project_detail(
                     ProjectContractError,
                 ),
                 paper=paper,
+                note_block=note_block,
             )
         )
     links.sort(key=lambda link: (link.created_at, link.link_id))
@@ -501,6 +566,179 @@ def adapt_canonical_tag(source: Mapping[str, Any]) -> CanonicalTag:
             source.get("suggestion_strength"),
             "suggestion_strength",
             TagContractError,
+        ),
+    )
+
+
+def _adapt_note_block_item(source: Mapping[str, Any]) -> NoteBlockItem:
+    try:
+        return NoteBlockItem(
+            id=_strict_text(source.get("id"), "id", NoteBlockContractError),
+            paper_id=_strict_text(source.get("paper_id"), "paper_id", NoteBlockContractError),
+            block_type=_strict_text(
+                source.get("block_type"),
+                "block_type",
+                NoteBlockContractError,
+            ),
+            title=_strict_untrimmed_text(source.get("title"), "title", NoteBlockContractError),
+            text=_strict_untrimmed_text(source.get("text"), "text", NoteBlockContractError),
+            page=_strict_untrimmed_text(source.get("page"), "page", NoteBlockContractError),
+            figure=_strict_untrimmed_text(source.get("figure"), "figure", NoteBlockContractError),
+            quote=_strict_untrimmed_text(source.get("quote"), "quote", NoteBlockContractError),
+            tags=_strict_string_list(source.get("tags"), "tags", NoteBlockContractError),
+            created_at=_strict_text(
+                source.get("created_at"),
+                "created_at",
+                NoteBlockContractError,
+            ),
+            updated_at=_strict_text(
+                source.get("updated_at"),
+                "updated_at",
+                NoteBlockContractError,
+            ),
+        )
+    except ValueError as exc:
+        if isinstance(exc, NoteBlockContractError):
+            raise
+        raise NoteBlockContractError("Note Block contains unsupported values.") from None
+
+
+def adapt_note_block_collection(source: Mapping[str, Any]) -> NoteBlockCollectionResponse:
+    raw_source = source.get("source_paper")
+    raw_items = source.get("items")
+    raw_links = source.get("project_links")
+    if not isinstance(raw_source, Mapping):
+        raise NoteBlockContractError("Note Block source Paper must be an object.")
+    if not isinstance(raw_items, (list, tuple)):
+        raise NoteBlockContractError("Note Block items must be a list.")
+    if not isinstance(raw_links, (list, tuple)):
+        raise NoteBlockContractError("Note Block Project links must be a list.")
+    if any(not isinstance(item, Mapping) for item in raw_items):
+        raise NoteBlockContractError("Note Block items must be objects.")
+    if any(not isinstance(link, Mapping) for link in raw_links):
+        raise NoteBlockContractError("Note Block Project links must be objects.")
+    try:
+        response = NoteBlockCollectionResponse(
+            source_paper=NoteBlockSourcePaper(
+                paper_id=_strict_text(
+                    raw_source.get("paper_id"),
+                    "source_paper.paper_id",
+                    NoteBlockContractError,
+                ),
+                title=_strict_untrimmed_text(
+                    raw_source.get("title"),
+                    "source_paper.title",
+                    NoteBlockContractError,
+                ),
+            ),
+            items=[
+                _adapt_note_block_item(item)
+                for item in raw_items
+            ],
+            total=_nonnegative_integer(source.get("total"), "total", NoteBlockContractError),
+            note_blocks_revision=_strict_revision(
+                source.get("note_blocks_revision"),
+                "note_blocks_revision",
+                NoteBlockContractError,
+            ),
+            project_links=[
+                NoteBlockProjectLink(
+                    link_id=_strict_text(link.get("link_id"), "link_id", NoteBlockContractError),
+                    project_id=_strict_text(
+                        link.get("project_id"),
+                        "project_id",
+                        NoteBlockContractError,
+                    ),
+                    project_name=_strict_untrimmed_text(
+                        link.get("project_name"),
+                        "project_name",
+                        NoteBlockContractError,
+                    ),
+                    project_status=_strict_text(
+                        link.get("project_status"),
+                        "project_status",
+                        NoteBlockContractError,
+                    ),
+                    note_block_id=_strict_text(
+                        link.get("note_block_id"),
+                        "note_block_id",
+                        NoteBlockContractError,
+                    ),
+                    link_type=_strict_text(
+                        link.get("link_type"),
+                        "link_type",
+                        NoteBlockContractError,
+                    ),
+                    links_revision=_strict_revision(
+                        link.get("links_revision"),
+                        "links_revision",
+                        NoteBlockContractError,
+                    ),
+                )
+                for link in raw_links
+            ],
+            project_links_state=_strict_text(
+                source.get("project_links_state"),
+                "project_links_state",
+                NoteBlockContractError,
+            ),
+        )
+        if response.total != len(response.items):
+            raise NoteBlockContractError("Note Block total does not match its items.")
+        if any(item.paper_id != response.source_paper.paper_id for item in response.items):
+            raise NoteBlockContractError("Note Block Paper identity is inconsistent.")
+        block_ids = {item.id for item in response.items}
+        if len(block_ids) != len(response.items):
+            raise NoteBlockContractError("Note Block identities must be unique.")
+        if any(link.note_block_id not in block_ids for link in response.project_links):
+            raise NoteBlockContractError("Project link targets an absent Note Block.")
+        return response
+    except ValueError as exc:
+        if isinstance(exc, NoteBlockContractError):
+            raise
+        raise NoteBlockContractError("Note Block collection contains unsupported values.") from None
+
+
+def adapt_note_block_command_result(
+    source: DomainNoteBlockCommandResult,
+) -> NoteBlockCommandResponse:
+    return NoteBlockCommandResponse(
+        status=source.status,
+        block=_adapt_note_block_item(source.block),
+        note_blocks_revision=_strict_revision(
+            source.note_blocks_revision,
+            "note_blocks_revision",
+            NoteBlockContractError,
+        ),
+        total=_nonnegative_integer(source.total, "total", NoteBlockContractError),
+    )
+
+
+def adapt_note_block_link_command_result(
+    source: DomainNoteBlockLinkCommandResult,
+) -> NoteBlockLinkCommandResponse:
+    return NoteBlockLinkCommandResponse(
+        status=source.status,
+        project=_adapt_project_command_state(source.project),
+        link=NoteBlockLinkCommandState(
+            link_id=_strict_text(source.link.link_id, "link.link_id", ProjectContractError),
+            project_id=_strict_text(
+                source.link.project_id,
+                "link.project_id",
+                ProjectContractError,
+            ),
+            paper_id=_strict_text(source.link.paper_id, "link.paper_id", ProjectContractError),
+            note_block_id=_strict_text(
+                source.link.note_block_id,
+                "link.note_block_id",
+                ProjectContractError,
+            ),
+            link_type=_strict_text(source.link.link_type, "link.link_type", ProjectContractError),
+            created_at=_strict_text(
+                source.link.created_at,
+                "link.created_at",
+                ProjectContractError,
+            ),
         ),
     )
 

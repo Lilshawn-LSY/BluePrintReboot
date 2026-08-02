@@ -1,8 +1,30 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.5.4-project-write-paper-links`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
+Required before and after Codex-assisted release work, including `v1.5.5-note-block-write-project-links`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
+
+## v1.5.5 Note Block Write and Project Links
+
+- [x] Validate empty and stored-order Note Block collections, normalized public fields, complete-state deterministic revisions, count bounds, missing Paper, corrupt JSON, duplicate identity, and private-field exclusion.
+- [x] Validate create, every allowlisted update field, exact no-op, invalid type/field/value/length/count, server-owned field rejection, unknown Paper/block, and stale-revision zero mutation.
+- [x] Inject lock contention, reload-after-lock concurrency, serialization/replace/verification failures, and confirm generic errors plus exact original bytes/timestamp rollback.
+- [x] Validate Note Block Project-link add, exact duplicate unchanged, distinct link types, Project/Paper/block/mismatch/archive/stale rejection, exact unlink, wrong-target/cross-Project rejection, and source-data preservation.
+- [x] Validate Project Detail available, missing-block, missing-Paper, and unavailable states, bounded preview, private-field exclusion, stable target identity, and whole-page survival after target failure.
+- [x] Confirm strict API schemas, generic 404/409/422/503 responses, exact bridge methods/paths, encoded/unlisted path rejection, JSON-only commands, and unchanged PDF Range/Reader/Project/Paper-link contracts.
+- [x] Confirm Reader loading/empty/error/offline, explicit create/edit/cancel/save/no-op/reload, changed fields, conflict/offline draft retention, Paper isolation, independent command states, and unsaved navigation warning.
+- [x] Confirm bounded writable-Project selection, duplicate truthfulness, link selection retention, current links, unlink confirmation, typed Project Detail rendering, orphan rendering, stable Reader navigation, and archived-control absence.
+- [x] Open a real Paper with existing Note Blocks and a real Paper with none; confirm stored order, content, and empty state.
+- [x] Create a real Note Block, reload the Reader, and confirm the same block appears in Streamlit.
+- [x] Edit every allowlisted field, save/reload, and confirm web/Streamlit convergence; verify no-op does not claim a write.
+- [x] Produce a stale Note Block collection conflict in two tabs; confirm newer state is retained, the stale draft survives, and reload/retry succeeds.
+- [x] Link a real Note Block to a writable Project, confirm the typed Project summary and Reader navigation, repeat the exact link for unchanged, add a distinct type, and unlink without deleting the Project, Paper, or block.
+- [x] Produce a stale Project-link conflict; confirm the Project/block/link-type selection survives and reload/retry succeeds.
+- [x] Confirm missing-block, missing-source-Paper, and unreadable Note Block storage states with approved disposable data; confirm no link is auto-repaired or deleted.
+- [x] Archive a linked Project and confirm links remain readable while all Project link write controls are absent.
+- [x] Stop/restart FastAPI while a Note Block draft and link selection are dirty; confirm no false success and preserved state after retry.
+- [x] Inspect browser Network responses for absence of local paths, filenames, raw errors, internal dictionaries, private records, stored private content, and submitted draft echo.
+- [ ] Confirm Note Block delete/reorder, drag-and-drop, PDF selection/highlight, automatic block creation, autosave, combined save, Project delete/unarchive, Tag/Settings writes, and bulk actions remain absent.
 
 ## v1.5.4 Project Write and Paper–Project Link Commands
 
@@ -15,14 +37,14 @@ Current evidence is represented only in the generated [Current Release Status](.
 - [x] Confirm exact API/bridge methods and paths; reject Project delete/unarchive, Note Block targets, encoded path tricks, wrong methods, and non-JSON command bodies.
 - [x] Confirm explicit create/edit/save/cancel/archive/add/remove source workflows, real bounded Paper selection, draft preservation, conflict reload, duplicate truthfulness, confirmations, and archived-control absence.
 - [x] Regress Project/Tag/Settings reads, Reader commands, managed PDF Range, Streamlit storage/service behavior, release reconciliation, tracker export, and repository hygiene.
-- [ ] Create a real Project in the web UI and verify it appears in Streamlit and survives reload.
-- [ ] Edit every allowlisted Project field in the web UI and verify Streamlit/web convergence after reload.
-- [ ] Link an existing Paper, confirm it in both interfaces, repeat the exact add and confirm unchanged behavior, then remove the link without deleting the Paper.
-- [ ] Archive a Project, confirm its links remain readable and all Project write controls are absent.
-- [ ] Produce a second-tab stale Project and stale link conflict, confirm no newer state is overwritten, preserve the draft/selection, then reload and retry.
-- [ ] Stop/restart FastAPI during a dirty draft and a link selection; confirm explicit unavailable/retry behavior without draft loss or false success.
-- [ ] Inspect browser Network responses for absence of paths, filenames, raw errors, internal dictionaries, private records, and submitted draft echo.
-- [ ] Confirm Note Block reads/writes/link commands, Project delete/unarchive, Tag writes, Settings writes, autosave, bulk actions, and drag/drop remain absent.
+- [x] Create a real Project in the web UI and verify it appears in Streamlit and survives reload.
+- [x] Edit every allowlisted Project field in the web UI and verify Streamlit/web convergence after reload.
+- [x] Link an existing Paper, confirm it in both interfaces, repeat the exact add and confirm unchanged behavior, then remove the link without deleting the Paper.
+- [x] Archive a Project, confirm its links remain readable and all Project write controls are absent.
+- [x] Produce a second-tab stale Project and stale link conflict, confirm no newer state is overwritten, preserve the draft/selection, then reload and retry.
+- [x] Stop/restart FastAPI during a dirty draft and a link selection; confirm explicit unavailable/retry behavior without draft loss or false success.
+- [x] Inspect browser Network responses for absence of paths, filenames, raw errors, internal dictionaries, private records, and submitted draft echo.
+- [x] Confirm the v1.5.4 exclusion boundary at validation time; Note Block commands were added later in v1.5.5 while Project delete/unarchive, Tag/Settings writes, autosave, bulk actions, and drag/drop remain absent.
 
 ## v1.5.3 Settings and Health Safe Read Parity
 

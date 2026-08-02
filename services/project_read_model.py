@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Any, Mapping, TypedDict
 
 from services.library_read_model import build_paper_list_items
-from storage.paths import INDEX_CSV, PROJECTS_DIR
+from services.note_block_read_model import normalized_note_blocks
+from storage.note_block_store import list_note_blocks
+from storage.paths import INDEX_CSV, NOTE_BLOCKS_DIR, PROJECTS_DIR
 from storage.project_link_store import list_project_links
 from storage.project_store import list_projects
 
@@ -36,14 +38,28 @@ class LinkedPaperSummary(TypedDict):
     archived: bool
 
 
+class LinkedNoteBlockSummary(TypedDict):
+    block_id: str
+    paper_id: str
+    source_paper_title: str
+    block_type: str
+    title: str
+    text_preview: str
+    page: str
+    figure: str
+    tags: list[str]
+
+
 class ProjectLinkTarget(TypedDict):
     link_id: str
     link_type: str
     target_type: str
+    target_id: str
     target_state: str
     paper_id: str
     created_at: str
     paper: LinkedPaperSummary | None
+    note_block: LinkedNoteBlockSummary | None
 
 
 class ProjectDetail(ProjectListItem):
@@ -145,11 +161,36 @@ def _linked_paper_summary(source: Mapping[str, Any]) -> LinkedPaperSummary:
     }
 
 
+def _bounded_preview(value: object, maximum: int = 280) -> str:
+    compact = " ".join(str(value or "").split())
+    if len(compact) <= maximum:
+        return compact
+    return compact[: maximum - 3].rstrip() + "..."
+
+
+def _linked_note_block_summary(
+    block: Mapping[str, Any],
+    paper: LinkedPaperSummary,
+) -> LinkedNoteBlockSummary:
+    return {
+        "block_id": str(block["id"]),
+        "paper_id": str(block["paper_id"]),
+        "source_paper_title": paper["title"],
+        "block_type": str(block["block_type"]),
+        "title": str(block["title"]),
+        "text_preview": _bounded_preview(block["text"]),
+        "page": str(block["page"]),
+        "figure": str(block["figure"]),
+        "tags": [str(tag) for tag in block["tags"]],
+    }
+
+
 def build_project_detail(
     project_id: str,
     *,
     projects_dir: Path | None = None,
     index_csv: Path | None = None,
+    note_blocks_dir: Path | None = None,
 ) -> ProjectDetail | None:
     projects, all_links = _load_projects_and_links(projects_dir)
     project = next(
@@ -163,9 +204,12 @@ def build_project_detail(
         link for link in all_links
         if str(link["project_id"]) == project_id
     ]
-    paper_links = [link for link in links if link["target_type"] == "paper"]
+    paper_context_links = [
+        link for link in links
+        if link["target_type"] in {"paper", "note_block"}
+    ]
     papers_by_id: dict[str, LinkedPaperSummary] = {}
-    if paper_links:
+    if paper_context_links:
         paper_items = build_paper_list_items(
             index_csv=Path(index_csv) if index_csv is not None else INDEX_CSV,
             health_report={},
@@ -178,17 +222,48 @@ def build_project_detail(
 
     targets: list[ProjectLinkTarget] = []
     orphaned_count = 0
+    blocks_by_paper: dict[str, list[dict[str, Any]] | None] = {}
+    effective_note_blocks_dir = (
+        Path(note_blocks_dir) if note_blocks_dir is not None else NOTE_BLOCKS_DIR
+    )
     for link in links:
         target_type = str(link["target_type"])
-        paper_id = (
-            str(link.get("paper_id", "") or link["target_id"])
-            if target_type == "paper"
-            else ""
-        )
+        paper_id = str(link.get("paper_id", "") or link["target_id"])
         paper = papers_by_id.get(paper_id) if paper_id else None
+        note_block: LinkedNoteBlockSummary | None = None
         if target_type == "paper":
             target_state = "available" if paper is not None else "orphaned"
             orphaned_count += paper is None
+        elif target_type == "note_block":
+            if paper is None:
+                target_state = "orphaned_paper"
+                orphaned_count += 1
+            else:
+                if paper_id not in blocks_by_paper:
+                    try:
+                        blocks_by_paper[paper_id] = normalized_note_blocks(
+                            paper_id,
+                            list_note_blocks(paper_id, effective_note_blocks_dir),
+                        )
+                    except Exception:
+                        blocks_by_paper[paper_id] = None
+                blocks = blocks_by_paper[paper_id]
+                if blocks is None:
+                    target_state = "unavailable"
+                else:
+                    block = next(
+                        (
+                            candidate for candidate in blocks
+                            if str(candidate["id"]) == str(link["target_id"])
+                        ),
+                        None,
+                    )
+                    if block is None:
+                        target_state = "orphaned_note_block"
+                        orphaned_count += 1
+                    else:
+                        target_state = "available"
+                        note_block = _linked_note_block_summary(block, paper)
         else:
             target_state = "not_applicable"
         targets.append(
@@ -196,10 +271,12 @@ def build_project_detail(
                 "link_id": str(link["id"]),
                 "link_type": str(link["link_type"]),
                 "target_type": target_type,
+                "target_id": str(link["target_id"]),
                 "target_state": target_state,
                 "paper_id": paper_id,
                 "created_at": str(link["created_at"]),
-                "paper": paper,
+                "paper": paper if target_type == "paper" else None,
+                "note_block": note_block,
             }
         )
     targets.sort(key=lambda link: (link["created_at"], link["link_id"]))

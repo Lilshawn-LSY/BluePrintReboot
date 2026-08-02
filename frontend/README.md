@@ -1,6 +1,6 @@
 # BluePrintReboot frontend
 
-The v1.5.4 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. Projects now supports explicit creation, allowlisted metadata edit/save/cancel, one-way archive, and adding or removing links to existing Papers. Optimistic Project and link revisions preserve drafts or selections on conflicts and failures. There is no autosave, Project delete/unarchive, Note Block command, Tag write, or Settings write. The Reader retains its separate explicit metadata and Reading Note saves.
+The v1.5.5 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. The Reader now adds a Paper-local structured Note Block workspace with explicit create/edit/save/cancel, conflict-safe drafts, and explicit links to existing writable Projects. Project Detail renders typed Note Block summaries, orphan/unavailable states, stable source navigation, and confirmed unlink. Metadata, Reading Note, Note Block, Project, and link command states remain independent. There is no autosave, combined save, Note Block delete/reorder, Project delete/unarchive, Tag write, or Settings write.
 
 ## Local development
 

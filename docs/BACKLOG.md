@@ -1,6 +1,6 @@
 # BluePrintReboot Backlog
 
-Stable backlog last edited: 2026-07-27
+Stable backlog last edited: 2026-08-02
 
 Current release evidence and individually addressable pending checks live in the generated [Current Release Status](CURRENT_RELEASE_STATUS.md). This backlog does not duplicate mutable counts or verification state.
 
@@ -18,6 +18,23 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.2 Projects and Tags read parity implementation.
 - [x] v1.5.3 Settings and health safe read parity implementation.
 - [x] v1.5.4 Project write and Paper–Project link command implementation.
+- [x] v1.5.5 Note Block write and Project-link vertical slice implementation.
+
+## v1.5.5 Note Block write and Project links
+
+- [x] Add a bounded stored-order Note Block collection with source Paper identity, total, safe Project-link summaries, and deterministic complete-state revision.
+- [x] Add independent explicit Note Block create/update commands with strict content fields, server-owned identity/timestamps, exact no-op, workspace locking, reload-after-lock, atomic verification, and rollback.
+- [x] Add Project Note Block link/unlink commands with Project/Paper/block identity checks, archived rejection, exact duplicate unchanged, distinct link types, stale revision protection, and non-destructive unlink.
+- [x] Extend Project Detail with typed bounded summaries and explicit available, missing-block, missing-Paper, and unavailable states without automatic repair.
+- [x] Add Paper-local Reader create/edit/cancel/save/reload and Project-link workflows with independent drafts, explicit confirmation, conflict/offline retention, and stable source navigation.
+- [x] Extend the exact JSON bridge, typed client, response/request types, disposable backend/frontend tests, smoke contracts, and release reconciliation.
+- [x] Record the 2026-08-02 user-performed real-data Note Block read/create/edit, cross-surface, conflict/restart, Project-link, orphan/navigation, archived-control, and Network-privacy checks.
+- [ ] Record v1.5.5 hosted CI, merge, tag, GitHub Release, and post-merge evidence only after those events occur.
+- [ ] Keep Note Block delete/reorder, autosave, combined save, broader writes, and v1.6 scope deferred until separately approved.
+
+## v1.6 Reader/shared UX follow-up
+
+- [ ] Non-blocking: resolve the deferred Note Block layout defect in the Reader/shared UX. The accepted v1.5.5 command and runtime behavior is unchanged, and no UI redesign is included in v1.5.5.
 
 ## v1.5.4 Project write and Paper–Project link commands
 
@@ -28,9 +45,10 @@ Current release evidence and individually addressable pending checks live in the
 - [x] Extend the same-origin bridge with exact method/path pairs and retain Reader/PDF/Settings/Tag behavior.
 - [x] Add explicit create/edit/save/cancel/archive/add/remove frontend workflows with draft preservation, honest duplicate/no-op results, confirmations, and archived read-only detail.
 - [x] Add disposable concurrency, no-op, rollback, isolation, privacy, bridge, state, rendering-source, and regression coverage.
-- [x] Mark R130 and R131 complete; keep R132 deferred and R133 partial.
-- [ ] Complete real-data Project create/edit/archive/link/unlink, cross-surface, conflict, offline/restart, archived-read, and Network-privacy checks before closing G4.
-- [ ] Keep v1.6 expansion deferred until G4 evidence closes and scope is separately approved.
+- [x] Mark R130 and R131 complete.
+- [x] Record the 2026-08-02 user-performed real-data Project create/edit/archive/link/unlink, cross-surface, conflict, offline/restart, archived-read, and Network-privacy checks; close the specified local G4 parity evidence.
+- [x] Advance R132 into the v1.5.5 implementation while keeping its user-performed runtime evidence separate.
+- [x] Record the separate v1.5.5 user-performed runtime evidence before considering broader v1.6 scope.
 - [ ] Record v1.5.4 pull request, hosted CI, merge, tag, GitHub Release, or post-merge evidence only after those events occur.
 
 ## v1.5.3 Settings and health safe read parity

@@ -8,11 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.4-project-write-paper-links**.
+Current runtime target: **v1.5.5-note-block-write-project-links**.
 
-v1.5.4 adds the first bounded Project write slice: explicit Project creation, allowlisted metadata updates, one-way archive, and add/remove commands for links to existing Papers. Project and link commands use workspace locking, reload-after-lock optimistic revisions, atomic replacement, rollback verification, and strict private-safe API contracts. There is no Project deletion, unarchive, Tag write, Note Block command, autosave, or bulk mutation.
+v1.5.5 adds a bounded structured Note Block slice to the web Reader: stored-order collection reads, explicit create/update, deterministic collection revisions, and explicit typed links to existing Projects. Project Detail resolves safe block summaries and explicit orphan/unavailable states. Note Block and Project-link commands use workspace locking, reload-after-lock optimistic revisions, atomic replacement, rollback verification, and strict private-safe API contracts. There is no Note Block delete/reorder, Project deletion/unarchive, Tag or Settings write, autosave, combined save, or bulk mutation.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.4. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.5. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -45,7 +45,7 @@ Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the 
 
 ## Bounded Local API
 
-Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while two Reader commands and five Project/Paper-link commands form the exact mutation boundary. Project, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
+Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while two Reader commands, two independent Note Block commands, and seven Project/link commands form the exact mutation boundary. Project, Note Block, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
 
 Start it from Windows PowerShell:
 
@@ -64,6 +64,9 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Managed PDF stream: `http://127.0.0.1:8000/papers/{paper_id}/pdf`
 - Metadata command: `PATCH http://127.0.0.1:8000/papers/{paper_id}/metadata`
 - Reading Note command: `PUT http://127.0.0.1:8000/papers/{paper_id}/reading-note`
+- Structured Note Block collection: `GET http://127.0.0.1:8000/papers/{paper_id}/note-blocks`
+- Create structured Note Block: `POST http://127.0.0.1:8000/papers/{paper_id}/note-blocks`
+- Update structured Note Block: `PATCH http://127.0.0.1:8000/papers/{paper_id}/note-blocks/{block_id}`
 - Project collection: [http://127.0.0.1:8000/projects](http://127.0.0.1:8000/projects)
 - Project detail: `GET http://127.0.0.1:8000/projects/{project_id}`
 - Create Project: `POST http://127.0.0.1:8000/projects`
@@ -71,19 +74,23 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Archive Project: `POST http://127.0.0.1:8000/projects/{project_id}/archive`
 - Add existing Paper link: `POST http://127.0.0.1:8000/projects/{project_id}/paper-links`
 - Remove Paper link: `DELETE http://127.0.0.1:8000/projects/{project_id}/paper-links/{link_id}`
+- Add Note Block link: `POST http://127.0.0.1:8000/projects/{project_id}/note-block-links`
+- Remove Note Block link: `DELETE http://127.0.0.1:8000/projects/{project_id}/note-block-links/{link_id}`
 - Canonical Tags: [http://127.0.0.1:8000/tags](http://127.0.0.1:8000/tags)
 - Tag candidate summary: [http://127.0.0.1:8000/tags/summary](http://127.0.0.1:8000/tags/summary)
 - Safe Settings summary: [http://127.0.0.1:8000/settings/summary](http://127.0.0.1:8000/settings/summary)
 
 `GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), and `archive_status` (`active`, `archived`, or `all`; default `active`). Results are ordered by case-insensitive title and then stable `paper_id`.
 
-`GET /projects` and `GET /tags` accept `limit` (1-100, default 20) and `offset` (default 0). Projects are ordered by case-insensitive name then stable `project_id`; Tags are ordered by case-insensitive label then canonical key. `GET /projects/{project_id}` accepts `links_limit` (1-100, default 20) and `links_offset` (default 0). Missing linked papers remain successful detail reads with `target_state: "orphaned"` and no invented paper metadata. Tag summary counts are derived from real deterministic service output; a missing or unreadable candidate source is an explicit unavailable state.
+`GET /projects` and `GET /tags` accept `limit` (1-100, default 20) and `offset` (default 0). Projects are ordered by case-insensitive name then stable `project_id`; Tags are ordered by case-insensitive label then canonical key. `GET /projects/{project_id}` accepts `links_limit` (1-100, default 20) and `links_offset` (default 0). Missing linked Papers remain successful detail reads with `target_state: "orphaned"`; Note Block targets distinguish `available`, `orphaned_note_block`, `orphaned_paper`, and `unavailable`, without invented metadata or automatic link repair. Tag summary counts are derived from real deterministic service output; a missing or unreadable candidate source is an explicit unavailable state.
 
 `GET /settings/summary` has no query or write surface. It returns four strict sections: Application, Workspace, Data integrity, and Backup readiness. Its lightweight reader caps file discovery, index rows, per-file JSON reads, and total JSON bytes per request; checks only file presence and app-owned metadata; and never hashes or parses PDFs, extracts text, opens snapshot archives, verifies restores, or writes cache/report/status files. Missing diagnostics use `state: "unavailable"` with `count: null`, which is distinct from a verified zero.
 
 Metadata requests contain `changes` plus `expected_revision`. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
 
 Project update/archive requests use `expected_revision`; Paper-link add/remove requests use `expected_links_revision`. Both tokens are deterministic SHA-256 revisions over the complete relevant stored state. Commands acquire the shared workspace write lock, reload after lock acquisition, reject stale state without mutation, and verify persisted output. Project create/update/archive touch only Project storage; Paper-link commands touch only link storage. Archive preserves existing links and is not deletion.
+
+Note Block create/update requests use `expected_revision`, a deterministic SHA-256 token over the complete normalized stored-order collection. Identity and timestamps are server-owned; only the seven canonical content fields are accepted. Exact no-op updates do not rewrite the file. Note Block Project-link commands validate the Project, source Paper, and Paper-owned block identity and touch only Project-link storage. Exact duplicates return `unchanged`, unlink preserves the Project, Paper, and Note Block, and archived Project links remain read-only.
 
 The equivalent direct command is `python -m uvicorn api.main:app --host 127.0.0.1 --port 8000` when the repository environment is active.
 
@@ -260,6 +267,7 @@ Foundation release documents:
 - [v1.5.2 Projects and Tags Read Parity release-note draft](docs/release_notes/v1.5.2.md)
 - [v1.5.3 Settings and Health Safe Read Parity release-note draft](docs/release_notes/v1.5.3.md)
 - [v1.5.4 Project Write and Paper–Project Link Commands release-note draft](docs/release_notes/v1.5.4.md)
+- [v1.5.5 Note Block Write and Project Links release-note draft](docs/release_notes/v1.5.5.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -323,6 +331,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.5.5-note-block-write-project-links
+
+- Adds a bounded stored-order structured Note Block read model and an independent explicit create/update command service.
+- Adds typed Note Block–Project add/unlink commands with exact duplicate truthfulness, optimistic link revisions, and non-destructive unlink.
+- Extends Reader and Project Detail with independent draft-preserving Note Block workflows, typed summaries, explicit target states, and stable source navigation.
+- Preserves local storage, Streamlit behavior, PDF.js lifecycle/Range handling, explicit-save policy, shared locking, atomic verification, and rollback contracts.
 
 ### v1.5.1-reader-write-vertical-slice
 

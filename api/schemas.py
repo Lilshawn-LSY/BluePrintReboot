@@ -95,18 +95,36 @@ class LinkedPaperSummary(StrictResponseModel):
 class ProjectTargetState(str, Enum):
     available = "available"
     orphaned = "orphaned"
+    orphaned_note_block = "orphaned_note_block"
+    orphaned_paper = "orphaned_paper"
     unavailable = "unavailable"
     not_applicable = "not_applicable"
+
+
+class LinkedNoteBlockSummary(StrictResponseModel):
+    block_id: str
+    paper_id: str
+    source_paper_title: str
+    block_type: Literal[
+        "summary", "claim", "method", "evidence", "question", "idea", "limitation"
+    ]
+    title: str
+    text_preview: str = Field(max_length=280)
+    page: str
+    figure: str
+    tags: list[str]
 
 
 class ProjectLinkTarget(StrictResponseModel):
     link_id: str
     link_type: str
     target_type: str
+    target_id: str
     target_state: ProjectTargetState
     paper_id: str
     created_at: str
     paper: LinkedPaperSummary | None
+    note_block: LinkedNoteBlockSummary | None
 
 
 class ProjectDetail(ProjectListItem):
@@ -160,6 +178,82 @@ class PaperLinkCommandResponse(StrictResponseModel):
     status: Literal["created", "unchanged", "removed"]
     project: ProjectCommandState
     link: PaperLinkCommandState
+
+
+class NoteBlockItem(StrictResponseModel):
+    id: str
+    paper_id: str
+    block_type: Literal[
+        "summary", "claim", "method", "evidence", "question", "idea", "limitation"
+    ]
+    title: str
+    text: str
+    page: str
+    figure: str
+    quote: str
+    tags: list[str]
+    created_at: str
+    updated_at: str
+
+
+class NoteBlockSourcePaper(StrictResponseModel):
+    paper_id: str
+    title: str
+
+
+class NoteBlockProjectLink(StrictResponseModel):
+    link_id: str
+    project_id: str
+    project_name: str
+    project_status: Literal["active", "paused", "done", "archived", "unavailable"]
+    note_block_id: str
+    link_type: Literal[
+        "related",
+        "background",
+        "key_reference",
+        "supports_project",
+        "raises_question",
+        "idea_for_project",
+    ]
+    links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class NoteBlockCollectionResponse(StrictResponseModel):
+    source_paper: NoteBlockSourcePaper
+    items: list[NoteBlockItem]
+    total: int = Field(ge=0)
+    note_blocks_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    project_links: list[NoteBlockProjectLink]
+    project_links_state: Literal["available", "unavailable"]
+
+
+class NoteBlockCommandResponse(StrictResponseModel):
+    status: Literal["created", "saved", "no_op"]
+    block: NoteBlockItem
+    note_blocks_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    total: int = Field(ge=0)
+
+
+class NoteBlockLinkCommandState(StrictResponseModel):
+    link_id: str
+    project_id: str
+    paper_id: str
+    note_block_id: str
+    link_type: Literal[
+        "related",
+        "background",
+        "key_reference",
+        "supports_project",
+        "raises_question",
+        "idea_for_project",
+    ]
+    created_at: str
+
+
+class NoteBlockLinkCommandResponse(StrictResponseModel):
+    status: Literal["created", "unchanged", "removed"]
+    project: ProjectCommandState
+    link: NoteBlockLinkCommandState
 
 
 class CanonicalTag(StrictResponseModel):
@@ -469,6 +563,88 @@ class AddPaperLinkRequest(StrictRequestModel):
 
 
 class RemovePaperLinkRequest(StrictRequestModel):
+    expected_links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class NoteBlockTagsMixin:
+    @field_validator("tags", mode="before", check_fields=False)
+    @classmethod
+    def validate_note_block_tags(cls, value: Any) -> list[str]:
+        if not isinstance(value, list) or len(value) > 25:
+            raise ValueError("Note Block tags must be a bounded list.")
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("Note Block tags must contain only strings.")
+            tag = item.strip()
+            if not tag or len(tag) > 100:
+                raise ValueError("Note Block tags must be non-empty and at most 100 characters.")
+            if tag not in normalized:
+                normalized.append(tag)
+        return normalized
+
+
+class CreateNoteBlockRequest(NoteBlockTagsMixin, StrictRequestModel):
+    block_type: Literal[
+        "summary", "claim", "method", "evidence", "question", "idea", "limitation"
+    ]
+    title: str = Field(default="", max_length=1_000)
+    text: str = Field(default="", max_length=100_000)
+    page: str = Field(default="", max_length=100)
+    figure: str = Field(default="", max_length=500)
+    quote: str = Field(default="", max_length=100_000)
+    tags: list[str] = Field(default_factory=list, max_length=25)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class NoteBlockChanges(NoteBlockTagsMixin, StrictRequestModel):
+    block_type: Literal[
+        "summary", "claim", "method", "evidence", "question", "idea", "limitation"
+    ] | None = None
+    title: str | None = Field(default=None, max_length=1_000)
+    text: str | None = Field(default=None, max_length=100_000)
+    page: str | None = Field(default=None, max_length=100)
+    figure: str | None = Field(default=None, max_length=500)
+    quote: str | None = Field(default=None, max_length=100_000)
+    tags: list[str] | None = Field(default=None, max_length=25)
+
+    @model_validator(mode="after")
+    def validate_present_fields(self) -> "NoteBlockChanges":
+        if not self.model_fields_set:
+            raise ValueError("At least one Note Block change is required.")
+        if any(getattr(self, field_name) is None for field_name in self.model_fields_set):
+            raise ValueError("Note Block changes cannot be null.")
+        return self
+
+
+class UpdateNoteBlockRequest(StrictRequestModel):
+    changes: NoteBlockChanges
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class AddNoteBlockLinkRequest(StrictRequestModel):
+    paper_id: str = Field(min_length=1, max_length=200)
+    note_block_id: str = Field(min_length=1, max_length=200)
+    link_type: Literal[
+        "related",
+        "background",
+        "key_reference",
+        "supports_project",
+        "raises_question",
+        "idea_for_project",
+    ] = "related"
+    expected_links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("paper_id", "note_block_id")
+    @classmethod
+    def validate_identities(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Identity must not be empty.")
+        return normalized
+
+
+class RemoveNoteBlockLinkRequest(StrictRequestModel):
     expected_links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 

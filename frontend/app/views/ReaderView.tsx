@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { PageHeader } from "../components/PageHeader";
 import { PdfJsReader } from "../components/PdfJsReader";
+import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
@@ -365,6 +366,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               ) : null}
             </div>
           </section>
+          <NoteBlocksWorkspace key={snapshot.paper.paper_id} paperId={snapshot.paper.paper_id} />
         </aside>
       </div>
     </>

@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import Any, Literal, Mapping
 from uuid import uuid4
 
+from services.note_block_read_model import normalized_note_blocks
 from services.project_read_model import project_links_revision, project_revision
-from storage import project_link_store, project_store
+from storage import note_block_store, project_link_store, project_store
 from storage.atomic_text import atomic_write_text
 from storage.index_store import read_index_snapshot
-from storage.paths import INDEX_CSV, PROJECTS_DIR
+from storage.paths import INDEX_CSV, NOTE_BLOCKS_DIR, PROJECTS_DIR
 from storage.workspace_lock import WorkspaceLockUnavailable, workspace_write_lock
 
 
@@ -74,6 +75,16 @@ class PaperLinkCommandState:
 
 
 @dataclass(frozen=True)
+class NoteBlockLinkCommandState:
+    link_id: str
+    project_id: str
+    paper_id: str
+    note_block_id: str
+    link_type: str
+    created_at: str
+
+
+@dataclass(frozen=True)
 class ProjectCommandResult:
     status: Literal["created", "saved", "no_op", "archived", "already_archived"]
     project: ProjectCommandState
@@ -84,6 +95,13 @@ class PaperLinkCommandResult:
     status: Literal["created", "unchanged", "removed"]
     project: ProjectCommandState
     link: PaperLinkCommandState
+
+
+@dataclass(frozen=True)
+class NoteBlockLinkCommandResult:
+    status: Literal["created", "unchanged", "removed"]
+    project: ProjectCommandState
+    link: NoteBlockLinkCommandState
 
 
 @dataclass(frozen=True)
@@ -304,17 +322,30 @@ def _paper_link_state(link: Mapping[str, Any]) -> PaperLinkCommandState:
     )
 
 
+def _note_block_link_state(link: Mapping[str, Any]) -> NoteBlockLinkCommandState:
+    return NoteBlockLinkCommandState(
+        link_id=str(link["id"]),
+        project_id=str(link["project_id"]),
+        paper_id=str(link["paper_id"]),
+        note_block_id=str(link["target_id"]),
+        link_type=str(link["link_type"]),
+        created_at=str(link["created_at"]),
+    )
+
+
 class ProjectCommandService:
-    """Locked, optimistic, atomic command boundary for Projects and Paper links."""
+    """Locked, optimistic, atomic command boundary for Projects and typed links."""
 
     def __init__(
         self,
         *,
         projects_dir: Path = PROJECTS_DIR,
         index_csv: Path = INDEX_CSV,
+        note_blocks_dir: Path = NOTE_BLOCKS_DIR,
     ) -> None:
         self.projects_dir = Path(projects_dir)
         self.index_csv = Path(index_csv)
+        self.note_blocks_dir = Path(note_blocks_dir)
 
     def _load(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         try:
@@ -591,4 +622,125 @@ class ProjectCommandService:
                 status="removed",
                 project=_project_state(project, persisted),
                 link=_paper_link_state(link),
+            )
+
+    def add_note_block_link(
+        self,
+        project_id: str,
+        *,
+        paper_id: str,
+        note_block_id: str,
+        link_type: str,
+        expected_links_revision: str,
+    ) -> NoteBlockLinkCommandResult:
+        safe_paper_id = _required_text(paper_id, "paper_id", 200)
+        safe_block_id = _required_text(note_block_id, "note_block_id", 200)
+        safe_link_type = _choice(
+            link_type,
+            "link_type",
+            project_link_store.ALLOWED_LINK_TYPES,
+        )
+        with _persistent_command_lock(self.projects_dir, self.index_csv):
+            projects, links = self._load()
+            project = _find_project(projects, project_id)
+            if project["status"] == "archived":
+                raise ProjectArchivedConflict
+            if project_links_revision(project_id, links) != expected_links_revision:
+                raise ProjectCommandConflict
+            try:
+                paper_index = read_index_snapshot(self.index_csv)
+            except Exception:
+                raise ProjectCommandUnavailable from None
+            if (
+                "paper_id" not in paper_index
+                or safe_paper_id not in set(paper_index["paper_id"].astype(str))
+            ):
+                raise ProjectCommandNotFound
+            try:
+                blocks = note_block_store.list_note_blocks(
+                    safe_paper_id,
+                    self.note_blocks_dir,
+                )
+                normalized_note_blocks(safe_paper_id, blocks)
+            except Exception:
+                raise ProjectCommandUnavailable from None
+            if not any(str(block.get("id", "")) == safe_block_id for block in blocks):
+                raise ProjectCommandNotFound
+
+            duplicate = next(
+                (
+                    link
+                    for link in links
+                    if str(link.get("project_id", "")) == project_id
+                    and str(link.get("target_type", "")) == "note_block"
+                    and str(link.get("target_id", "")) == safe_block_id
+                    and str(link.get("paper_id", "")) == safe_paper_id
+                    and str(link.get("link_type", "")) == safe_link_type
+                ),
+                None,
+            )
+            if duplicate is not None:
+                return NoteBlockLinkCommandResult(
+                    status="unchanged",
+                    project=_project_state(project, links),
+                    link=_note_block_link_state(duplicate),
+                )
+
+            link = {
+                "id": str(uuid4()),
+                "project_id": project_id,
+                "target_type": "note_block",
+                "target_id": safe_block_id,
+                "paper_id": safe_paper_id,
+                "link_type": safe_link_type,
+                "note": "",
+                "created_at": _utc_now_iso(),
+            }
+            persisted = self._persist_links(
+                [*links, link],
+                expected_link_id=link["id"],
+            )
+            created = next(item for item in persisted if str(item["id"]) == link["id"])
+            return NoteBlockLinkCommandResult(
+                status="created",
+                project=_project_state(project, persisted),
+                link=_note_block_link_state(created),
+            )
+
+    def remove_note_block_link(
+        self,
+        project_id: str,
+        link_id: str,
+        *,
+        expected_links_revision: str,
+    ) -> NoteBlockLinkCommandResult:
+        with _persistent_command_lock(self.projects_dir, self.index_csv):
+            projects, links = self._load()
+            project = _find_project(projects, project_id)
+            if project["status"] == "archived":
+                raise ProjectArchivedConflict
+            if project_links_revision(project_id, links) != expected_links_revision:
+                raise ProjectCommandConflict
+            link = next(
+                (
+                    item
+                    for item in links
+                    if str(item.get("id", "")) == link_id
+                    and str(item.get("project_id", "")) == project_id
+                    and str(item.get("target_type", "")) == "note_block"
+                ),
+                None,
+            )
+            if link is None:
+                raise ProjectCommandNotFound
+
+            persisted = self._persist_links(
+                [item for item in links if str(item.get("id", "")) != link_id],
+                expected_link_id=None,
+                removed_link_id=link_id,
+            )
+            return NoteBlockLinkCommandResult(
+                status="removed",
+                project=_project_state(project, persisted),
+                link=_note_block_link_state(link),
             )
