@@ -540,7 +540,7 @@
           }
         },
         "unreadable_note_warning": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-26",
             "reference": "docs/checklists/regression_checklist.md",
@@ -548,7 +548,7 @@
           }
         },
         "missing_pdf": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-26",
             "reference": "docs/checklists/regression_checklist.md",
@@ -606,7 +606,7 @@
       }
     },
     "project_write_runtime": {
-      "status": "VERIFIED",
+      "status": "NOT VERIFIED",
       "evidence": {
         "date": "2026-07-27",
         "reference": "docs/checklists/regression_checklist.md",
@@ -614,7 +614,7 @@
       },
       "checks": {
         "create_reload_streamlit_visibility": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -622,7 +622,7 @@
           }
         },
         "metadata_round_trip": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -630,7 +630,7 @@
           }
         },
         "paper_link_add_duplicate_remove": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -638,7 +638,7 @@
           }
         },
         "archive_preserves_links": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -646,7 +646,7 @@
           }
         },
         "project_revision_conflict": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -654,7 +654,7 @@
           }
         },
         "link_revision_conflict": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -662,7 +662,7 @@
           }
         },
         "api_restart_draft_recovery": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -670,7 +670,7 @@
           }
         },
         "network_privacy": {
-          "status": "VERIFIED",
+          "status": "NOT VERIFIED",
           "evidence": {
             "date": "2026-07-27",
             "reference": "docs/checklists/regression_checklist.md",
@@ -682,7 +682,7 @@
   },
   "publication_state": {
     "github_release": {
-      "status": "VERIFIED",
+      "status": "NOT VERIFIED",
       "url": null,
       "evidence": {
         "date": "2026-07-25",
@@ -701,7 +701,7 @@
   },
   "recurring_operational_procedures": {
     "clean_pc_restore": {
-      "status": "VERIFIED",
+      "status": "NOT VERIFIED",
       "procedure": "docs/checklists/new_pc_restore_checklist.md",
       "cadence": "Repeat for release readiness or environment migration when explicitly scheduled.",
       "evidence": {
