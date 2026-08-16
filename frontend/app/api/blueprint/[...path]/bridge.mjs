@@ -21,6 +21,10 @@ export function isBlueprintMetadataPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "metadata";
 }
 
+export function isBlueprintMetadataEnrichmentPreviewPath(parts) {
+  return Array.isArray(parts) && parts.length === 4 && parts[0] === "papers" && parts[2] === "metadata" && parts[3] === "enrichment-preview";
+}
+
 export function isBlueprintPaperTagsPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "tags";
 }
@@ -100,6 +104,7 @@ export function isAllowedBlueprintRequest(method, parts) {
       || isBlueprintProjectPaperLinksPath(parts)
       || isBlueprintProjectNoteBlockLinksPath(parts)
       || isBlueprintNoteBlocksPath(parts)
+      || isBlueprintMetadataEnrichmentPreviewPath(parts)
       || isBlueprintPaperTagsPath(parts);
   }
   if (normalizedMethod === "PATCH") {

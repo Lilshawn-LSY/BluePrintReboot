@@ -7,6 +7,7 @@ import {
   isAllowedBlueprintPath,
   isAllowedBlueprintRequest,
   isBlueprintMetadataPath,
+  isBlueprintMetadataEnrichmentPreviewPath,
   isBlueprintPaperTagsPath,
   isBlueprintNoteBlockPath,
   isBlueprintNoteBlocksPath,
@@ -37,6 +38,7 @@ test("allows the bounded read routes plus the exact managed PDF, Reader, and Not
   assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader"]), true);
   assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader", "raw"]), false);
   assert.equal(isBlueprintMetadataPath(["papers", "paper-123", "metadata"]), true);
+  assert.equal(isBlueprintMetadataEnrichmentPreviewPath(["papers", "paper-123", "metadata", "enrichment-preview"]), true);
   assert.equal(isBlueprintPaperTagsPath(["papers", "paper-123", "tags"]), true);
   assert.equal(isBlueprintReadingNotePath(["papers", "paper-123", "reading-note"]), true);
   assert.equal(isBlueprintNoteBlocksPath(["papers", "paper-123", "note-blocks"]), true);
@@ -45,6 +47,7 @@ test("allows the bounded read routes plus the exact managed PDF, Reader, and Not
 
 test("allows only the exact method and path pairs for Reader commands", () => {
   assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "metadata"]), true);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "metadata", "enrichment-preview"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "tags"]), true);
   assert.equal(isAllowedBlueprintRequest("DELETE", ["papers", "paper-1", "tags"]), true);
   assert.equal(isAllowedBlueprintRequest("PUT", ["papers", "paper-1", "reading-note"]), true);
@@ -54,6 +57,8 @@ test("allows only the exact method and path pairs for Reader commands", () => {
     ["PUT", ["papers", "paper-1", "metadata"]],
     ["PATCH", ["papers", "paper-1", "reading-note"]],
     ["POST", ["papers", "paper-1", "metadata"]],
+    ["GET", ["papers", "paper-1", "metadata", "enrichment-preview"]],
+    ["PATCH", ["papers", "paper-1", "metadata", "enrichment-preview"]],
     ["PATCH", ["papers", "paper-1", "tags"]],
     ["PUT", ["papers", "paper-1", "tags"]],
     ["DELETE", ["papers", "paper-1", "reading-note"]],
@@ -188,6 +193,33 @@ test("forwards command JSON bodies and Content-Type without forwarding Range", a
   );
   assert.equal(response.status, 200);
   assert.equal(requestedUrl, `${API_URL}/papers/paper%201/metadata`);
+});
+
+test("forwards the exact metadata enrichment preview request without granting metadata writes", async () => {
+  const payload = JSON.stringify({});
+  let requestedUrl;
+  const response = await proxyBlueprintRequest(
+    new Request("http://localhost/api/blueprint/papers/paper%201/metadata/enrichment-preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Range: "bytes=0-10" },
+      body: payload,
+    }),
+    ["papers", "paper 1", "metadata", "enrichment-preview"],
+    {
+      apiUrl: API_URL,
+      fetchImpl: async (url, options) => {
+        requestedUrl = url;
+        assert.equal(options.method, "POST");
+        assert.equal(options.headers.get("Content-Type"), "application/json");
+        assert.equal(options.headers.get("Range"), null);
+        assert.equal(options.body, payload);
+        return Response.json({ fields: [] });
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(requestedUrl, `${API_URL}/papers/paper%201/metadata/enrichment-preview`);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper 1", "metadata"]), false);
 });
 
 test("forwards the exact Paper tag commands with a JSON revision baseline", async () => {

@@ -725,6 +725,26 @@ class MetadataCommandRequest(StrictRequestModel):
     expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class MetadataEnrichmentPreviewRequest(StrictRequestModel):
+    """An intentionally empty, explicit request for non-persistent candidates."""
+
+
+class MetadataEnrichmentFieldPreview(StrictResponseModel):
+    field: Literal["title", "authors", "year", "journal", "doi", "abstract", "keywords"]
+    current_value: str
+    candidate_value: str
+    source: str
+    state: Literal["unchanged", "conflict", "available", "unavailable"]
+
+
+class MetadataEnrichmentPreviewResponse(StrictResponseModel):
+    paper_id: str
+    metadata_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    candidate_sources: list[str]
+    fields: list[MetadataEnrichmentFieldPreview]
+    diagnostics: list[str]
+
+
 class PersistedReadingNote(StrictResponseModel):
     exists: bool
     content: str

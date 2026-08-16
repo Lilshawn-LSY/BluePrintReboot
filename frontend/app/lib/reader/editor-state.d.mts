@@ -56,6 +56,11 @@ export function applyMetadataCommandResult(
   state: ReaderEditorState,
   response: MetadataCommandResponse,
 ): ReaderEditorState;
+export function applyMetadataEnrichmentCommandResult(
+  state: ReaderEditorState,
+  response: MetadataCommandResponse,
+  selectedFields: Array<keyof EditablePaperMetadata>,
+): ReaderEditorState;
 export function applyPaperTagCommandResult(
   state: ReaderEditorState,
   response: PaperTagCommandResponse,

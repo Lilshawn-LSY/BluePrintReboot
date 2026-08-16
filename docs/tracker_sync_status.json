@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.7",
-  "release_name": "v1.5.7-paper-tag-apply-remove",
+  "product_version": "1.5.8",
+  "release_name": "v1.5.8-metadata-enrichment-frontend",
   "as_of": "2026-08-16",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 124,
+        "passed": 127,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 local validation",
-        "summary": "The current offline repository readiness smoke completed with 124 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.8 local validation",
+        "summary": "The current offline repository readiness smoke completed with 127 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 725,
+        "passed": 737,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 local validation",
-        "summary": "The current full Python suite completed with 725 passed."
+        "reference": "v1.5.8 local validation",
+        "summary": "The current full Python suite completed with 737 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -151,16 +151,16 @@
     },
     "focused_reader_commands": {
       "status": "VERIFIED",
-      "scope": "Reader metadata, Paper tag, and Reading Note command contracts",
-      "command": ".venv/bin/python -m pytest -q tests/test_paper_tag_commands.py tests/test_reader_commands.py tests/test_reader_snapshot_api.py tests/test_api.py tests/test_read_models.py",
+      "scope": "Reader metadata enrichment, Paper tag, Reading Note, snapshot, and API command contracts",
+      "command": ".venv/bin/python -m pytest -q tests/test_metadata_enrichment_api.py tests/test_reader_commands.py tests/test_reader_snapshot_api.py tests/test_api.py tests/test_read_models.py tests/test_pdf_api.py",
       "counts": {
-        "passed": 80,
+        "passed": 96,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 focused Reader tag validation",
-        "summary": "The focused Reader tag, metadata, snapshot, read-parity, concurrency, normalization, header synchronization, rollback, and privacy suite passed."
+        "reference": "v1.5.8 focused Reader enrichment validation",
+        "summary": "The focused metadata-enrichment preview, PDF DOI, provider fallback/failure, selective apply, stale revision, Reader metadata/note, snapshot, API, and privacy suite passed."
       }
     },
     "focused_pdf_api": {
@@ -280,12 +280,12 @@
       "scope": "release and version contracts",
       "command": ".venv/bin/python -m pytest -q tests/test_release_contracts.py tests/test_release_state_reconciliation.py tests/test_contact.py tests/test_smoke_check.py",
       "counts": {
-        "passed": 53,
+        "passed": 54,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 focused release validation",
+        "reference": "v1.5.8 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, local release-document, reconciliation, contact, and smoke-contract suite passed."
       }
     },
@@ -299,7 +299,7 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 local release reconciliation",
+        "reference": "v1.5.8 local release reconciliation",
         "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
       }
     },
@@ -324,18 +324,18 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 local validation",
+        "reference": "v1.5.8 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
     "frontend_production_build": {
       "status": "VERIFIED",
       "scope": "frontend production build",
-      "command": "npm --prefix frontend test",
+      "command": "npm --prefix frontend run build",
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 local validation",
+        "reference": "v1.5.8 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -351,7 +351,7 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 local validation",
+        "reference": "v1.5.8 local validation",
         "summary": "The complete frontend build and Node test suite passed."
       }
     },
@@ -440,12 +440,12 @@
       "scope": "tracked repository entries only",
       "command": ".venv/bin/python scripts/check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 276,
+        "entries_inspected": 280,
         "violations": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.7 local hygiene validation",
+        "reference": "v1.5.8 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -818,6 +818,136 @@
           }
         }
       }
+    },
+    "metadata_enrichment_runtime": {
+      "status": "VERIFIED",
+      "evidence": {
+        "date": "2026-08-16",
+        "reference": "User-provided v1.5.8 manual verification",
+        "summary": "User-provided manual verification completed the candidate preview, comparison, selective apply, provider-safety, Reading Note draft-preservation, conflict, reload, and existing workflow smoke scenarios."
+      },
+      "checks": {
+        "candidate_fetch_preview_only": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Candidate fetch was preview-only; no Paper metadata changed before Apply."
+          }
+        },
+        "current_candidate_provenance_display": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Current values, candidates, and provenance displayed correctly."
+          }
+        },
+        "selective_partial_apply_reload": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Selective partial apply persisted after reload."
+          }
+        },
+        "unselected_manual_metadata_preserved": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Unselected and manual metadata remained preserved."
+          }
+        },
+        "missing_candidate_abstract_preserves_existing": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "A missing candidate abstract did not erase the existing abstract."
+          }
+        },
+        "partial_provider_result_safe": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "A partial provider result was handled safely."
+          }
+        },
+        "provider_failure_preserves_paper_metadata": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "A provider failure left Paper metadata unchanged."
+          }
+        },
+        "unsaved_reading_note_survives_candidate_fetch": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "An unsaved Reading Note survived candidate fetch."
+          }
+        },
+        "unsaved_reading_note_survives_metadata_apply": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "An unsaved Reading Note survived metadata apply."
+          }
+        },
+        "unsaved_reading_note_survives_enrichment_error": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "An unsaved Reading Note survived enrichment or provider error."
+          }
+        },
+        "stale_revision_conflict_no_silent_overwrite": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "A stale revision produced an explicit conflict with no silent overwrite."
+          }
+        },
+        "other_tab_metadata_preserved_after_stale_conflict": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Metadata written in another tab remained preserved after stale conflict."
+          }
+        },
+        "repeated_apply_no_corruption": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Repeated apply caused no corruption."
+          }
+        },
+        "browser_reload_preserves_applied_metadata": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Browser reload preserved successfully applied metadata."
+          }
+        },
+        "reader_project_tag_workflow_smoke": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "User-provided v1.5.8 manual verification",
+            "summary": "Existing Reader, Project, and Tag workflow smoke verification passed."
+          }
+        }
+      }
     }
   },
   "publication_state": {
@@ -863,11 +993,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.5.7 manual, hosted, and publication evidence; v1.6 Reader/shared UX deferred",
+    "name": "v1.5.8 PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.5.9+ enrichment extensions deferred",
     "evidence": {
       "date": "2026-08-16",
-      "reference": "docs/release_notes/v1.5.7.md",
-      "summary": "Keep v1.5.7 manual, hosted CI, merge, tag, publication, and clean-PC restore evidence separate from the implemented local Paper-tag command slice and deferred v1.6 Reader/shared UX work."
+      "reference": "docs/release_notes/v1.5.8.md",
+      "summary": "Keep v1.5.8 PR-head CI, merge, tag, publication, post-merge main CI, and clean-PC restore evidence separate from the completed local manual verification and deferred v1.5.9+ enrichment extensions."
     }
   },
   "historical_evidence": {

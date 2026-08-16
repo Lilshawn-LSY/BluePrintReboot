@@ -31,6 +31,7 @@ from api.dependencies import (
     get_canonical_tags,
     get_health_summary,
     get_library_status,
+    get_metadata_enrichment_service,
     get_managed_pdf,
     get_note_block_collection,
     get_note_block_command_service,
@@ -55,6 +56,8 @@ from api.schemas import (
     LibraryStatusResponse,
     MetadataCommandRequest,
     MetadataCommandResponse,
+    MetadataEnrichmentPreviewRequest,
+    MetadataEnrichmentPreviewResponse,
     PaperTagCommandRequest,
     PaperTagCommandResponse,
     NoteBlockCollectionResponse,
@@ -97,6 +100,11 @@ from services.project_commands import (
     ProjectCommandUnavailable,
 )
 from services.reader_commands import ReaderCommandConflict, ReaderCommandNotFound, ReaderCommandService, ReaderCommandUnavailable
+from services.metadata_enrichment import (
+    MetadataEnrichmentNotFound,
+    MetadataEnrichmentService,
+    MetadataEnrichmentUnavailable,
+)
 from services.settings_read_model import SettingsSummary as DomainSettingsSummary
 from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
 
@@ -108,6 +116,7 @@ PDF_INVALID_DETAIL = "Managed PDF path is invalid."
 PDF_UNAVAILABLE_DETAIL = "Managed PDF is temporarily unavailable."
 COMMAND_CONFLICT_DETAIL = "The saved Reader state changed. Reload the current version before retrying."
 COMMAND_UNAVAILABLE_DETAIL = "The Reader command could not be completed."
+METADATA_ENRICHMENT_UNAVAILABLE_DETAIL = "Metadata enrichment could not be completed."
 COMMAND_INVALID_DETAIL = "Request validation failed."
 PROJECT_COMMAND_CONFLICT_DETAIL = "The saved Project state changed. Reload the current version before retrying."
 PROJECT_ARCHIVED_DETAIL = "Archived Projects do not allow this command."
@@ -794,6 +803,50 @@ def save_reader_metadata(
             "sha256": result.reading_note.sha256,
             "size_bytes": result.reading_note.size_bytes,
         },
+    )
+
+
+@router.post(
+    "/papers/{paper_id}/metadata/enrichment-preview",
+    response_model=MetadataEnrichmentPreviewResponse,
+    summary="Fetch non-persistent metadata enrichment candidates",
+    description=(
+        "Explicitly retrieve Crossref and existing local/arXiv fallback candidate metadata "
+        "for comparison only. This operation never writes Paper metadata; selected values "
+        "must be saved separately through the Reader metadata command."
+    ),
+    responses={
+        404: {"model": APIError, "description": "No paper has the requested identity."},
+        422: {"model": APIError, "description": "The enrichment request is invalid."},
+        503: {"model": APIError, "description": "The preview could not be completed."},
+    },
+)
+def preview_metadata_enrichment(
+    _request: MetadataEnrichmentPreviewRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200, description="Stable BluePrintReboot paper identity.")],
+    enrichment: Annotated[MetadataEnrichmentService, Depends(get_metadata_enrichment_service)],
+) -> MetadataEnrichmentPreviewResponse:
+    try:
+        preview = enrichment.preview(paper_id)
+    except MetadataEnrichmentNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except MetadataEnrichmentUnavailable:
+        raise HTTPException(status_code=503, detail=METADATA_ENRICHMENT_UNAVAILABLE_DETAIL) from None
+    return MetadataEnrichmentPreviewResponse(
+        paper_id=preview.paper_id,
+        metadata_revision=preview.metadata_revision,
+        candidate_sources=list(preview.candidate_sources),
+        fields=[
+            {
+                "field": field.field,
+                "current_value": field.current_value,
+                "candidate_value": field.candidate_value,
+                "source": field.source,
+                "state": field.state,
+            }
+            for field in preview.fields
+        ],
+        diagnostics=list(preview.diagnostics),
     )
 
 

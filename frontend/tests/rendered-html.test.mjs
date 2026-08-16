@@ -68,6 +68,10 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(detail, /Reader unavailable/);
   assert.match(readerView, /title=\{editor\.metadata\.draft\.title \|\| snapshot\.paper\.title\}/);
   assert.match(readerView, /Paper metadata/);
+  assert.match(readerView, /Metadata enrichment/);
+  assert.match(readerView, /Fetch candidates/);
+  assert.match(readerView, /Apply selected fields/);
+  assert.match(readerView, /previewMetadataEnrichment/);
   assert.match(readerView, /Complete Reading Note/);
   assert.match(readerView, /Save Metadata/);
   assert.match(readerView, /Save Reading Note/);
@@ -99,6 +103,7 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(reader, /lifecycleGenerationRef/);
   assert.match(reader, /observeLifecyclePromise\(controller\.destroy\(\), "cleanup"\)/);
   assert.match(readerView, /apiClient\.saveReaderMetadata/);
+  assert.match(readerView, /applyMetadataEnrichmentCommandResult/);
   assert.match(readerView, /apiClient\.saveReadingNote/);
   assert.doesNotMatch(readerView, /contentEditable|dangerouslySetInnerHTML|autosave|annotation|highlight/i);
   assert.match(client, /getReaderSnapshot/);
@@ -121,7 +126,7 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /return "Reader"/);
-  assert.equal(JSON.parse(packageJson).version, "1.5.7");
+  assert.equal(JSON.parse(packageJson).version, "1.5.8");
   assert.match(shell, /packageMetadata\.version/);
   assert.match(shell, /Local workspace/);
   assert.doesNotMatch(shell, /v1\.5\.4|Project commands/);

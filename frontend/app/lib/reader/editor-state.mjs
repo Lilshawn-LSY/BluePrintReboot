@@ -119,6 +119,32 @@ export function applyMetadataCommandResult(state, response) {
   };
 }
 
+export function applyMetadataEnrichmentCommandResult(state, response, selectedFields) {
+  const selected = new Set(selectedFields);
+  const updated = applyMetadataCommandResult(state, response);
+  const draft = { ...updated.metadata.draft };
+  const preservedFields = [];
+
+  for (const field of METADATA_FIELDS) {
+    if (selected.has(field) || state.metadata.draft[field] === state.metadata.baseline[field]) continue;
+    draft[field] = state.metadata.draft[field];
+    preservedFields.push(field);
+  }
+
+  const draftChanged = changedMetadataFields(draft, updated.metadata.baseline).length > 0;
+  return {
+    ...updated,
+    metadata: {
+      ...updated.metadata,
+      draft,
+      status: draftChanged ? "dirty" : updated.metadata.status,
+      message: preservedFields.length
+        ? `Selected enrichment fields saved. Unselected manual draft fields were kept: ${preservedFields.join(", ")}.`
+        : updated.metadata.message,
+    },
+  };
+}
+
 export function applyPaperTagCommandResult(state, response) {
   const noteWasDirty = state.note.draft !== state.note.baseline;
   let noteDraft = state.note.draft;

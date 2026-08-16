@@ -24,6 +24,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.5.3 adds one bounded safe Settings summary, a real four-section Settings view, explicit zero-versus-unavailable diagnostics, and backup-evidence presence without adding Settings, health, backup, restore, or repair writes.
 - v1.5.4 adds explicit Project create/update/archive and existing-Paper link/unlink commands with separate Project/link revisions, shared locking, atomic replacement, rollback verification, and draft-preserving frontend workflows.
 - v1.5.5 adds structured Note Block collection reads, explicit create/update commands, typed Note Block–Project add/unlink commands, safe Project Detail target resolution, and independent Reader workflows without changing storage formats.
+- v1.5.8 adds a separate Paper-scoped metadata candidate preview in the web Reader, source-labelled field comparison, and selective application through the existing metadata command without automatic overwrite or new storage.
 
 ## Decision gates
 
