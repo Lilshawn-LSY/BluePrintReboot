@@ -492,9 +492,19 @@ class ManagedPdfScanCandidate(StrictResponseModel):
 
     relative_path: str
     filename: str
-    status: Literal["new", "already_registered", "invalid", "unavailable"]
+    status: Literal[
+        "new",
+        "already_registered",
+        "duplicate_content",
+        "reconnect_available",
+        "reconnect_ambiguous",
+        "invalid",
+        "unavailable",
+    ]
     message: str
     can_import: bool
+    can_reconnect: bool
+    reconnect_paper_id: str = ""
     size_bytes: int = Field(ge=0)
 
 
@@ -520,8 +530,38 @@ class ManagedPdfImportResponse(StrictResponseModel):
     results: list[ManagedPdfImportResult]
 
 
+class ManagedPdfReconnectResponse(StrictResponseModel):
+    status: Literal["reconnected"]
+    paper_id: str
+    relative_path: str
+    message: str
+
+
 class StrictRequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class ManagedPdfReconnectRequest(StrictRequestModel):
+    paper_id: str = Field(min_length=1, max_length=200)
+    relative_path: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("relative_path")
+    @classmethod
+    def validate_reconnect_relative_path(cls, value: str) -> str:
+        path = value.strip().replace("\\", "/")
+        posix_path = PurePosixPath(path)
+        windows_path = PureWindowsPath(path)
+        if (
+            not path
+            or posix_path.is_absolute()
+            or windows_path.is_absolute()
+            or windows_path.drive
+            or windows_path.root
+            or any(part in {"", ".", ".."} for part in posix_path.parts)
+            or posix_path.suffix.casefold() != ".pdf"
+        ):
+            raise ValueError("Reconnect paths must be safe managed-relative PDF paths.")
+        return posix_path.as_posix()
 
 
 class ManagedPdfImportRequest(StrictRequestModel):

@@ -29,7 +29,7 @@ export function DashboardView() {
             </div>
           </Section>
           <div className="split-layout">
-            <Section title="Current work" description="Recently ordered active papers from the read-only API." actions={<Link className="text-link" href="/papers">All papers <ArrowRight size={14} /></Link>}>
+            <Section title="Current work" description="Recently ordered active papers from the read-only API." actions={<Link className="text-link" href="/library">Open Library <ArrowRight size={14} /></Link>}>
               {resource.data.papers.items.length === 0 ? <EmptyState title="No active papers" description="Add and scan PDFs in Streamlit; active papers will appear here." /> : (
                 <DataTableShell label="Recent active papers">
                   <table><thead><tr><th>Paper</th><th>Year</th><th>Status</th></tr></thead><tbody>
@@ -40,7 +40,7 @@ export function DashboardView() {
             </Section>
             <Section title="Entry points" description="Move directly to the part of the workspace you need.">
               <div className="entry-list">
-                <Link href="/papers"><BookOpen size={18} /><span><strong>Browse papers</strong><small>Open citation metadata and reading context.</small></span><ArrowRight size={15} /></Link>
+                <Link href="/library"><BookOpen size={18} /><span><strong>Open Library</strong><small>Search, browse, and manage your paper collection.</small></span><ArrowRight size={15} /></Link>
                 <Link href="/library"><LibraryBig size={18} /><span><strong>Check library integrity</strong><small>Review missing files, duplicates, and recovery state.</small></span><ArrowRight size={15} /></Link>
               </div>
             </Section>

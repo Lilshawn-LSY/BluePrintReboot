@@ -34,6 +34,7 @@ export interface PaperListItem {
   health: string[];
 }
 
+
 export interface ProjectLink {
   project_id: string;
   link_type: string;
@@ -262,7 +263,7 @@ export interface ReadingNoteCommandResponse {
   size_bytes: number;
 }
 
-export type ManagedPdfScanStatus = "new" | "already_registered" | "invalid" | "unavailable";
+export type ManagedPdfScanStatus = "new" | "already_registered" | "duplicate_content" | "reconnect_available" | "reconnect_ambiguous" | "invalid" | "unavailable";
 
 export interface ManagedPdfScanCandidate {
   relative_path: string;
@@ -270,6 +271,8 @@ export interface ManagedPdfScanCandidate {
   status: ManagedPdfScanStatus;
   message: string;
   can_import: boolean;
+  can_reconnect: boolean;
+  reconnect_paper_id: string;
   size_bytes: number;
 }
 
@@ -295,6 +298,13 @@ export interface ManagedPdfImportResponse {
   message: string;
   imported_count: number;
   results: ManagedPdfImportResult[];
+}
+
+export interface ManagedPdfReconnectResponse {
+  status: "reconnected";
+  paper_id: string;
+  relative_path: string;
+  message: string;
 }
 
 export interface PaginatedPaperList {

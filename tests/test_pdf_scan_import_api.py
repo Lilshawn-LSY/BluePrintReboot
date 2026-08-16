@@ -94,6 +94,8 @@ def test_scan_finds_new_pdf_without_creating_a_paper_and_ignores_non_pdfs(tmp_pa
                 "status": "new",
                 "message": "Ready to register as a new Paper.",
                 "can_import": True,
+                "can_reconnect": False,
+                "reconnect_paper_id": "",
                 "size_bytes": len(PDF_BYTES),
             }
         ],
@@ -115,7 +117,7 @@ def test_scan_identifies_registered_and_content_duplicate_pdfs_without_new_rows(
     candidates = {item["relative_path"]: item for item in response.json()["candidates"]}
 
     assert candidates["Registered.pdf"]["status"] == "already_registered"
-    assert candidates["Same-content.pdf"]["status"] == "already_registered"
+    assert candidates["Same-content.pdf"]["status"] == "duplicate_content"
     assert len(read_index_snapshot(index_csv)) == 1
 
 
@@ -213,3 +215,75 @@ def test_unreadable_pdf_scan_remains_non_mutating_and_import_rejects_unsafe_path
     invalid = client.post("/papers/import", json={"relative_paths": ["../outside.pdf"]})
     assert invalid.status_code == 422
     assert str(tmp_path) not in invalid.text
+
+
+def test_exact_hash_reconnect_preserves_existing_paper_owned_state(tmp_path: Path) -> None:
+    workspace, papers_dir, notes_dir, index_csv = _workspace(tmp_path)
+    original = papers_dir / "Original.pdf"
+    original.write_bytes(PDF_BYTES)
+    client = _client(workspace, papers_dir, notes_dir, index_csv)
+    imported = client.post("/papers/import", json={"relative_paths": ["Original.pdf"]}).json()
+    paper_id = imported["results"][0]["paper_id"]
+
+    # These files represent Paper-owned and linked state.  Reconnect must only
+    # update the existing index row's managed-file identity fields.
+    (notes_dir / f"{paper_id}.md").write_text("saved reading note", encoding="utf-8")
+    blocks = workspace / "data" / "note_blocks" / f"{paper_id}.json"
+    blocks.parent.mkdir(parents=True)
+    blocks.write_text('[{"id":"block-1","paper_id":"' + paper_id + '"}]', encoding="utf-8")
+    links = workspace / "data" / "projects" / "links.json"
+    links.parent.mkdir(parents=True)
+    links.write_text('[{"paper_id":"' + paper_id + '","project_id":"project-1"}]', encoding="utf-8")
+    before_owned = {path: path.read_bytes() for path in (notes_dir / f"{paper_id}.md", blocks, links)}
+
+    dataframe = read_index_snapshot(index_csv)
+    dataframe.loc[dataframe["paper_id"] == paper_id, "title"] = "Curated title"
+    dataframe.loc[dataframe["paper_id"] == paper_id, "tags"] = "methods, review"
+    from storage.index_store import save_index
+    save_index(dataframe, index_csv)
+    original.unlink()
+    (papers_dir / "moved").mkdir()
+    moved = papers_dir / "moved" / "Renamed.pdf"
+    moved.write_bytes(PDF_BYTES)
+
+    scan = client.post("/papers/scan", json={})
+    assert scan.status_code == 200
+    candidate = scan.json()["candidates"][0]
+    assert candidate["status"] == "reconnect_available"
+    assert candidate["can_import"] is False
+    assert candidate["can_reconnect"] is True
+    assert candidate["reconnect_paper_id"] == paper_id
+
+    reconnected = client.post("/papers/reconnect", json={"paper_id": paper_id, "relative_path": "moved/Renamed.pdf"})
+    assert reconnected.status_code == 200
+    assert reconnected.json()["status"] == "reconnected"
+    row = read_index_snapshot(index_csv).iloc[0]
+    assert row["paper_id"] == paper_id
+    assert row["filename"] == "Renamed.pdf"
+    assert row["title"] == "Curated title"
+    assert row["tags"] == "methods, review"
+    assert all(path.read_bytes() == expected for path, expected in before_owned.items())
+    assert str(workspace) not in reconnected.text
+
+
+def test_exact_hash_reconnect_rejects_ambiguous_or_stale_candidates_without_mutation(tmp_path: Path) -> None:
+    workspace, papers_dir, notes_dir, index_csv = _workspace(tmp_path)
+    (papers_dir / "One.pdf").write_bytes(PDF_BYTES)
+    (papers_dir / "Two.pdf").write_bytes(PDF_BYTES + b"two")
+    client = _client(workspace, papers_dir, notes_dir, index_csv)
+    first = client.post("/papers/import", json={"relative_paths": ["One.pdf"]}).json()["results"][0]["paper_id"]
+    second = client.post("/papers/import", json={"relative_paths": ["Two.pdf"]}).json()["results"][0]["paper_id"]
+    dataframe = read_index_snapshot(index_csv)
+    dataframe.loc[dataframe["paper_id"] == second, "pdf_sha256"] = dataframe.loc[dataframe["paper_id"] == first, "pdf_sha256"].iloc[0]
+    from storage.index_store import save_index
+    save_index(dataframe, index_csv)
+    (papers_dir / "One.pdf").unlink()
+    (papers_dir / "Two.pdf").unlink()
+    (papers_dir / "Moved.pdf").write_bytes(PDF_BYTES)
+
+    scan = client.post("/papers/scan", json={}).json()
+    assert scan["candidates"][0]["status"] == "reconnect_ambiguous"
+    before = index_csv.read_bytes()
+    conflict = client.post("/papers/reconnect", json={"paper_id": first, "relative_path": "Moved.pdf"})
+    assert conflict.status_code == 409
+    assert index_csv.read_bytes() == before

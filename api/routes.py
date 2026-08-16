@@ -65,6 +65,8 @@ from api.schemas import (
     LibraryStatusResponse,
     ManagedPdfImportRequest,
     ManagedPdfImportResponse,
+    ManagedPdfReconnectRequest,
+    ManagedPdfReconnectResponse,
     ManagedPdfScanResponse,
     MetadataCommandRequest,
     MetadataCommandResponse,
@@ -99,7 +101,14 @@ from api.schemas import (
     CreateNoteBlockRequest,
     UpdateNoteBlockRequest,
 )
-from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail as DomainPaperDetail, PaperListItem as DomainPaperListItem, ReaderSnapshot as DomainReaderSnapshot
+from services.library_read_model import (
+    HealthSummary,
+    LibraryStatus,
+    PaperDetail as DomainPaperDetail,
+    PaperListItem as DomainPaperListItem,
+    ReaderSnapshot as DomainReaderSnapshot,
+    filter_paper_list_items,
+)
 from services.project_read_model import ProjectDetail as DomainProjectDetail, ProjectListItem as DomainProjectListItem
 from services.note_block_read_model import NoteBlockCollection as DomainNoteBlockCollection
 from services.note_block_commands import (
@@ -123,7 +132,12 @@ from services.metadata_enrichment import (
     MetadataEnrichmentService,
     MetadataEnrichmentUnavailable,
 )
-from services.pdf_scan_import import PdfScanImportService, PdfScanImportUnavailable
+from services.pdf_scan_import import (
+    PdfReconnectConflict,
+    PdfReconnectInvalid,
+    PdfScanImportService,
+    PdfScanImportUnavailable,
+)
 from services.settings_read_model import SettingsSummary as DomainSettingsSummary
 from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
 from services.tag_candidate_review import (
@@ -818,6 +832,39 @@ def import_managed_pdfs(
         raise HTTPException(status_code=503, detail=PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL) from None
 
 
+@router.post(
+    "/papers/reconnect",
+    response_model=ManagedPdfReconnectResponse,
+    summary="Reconnect a missing Paper to an exact managed PDF",
+    description=(
+        "Explicitly reconnect one missing indexed Paper to one managed-relative PDF only "
+        "when its SHA-256 identity remains an unambiguous exact match."
+    ),
+    responses={
+        409: {"model": APIError, "description": "The reconnect candidate changed or is ambiguous."},
+        422: {"model": APIError, "description": "The reconnect request is invalid."},
+        503: {"model": APIError, "description": "The reconnect could not be persisted consistently."},
+    },
+)
+def reconnect_managed_pdf(
+    request: ManagedPdfReconnectRequest,
+    commands: Annotated[PdfScanImportService, Depends(get_pdf_scan_import_service)],
+) -> ManagedPdfReconnectResponse:
+    try:
+        return ManagedPdfReconnectResponse.model_validate(
+            commands.reconnect(
+                paper_id=request.paper_id,
+                relative_path=request.relative_path,
+            )
+        )
+    except PdfReconnectConflict:
+        raise HTTPException(status_code=409, detail="The reconnect candidate changed or is no longer uniquely safe. Scan again before retrying.") from None
+    except PdfReconnectInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except PdfScanImportUnavailable:
+        raise HTTPException(status_code=503, detail=PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL) from None
+
+
 @router.get(
     "/papers",
     response_model=PaginatedPaperList,
@@ -835,10 +882,15 @@ def list_papers(
         ArchiveStatus,
         Query(description="Archive filter: `active` excludes archived papers, `archived` returns only archived papers, and `all` returns both."),
     ] = ArchiveStatus.active,
+    q: Annotated[str, Query(max_length=200, description="Case-insensitive bounded metadata search.")] = "",
+    tag: Annotated[str, Query(max_length=100, description="Exact case-insensitive Paper tag filter.")] = "",
+    year: Annotated[str, Query(pattern=r"^$|^[0-9]{4}$", description="Exact four-digit publication year filter.")] = "",
+    status: Annotated[str, Query(max_length=100, description="Exact case-insensitive reading-status filter.")] = "",
 ) -> PaginatedPaperList:
     try:
+        filtered = filter_paper_list_items(papers, q=q, tag=tag, year=year, status=status)
         adapted = sorted(
-            (adapt_paper_list_item(paper) for paper in papers),
+            (adapt_paper_list_item(paper) for paper in filtered),
             key=lambda paper: (paper.title.casefold(), paper.paper_id),
         )
     except PaperContractError:

@@ -79,6 +79,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.5.8.md",
     "docs/release_notes/v1.5.9.md",
     "docs/release_notes/v1.5.10.md",
+    "docs/release_notes/v1.5.11.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -310,6 +311,7 @@ def check_api_contract() -> SmokeCheckResult:
             "/papers": {"get"},
             "/papers/scan": {"post"},
             "/papers/import": {"post"},
+            "/papers/reconnect": {"post"},
             "/papers/{paper_id}": {"get"},
             "/papers/{paper_id}/reader": {"get"},
             "/papers/{paper_id}/pdf": {"get"},
@@ -347,7 +349,7 @@ def check_api_contract() -> SmokeCheckResult:
     return SmokeCheckResult(
         "api:application-contract",
         "pass",
-        f"bounded Tag governance and candidate-review routes are present for {APP_VERSION}",
+        f"bounded Library/Paper workflow routes are present for {APP_VERSION}",
     )
 
 
@@ -374,6 +376,7 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             "getLibraryStatus",
             "scanManagedPdfs",
             "importManagedPdfs",
+            "reconnectManagedPdf",
             "getPapers",
             "getPaper",
             "getProjects",

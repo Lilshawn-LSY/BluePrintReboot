@@ -7,13 +7,21 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Iterator, Mapping
 
 from ingest.scanner import make_paper_id, pdf_hash_metadata_key, pdf_sha256_with_metadata, scan_pdf_path
-from storage.index_store import read_index_snapshot, register_scanned_paper_records
+from storage.index_store import read_index_snapshot, register_scanned_paper_records, save_index
 from storage.paths import INDEX_CSV, NOTES_DIR, PAPERS_DIR
 from storage.workspace_lock import WorkspaceLockUnavailable, workspace_write_lock
 
 
 class PdfScanImportUnavailable(RuntimeError):
     """The managed-PDF command could not complete without risking consistency."""
+
+
+class PdfReconnectConflict(RuntimeError):
+    """A reconnect candidate changed or is no longer uniquely safe."""
+
+
+class PdfReconnectInvalid(ValueError):
+    """A reconnect request is outside the bounded managed-PDF contract."""
 
 
 @dataclass(frozen=True)
@@ -25,6 +33,7 @@ class _PdfEvaluation:
     size_bytes: int
     path: Path | None = None
     hash_metadata: Mapping[str, object] | None = None
+    reconnect_paper_id: str = ""
 
     @property
     def can_import(self) -> bool:
@@ -108,12 +117,12 @@ class PdfScanImportService:
         resolved = candidate.resolve(strict=False)
         return resolved if _is_within(resolved, self.papers_dir) else None
 
-    def _registry_state(self) -> tuple[dict[str, Mapping[str, object]], set[str], set[str]]:
+    def _registry_state(self) -> tuple[dict[str, Mapping[str, object]], set[str], dict[str, list[Mapping[str, object]]]]:
         dataframe = read_index_snapshot(self.index_csv)
         records = dataframe.to_dict("records")
         by_path: dict[str, Mapping[str, object]] = {}
         paper_ids: set[str] = set()
-        hashes: set[str] = set()
+        hashes: dict[str, list[Mapping[str, object]]] = {}
         for record in records:
             paper_id = str(record.get("paper_id", "") or "").strip()
             if paper_id:
@@ -123,7 +132,7 @@ class PdfScanImportService:
                 by_path[_path_key(record_path)] = record
             digest = str(record.get("pdf_sha256", "") or "").strip()
             if digest:
-                hashes.add(digest)
+                hashes.setdefault(digest, []).append(record)
         return by_path, paper_ids, hashes
 
     def _relative_for_discovered_path(self, path: Path) -> str:
@@ -142,7 +151,7 @@ class PdfScanImportService:
         *,
         by_path: Mapping[str, Mapping[str, object]],
         paper_ids: set[str],
-        hashes: set[str],
+        hashes: Mapping[str, list[Mapping[str, object]]],
     ) -> _PdfEvaluation:
         safe_relative = _safe_relative_path(relative_path)
         filename = PurePosixPath(safe_relative or relative_path).name
@@ -231,12 +240,50 @@ class PdfScanImportService:
             )
         paper_id = make_paper_id(resolved, self.papers_dir)
         digest = str(hash_metadata["pdf_sha256"])
-        if _path_key(resolved) in by_path or paper_id in paper_ids or digest in hashes:
+        if _path_key(resolved) in by_path or paper_id in paper_ids:
             return _PdfEvaluation(
                 relative_path=safe_relative,
                 filename=filename,
                 status="already_registered",
                 message="This PDF is already registered in the local library.",
+                size_bytes=file_stat.st_size,
+                path=resolved,
+                hash_metadata=hash_metadata,
+            )
+        hash_matches = list(hashes.get(digest, []))
+        if hash_matches:
+            missing_matches = [
+                record for record in hash_matches
+                if (record_path := self._record_path(record)) is None or not record_path.is_file()
+            ]
+            if len(hash_matches) == 1 and len(missing_matches) == 1:
+                reconnect_paper_id = str(missing_matches[0].get("paper_id", "") or "").strip()
+                if reconnect_paper_id:
+                    return _PdfEvaluation(
+                        relative_path=safe_relative,
+                        filename=filename,
+                        status="reconnect_available",
+                        message="Exact content matches one Paper whose managed PDF is missing. Review and explicitly reconnect it.",
+                        size_bytes=file_stat.st_size,
+                        path=resolved,
+                        hash_metadata=hash_metadata,
+                        reconnect_paper_id=reconnect_paper_id,
+                    )
+            if missing_matches:
+                return _PdfEvaluation(
+                    relative_path=safe_relative,
+                    filename=filename,
+                    status="reconnect_ambiguous",
+                    message="Exact content matches multiple registered Papers or file states. No reconnect was selected automatically.",
+                    size_bytes=file_stat.st_size,
+                    path=resolved,
+                    hash_metadata=hash_metadata,
+                )
+            return _PdfEvaluation(
+                relative_path=safe_relative,
+                filename=filename,
+                status="duplicate_content",
+                message="This PDF has the same exact content as a registered Paper at another managed path.",
                 size_bytes=file_stat.st_size,
                 path=resolved,
                 hash_metadata=hash_metadata,
@@ -264,6 +311,8 @@ class PdfScanImportService:
             "status": status,
             "message": evaluation.message,
             "can_import": evaluation.can_import,
+            "can_reconnect": evaluation.status == "reconnect_available" and bool(evaluation.reconnect_paper_id),
+            "reconnect_paper_id": evaluation.reconnect_paper_id,
             "size_bytes": evaluation.size_bytes,
         }
 
@@ -316,6 +365,70 @@ class PdfScanImportService:
             "candidates": candidates,
         }
 
+    def reconnect(self, *, paper_id: str, relative_path: str) -> dict[str, Any]:
+        """Explicitly reconnect one missing Paper to one exact managed PDF.
+
+        The command updates only file identity columns in the existing row. It
+        never creates, merges, or deletes Paper records, so all Paper-owned
+        notes, blocks, tags, and Project links remain attached to ``paper_id``.
+        """
+
+        safe_relative = _safe_relative_path(relative_path)
+        if not paper_id.strip() or safe_relative is None or not safe_relative.casefold().endswith(".pdf"):
+            raise PdfReconnectInvalid
+        try:
+            with self._write_lock():
+                candidate = self._path_from_relative(safe_relative)
+                if candidate is None:
+                    raise PdfReconnectInvalid
+                evaluations_by_path, paper_ids, hashes = self._registry_state()
+                evaluation = self._evaluate(
+                    safe_relative,
+                    by_path=evaluations_by_path,
+                    paper_ids=paper_ids,
+                    hashes=hashes,
+                )
+                if (
+                    evaluation.status != "reconnect_available"
+                    or evaluation.reconnect_paper_id != paper_id
+                    or evaluation.hash_metadata is None
+                ):
+                    raise PdfReconnectConflict
+                dataframe = read_index_snapshot(self.index_csv)
+                matches = dataframe[dataframe["paper_id"] == paper_id]
+                if len(matches) != 1 or evaluation.path is None:
+                    raise PdfReconnectConflict
+                row_index = matches.index[0]
+                current_path = self._record_path(matches.iloc[0].to_dict())
+                if current_path is not None and current_path.is_file():
+                    raise PdfReconnectConflict
+                # Recheck exact identity after the lock and immediately before
+                # persistence; do not trust a stale scan preview.
+                refreshed = pdf_sha256_with_metadata(evaluation.path)
+                expected_digest = str(evaluation.hash_metadata.get("pdf_sha256", "")).casefold()
+                if not expected_digest or str(refreshed.get("pdf_sha256", "")).casefold() != expected_digest:
+                    raise PdfReconnectConflict
+                dataframe.at[row_index, "filename"] = evaluation.path.name
+                dataframe.at[row_index, "filepath"] = str(evaluation.path)
+                dataframe.at[row_index, "pdf_sha256"] = refreshed["pdf_sha256"]
+                dataframe.at[row_index, "pdf_size_bytes"] = refreshed["pdf_size_bytes"]
+                dataframe.at[row_index, "pdf_modified_at"] = refreshed["pdf_modified_at"]
+                save_index(dataframe, self.index_csv)
+                verified = read_index_snapshot(self.index_csv)
+                saved = verified[verified["paper_id"] == paper_id]
+                if len(saved) != 1 or str(saved.iloc[0].get("pdf_sha256", "")).casefold() != expected_digest:
+                    raise PdfScanImportUnavailable
+                return {
+                    "status": "reconnected",
+                    "paper_id": paper_id,
+                    "relative_path": safe_relative,
+                    "message": "Reconnected the existing Paper to the exact managed PDF. Paper metadata and linked work were preserved.",
+                }
+        except (PdfReconnectConflict, PdfReconnectInvalid, PdfScanImportUnavailable):
+            raise
+        except Exception:
+            raise PdfScanImportUnavailable from None
+
     def import_selected(self, relative_paths: list[str]) -> dict[str, Any]:
         """Register selected new PDFs, reporting safe per-file outcomes."""
 
@@ -367,6 +480,10 @@ class PdfScanImportService:
                 results: list[dict[str, Any]] = []
                 for item in evaluations:
                     payload = self._candidate_payload(item, preserve_missing=True)
+                    # Reconnect availability is a scan-preview concern; import
+                    # outcomes retain their pre-existing compact contract.
+                    payload.pop("can_reconnect", None)
+                    payload.pop("reconnect_paper_id", None)
                     if item.status == "new":
                         paper_id = persisted_paths.get(_path_key(item.path)) if item.path is not None else ""
                         if item.path is None or _path_key(item.path) not in record_paths:

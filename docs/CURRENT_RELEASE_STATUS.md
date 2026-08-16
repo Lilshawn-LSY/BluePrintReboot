@@ -7,28 +7,29 @@ Rendered as of 2026-08-16.
 
 ## Release identity
 
-- Runtime target version: `1.5.10`
-- Runtime target name: `v1.5.10-tag-governance-candidate-review`
+- Runtime target version: `1.5.11`
+- Runtime target name: `v1.5.11-library-paper-workflow-closure`
 - Immutable released baseline: `v1.4.0-pdfjs-reader-foundation` at `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`
-- Next milestone: **DOCUMENTED ONLY** — v1.5.10 manual tag-governance/candidate-review verification, the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.6.0 Reader Workspace UX Overhaul follows
+- Next milestone: **DOCUMENTED ONLY** — remaining v1.5.10 candidate-route browser Network privacy, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.6.0 Reader Workspace UX Overhaul follows
 
 ## Current state summary
 
 | Area | Status | Evidence |
 |---|---|---|
-| v1.5.10 local runtime target | VERIFIED | The current offline repository readiness smoke completed with 137 passed, 0 warnings, and 0 failed. (2026-08-16; v1.5.10 local validation) |
+| v1.5.11 local runtime target | VERIFIED | The current offline repository readiness smoke completed with 138 passed, 0 warnings, and 0 failed. (2026-08-16; v1.5.11 local validation) |
 | v1.4.0 implementation baseline | VERIFIED | The v1.4.0 PDF.js Reader foundation and worker-cancellation lifecycle repair are verified at the immutable product baseline. (2026-07-25; v1.4.0 implementation and historical validation record) |
 | PR #6 control-plane change | VERIFIED | Merged into `main` at `7b6a17369d3987dc1c8c6527a268a1df17feedcb`. |
 | v1.4.0 tag | VERIFIED | Tag targets immutable baseline `09a02e3dd42fb3f0209a89be43cb7de77f0599d4`. |
 | PR-head GitHub Actions | PARTIALLY VERIFIED | Run `30190817882`; Python `failure`, frontend `success`. |
 | Post-merge `main` GitHub Actions | NOT VERIFIED | No repository-accessible evidence proves a separate post-merge main workflow run. |
 | Reader runtime | VERIFIED | All listed real-PDF Reader runtime checks have completed manual evidence. |
+| v1.5.11 Library/Paper workflow runtime | VERIFIED | User-provided manual validation completed the planned v1.5.11 Library/Paper browser workflow, runtime, privacy, regression, and restart-persistence checks. |
 | v1.5.0 Reader Snapshot runtime | PARTIALLY VERIFIED | Native fallback, API/bridge PDF delivery, first-page rendering, persisted-note/PDF pairing, absent-note clean state, paper transition, and API restart recovery have runtime evidence; unreadable-note and missing-PDF scenarios remain open. |
 | v1.5.1 Reader write runtime | PARTIALLY VERIFIED | User-performed validation verified Reader pairing, explicit saves and reloads, canonical header refresh, conflict recovery, restart recovery, transition behavior, clean empty new-paper state, and cross-surface visibility; unreadable-note and missing-PDF scenarios remain NOT VERIFIED. |
 | v1.5.4 Project write runtime | VERIFIED | User-performed real-data runtime validation verified Project create/edit/archive, Paper-link add/duplicate/remove, conflicts, restart recovery, cross-surface parity, and private-safe Network responses. |
 | v1.5.5 Note Block write runtime | VERIFIED | User-performed runtime validation verified the v1.5.5 Note Block write and Project-link workflow; orphan and unavailable states used only an approved disposable workspace. |
 | v1.5.8 Metadata enrichment runtime | VERIFIED | User-provided manual verification completed the candidate preview, comparison, selective apply, provider-safety, Reading Note draft-preservation, conflict, reload, and existing workflow smoke scenarios. |
-| v1.5.9 PDF scan/import runtime | PARTIALLY VERIFIED | User-provided manual verification covers managed-PDF scan, selection, import, safe failure, Library/Reader visibility, restart persistence, and explicit metadata enrichment; browser Network path privacy remains separately unverified. |
+| v1.5.9 PDF scan/import runtime | VERIFIED | User-provided manual validation now covers managed-PDF scan/import behavior, safe failure, Library/Reader visibility, restart persistence, explicit metadata enrichment, and browser Network path privacy. |
 | v1.5.10 Tag candidate review runtime | PARTIALLY VERIFIED | User-provided manual verification passed canonical governance, candidate review/promotion, explicit Paper apply, conflict safety, draft preservation, regression, and end-to-end workflow checks; candidate-route browser Network privacy remains separately unverified. |
 | Streamlit regression | VERIFIED | A separate non-mutating Streamlit regression completed across the established reading and library surfaces. |
 | GitHub Release publication | NOT VERIFIED | No GitHub Release publication evidence is recorded; tag existence is not publication evidence. |
@@ -49,8 +50,8 @@ Rendered as of 2026-08-16.
 |---|---|---|---|---|
 | Pr Head CI | PARTIALLY VERIFIED | PR #6 head commit | 1 jobs passed, 1 jobs failed | The PR #6 head workflow completed with a successful frontend job and a Python smoke-check failure. (2026-07-26; GitHub Actions run 30190817882) |
 | Post Merge Main CI | NOT VERIFIED | post-merge main commit | Not recorded | No repository-accessible evidence proves a separate post-merge main workflow run. (2026-07-25; repository evidence audit) |
-| Local Smoke | VERIFIED | offline repository readiness smoke | 137 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 137 passed, 0 warnings, and 0 failed. (2026-08-16; v1.5.10 local validation) |
-| Full pytest | VERIFIED | full Python test suite | 751 passed, 0 failed, 0 skipped | The v1.5.10 full Python suite completed with 751 passed before the user-provided manual run changed the local Tag Book configuration; the manual configuration change is preserved separately. (2026-08-16; v1.5.10 local validation) |
+| Local Smoke | VERIFIED | offline repository readiness smoke | 138 passed, 0 warnings, 0 failed | The current offline repository readiness smoke completed with 138 passed, 0 warnings, and 0 failed. (2026-08-16; v1.5.11 local validation) |
+| Full pytest | VERIFIED | full Python test suite | 757 passed, 0 failed, 0 skipped | The v1.5.11 full Python suite completed with 757 passed, 0 failed, and 0 skipped using disposable fixtures for the new Library/Paper workflow coverage. (2026-08-16; v1.5.11 local validation) |
 | Focused Reader Snapshot | VERIFIED | read-only Reader Snapshot API contracts | 21 passed, 0 failed | The focused Reader Snapshot schema, adapter, route, failure-state, and privacy suite passed. (2026-07-26; v1.5.0 focused Reader Snapshot validation) |
 | Focused Reader Commands | VERIFIED | Reader metadata enrichment, Paper tag, Reading Note, snapshot, and API command contracts | 96 passed, 0 failed | The focused metadata-enrichment preview, PDF DOI, provider fallback/failure, selective apply, stale revision, Reader metadata/note, snapshot, API, and privacy suite passed. (2026-08-16; v1.5.8 focused Reader enrichment validation) |
 | Focused Pdf Api | VERIFIED | managed PDF and scan/import API contracts | 18 passed, 0 failed | The focused managed-PDF and scan/import API contract suite passed. (2026-08-16; v1.5.9 focused PDF scan/import validation) |
@@ -64,9 +65,9 @@ Rendered as of 2026-08-16.
 | Focused Release Version | VERIFIED | release and version contracts | 55 passed, 0 failed | The focused runtime-target, immutable-baseline, v1.5.10 local release-document, reconciliation, contact, and smoke-contract suite passed. (2026-08-16; v1.5.10 release validation) |
 | Release Reconciliation | VERIFIED | canonical release-state reconciliation contracts | 30 passed, 0 failed | Canonical manifest validation and deterministic current-status rendering passed for the v1.5.10 runtime target. (2026-08-16; v1.5.10 local release reconciliation) |
 | Tracker Export | VERIFIED | deterministic external-tracker export contracts | 8 passed, 0 failed | The deterministic UTF-8 tracker export, controlled status, privacy, and standard-library checks passed. (2026-08-02; v1.5.5 local tracker export validation) |
-| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-08-16; v1.5.10 local validation) |
-| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-08-16; v1.5.10 local validation) |
-| Frontend Node Tests | VERIFIED | frontend bridge, Reader, and PDF lifecycle Node suites | 11 passed, 0 failed, 0 skipped, 0 cancelled | The complete frontend build and Node test suite passed. (2026-08-16; v1.5.10 local validation) |
+| Frontend Lint | VERIFIED | frontend static analysis | Not recorded | Frontend lint completed successfully with no findings. (2026-08-16; v1.5.11 local validation) |
+| Frontend Production Build | VERIFIED | frontend production build | Not recorded | The production frontend build passed and emitted the local PDF.js worker asset. (2026-08-16; v1.5.11 local validation) |
+| Frontend Node Tests | VERIFIED | frontend bridge, Reader, and PDF lifecycle Node suites | 11 passed, 0 failed, 0 skipped, 0 cancelled | The complete frontend build and Node test suite passed. (2026-08-16; v1.5.11 local validation) |
 | Frontend Projects Tags | VERIFIED | Tags governance, candidate-review bridge, rendering-source, negative-state, and compatibility contracts | 28 passed, 0 failed, 0 skipped, 0 cancelled | The focused exact governance/candidate bridge allowlist, canonical registry rendering, explicit review/apply boundary, shared states, retry, and no-fabrication suite passed. (2026-08-16; v1.5.10 focused Tags and candidate-review frontend validation) |
 | Frontend Settings | VERIFIED | Settings route, real-field rendering source, negative states, compatibility, and exact bridge allowlist | 27 passed, 0 failed, 0 skipped, 0 cancelled | The focused four-section rendering source, zero-versus-unavailable, shared-state, retry, no-action, no-fabrication, compatibility, and exact GET bridge suite passed. (2026-07-27; v1.5.3 focused Settings frontend validation) |
 | Frontend Reader Commands | VERIFIED | Reader editor state and exact command bridge allowlist, including Paper tags | 27 passed, 0 failed, 0 skipped, 0 cancelled | The exact bridge method/path allowlist and Reader editor state, Paper-tag draft preservation, header refresh, conflict, and transition suites passed. (2026-07-27; v1.5.2 focused frontend Reader command validation) |
@@ -74,7 +75,27 @@ Rendered as of 2026-08-16.
 | Frontend Note Blocks | VERIFIED | Note Block editor state, Reader/Project workflows, exact bridge allowlist, and draft-preservation contracts | 29 passed, 0 failed, 0 skipped, 0 cancelled | The focused explicit editor, conflict/offline draft retention, Paper isolation, Project linking, typed detail, navigation, and exact bridge suite passed. (2026-08-02; v1.5.5 focused frontend Note Block validation) |
 | Repository Hygiene | VERIFIED | tracked repository entries only | 287 entries inspected, 0 violations | Tracked-entry hygiene passed without reading user-data contents. (2026-08-16; v1.5.10 local hygiene validation) |
 
-The current smoke result is 137 passed, 0 warnings, 0 failed. The two conflicting v1.4.0 records remain historical evidence and do not override this current result.
+The current smoke result is 138 passed, 0 warnings, 0 failed. The two conflicting v1.4.0 records remain historical evidence and do not override this current result.
+
+## v1.5.11 Library/Paper workflow manual validation
+
+Aggregate state: **VERIFIED**.
+
+| Check | Status | Evidence |
+|---|---|---|
+| Library primary and papers signpost | VERIFIED | Library was verified as the primary Paper workflow, with legacy /papers retained as a signpost. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Stable urls navigation | VERIFIED | Paper Detail and Reader URLs and navigation remained stable. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Server side search filters pagination | VERIFIED | Server-side search across title, author, journal, DOI, tag, and keyword, including filters and pagination, was verified. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Browsing and missing pdf state | VERIFIED | Existing Paper browsing and missing-PDF states were verified. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Scan import without auto enrichment tagging | VERIFIED | Managed PDF scan/import was verified without automatic enrichment or tagging. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Enrichment preview selective apply | VERIFIED | Library metadata enrichment preview and selective apply were verified. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Exact sha256 duplicate detection | VERIFIED | Exact SHA-256 duplicate detection was verified. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Reconnect preserves paper state | VERIFIED | Moved or renamed PDF explicit reconnect preserved the same paper_id, metadata, Reading Note, tags, Note Blocks, and Project links. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Ambiguous repair non mutating | VERIFIED | Ambiguous repair remained non-mutating. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Offline failure conflict behavior | VERIFIED | Offline, failure, and conflict behavior was verified. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Browser network privacy | VERIFIED | Browser Network responses exposed no absolute filesystem paths, workspace roots, private configuration, or tracebacks. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Existing surface regressions | VERIFIED | Existing Reader, Project, Tag, Note Block, and Settings regressions were verified. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
+| Restart persistence | VERIFIED | Restart persistence was verified. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
 
 ## Reader manual validation
 
@@ -167,7 +188,7 @@ Aggregate state: **VERIFIED**.
 
 ## v1.5.9 PDF scan/import manual validation
 
-Aggregate state: **PARTIALLY VERIFIED**.
+Aggregate state: **VERIFIED**.
 
 | Check | Status | Evidence |
 |---|---|---|
@@ -178,7 +199,7 @@ Aggregate state: **PARTIALLY VERIFIED**.
 | Metadata enrichment follow up | VERIFIED | The existing explicit v1.5.8 metadata-enrichment workflow worked on a newly imported Paper. (2026-08-16; user-provided v1.5.9 manual verification) |
 | Partial failure feedback | VERIFIED | Invalid, unreadable, and disappeared selected PDFs failed without ghost records or registry corruption, and partial failures did not damage existing Papers. (2026-08-16; user-provided v1.5.9 manual verification) |
 | Restart persistence | VERIFIED | Imported Papers persisted after both browser reload and application restart, and repeated scan/import did not create duplicates. (2026-08-16; user-provided v1.5.9 manual verification) |
-| Network path privacy | NOT VERIFIED | Manual browser Network confirmation that scan/import responses expose no absolute local path has not been performed. (2026-08-16; v1.5.9 manual verification plan) |
+| Network path privacy | VERIFIED | Browser Network inspection confirmed scan/import responses exposed no absolute filesystem paths, workspace roots, private configuration, or tracebacks. (2026-08-16; user-provided v1.5.11 manual browser/runtime validation) |
 
 ## v1.5.10 Tag governance and candidate-review manual validation
 
@@ -207,7 +228,6 @@ Aggregate state: **PARTIALLY VERIFIED**.
 - Post-merge `main` workflow: **NOT VERIFIED**. No repository-accessible evidence proves a separate post-merge main workflow run.
 - v1.5.0 Reader Snapshot runtime: **PARTIALLY VERIFIED**. Native fallback, API/bridge PDF delivery, first-page rendering, persisted-note/PDF pairing, absent-note clean state, paper transition, and API restart recovery have runtime evidence; unreadable-note and missing-PDF scenarios remain open.
 - v1.5.1 Reader write runtime: **PARTIALLY VERIFIED**. User-performed validation verified Reader pairing, explicit saves and reloads, canonical header refresh, conflict recovery, restart recovery, transition behavior, clean empty new-paper state, and cross-surface visibility; unreadable-note and missing-PDF scenarios remain NOT VERIFIED.
-- v1.5.9 PDF scan/import runtime: **PARTIALLY VERIFIED**. User-provided manual verification covers managed-PDF scan, selection, import, safe failure, Library/Reader visibility, restart persistence, and explicit metadata enrichment; browser Network path privacy remains separately unverified.
 - v1.5.10 Tag candidate review runtime: **PARTIALLY VERIFIED**. User-provided manual verification passed canonical governance, candidate review/promotion, explicit Paper apply, conflict safety, draft preservation, regression, and end-to-end workflow checks; candidate-route browser Network privacy remains separately unverified.
 - GitHub Release publication: **NOT VERIFIED**. No GitHub Release publication evidence is recorded; tag existence is not publication evidence.
 - Clean-PC restore: **NOT VERIFIED**. Readiness scripts and a checklist exist, but no genuine clean-PC restore rehearsal is recorded.

@@ -1,13 +1,12 @@
 "use client";
 
-import { BookOpen, FolderKanban, Gauge, LibraryBig, Settings, Tags } from "lucide-react";
+import { FolderKanban, Gauge, LibraryBig, Settings, Tags } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
   { href: "/library", label: "Library", icon: LibraryBig },
-  { href: "/papers", label: "Papers", icon: BookOpen },
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/tags", label: "Tags", icon: Tags },
   { href: "/settings", label: "Settings", icon: Settings },

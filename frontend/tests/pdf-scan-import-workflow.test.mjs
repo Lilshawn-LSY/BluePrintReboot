@@ -57,8 +57,10 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
 
   assert.match(client, /scanManagedPdfs/);
   assert.match(client, /importManagedPdfs/);
+  assert.match(client, /reconnectManagedPdf/);
   assert.match(client, /"\/papers\/scan"/);
   assert.match(client, /"\/papers\/import"/);
+  assert.match(client, /"\/papers\/reconnect"/);
   assert.match(types, /ManagedPdfScanCandidate/);
   assert.match(types, /ManagedPdfImportResult/);
   assert.match(library, /Scan PDFs/);
@@ -68,9 +70,14 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
   assert.match(library, /Import selected/);
   assert.match(library, /apiClient\.importManagedPdfs\(selectedPaths\)/);
   assert.match(library, /already_registered/);
-  assert.match(library, /PDF import unavailable/);
+  assert.match(library, /duplicate_content/);
+  assert.match(library, /reconnect_available/);
+  assert.match(library, /Reconnect existing Paper/);
+  assert.match(library, /PDF command unavailable/);
   assert.match(library, /importResult\.results/);
-  assert.match(library, /Open Reader/);
-  assert.match(library, /Metadata enrichment remains a separate Reader action/);
+  assert.match(library, />Reader</);
+  assert.match(library, /Metadata enrichment/);
+  assert.match(library, /previewMetadataEnrichment/);
+  assert.match(library, /Apply selected fields/);
   assert.doesNotMatch(library, /fetch\s*\(/);
 });

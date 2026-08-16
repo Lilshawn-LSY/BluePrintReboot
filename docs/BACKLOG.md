@@ -22,12 +22,13 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.8 Paper-scoped web metadata candidate preview and selective apply over existing enrichment providers.
 - [x] v1.5.9 bounded managed-directory web PDF scan, candidate preview, explicit selective import, and Reader/PDF follow-through without automatic enrichment or tags.
 - [x] v1.5.10 canonical Tag Book governance and persisted Paper-scoped tag candidate review, with explicit promotion and separate existing-command Paper apply.
+- [x] v1.5.11 Library/Paper workflow closure: server-backed collection search/filter/pagination, Library enrichment reuse, coherent navigation, and explicit exact-content managed-PDF reconnect without Paper duplication.
 
 ## v1.6.0 Reader Workspace UX Overhaul
 
 - [ ] Address the deferred Reader/shared layout and workspace clarity work without changing the v1.5.10 candidate-review/apply boundary or introducing a broad data-model rewrite.
 - [ ] Keep drag/drop, watcher/background import, OCR/full-text extraction, automatic/background or bulk enrichment, automatic overwrite/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, citation export, backup/recovery redesign, and folder management separately scoped.
-- [ ] Treat the former v1.5.11 candidate-review package as absorbed into v1.5.10; do not schedule it as a separate functional release.
+- [ ] Preserve the closed v1.5.11 Library/Paper command and privacy boundaries while redesigning UX only under a separately approved v1.6 scope.
 
 ## v1.8.0 Tag Intelligence
 

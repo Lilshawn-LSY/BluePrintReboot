@@ -2,7 +2,17 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
-## v1.5.10-tag-governance-candidate-review
+## v1.5.11-library-paper-workflow-closure
+
+- [x] Library is the primary web Paper collection: scan/import, server-backed search/filter/pagination, explicit enrichment reuse, and Paper Detail/Reader navigation are one bounded workflow.
+- [x] Search/filter occurs in the Paper read model before pagination and returns only allowlisted Paper summary fields.
+- [x] Managed scan distinguishes registered paths, exact duplicate content, uniquely reconnectable missing Papers, and ambiguous reconnect candidates without automatic mutation.
+- [x] Explicit reconnect is managed-root-contained, lock/reload/atomic-persistence protected, keeps `paper_id`, and updates only the managed-file identity fields after a fresh exact-content check.
+- [x] Disposable backend/frontend regressions cover search/filter/pagination, bridge allowlisting, offline/error states, and non-destructive reconnect preservation.
+- [x] User-provided manual validation verified the full v1.5.11 browser workflow, offline/conflict states, restart persistence, existing-surface regressions, and browser Network payload privacy.
+- [ ] v1.5.11 PR-head CI, merge to `main`, v1.5.11 tag, GitHub Release, post-merge `main` CI, and clean-PC restore remain open until separately observed.
+
+## Historical v1.5.10-tag-governance-candidate-review
 
 - [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.10 while the immutable released baseline remains v1.4.0.
 - [x] Canonical Tag Book create/edit/alias/deprecate commands are revision-checked, lock-protected, atomically persisted, and return controlled stale/conflict/error states.
@@ -27,7 +37,7 @@ Current evidence is generated from the canonical manifest. Inspect [Current Rele
 - [x] Imported Papers appear through existing Paper/read models, open through the Reader/PDF API, and retain the explicit v1.5.8 metadata-enrichment follow-up rather than automatic provider calls or tags.
 - [x] Disposable backend/frontend tests cover preview non-mutation, non-PDF rejection, registration, partial selection/failure, duplicate safety, Reader/PDF compatibility, reload, metadata follow-up, bridge method/path limits, candidate rendering, selection, and error state sources.
 - [x] User-provided v1.5.9 manual verification covers real-library scan preview non-mutation, selected and partial import, duplicate/new/invalid distinctions, filename compatibility, failure safety, collection/Reader visibility, reload/restart persistence, metadata-enrichment follow-up, and existing Reader/Project/Tag workflow compatibility.
-- [ ] Manually verify private-safe browser Network responses for the scan/import routes; this remains separate from the recorded workflow evidence.
+- [x] User-provided v1.5.11 manual validation verified private-safe browser Network responses for scan/import workflow coverage.
 - [ ] v1.5.9 PR-head CI, merge to `main`, v1.5.9 tag, GitHub Release, post-merge `main` CI, and clean-PC restore remain open until separately observed.
 - [ ] Drag/drop, watcher, OCR, full-text extraction, automatic enrichment/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, migration, backup redesign, citation workflow, and free-form folder management remain excluded.
 
