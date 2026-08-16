@@ -624,5 +624,5 @@ def test_openapi_documents_all_new_get_contracts() -> None:
     assert set(paths["/projects/{project_id}/archive"]) == {"post"}
     assert set(paths["/projects/{project_id}/paper-links"]) == {"post"}
     assert set(paths["/projects/{project_id}/paper-links/{link_id}"]) == {"delete"}
-    assert set(paths["/tags"]) == {"get"}
+    assert set(paths["/tags"]) == {"get", "post"}
     assert set(paths["/tags/summary"]) == {"get"}

@@ -21,13 +21,24 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.5 Note Block write and Project-link vertical slice implementation.
 - [x] v1.5.8 Paper-scoped web metadata candidate preview and selective apply over existing enrichment providers.
 - [x] v1.5.9 bounded managed-directory web PDF scan, candidate preview, explicit selective import, and Reader/PDF follow-through without automatic enrichment or tags.
+- [x] v1.5.10 canonical Tag Book governance and persisted Paper-scoped tag candidate review, with explicit promotion and separate existing-command Paper apply.
 
-## v1.5.10+ ingestion and metadata follow-up
+## v1.6.0 Reader Workspace UX Overhaul
 
-- [ ] Keep drag/drop, watcher/background import, OCR/full-text extraction, automatic/background or bulk enrichment, automatic overwrite/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, citation export, backup/recovery redesign, folder management, and Reader UX redesign separately scoped from v1.5.9.
+- [ ] Address the deferred Reader/shared layout and workspace clarity work without changing the v1.5.10 candidate-review/apply boundary or introducing a broad data-model rewrite.
+- [ ] Keep drag/drop, watcher/background import, OCR/full-text extraction, automatic/background or bulk enrichment, automatic overwrite/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, citation export, backup/recovery redesign, and folder management separately scoped.
+- [ ] Treat the former v1.5.11 candidate-review package as absorbed into v1.5.10; do not schedule it as a separate functional release.
+
+## v1.8.0 Tag Intelligence
+
+- [ ] Consider semantic-quality optimization, embedding/vector techniques, and any new LLM/provider integration only after a separately approved v1.8.0 plan. v1.5.10's deterministic rulebook baseline is measurement, not an intelligence feature.
+
+## Outstanding release evidence
+
 - [x] Record user-provided v1.5.8 manual candidate-preview, partial-apply, conflict/retry, persistence, and Reader/Project/Tag smoke evidence in the generated release state.
 - [x] Record user-provided v1.5.9 manual PDF scan/import evidence, excluding the separately outstanding browser Network path-privacy check.
 - [ ] Record the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, GitHub Release, and post-merge main CI only after those events occur.
+- [ ] Record v1.5.10 manual canonical-governance/candidate-review browser verification, PR-head CI, merge, tag, GitHub Release, post-merge main CI, and clean-PC restore only after those events occur.
 
 ## v1.5.5 Note Block write and Project links
 

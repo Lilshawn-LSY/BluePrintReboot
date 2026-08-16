@@ -1,6 +1,6 @@
 # BluePrintReboot Roadmap
 
-Stable roadmap last edited: 2026-08-02
+Stable roadmap last edited: 2026-08-16
 
 Current release evidence is not duplicated here. See the generated [Current Release Status](CURRENT_RELEASE_STATUS.md), derived from the canonical machine-readable manifest. This roadmap records stable architecture, closed decision gates, and the next approved product direction rather than mutable repository observations.
 
@@ -26,6 +26,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.5.5 adds structured Note Block collection reads, explicit create/update commands, typed Note Block–Project add/unlink commands, safe Project Detail target resolution, and independent Reader workflows without changing storage formats.
 - v1.5.8 adds a separate Paper-scoped metadata candidate preview in the web Reader, source-labelled field comparison, and selective application through the existing metadata command without automatic overwrite or new storage.
 - v1.5.9 adds bounded web Library scan/preview/selective-import commands for PDFs already in `papers/`, preserving scan/import separation, managed-relative path validation, stable Paper identities, per-file failures, Reader/PDF compatibility, and explicit post-import metadata enrichment.
+- v1.5.10 combines the planned canonical-tag governance and candidate-review packages: the existing Tag Book gains revision-checked canonical create/edit/alias/deprecate commands; rulebook candidates gain persisted explicit review, promotion, and separate application through the existing Paper-tag command. Legacy Paper tag text remains untouched, and no candidate is automatically applied.
 
 ## Decision gates
 
@@ -47,39 +48,39 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | v1.5.4 Project write and Paper–Project links | Runtime parity closed | Five strict command routes and disposable regressions are implemented; the 2026-08-02 user-performed real-data runtime checks are VERIFIED. Hosted, merge, tag, and publication evidence remain separate. |
 | v1.5.5 Note Block write and Project links | Runtime parity closed | Five exact read/command routes, complete-state revisions, lock/reload atomicity, failure rollback, typed orphan states, exact bridge paths, explicit UI actions, and disposable regressions are implemented; the 2026-08-02 user-performed runtime checks are VERIFIED. Hosted evidence remains separate. |
 
-## Current product milestone: v1.5.5 Note Block write and Project links
+## Current product milestone: v1.5.10 Tag Governance & Candidate Review
 
-The v1.5.5 runtime target adds the structured Note Block vertical slice without broadening into Note Block deletion/reordering, Project deletion/unarchive, Tag governance, Settings writes, bulk workflows, or schema migration. It does not relabel the immutable v1.4.0 released baseline and does not claim hosted validation, merge, tag, or publication.
+v1.5.10 is the final v1.5.x functional package. It does not relabel the immutable v1.4.0 released baseline and does not claim manual browser verification, hosted validation, merge, tag, or publication. The planned v1.5.11 candidate-review package is absorbed here; v1.6.0 is the next functional release and remains the Reader Workspace UX Overhaul.
 
 ### Implemented product slice
 
-- `GET /papers/{paper_id}/note-blocks` returns a bounded stored-order collection, source Paper identity, total, safe current Project links, and a deterministic revision over the complete normalized collection.
-- `POST /papers/{paper_id}/note-blocks` and `PATCH /papers/{paper_id}/note-blocks/{block_id}` accept only the seven canonical content fields; identity and timestamps remain server-owned, exact no-op avoids rewriting, and delete/reorder remain absent.
-- `POST /projects/{project_id}/note-block-links` and `DELETE /projects/{project_id}/note-block-links/{link_id}` validate the Project, source Paper, Paper-owned block identity, link type, and link revision; they touch only Project-link storage.
-- Project Detail exposes bounded typed summaries and explicit `available`, `orphaned_note_block`, `orphaned_paper`, and `unavailable` states without automatic deletion or repair.
-- Commands acquire the shared lock, reload state, reject stale requests before writing, atomically replace only the owning store, reload/verify, and restore original bytes and timestamps after failure where possible.
-- Reader Note Block drafts remain independent from Metadata and Reading Note drafts. Conflicts and offline failures preserve drafts or selections; duplicate exact links return unchanged; archived Projects remain readable with write controls absent.
-- PDF.js lifecycle and Range delivery, existing Reader and Project/Paper-link commands, Tags, Settings, Streamlit storage formats, stable identities, and local-only operation remain unchanged.
+- The canonical registry exposes bounded create/edit/alias/deprecate operations through a Tag Book service. Canonical keys remain stable and changes require a Tag Book revision under the shared lock.
+- Alias and label collisions are rejected using the existing normalization rules. Categories remain bounded metadata; a deprecated tag stays visible and is not physically deleted.
+- Governance writes never rewrite Paper tag values. Historical canonical relationships and existing legacy/noncanonical values remain recoverable and inspectable.
+- Candidate generation is a separate persisted review context over the existing rulebook/extracted-text data. It is non-mutating for Papers and carries only existing source/evidence/score/confidence information.
+- Approval, rejection, and promotion are explicit review actions. Promotion resolves or creates a canonical registry entry without creating duplicate canonical/alias identities.
+- Apply is a distinct final action that delegates to the v1.5.7 Paper-tag command with the Paper tag revision. It preserves no-op, conflict, lock, atomicity, rollback, and unsaved Reading Note draft boundaries.
+- A deterministic three-fixture quality baseline records present/missing expected candidates and false positives without optimizing or claiming semantic quality.
 
 ### Evidence state
 
-- User-performed v1.5.5 real-data checks for Note Block reads, create/edit round trips, cross-surface visibility, conflict/restart recovery, Project links, target states/navigation, archived controls, and private-safe Network responses are VERIFIED with evidence dated 2026-08-02.
-- The unreadable persisted-note warning and missing managed-PDF Reader scenarios remain NOT VERIFIED pending separate evidence.
-- Hosted CI, merge, tag, GitHub Release, post-merge, and clean-PC restore evidence remain separate and unclaimed.
-- The 2026-08-02 v1.5.4 user-performed real-data Project/Paper-link checks remain distinct from the v1.5.5 verification and hosted gates.
+- Local service/API/frontend validation is recorded in the release manifest; manual browser/workspace verification, hosted CI, merge, tag, GitHub Release, post-merge, and clean-PC restore remain separately unclaimed.
+- Existing v1.5.4-v1.5.9 runtime evidence remains historical context and is not relabeled as v1.5.10 evidence.
 
 ### Roadmap item status
 
-| Item | Status after v1.5.5 implementation |
+| Item | Status after v1.5.10 implementation |
 |---|---|
-| R130 Project command service and API | Complete. |
-| R131 web Project metadata and Paper-link workflows | Complete. |
-| R132 Note Block read/write/link commands | Complete locally with disposable automated coverage. |
-| R133 cross-surface Project command evidence | Complete for the specified local real-data runtime checks; hosted release evidence remains separate. |
-| G4 Project write parity | Closed for implementation and user-performed local runtime parity; release publication gates remain separate. |
-| v1.5.5 Note Block runtime evidence | Complete for the specified user-performed real-data validation dated 2026-08-02. |
-| v1.6 broader write expansion | Deferred and separately scoped; the non-blocking Reader/shared Note Block layout defect is recorded in the backlog. |
+| v1.5.10 canonical Tag Book governance | Complete locally with explicit revision, lock, collision, and deprecation safeguards. |
+| v1.5.10 candidate review | Complete locally with persisted review state and separate final Paper apply. |
+| v1.5.11 candidate review package | Absorbed into v1.5.10; no separate functional release remains. |
+| v1.6.0 Reader Workspace UX Overhaul | Next functional release; deferred without a redesign in v1.5.10. |
+| v1.8.0 Tag Intelligence | Deferred: semantic-quality optimization, embeddings, and LLM/provider work remain out of scope. |
+
+### Historical v1.5.5 Note Block milestone
+
+The former v1.5.5 current-milestone record remains historical context: it delivered the bounded stored-order Note Block collection, explicit create/update and Project-link commands, independent Reader drafts, typed orphan/unavailable states, shared-lock/revision/atomic persistence protections, and 2026-08-02 user-performed runtime evidence. Its broader Reader/shared UX follow-up remains the basis of the separately scoped v1.6.0 overhaul.
 
 ## Continuing constraints
 
-No autosave, combined save endpoint, Note Block deletion/reorder/drag-and-drop, PDF selection/highlight or automatic block creation, Project deletion/unarchive, Tag governance/write, Settings write, configuration editing, automatic backup, automatic duplicate merge/deletion, automatic repair, database migration, OCR, LLM tagging, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of automated tests. Broader UI polish and v1.6 scope remain deferred.
+No automatic candidate application, automatic tag cleanup, bulk retagging, destructive canonical-tag deletion, ontology editing, embedding/vector/LLM tagging, combined save endpoint, Note Block deletion/reorder/drag-and-drop, PDF selection/highlight or automatic block creation, Project deletion/unarchive, Settings write, configuration editing, automatic backup, automatic duplicate merge/deletion, automatic repair, database migration, OCR, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of automated tests. The Reader workspace visual overhaul remains v1.6.0 work.

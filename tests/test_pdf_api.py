@@ -181,6 +181,12 @@ def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> No
         "/papers/{paper_id}/metadata",
         "/papers/{paper_id}/metadata/enrichment-preview",
         "/papers/{paper_id}/tags",
+        "/papers/{paper_id}/tag-candidates",
+        "/papers/{paper_id}/tag-candidates/generate",
+        "/papers/{paper_id}/tag-candidates/{candidate_id}/approve",
+        "/papers/{paper_id}/tag-candidates/{candidate_id}/reject",
+        "/papers/{paper_id}/tag-candidates/{candidate_id}/promote",
+        "/papers/{paper_id}/tag-candidates/{candidate_id}/apply",
         "/papers/{paper_id}/reading-note",
         "/papers/{paper_id}/note-blocks",
         "/papers/{paper_id}/note-blocks/{block_id}",
@@ -194,6 +200,10 @@ def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> No
         "/settings/summary",
         "/tags",
         "/tags/summary",
+        "/tags/governance",
+        "/tags/{canonical_key}",
+        "/tags/{canonical_key}/aliases",
+        "/tags/{canonical_key}/deprecate",
     }
     assert set(paths["/papers/{paper_id}/metadata"]) == {"patch"}
     assert set(paths["/papers/scan"]) == {"post"}

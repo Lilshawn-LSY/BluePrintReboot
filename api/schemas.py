@@ -285,6 +285,21 @@ class CandidateSummaryResponse(StrictResponseModel):
     quality_counts: CandidateQualityCounts
 
 
+class CanonicalTagGovernanceItem(CanonicalTag):
+    description: str
+
+
+class CanonicalTagGovernanceSnapshot(StrictResponseModel):
+    items: list[CanonicalTagGovernanceItem]
+    registry_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class CanonicalTagGovernanceResponse(StrictResponseModel):
+    status: Literal["created", "saved", "no_op", "deprecated"]
+    tag: CanonicalTagGovernanceItem
+    registry_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class SettingsWorkspaceResource(StrictResponseModel):
     code: Literal[
         "papers",
@@ -849,6 +864,98 @@ class PaperTagCommandResponse(StrictResponseModel):
     canonical_note_header: ReaderNoteHeader
     canonical_note_header_text: str
     reading_note: PersistedReadingNote
+
+
+class TagCandidateEvidence(StrictResponseModel):
+    source: str
+    source_label: str
+    matched_text: str
+    snippet: str = Field(max_length=240)
+
+
+class TagCandidateItem(StrictResponseModel):
+    candidate_id: str = Field(pattern=r"^[0-9a-f]{64}$")
+    tag_text: str
+    normalized_tag: str
+    resolved_canonical: str
+    canonical_status: str
+    category: str
+    source: str
+    source_label: str
+    matched_text: str
+    evidence: list[TagCandidateEvidence]
+    score: int = Field(ge=0)
+    confidence: float = Field(ge=0, le=1)
+    quality: str
+    reason: str
+    state: Literal["unresolved", "resolved", "approved", "rejected", "applied"]
+    generated_kind: Literal["known_canonical", "new_candidate", "weak_candidate", "rejected_candidate"]
+
+
+class TagCandidateCollectionResponse(StrictResponseModel):
+    paper_id: str
+    review_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    tags_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    state: Literal["not_generated", "generated"]
+    items: list[TagCandidateItem]
+
+
+class TagCandidateGenerateRequest(StrictRequestModel):
+    reset_rejections: bool = False
+
+
+class TagCandidateReviewRequest(StrictRequestModel):
+    expected_review_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class TagCandidatePromoteRequest(TagCandidateReviewRequest):
+    label: str | None = Field(default=None, min_length=1, max_length=200)
+    category: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class TagCandidateApplyRequest(TagCandidateReviewRequest):
+    expected_tags_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class TagCandidateApplyResponse(StrictResponseModel):
+    candidate: TagCandidateItem
+    review_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    paper_tag: PaperTagCommandResponse
+
+
+class CanonicalTagCreateRequest(StrictRequestModel):
+    label: str = Field(min_length=1, max_length=200)
+    category: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=2_000)
+    suggestion_strength: int = Field(default=1, ge=0, le=100)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class CanonicalTagChanges(StrictRequestModel):
+    label: str | None = Field(default=None, min_length=1, max_length=200)
+    category: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=2_000)
+    suggestion_strength: int | None = Field(default=None, ge=0, le=100)
+
+    @model_validator(mode="after")
+    def require_change(self) -> "CanonicalTagChanges":
+        if not self.model_fields_set:
+            raise ValueError("At least one canonical tag change is required.")
+        return self
+
+
+class CanonicalTagUpdateRequest(StrictRequestModel):
+    changes: CanonicalTagChanges
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class CanonicalTagAliasRequest(StrictRequestModel):
+    alias: str = Field(min_length=1, max_length=200)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class CanonicalTagDeprecateRequest(StrictRequestModel):
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ReadingNoteCommandRequest(StrictRequestModel):

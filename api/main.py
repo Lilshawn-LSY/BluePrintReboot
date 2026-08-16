@@ -40,6 +40,8 @@ def create_app() -> FastAPI:
                 and request.url.path.startswith("/papers/")
             )
         )
+        tag_governance_command = request.method in {"POST", "PATCH", "DELETE"} and request.url.path.startswith("/tags")
+        tag_candidate_command = request.method == "POST" and "/tag-candidates" in request.url.path
         project_command = (
             request.method in {"POST", "PATCH", "DELETE"}
             and (
@@ -48,7 +50,7 @@ def create_app() -> FastAPI:
             )
         )
         pdf_import_command = request.method == "POST" and request.url.path == "/papers/import"
-        if not (reader_command or project_command or pdf_import_command):
+        if not (reader_command or project_command or pdf_import_command or tag_governance_command or tag_candidate_command):
             return await request_validation_exception_handler(request, exception)
         return JSONResponse(
             status_code=422,

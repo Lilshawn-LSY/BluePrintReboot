@@ -11,6 +11,13 @@ import {
   isBlueprintManagedPdfImportPath,
   isBlueprintManagedPdfScanPath,
   isBlueprintPaperTagsPath,
+  isBlueprintTagCandidatesPath,
+  isBlueprintTagCandidateGeneratePath,
+  isBlueprintTagCandidateActionPath,
+  isBlueprintTagGovernancePath,
+  isBlueprintCanonicalTagPath,
+  isBlueprintCanonicalTagAliasesPath,
+  isBlueprintCanonicalTagDeprecatePath,
   isBlueprintNoteBlockPath,
   isBlueprintNoteBlocksPath,
   isBlueprintPdfPath,
@@ -29,7 +36,7 @@ import {
 const API_URL = "http://127.0.0.1:8000";
 
 test("allows the bounded read routes plus the exact managed PDF, Reader, and Note Block routes", () => {
-  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["settings", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"], ["papers", "paper-123", "note-blocks"]]) {
+  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["tags", "governance"], ["settings", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"], ["papers", "paper-123", "note-blocks"], ["papers", "paper-123", "tag-candidates"]]) {
     assert.equal(isAllowedBlueprintPath(parts), true, parts.join("/"));
   }
   for (const parts of [[], ["library"], ["settings"], ["tags", "unknown"], ["projects", "project-123", "edit"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["papers", "paper-123", "reader", "raw"], ["health", "extra"]]) {
@@ -42,6 +49,13 @@ test("allows the bounded read routes plus the exact managed PDF, Reader, and Not
   assert.equal(isBlueprintMetadataPath(["papers", "paper-123", "metadata"]), true);
   assert.equal(isBlueprintMetadataEnrichmentPreviewPath(["papers", "paper-123", "metadata", "enrichment-preview"]), true);
   assert.equal(isBlueprintPaperTagsPath(["papers", "paper-123", "tags"]), true);
+  assert.equal(isBlueprintTagCandidatesPath(["papers", "paper-123", "tag-candidates"]), true);
+  assert.equal(isBlueprintTagCandidateGeneratePath(["papers", "paper-123", "tag-candidates", "generate"]), true);
+  assert.equal(isBlueprintTagCandidateActionPath(["papers", "paper-123", "tag-candidates", "candidate", "approve"]), true);
+  assert.equal(isBlueprintTagGovernancePath(["tags", "governance"]), true);
+  assert.equal(isBlueprintCanonicalTagPath(["tags", "field-tag"]), true);
+  assert.equal(isBlueprintCanonicalTagAliasesPath(["tags", "field-tag", "aliases"]), true);
+  assert.equal(isBlueprintCanonicalTagDeprecatePath(["tags", "field-tag", "deprecate"]), true);
   assert.equal(isBlueprintReadingNotePath(["papers", "paper-123", "reading-note"]), true);
   assert.equal(isBlueprintManagedPdfScanPath(["papers", "scan"]), true);
   assert.equal(isBlueprintManagedPdfImportPath(["papers", "import"]), true);
@@ -59,6 +73,18 @@ test("allows only the exact method and path pairs for Reader commands", () => {
   assert.equal(isAllowedBlueprintRequest("PUT", ["papers", "paper-1", "reading-note"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "note-blocks"]), true);
   assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "note-blocks", "block-1"]), true);
+  for (const [method, parts] of [
+    ["POST", ["tags"]],
+    ["PATCH", ["tags", "field-tag"]],
+    ["POST", ["tags", "field-tag", "aliases"]],
+    ["DELETE", ["tags", "field-tag", "aliases"]],
+    ["POST", ["tags", "field-tag", "deprecate"]],
+    ["POST", ["papers", "paper-1", "tag-candidates", "generate"]],
+    ["POST", ["papers", "paper-1", "tag-candidates", "candidate-1", "approve"]],
+    ["POST", ["papers", "paper-1", "tag-candidates", "candidate-1", "reject"]],
+    ["POST", ["papers", "paper-1", "tag-candidates", "candidate-1", "promote"]],
+    ["POST", ["papers", "paper-1", "tag-candidates", "candidate-1", "apply"]],
+  ]) assert.equal(isAllowedBlueprintRequest(method, parts), true, `${method} ${parts.join("/")}`);
   for (const [method, parts] of [
     ["PUT", ["papers", "paper-1", "metadata"]],
     ["PATCH", ["papers", "paper-1", "reading-note"]],
@@ -78,6 +104,10 @@ test("allows only the exact method and path pairs for Reader commands", () => {
     ["PUT", ["settings", "summary"]],
     ["PATCH", ["settings", "summary"]],
     ["DELETE", ["settings", "summary"]],
+    ["PATCH", ["tags", "governance"]],
+    ["POST", ["tags", "governance"]],
+    ["GET", ["papers", "paper-1", "tag-candidates", "generate"]],
+    ["PATCH", ["papers", "paper-1", "tag-candidates", "candidate-1", "apply"]],
   ]) {
     assert.equal(isAllowedBlueprintRequest(method, parts), false, `${method} ${parts.join("/")}`);
   }

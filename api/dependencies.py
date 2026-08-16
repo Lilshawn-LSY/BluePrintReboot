@@ -14,6 +14,8 @@ from services.note_block_read_model import NoteBlockCollection
 from services.project_read_model import ProjectDetail, ProjectListItem
 from services.project_commands import ProjectCommandService
 from services.reader_commands import ReaderCommandService
+from services.tag_candidate_review import TagCandidateReviewService
+from services.tag_governance import CanonicalTagGovernanceService
 from services.metadata_enrichment import MetadataEnrichmentService
 from services.pdf_scan_import import PdfScanImportService
 from services.settings_read_model import SettingsSummary
@@ -29,6 +31,11 @@ _metadata_enrichment_service = MetadataEnrichmentService()
 _pdf_scan_import_service = PdfScanImportService()
 _project_command_service = ProjectCommandService()
 _note_block_command_service = NoteBlockCommandService()
+_tag_governance_service = CanonicalTagGovernanceService()
+_tag_candidate_review_service = TagCandidateReviewService(
+    governance=_tag_governance_service,
+    reader_commands=_reader_command_service,
+)
 
 
 def get_health_summary() -> HealthSummary:
@@ -133,3 +140,11 @@ def get_project_command_service() -> ProjectCommandService:
 
 def get_note_block_command_service() -> NoteBlockCommandService:
     return _note_block_command_service
+
+
+def get_tag_governance_service() -> CanonicalTagGovernanceService:
+    return _tag_governance_service
+
+
+def get_tag_candidate_review_service() -> TagCandidateReviewService:
+    return _tag_candidate_review_service

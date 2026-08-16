@@ -126,7 +126,7 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /return "Reader"/);
-  assert.equal(JSON.parse(packageJson).version, "1.5.9");
+  assert.equal(JSON.parse(packageJson).version, "1.5.10");
   assert.match(shell, /packageMetadata\.version/);
   assert.match(shell, /Local workspace/);
   assert.doesNotMatch(shell, /v1\.5\.4|Project commands/);

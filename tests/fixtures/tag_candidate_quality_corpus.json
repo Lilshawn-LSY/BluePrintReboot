@@ -1,0 +1,26 @@
+[
+  {
+    "id": "known-single-cell",
+    "record": {
+      "title": "Single-cell RNA sequencing atlas of roots",
+      "tags": ""
+    },
+    "expected_candidates": ["single-cell-rna-seq"]
+  },
+  {
+    "id": "new-crispr-screen",
+    "record": {
+      "abstract": "We performed a genome-wide CRISPR screen in pooled cells.",
+      "tags": ""
+    },
+    "expected_candidates": ["crispr-screen"]
+  },
+  {
+    "id": "rejected-generic-model",
+    "record": {
+      "abstract": "A large-scale deep learning model was evaluated.",
+      "tags": ""
+    },
+    "expected_candidates": []
+  }
+]

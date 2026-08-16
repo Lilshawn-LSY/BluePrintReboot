@@ -204,6 +204,11 @@ tbody tr:hover { background: var(--color-surface-subtle); }
 .reader-control--secondary { background: var(--color-surface-subtle); }
 .reader-control--danger { border-color: #e1c3bf; color: var(--color-danger); background: var(--color-danger-soft); }
 .reader-control--danger:hover:not(:disabled) { border-color: var(--color-danger); color: var(--color-danger); }
+.candidate-review-list { display: grid; gap: var(--space-3); }
+.candidate-review-card { display: grid; gap: var(--space-2); padding: var(--space-3); border: var(--border); border-radius: var(--radius-sm); background: var(--color-surface-subtle); }
+.candidate-review-card p { margin: 0; }
+.candidate-review-card__reason { color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+.candidate-review-card__evidence { padding: var(--space-2) var(--space-3); border-left: 3px solid var(--color-border-strong); color: var(--color-text-secondary); font-size: var(--font-size-xs); }
 .project-command-panel { display: grid; gap: var(--space-4); padding: var(--space-5); border: var(--border); border-radius: var(--radius-md); background: var(--color-surface); box-shadow: var(--shadow-subtle); }
 .project-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
 .project-form-wide { grid-column: 1 / -1; }

@@ -10,7 +10,7 @@ import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
-import type { EditablePaperMetadata, MetadataEnrichmentPreview, ReaderSnapshot } from "../lib/api/types";
+import type { EditablePaperMetadata, MetadataEnrichmentPreview, ReaderSnapshot, TagCandidateCollection, TagCandidateItem } from "../lib/api/types";
 import {
   applyMetadataEnrichmentCommandResult,
   applyMetadataCommandResult,
@@ -29,6 +29,14 @@ type EnrichmentState = {
   status: EnrichmentStatus;
   preview: MetadataEnrichmentPreview | null;
   selectedFields: Array<keyof EditablePaperMetadata>;
+  message: string;
+};
+
+type CandidateReviewStatus = "idle" | "loading" | "ready" | "conflict" | "error";
+
+type CandidateReviewState = {
+  status: CandidateReviewStatus;
+  collection: TagCandidateCollection | null;
   message: string;
 };
 
@@ -116,6 +124,14 @@ function refreshedCandidatePreview(
 }
 
 
+function candidateReviewFailure(error: unknown): Pick<CandidateReviewState, "status" | "message"> {
+  if (error instanceof ApiClientError && error.kind === "conflict") {
+    return { status: "conflict", message: "The candidate review or Paper tags changed. Reload or regenerate candidates before retrying; Reader drafts remain untouched." };
+  }
+  return { status: "error", message: "Candidate review could not be completed. No Paper tags were changed." };
+}
+
+
 function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const [editor, setEditor] = useState(() => createReaderEditorState(snapshot));
   const [enrichment, setEnrichment] = useState<EnrichmentState>({
@@ -124,10 +140,37 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     selectedFields: [],
     message: "",
   });
+  const [candidateReview, setCandidateReview] = useState<CandidateReviewState>({
+    status: "idle",
+    collection: null,
+    message: "Generate candidates to begin an explicit review. Generation never applies Paper tags.",
+  });
   const tagBook = useApiResource(
     "reader-canonical-tag-book",
     () => apiClient.getTags({ limit: 100 }),
   );
+  useEffect(() => {
+    let current = true;
+    void apiClient.getTagCandidates(snapshot.paper.paper_id)
+      .then((collection) => {
+        if (!current || collection.state !== "generated") return;
+        setCandidateReview((state) => state.status === "idle" ? {
+          status: "ready",
+          collection,
+          message: collection.items.length
+            ? "Saved candidates are ready for review. Nothing has been applied to this Paper."
+            : "A saved candidate review contains no candidates. Nothing has been applied to this Paper.",
+        } : state);
+      })
+      .catch((error) => {
+        if (!current) return;
+        setCandidateReview((state) => state.status === "idle" ? {
+          ...state,
+          ...candidateReviewFailure(error),
+        } : state);
+      });
+    return () => { current = false; };
+  }, [snapshot.paper.paper_id]);
   const metadataChanged = useMemo(
     () => changedMetadataFields(editor.metadata.draft, editor.metadata.baseline),
     [editor.metadata.draft, editor.metadata.baseline],
@@ -445,6 +488,75 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     }
   };
 
+  const generateTagCandidates = async (resetRejections = false) => {
+    if (candidateReview.status === "loading") return;
+    setCandidateReview((current) => ({ ...current, status: "loading", message: "Generating candidates for review…" }));
+    try {
+      const collection = await apiClient.generateTagCandidates(snapshot.paper.paper_id, resetRejections);
+      setCandidateReview({
+        status: "ready",
+        collection,
+        message: collection.items.length
+          ? "Candidates are ready for review. Nothing has been applied to this Paper."
+          : "No candidates were generated. Nothing has been applied to this Paper.",
+      });
+    } catch (error) {
+      setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
+    }
+  };
+
+  const reviewCandidate = async (candidate: TagCandidateItem, action: "approve" | "reject" | "promote") => {
+    const collection = candidateReview.collection;
+    if (!collection || candidateReview.status === "loading") return;
+    setCandidateReview((current) => ({ ...current, status: "loading", message: `${statusLabel(action)}ing candidate…` }));
+    try {
+      const next = action === "approve"
+        ? await apiClient.approveTagCandidate(snapshot.paper.paper_id, candidate.candidate_id, collection.review_revision)
+        : action === "reject"
+          ? await apiClient.rejectTagCandidate(snapshot.paper.paper_id, candidate.candidate_id, collection.review_revision)
+          : await apiClient.promoteTagCandidate(snapshot.paper.paper_id, candidate.candidate_id, collection.review_revision, candidate.category);
+      setCandidateReview({
+        status: "ready",
+        collection: next,
+        message: action === "approve" ? "Candidate approved. Apply remains a separate Paper mutation." : action === "reject" ? "Candidate rejected. It will remain rejected unless deliberately reset during regeneration." : "Candidate promoted or resolved as a canonical tag. Apply remains a separate Paper mutation.",
+      });
+    } catch (error) {
+      setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
+    }
+  };
+
+  const applyCandidate = async (candidate: TagCandidateItem) => {
+    const collection = candidateReview.collection;
+    if (!collection || candidateReview.status === "loading" || editor.tags.status === "saving") return;
+    setCandidateReview((current) => ({ ...current, status: "loading", message: "Applying approved canonical tag through the Paper tag command…" }));
+    try {
+      const response = await apiClient.applyTagCandidate(
+        snapshot.paper.paper_id,
+        candidate.candidate_id,
+        collection.review_revision,
+        editor.tags.revision,
+      );
+      setEditor((current) => applyPaperTagCommandResult(current, response.paper_tag));
+      setCandidateReview((current) => {
+        if (!current.collection) return current;
+        return {
+          status: "ready",
+          collection: {
+            ...current.collection,
+            review_revision: response.review_revision,
+            tags_revision: response.paper_tag.tags_revision,
+            items: current.collection.items.map((item) => item.candidate_id === response.candidate.candidate_id ? response.candidate : item),
+          },
+          message: response.paper_tag.status === "no_op"
+            ? "The canonical tag was already applied; the candidate is recorded as applied."
+            : "Canonical tag applied through the existing Paper tag command.",
+        };
+      });
+    } catch (error) {
+      setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
+    }
+  };
+
   const noteUnavailable = snapshot.warnings.includes("saved_note_unavailable");
   const detailHref = `/papers/${encodeURIComponent(snapshot.paper.paper_id)}`;
   return (
@@ -670,6 +782,40 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 </button>
               ) : null}
             </div>
+          </section>
+
+          <section className="reader-editor" aria-labelledby="tag-candidate-review-title">
+            <div className="reader-note__heading">
+              <div>
+                <p className="eyebrow">Explicit review workflow</p>
+                <h2 id="tag-candidate-review-title">Tag candidates</h2>
+              </div>
+              <StatusBadge tone={candidateReview.status === "conflict" || candidateReview.status === "error" ? "danger" : candidateReview.status === "ready" ? "accent" : "neutral"}>{statusLabel(candidateReview.status)}</StatusBadge>
+            </div>
+            <p className="reader-editor__status">{candidateReview.message}</p>
+            <div className="reader-editor__actions">
+              <button className="reader-control" type="button" disabled={candidateReview.status === "loading"} onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />{candidateReview.status === "loading" ? "Generating…" : candidateReview.collection ? "Refresh candidates" : "Generate candidates"}</button>
+              {candidateReview.collection?.items.some((item) => item.state === "rejected") ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading"} onClick={() => generateTagCandidates(true)}>Reset rejected on regeneration</button> : null}
+            </div>
+            {candidateReview.collection?.items.length ? <div className="candidate-review-list" aria-label="Tag candidate review items">
+              {candidateReview.collection.items.map((candidate) => {
+                const activeResolution = Boolean(candidate.resolved_canonical) && candidate.canonical_status === "active";
+                const canReview = candidate.state !== "rejected" && candidate.state !== "applied" && candidate.quality !== "rejected";
+                const canApply = activeResolution && (candidate.state === "resolved" || candidate.state === "approved");
+                return <article className="candidate-review-card" key={candidate.candidate_id}>
+                  <div className="reader-note__heading"><div><strong>{candidate.tag_text}</strong><p className="muted-text">{candidate.category} · {candidate.source_label || "local evidence"}{candidate.score ? ` · score ${candidate.score}` : ""}</p></div><StatusBadge tone={candidate.state === "rejected" ? "danger" : candidate.state === "approved" || candidate.state === "applied" ? "healthy" : candidate.state === "resolved" ? "accent" : "warning"}>{candidate.state}</StatusBadge></div>
+                  <p className="candidate-review-card__reason">{candidate.reason || "Local candidate evidence; review before any action."}</p>
+                  {candidate.resolved_canonical ? <p className="muted-text">Resolves to <span className="mono-id">{candidate.resolved_canonical}</span>{candidate.canonical_status === "deprecated" ? " (deprecated; cannot apply)" : ""}.</p> : null}
+                  {candidate.evidence[0]?.snippet ? <p className="candidate-review-card__evidence">{candidate.evidence[0].snippet}</p> : null}
+                  <div className="reader-editor__actions">
+                    {canReview && activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading"} onClick={() => reviewCandidate(candidate, "approve")}>Approve</button> : null}
+                    {canReview && !activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading"} onClick={() => reviewCandidate(candidate, "promote")}>Promote to canonical</button> : null}
+                    {canReview ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading"} onClick={() => reviewCandidate(candidate, "reject")}>Reject</button> : null}
+                    {canApply ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || editor.tags.status === "saving"} onClick={() => applyCandidate(candidate)}>Apply to Paper</button> : null}
+                  </div>
+                </article>;
+              })}
+            </div> : candidateReview.collection?.state === "generated" ? <p className="muted-text">No tag candidates are currently available for this Paper.</p> : null}
           </section>
 
           <section className="reader-editor reader-note" aria-labelledby="reading-note-editor-title">

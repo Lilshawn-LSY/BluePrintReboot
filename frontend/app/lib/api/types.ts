@@ -192,6 +192,69 @@ export interface PaperTagCommandResponse {
   reading_note: PersistedReadingNote;
 }
 
+export interface CanonicalTagGovernanceItem {
+  canonical_key: string;
+  label: string;
+  category: string;
+  aliases: string[];
+  status: string;
+  suggestion_strength: number;
+  description: string;
+}
+
+export interface CanonicalTagGovernanceSnapshot {
+  items: CanonicalTagGovernanceItem[];
+  registry_revision: string;
+}
+
+export interface CanonicalTagGovernanceResponse {
+  status: "created" | "saved" | "no_op" | "deprecated";
+  tag: CanonicalTagGovernanceItem;
+  registry_revision: string;
+}
+
+export interface TagCandidateEvidence {
+  source: string;
+  source_label: string;
+  matched_text: string;
+  snippet: string;
+}
+
+export type TagCandidateState = "unresolved" | "resolved" | "approved" | "rejected" | "applied";
+
+export interface TagCandidateItem {
+  candidate_id: string;
+  tag_text: string;
+  normalized_tag: string;
+  resolved_canonical: string;
+  canonical_status: string;
+  category: string;
+  source: string;
+  source_label: string;
+  matched_text: string;
+  evidence: TagCandidateEvidence[];
+  score: number;
+  confidence: number;
+  quality: string;
+  reason: string;
+  state: TagCandidateState;
+  generated_kind: "known_canonical" | "new_candidate" | "weak_candidate" | "rejected_candidate";
+}
+
+export interface TagCandidateCollection {
+  paper_id: string;
+  review_revision: string;
+  tags_revision: string;
+  state: "not_generated" | "generated";
+  items: TagCandidateItem[];
+}
+
+export interface TagCandidateApplyResponse {
+  candidate: TagCandidateItem;
+  review_revision: string;
+  paper_tag: PaperTagCommandResponse;
+}
+
 export interface ReadingNoteCommandResponse {
   status: "created" | "saved" | "no_op";
   content: string;

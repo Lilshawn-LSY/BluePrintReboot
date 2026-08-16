@@ -53,7 +53,8 @@ test("Tags renders canonical identity, label, category, aliases, status, and rea
 
   assert.match(tags, /apiClient\.getTags\(\{ limit: 100 \}\)/);
   assert.match(tags, /apiClient\.getTagSummary\(\)/);
-  for (const field of ["tag.label", "tag.canonical_key", "tag.category", "tag.aliases", "tag.status", "tag.suggestion_strength"]) {
+  assert.match(tags, /apiClient\.getTagGovernance\(\)/);
+  for (const field of ["tag.label", "tag.canonical_key", "tag.category", "tag.aliases", "tag.status", "selected.suggestion_strength"]) {
     assert.match(tags, new RegExp(field.replace(".", "\\.")));
   }
   assert.match(tags, /summary\.candidate_count/);
@@ -61,7 +62,9 @@ test("Tags renders canonical identity, label, category, aliases, status, and rea
   assert.match(tags, /Candidate summary unavailable/);
   assert.match(tags, /No candidate evidence/);
   assert.match(client, /\/tags\/summary/);
-  assert.doesNotMatch(tags, /<button\b|Create Tag|Apply Tag|Remove Tag|Edit Alias|Merge Tags/);
+  for (const operation of ["createCanonicalTag", "updateCanonicalTag", "addCanonicalTagAlias", "removeCanonicalTagAlias", "deprecateCanonicalTag"]) {
+    assert.match(tags, new RegExp(`apiClient\\.${operation}`));
+  }
 });
 
 test("shared async states cover loading, empty, offline, read-model failure, not-found, and retry", async () => {
@@ -89,9 +92,14 @@ test("read parity contains no fabricated records and preserves existing views", 
   ]);
 
   assert.match(projects, /never substitutes sample Projects/);
-  assert.match(tags, /never supplies generated examples/);
+  assert.match(tags, /no values are fabricated/);
   assert.doesNotMatch(projects + projectDetail + tags, /const\s+(?:projects|tags|papers)\s*=\s*\[/i);
   assert.match(library, /apiClient\.getLibraryStatus/);
   assert.match(papers, /apiClient\.getPapers/);
   assert.match(reader, /apiClient\.getReaderSnapshot/);
+  for (const operation of ["generateTagCandidates", "approveTagCandidate", "rejectTagCandidate", "promoteTagCandidate", "applyTagCandidate"]) {
+    assert.match(reader, new RegExp(`apiClient\\.${operation}`));
+  }
+  assert.match(reader, /Nothing has been applied to this Paper/);
+  assert.match(reader, /Apply remains a separate Paper mutation/);
 });

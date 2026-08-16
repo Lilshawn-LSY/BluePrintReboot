@@ -8,15 +8,15 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.9-pdf-scan-import-frontend**.
+Current runtime target: **v1.5.10-tag-governance-candidate-review**.
 
-v1.5.9 closes the web PDF-ingestion workflow for files already placed in the canonical `papers/` directory. **Scan PDFs** is a preview-only operation: it discovers recursive managed-directory PDF candidates and marks new, already-registered, invalid, or unavailable files without changing `paper_index.csv`. A separate explicit import revalidates only the selected new relative paths under the workspace lock and registers them through the established atomic index path. Per-file failures are reported without creating broken Paper rows or corrupting existing records. Import does not enrich metadata or apply tags; v1.5.8 enrichment remains an explicit Reader action after import.
+v1.5.10 completes the bounded tag-management workflow. The Tag Book is now a canonical registry with explicit create, metadata/category edit, alias, and deprecate commands protected by a registry revision and the shared workspace lock. Canonical identities and aliases must be unique under the established normalization rule; a deprecated tag remains visible and historical Paper tag values, including legacy/noncanonical values, are never silently rewritten or deleted.
 
-v1.5.7 adds bounded Paper-local tag apply/remove controls to the web Reader. Explicit add/remove commands use a tag-only revision, shared locking, reload-after-lock optimistic concurrency, atomic persistence, verified rollback, and canonical Reading Note header synchronization without replacing unsaved note bodies. The Reader prefers canonical Tag Book values while retaining compatible legacy/noncanonical stored Paper tags. There is no canonical Tag CRUD, alias governance, automatic or bulk tagging, or metadata-editor tag field.
+Paper-scoped tag candidates are persisted review records, not Paper tags. Generate/view candidates is non-mutating; a user can approve, reject, or promote an unresolved candidate to an active canonical tag. Only the separate **Apply** action uses the existing v1.5.7 Paper-tag command and its tag revision. Rejection remains persisted until an explicit regenerate/reset, and a deprecated or unresolved candidate cannot be applied. The small deterministic baseline measures the current rulebook rather than claiming semantic-tagging quality: 2 expected candidates present, 0 misses, 1 false positive, and precision-like 0.667 across three fixture cases.
 
 v1.5.6 closes the everyday Project workspace: one Project page now keeps explicit metadata/status/priority editing, Paper links, and a bounded existing Note Block picker together. The picker reads only the selected Paper's stored blocks and reuses the canonical typed Project-link command, including duplicate truthfulness, revision conflicts, and controlled unavailable/orphan states. Project and link writes remain independent, revision-checked, lock-protected, and atomic; there is no autosave, combined save, or storage migration.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.9. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, v1.5.7 Paper tags, v1.5.8 metadata enrichment, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.10. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, v1.5.7 Paper tags, v1.5.8 metadata enrichment, v1.5.9 PDF scan/import, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -85,6 +85,8 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Remove Note Block link: `DELETE http://127.0.0.1:8000/projects/{project_id}/note-block-links/{link_id}`
 - Canonical Tags: [http://127.0.0.1:8000/tags](http://127.0.0.1:8000/tags)
 - Tag candidate summary: [http://127.0.0.1:8000/tags/summary](http://127.0.0.1:8000/tags/summary)
+- Canonical tag governance: `GET /tags/governance`, `POST /tags`, `PATCH /tags/{canonical_key}`, `POST|DELETE /tags/{canonical_key}/aliases`, and `POST /tags/{canonical_key}/deprecate`
+- Paper tag candidates: `GET|POST /papers/{paper_id}/tag-candidates`, followed by `POST /papers/{paper_id}/tag-candidates/{candidate_id}/approve|reject|promote|apply`
 - Safe Settings summary: [http://127.0.0.1:8000/settings/summary](http://127.0.0.1:8000/settings/summary)
 
 `GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), and `archive_status` (`active`, `archived`, or `all`; default `active`). Results are ordered by case-insensitive title and then stable `paper_id`.
@@ -94,6 +96,8 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 `GET /settings/summary` has no query or write surface. It returns four strict sections: Application, Workspace, Data integrity, and Backup readiness. Its lightweight reader caps file discovery, index rows, per-file JSON reads, and total JSON bytes per request; checks only file presence and app-owned metadata; and never hashes or parses PDFs, extracts text, opens snapshot archives, verifies restores, or writes cache/report/status files. Missing diagnostics use `state: "unavailable"` with `count: null`, which is distinct from a verified zero.
 
 Managed PDF scan and import are separate explicit `POST` commands. Scan returns only safe relative candidate paths and status; it has no registry persistence side effect. Import accepts only selected managed-relative `.pdf` paths, rechecks them under the shared workspace lock, and reports per-file imported, already-registered, missing, invalid, or unavailable outcomes. It never accepts arbitrary server filesystem paths, enriches metadata, tags a Paper, repairs moved files, or creates a broken record. Metadata enrichment preview is likewise a separate explicit `POST` with no persistence side effect. It returns only allowlisted current values, nonblank candidate values, field provenance, safe diagnostics, and candidate state; unavailable provider fields never mean “clear this stored value.” Metadata requests contain `changes` plus `expected_revision`, so only the fields selected from a preview mutate. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
+
+Tag governance stores only canonical Tag Book records and never normalizes or migrates stored Paper tags as a side effect. Alias lookup is deterministic: duplicate aliases, aliases that collide with a canonical identity, canonical labels that collide with an alias, ambiguous aliases, and self-aliases are rejected. Deprecation preserves the canonical record and old relationships but prevents normal candidate approval/promotion/application. Candidate generation uses the existing rulebook/extraction path and saves a per-Paper review context only. It never changes `paper_index.csv`; applying a candidate delegates to the existing tag command with `expected_tags_revision`, so repeat apply is an honest no-op and stale Paper or review state is a controlled conflict.
 
 Project update/archive requests use `expected_revision`; Paper-link add/remove requests use `expected_links_revision`. Both tokens are deterministic SHA-256 revisions over the complete relevant stored state. Commands acquire the shared workspace write lock, reload after lock acquisition, reject stale state without mutation, and verify persisted output. Project create/update/archive touch only Project storage; Paper-link commands touch only link storage. Archive preserves existing links and is not deletion.
 
@@ -281,6 +285,7 @@ Foundation release documents:
 - [v1.5.7 Paper Tag Apply/Remove release-note draft](docs/release_notes/v1.5.7.md)
 - [v1.5.8 Metadata Enrichment Frontend release-note draft](docs/release_notes/v1.5.8.md)
 - [v1.5.9 PDF Scan / Import Frontend release-note draft](docs/release_notes/v1.5.9.md)
+- [v1.5.10 Tag Governance & Candidate Review release-note draft](docs/release_notes/v1.5.10.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -344,6 +349,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.5.10-tag-governance-candidate-review
+
+- Adds revision-checked canonical Tag Book management: create, bounded metadata/category edits, alias management, and non-destructive deprecation.
+- Preserves historical and legacy/noncanonical Paper tag values; canonical and alias collisions are rejected rather than auto-corrected.
+- Adds persisted Paper-scoped candidate review, explicit approve/reject/promote actions, and a separate Apply action that reuses the existing Paper-tag command.
+- Records a deterministic rulebook candidate baseline; advanced tag intelligence, embeddings, LLMs, and broad semantic optimization remain deferred to v1.8.0.
 
 ### v1.5.9-pdf-scan-import-frontend
 

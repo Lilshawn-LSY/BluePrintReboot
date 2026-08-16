@@ -2,7 +2,23 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
-## v1.5.9-pdf-scan-import-frontend
+## v1.5.10-tag-governance-candidate-review
+
+- [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.10 while the immutable released baseline remains v1.4.0.
+- [x] Canonical Tag Book create/edit/alias/deprecate commands are revision-checked, lock-protected, atomically persisted, and return controlled stale/conflict/error states.
+- [x] Canonical/alias identity collisions, ambiguous aliases, self-aliases, and inconsistent normalization are rejected using existing conservative Tag Book rules; categories remain bounded metadata.
+- [x] Deprecation retains the canonical record and historical Paper relationships. No governance action deletes, renames, or rewrites legacy/noncanonical Paper tag text.
+- [x] Candidate generation and persisted review are Paper-tag non-mutating. Candidate source/evidence and existing score/confidence fields remain inspectable without fabricated values.
+- [x] Approve, reject, and promote are explicit review actions. Promotion resolves or creates an active canonical registry entry without duplicate canonical/alias identities; rejected candidates remain persisted until deliberate reset/re-generation.
+- [x] Apply is a separate final action that reuses the existing v1.5.7 Paper tag command, including tag revisions, locking, atomicity, conflict/no-op behavior, and Reading Note draft safety.
+- [x] The deterministic fixture baseline records 2 expected candidates present, 0 misses, 1 false positive, and precision-like 0.667 across 3 cases; it is measurement only.
+- [x] Disposable backend/frontend tests cover registry governance, candidate non-mutation/review/promotion/apply, stale conflicts, existing Paper-tag compatibility, and bounded bridge/UI routes.
+- [x] User-provided manual verification covers canonical registry changes, alias/deprecation visibility, candidate review states, explicit apply/no-auto-apply, stale conflict recovery, unsaved Reader draft preservation, regressions, and the complete end-to-end workflow.
+- [ ] Separately verify private-safe browser Network responses for governance and candidate-review routes.
+- [ ] v1.5.10 PR-head CI, merge to `main`, v1.5.10 tag, GitHub Release, post-merge `main` CI, and clean-PC restore remain open until separately observed.
+- [ ] v1.6.0 owns the Reader Workspace UX Overhaul. Automatic apply/cleanup, bulk retagging, embeddings/LLM tagging, ontology/graph work, and v1.8.0 Tag Intelligence remain excluded.
+
+## Historical v1.5.9-pdf-scan-import-frontend
 
 - [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.9 while the immutable released baseline remains v1.4.0.
 - [x] `POST /papers/scan` is a preview-only recursive managed-directory scan. It returns safe relative candidates without creating or changing a Paper record or triggering enrichment/tags.
