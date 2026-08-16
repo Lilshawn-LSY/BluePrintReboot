@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.5",
-  "release_name": "v1.5.5-note-block-write-project-links",
-  "as_of": "2026-08-02",
+  "product_version": "1.5.6",
+  "release_name": "v1.5.6-project-workspace-closure",
+  "as_of": "2026-08-16",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -108,31 +108,31 @@
     "local_smoke": {
       "status": "VERIFIED",
       "scope": "offline repository readiness smoke",
-      "command": ".\\.venv\\Scripts\\python.exe scripts\\smoke_check.py",
+      "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 123,
+        "passed": 124,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 local validation",
-        "summary": "The current offline repository readiness smoke completed with 123 passed, 0 warnings, and 0 failed."
+        "date": "2026-08-16",
+        "reference": "v1.5.6 local validation",
+        "summary": "The current offline repository readiness smoke completed with 124 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
       "status": "VERIFIED",
       "scope": "full Python test suite",
-      "command": ".\\.venv\\Scripts\\python.exe -m pytest -q",
+      "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 720,
+        "passed": 723,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 local validation",
-        "summary": "The current full Python suite completed with 720 passed."
+        "date": "2026-08-16",
+        "reference": "v1.5.6 local validation",
+        "summary": "The current full Python suite completed with 723 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -278,14 +278,14 @@
     "focused_release_version": {
       "status": "VERIFIED",
       "scope": "release and version contracts",
-      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_release_contracts.py -q",
+      "command": ".venv/bin/python -m pytest -q tests/test_release_contracts.py",
       "counts": {
         "passed": 9,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 focused release validation",
+        "date": "2026-08-16",
+        "reference": "v1.5.6 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
       }
     },
@@ -323,8 +323,8 @@
       "command": "npm run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 local validation",
+        "date": "2026-08-16",
+        "reference": "v1.5.6 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -334,8 +334,8 @@
       "command": "npm test",
       "counts": null,
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 local validation",
+        "date": "2026-08-16",
+        "reference": "v1.5.6 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -344,15 +344,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm test",
       "counts": {
-        "passed": 76,
+        "passed": 10,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 local validation",
-        "summary": "All 76 frontend Node tests passed."
+        "date": "2026-08-16",
+        "reference": "v1.5.6 local validation",
+        "summary": "All 10 frontend Node test files passed."
       }
     },
     "frontend_projects_tags": {
@@ -440,12 +440,12 @@
       "scope": "tracked repository entries only",
       "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 262,
+        "entries_inspected": 277,
         "violations": 0
       },
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 local hygiene validation",
+        "date": "2026-08-16",
+        "reference": "v1.5.6 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -863,11 +863,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.5.5 hosted and publication evidence; v1.6 Reader/shared UX deferred",
+    "name": "v1.5.6 hosted and publication evidence; v1.6 Reader/shared UX deferred",
     "evidence": {
-      "date": "2026-08-02",
+      "date": "2026-08-16",
       "reference": "docs/ROADMAP.md",
-      "summary": "Preserve completed local v1.5.5 runtime evidence while keeping hosted CI, merge, tag, publication, clean-PC restore, and the deferred v1.6 Reader/shared UX work separately evidenced."
+      "summary": "Preserve completed local v1.5.6 runtime evidence while keeping hosted CI, merge, tag, publication, clean-PC restore, and the deferred v1.6 Reader/shared UX work separately evidenced."
     }
   },
   "historical_evidence": {
@@ -908,7 +908,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-08-02",
+    "last_reconciled": "2026-08-16",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",

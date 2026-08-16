@@ -8,11 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.5-note-block-write-project-links**.
+Current runtime target: **v1.5.6-project-workspace-closure**.
 
-v1.5.5 adds a bounded structured Note Block slice to the web Reader: stored-order collection reads, explicit create/update, deterministic collection revisions, and explicit typed links to existing Projects. Project Detail resolves safe block summaries and explicit orphan/unavailable states. Note Block and Project-link commands use workspace locking, reload-after-lock optimistic revisions, atomic replacement, rollback verification, and strict private-safe API contracts. There is no Note Block delete/reorder, Project deletion/unarchive, Tag or Settings write, autosave, combined save, or bulk mutation.
+v1.5.6 closes the everyday Project workspace: one Project page now keeps explicit metadata/status/priority editing, Paper links, and a bounded existing Note Block picker together. The picker reads only the selected Paper's stored blocks and reuses the canonical typed Project-link command, including duplicate truthfulness, revision conflicts, and controlled unavailable/orphan states. Project and link writes remain independent, revision-checked, lock-protected, and atomic; there is no autosave, combined save, or storage migration.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.5. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.6. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -268,6 +268,7 @@ Foundation release documents:
 - [v1.5.3 Settings and Health Safe Read Parity release-note draft](docs/release_notes/v1.5.3.md)
 - [v1.5.4 Project Write and Paper–Project Link Commands release-note draft](docs/release_notes/v1.5.4.md)
 - [v1.5.5 Note Block Write and Project Links release-note draft](docs/release_notes/v1.5.5.md)
+- [v1.5.6 Project Workspace Closure release-note draft](docs/release_notes/v1.5.6.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -331,6 +332,12 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.5.6-project-workspace-closure
+
+- Closes the Project workspace with explicit metadata/status/priority commands, distinct Paper and Note Block link collections, and bounded local counts.
+- Lets a user select an existing Paper, load only that Paper's stored Note Blocks, select an allowlisted link type, and explicitly reuse the canonical typed Project-link command.
+- Preserves independent dirty metadata drafts, optimistic Project/link revisions, shared workspace locking, atomic verification/rollback, local storage, Reader behavior, and Streamlit compatibility.
 
 ### v1.5.5-note-block-write-project-links
 

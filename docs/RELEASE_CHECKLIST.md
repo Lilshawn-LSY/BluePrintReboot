@@ -2,6 +2,17 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.6-project-workspace-closure
+
+- [x] Project Detail keeps explicit metadata/status/priority editing, Paper-link management, and existing Note Block-link management together without a second storage path.
+- [x] The Project-local Note Block picker is bounded by existing Papers and the selected Paper's stored blocks; it uses the existing read and typed link-command contracts.
+- [x] Typed Paper and Note Block counts flow from the Project read model through the API/schema/frontend types; controlled orphan and unavailable states remain visible and non-destructive.
+- [x] Project metadata drafts and link commands remain independent; dirty drafts block link controls, archived Projects remain read-only, and link commands keep their separate revision checks.
+- [x] Disposable regression coverage includes metadata/list/detail persistence, both link types, canonical Note Block link visibility, duplicate no-ops, conflicts, archived controls, and target-state preservation.
+- [ ] User-performed browser validation of the Project-local Note Block picker and cross-surface persistence remains separate and is not claimed here.
+- [ ] Hosted CI, merge to `main`, v1.5.6 tag, GitHub Release, and post-merge `main` CI remain open until separately observed.
+- [ ] Drag-and-drop, PDF selection/highlighting, Note Block delete/reorder, automatic generation, autosave, Tag changes, graph/citation/backup work, design-system overhaul, Streamlit removal, database/cloud sync, Project delete, and unarchive remain excluded.
+
 ## v1.5.5-note-block-write-project-links
 
 - [x] Runtime, package/lockfile, README, manifest, release-note draft, and generated status identify v1.5.5 while the immutable released baseline remains v1.4.0.

@@ -11,6 +11,7 @@ from api import dependencies
 from api.main import INVALID_REQUEST_DETAIL, create_app
 from api.routes import PROJECT_COMMAND_UNAVAILABLE_DETAIL
 from services import project_commands
+from services.project_read_model import build_project_detail, build_project_list_items
 from services.project_commands import (
     ProjectArchivedConflict,
     ProjectCommandConflict,
@@ -61,6 +62,7 @@ def test_create_project_generates_identity_defaults_and_strict_result(tmp_path: 
     assert len(project["project_revision"]) == 64
     assert len(project["links_revision"]) == 64
     assert project["link_count"] == project["linked_paper_count"] == 0
+    assert project["linked_note_block_count"] == 0
     assert set(list_projects(service.projects_dir)[0]) >= {
         "id",
         "created_at",
@@ -128,6 +130,29 @@ def test_update_is_allowlisted_revisioned_and_preserves_immutable_fields(
     assert result.project.updated_at != created.project.updated_at
     assert result.project.project_id == created.project.project_id
     assert result.project.project_revision != created.project.project_revision
+
+
+def test_metadata_update_survives_project_list_and_detail_reload(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    created = service.create_project(name="Workspace metadata")
+
+    updated = service.update_project(
+        created.project.project_id,
+        {"status": "paused", "priority": "high"},
+        created.project.project_revision,
+    )
+    listing = build_project_list_items(projects_dir=service.projects_dir)
+    detail = build_project_detail(
+        created.project.project_id,
+        projects_dir=service.projects_dir,
+        index_csv=service.index_csv,
+    )
+
+    assert updated.status == "saved"
+    assert [(item["status"], item["priority"]) for item in listing] == [("paused", "high")]
+    assert detail is not None
+    assert detail["status"] == "paused"
+    assert detail["priority"] == "high"
 
 
 def test_update_and_archive_routes_return_refreshed_strict_state(tmp_path: Path) -> None:

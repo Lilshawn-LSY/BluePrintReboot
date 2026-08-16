@@ -398,6 +398,8 @@ def remove_project_paper_link(
             status_code=404,
             detail=PROJECT_COMMAND_NOT_FOUND_DETAIL,
         ) from None
+    except ProjectArchivedConflict:
+        raise HTTPException(status_code=409, detail=PROJECT_ARCHIVED_DETAIL) from None
     except ProjectCommandConflict:
         raise HTTPException(
             status_code=409,

@@ -189,6 +189,7 @@ export interface ProjectListItem {
   project_revision: string;
   link_count: number;
   linked_paper_count: number;
+  linked_note_block_count: number;
 }
 
 export interface LinkedPaperSummary {
@@ -264,6 +265,7 @@ export interface ProjectCommandState {
   links_revision: string;
   link_count: number;
   linked_paper_count: number;
+  linked_note_block_count: number;
 }
 
 export interface ProjectCommandResponse {

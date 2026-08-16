@@ -25,11 +25,11 @@ test("Projects and Tags routes no longer render deferred placeholders", async ()
   }
 });
 
-test("Projects renders real collection fields and bounded linked-paper detail", async () => {
+test("Projects renders real collection fields and bounded typed-link detail", async () => {
   const [, , , projects, projectDetail, , , , client] = await sources;
 
   assert.match(projects, /apiClient\.getProjects\(\{ limit: 100 \}\)/);
-  for (const field of ["project.name", "project.project_id", "project.status", "project.priority", "project.tags", "project.linked_paper_count", "project.updated_at"]) {
+  for (const field of ["project.name", "project.project_id", "project.status", "project.priority", "project.tags", "project.linked_paper_count", "project.linked_note_block_count", "project.updated_at"]) {
     assert.match(projects, new RegExp(field.replace(".", "\\.")));
   }
   assert.match(projectDetail, /apiClient\.getProject\(projectId, \{ linksLimit: 100 \}\)/);
@@ -38,6 +38,8 @@ test("Projects renders real collection fields and bounded linked-paper detail", 
   assert.match(projectDetail, /link\.paper\.title/);
   assert.match(projectDetail, /link\.paper_id/);
   assert.match(projectDetail, /Linked paper unavailable/);
+  assert.match(projectDetail, /Linked Note Blocks/);
+  assert.match(projectDetail, /project\.linked_note_block_count/);
   assert.match(client, /links_limit/);
   assert.match(client, /links_offset/);
   assert.match(projects, /Create Project/);

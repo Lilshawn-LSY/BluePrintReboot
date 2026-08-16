@@ -14,6 +14,7 @@ from services.note_block_commands import (
 )
 from services.note_block_read_model import build_note_block_collection, note_blocks_revision
 from services.project_commands import ProjectCommandService, ProjectCommandUnavailable
+from services.project_read_model import build_project_detail
 from storage.note_block_store import note_blocks_path
 
 
@@ -178,6 +179,14 @@ def test_project_note_block_link_api_add_duplicate_and_unlink(tmp_path: Path) ->
     )
     assert created.status_code == 200
     assert created.json()["status"] == "created"
+    detail = build_project_detail(
+        project.project.project_id,
+        projects_dir=project_service.projects_dir,
+        index_csv=project_service.index_csv,
+        note_blocks_dir=project_service.note_blocks_dir,
+    )
+    assert detail is not None
+    assert detail["links"][0]["note_block"]["block_id"] == block.block["id"]
     duplicate = client.post(
         f"/projects/{project.project.project_id}/note-block-links",
         json={

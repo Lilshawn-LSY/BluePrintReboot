@@ -76,5 +76,6 @@ def test_project_detail_resolves_available_orphaned_and_unavailable_note_blocks(
     assert by_id[links[1]["id"]]["target_id"] == "missing-block"
     assert by_id[links[2]["id"]]["target_state"] == "orphaned_paper"
     assert by_id[links[3]["id"]]["target_state"] == "unavailable"
+    assert detail["linked_note_block_count"] == 4
     assert detail["orphaned_link_count"] == 2
     assert all(link["paper"] is None for link in detail["links"])

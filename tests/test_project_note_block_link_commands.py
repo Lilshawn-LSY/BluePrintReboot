@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from services import project_commands
+from services.project_read_model import build_project_detail
 from services.project_commands import (
     ProjectArchivedConflict,
     ProjectCommandConflict,
@@ -92,6 +93,46 @@ def test_add_duplicate_and_distinct_link_types_are_truthful(tmp_path: Path) -> N
     assert len(list_project_links(service.projects_dir)) == 2
     assert distinct.project.link_count == 2
     assert distinct.project.linked_paper_count == 0
+    assert distinct.project.linked_note_block_count == 2
+
+
+def test_note_block_link_add_and_remove_survive_project_detail_reload(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    project = service.create_project(name="Project")
+    linked = service.add_note_block_link(
+        project.project.project_id,
+        paper_id="paper-1",
+        note_block_id="block-1",
+        link_type="related",
+        expected_links_revision=project.project.links_revision,
+    )
+    detail = build_project_detail(
+        project.project.project_id,
+        projects_dir=service.projects_dir,
+        index_csv=service.index_csv,
+        note_blocks_dir=service.note_blocks_dir,
+    )
+
+    assert detail is not None
+    assert detail["linked_note_block_count"] == 1
+    assert detail["links"][0]["note_block"]["block_id"] == "block-1"
+
+    removed = service.remove_note_block_link(
+        project.project.project_id,
+        linked.link.link_id,
+        expected_links_revision=detail["links_revision"],
+    )
+    reloaded = build_project_detail(
+        project.project.project_id,
+        projects_dir=service.projects_dir,
+        index_csv=service.index_csv,
+        note_blocks_dir=service.note_blocks_dir,
+    )
+
+    assert removed.status == "removed"
+    assert reloaded is not None
+    assert reloaded["links"] == []
+    assert reloaded["linked_note_block_count"] == 0
 
 
 def test_invalid_project_paper_block_mismatch_archived_and_stale_are_rejected(tmp_path: Path) -> None:

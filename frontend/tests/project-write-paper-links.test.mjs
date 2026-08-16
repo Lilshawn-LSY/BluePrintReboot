@@ -48,6 +48,21 @@ test("Paper linking uses the real bounded Paper index and exact link revision", 
   assert.doesNotMatch(detail, /sample Paper|const papers\s*=\s*\[/);
 });
 
+test("Project Detail can add an existing Note Block through the canonical read and link commands", async () => {
+  const [, detail, client] = await sources;
+  assert.match(detail, /Add an existing Note Block/);
+  assert.match(detail, /Source Paper/);
+  assert.match(detail, /Existing Note Block/);
+  assert.match(detail, /apiClient\.getNoteBlocks\(paperId\)/);
+  assert.match(detail, /apiClient\.addProjectNoteBlockLink/);
+  assert.match(detail, /Retry Note Block picker/);
+  assert.match(detail, /This Paper has no stored Note Blocks to link/);
+  assert.match(detail, /exact Note Block link already exists; nothing was written/);
+  assert.match(detail, /selected Paper, Note Block, and link type are preserved/);
+  assert.match(client, /note_block_id: noteBlockId/);
+  assert.match(client, /expected_links_revision: expectedLinksRevision/);
+});
+
 test("Paper unlink remains confirmed and cannot delete a Paper", async () => {
   const [, detail, client] = await sources;
   assert.match(detail, /Remove the Project link/);
@@ -63,5 +78,7 @@ test("archived Projects retain read detail while write controls are absent", asy
   assert.match(detail, /const archived = project\.status === "archived"/);
   assert.match(detail, /\{!archived \?/);
   assert.match(detail, /stored Paper and Note Block links remain readable/);
-  assert.match(detail, /Save or cancel the metadata draft before changing Paper links/);
+  assert.match(detail, /Save or cancel the metadata draft before changing Project links/);
+  assert.match(detail, /!archived && !dirty/);
+  assert.doesNotMatch(detail, /discardDraft:\s*true/);
 });

@@ -270,6 +270,11 @@ def adapt_project_list_item(source: Mapping[str, Any]) -> ProjectListItem:
             "linked_paper_count",
             ProjectContractError,
         ),
+        linked_note_block_count=_nonnegative_integer(
+            source.get("linked_note_block_count"),
+            "linked_note_block_count",
+            ProjectContractError,
+        ),
     )
 
 
@@ -487,6 +492,11 @@ def _adapt_project_command_state(source) -> ProjectCommandState:
         linked_paper_count=_nonnegative_integer(
             source.linked_paper_count,
             "project.linked_paper_count",
+            ProjectContractError,
+        ),
+        linked_note_block_count=_nonnegative_integer(
+            source.linked_note_block_count,
+            "project.linked_note_block_count",
             ProjectContractError,
         ),
     )
