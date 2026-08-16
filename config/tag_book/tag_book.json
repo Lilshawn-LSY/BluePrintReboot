@@ -73,7 +73,8 @@
       "canonical": "method",
       "label": "Method",
       "category": "paper_type",
-      "aliases": [],
+      "aliases": [
+      ],
       "status": "deprecated",
       "suggestion_strength": 5,
       "description": "Paper type tag for method papers.",
@@ -90,16 +91,6 @@
       "suggestion_strength": 1,
       "description": "Physics field tag preserved from the canonical registry.",
       "created_from": "config/canonical_tags.json"
-    },
-    {
-      "canonical": "piezo",
-      "label": "PIEZO",
-      "category": "gene_or_protein",
-      "aliases": [],
-      "status": "active",
-      "suggestion_strength": 1,
-      "description": "",
-      "created_from": "tag_governance"
     },
     {
       "canonical": "pipeline",
@@ -194,6 +185,8 @@
         "single cell rna-seq",
         "single-cell rna-seq",
         "single-cell-rna-seq",
+        "single-cell RNA sequencing",
+        "single cell RNA sequencing",
         "single-cell transcriptomics",
         "single cell transcriptomics"
       ],
