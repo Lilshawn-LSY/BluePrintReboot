@@ -244,6 +244,22 @@ def test_reader_write_manual_checks_preserve_the_two_unverified_scenarios() -> N
         validate_manifest(fabricated)
 
 
+def test_metadata_enrichment_manual_checks_are_complete_and_derived() -> None:
+    manifest = read_manifest()
+    runtime = manifest["manual_validation"]["metadata_enrichment_runtime"]
+
+    assert runtime["status"] == "VERIFIED"
+    assert len(runtime["checks"]) == 15
+    assert {item["status"] for item in runtime["checks"].values()} == {"VERIFIED"}
+    assert {item["evidence"]["date"] for item in runtime["checks"].values()} == {"2026-08-16"}
+    validate_manifest(manifest)
+
+    fabricated = copy.deepcopy(manifest)
+    fabricated["manual_validation"]["metadata_enrichment_runtime"]["status"] = "PARTIALLY VERIFIED"
+    with pytest.raises(ReleaseStateError, match="aggregate status must derive"):
+        validate_manifest(fabricated)
+
+
 @pytest.mark.parametrize(
     "summary",
     [

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyMetadataEnrichmentCommandResult,
   applyMetadataCommandResult,
   applyPaperTagCommandResult,
   changedMetadataFields,
@@ -142,6 +143,41 @@ test("metadata success refreshes a canonical dirty draft even when no note exist
   assert.match(updated.note.draft, /Unsaved absent-note body/);
   assert.equal(updated.note.baseline, "");
   assert.equal(updated.note.status, "dirty");
+});
+
+test("selective enrichment apply preserves unselected manual metadata and dirty Reading Note drafts", () => {
+  const state = createReaderEditorState(snapshot());
+  state.metadata.draft.authors = "Manual unsaved author";
+  state.metadata.draft.keywords = "manual, unsaved";
+  state.note.draft = state.note.draft.replace("Saved body for paper-a", "Exact enrichment-note draft");
+  const persisted = state.note.baseline.replace("title: Paper A", "title: Candidate title");
+  const response = {
+    status: "saved",
+    metadata: { ...metadata, title: "Candidate title" },
+    metadata_revision: "9".repeat(64),
+    changed_fields: ["title"],
+    note_header_status: "updated",
+    canonical_note_header: {},
+    canonical_note_header_text: persisted.slice(0, persisted.indexOf("## ")),
+    reading_note: {
+      exists: true,
+      content: persisted,
+      sha256: "8".repeat(64),
+      size_bytes: persisted.length,
+    },
+  };
+
+  const updated = applyMetadataEnrichmentCommandResult(state, response, ["title"]);
+
+  assert.equal(updated.metadata.baseline.title, "Candidate title");
+  assert.equal(updated.metadata.draft.title, "Candidate title");
+  assert.equal(updated.metadata.draft.authors, "Manual unsaved author");
+  assert.equal(updated.metadata.draft.keywords, "manual, unsaved");
+  assert.equal(updated.metadata.status, "dirty");
+  assert.match(updated.metadata.message, /Unselected manual draft fields were kept/);
+  assert.equal(updated.note.status, "dirty");
+  assert.match(updated.note.draft, /title: Candidate title/);
+  assert.match(updated.note.draft, /Exact enrichment-note draft/);
 });
 
 test("Paper tag success refreshes the canonical header without erasing a dirty note body", () => {

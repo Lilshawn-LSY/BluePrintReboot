@@ -71,6 +71,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.5.5.md",
     "docs/release_notes/v1.5.6.md",
     "docs/release_notes/v1.5.7.md",
+    "docs/release_notes/v1.5.8.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -131,6 +132,7 @@ KEY_MODULES = (
     "services.reader_commands",
     "services.restore_readiness",
     "services.metadata_fallback",
+    "services.metadata_enrichment",
     "services.missing_pdf_repair",
     "services.note_import",
     "services.pdf_inbox",
@@ -300,6 +302,7 @@ def check_api_contract() -> SmokeCheckResult:
             "/papers/{paper_id}/reader": {"get"},
             "/papers/{paper_id}/pdf": {"get"},
             "/papers/{paper_id}/metadata": {"patch"},
+            "/papers/{paper_id}/metadata/enrichment-preview": {"post"},
             "/papers/{paper_id}/tags": {"post", "delete"},
             "/papers/{paper_id}/reading-note": {"put"},
             "/papers/{paper_id}/note-blocks": {"get", "post"},
@@ -322,7 +325,7 @@ def check_api_contract() -> SmokeCheckResult:
     return SmokeCheckResult(
         "api:application-contract",
         "pass",
-        f"twelve GET routes, six Reader commands, and seven Project commands for {APP_VERSION}",
+        f"twelve GET routes, seven Reader commands, and seven Project commands for {APP_VERSION}",
     )
 
 
@@ -355,6 +358,7 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             "getTagSummary",
             "getSettingsSummary",
             "saveReaderMetadata",
+            "previewMetadataEnrichment",
             "addPaperTag",
             "removePaperTag",
             "saveReadingNote",

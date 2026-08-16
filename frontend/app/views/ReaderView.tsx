@@ -10,8 +10,9 @@ import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
-import type { EditablePaperMetadata, ReaderSnapshot } from "../lib/api/types";
+import type { EditablePaperMetadata, MetadataEnrichmentPreview, ReaderSnapshot } from "../lib/api/types";
 import {
+  applyMetadataEnrichmentCommandResult,
   applyMetadataCommandResult,
   applyPaperTagCommandResult,
   changedMetadataFields,
@@ -22,6 +23,14 @@ import {
 
 
 type EditorStatus = "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
+type EnrichmentStatus = "idle" | "loading" | "ready" | "saving" | "saved" | "conflict" | "error";
+
+type EnrichmentState = {
+  status: EnrichmentStatus;
+  preview: MetadataEnrichmentPreview | null;
+  selectedFields: Array<keyof EditablePaperMetadata>;
+  message: string;
+};
 
 const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   title: "Title",
@@ -32,6 +41,13 @@ const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   abstract: "Abstract",
   keywords: "Keywords",
 };
+
+const CANDIDATE_STATE_LABELS = {
+  unchanged: "Unchanged",
+  conflict: "Conflicts with current",
+  available: "Candidate available",
+  unavailable: "Unavailable",
+} as const;
 
 
 function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
@@ -47,7 +63,7 @@ function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
 }
 
 
-function statusLabel(status: EditorStatus): string {
+function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -63,8 +79,51 @@ function errorState(error: unknown): { status: EditorStatus; message: string } {
 }
 
 
+function enrichmentStateForError(error: unknown, action: "fetch" | "apply"): Pick<EnrichmentState, "status" | "message"> {
+  if (error instanceof ApiClientError && error.kind === "conflict") {
+    return {
+      status: "conflict",
+      message: "The saved metadata changed. Your candidate preview and selected fields are still here; reload candidates before retrying.",
+    };
+  }
+  return {
+    status: "error",
+    message: action === "fetch"
+      ? "Candidates could not be retrieved. No metadata was changed."
+      : "Selected metadata could not be saved. Your candidate selection and editor drafts remain unchanged.",
+  };
+}
+
+
+function refreshedCandidatePreview(
+  preview: MetadataEnrichmentPreview,
+  metadata: EditablePaperMetadata,
+  revision: string,
+): MetadataEnrichmentPreview {
+  return {
+    ...preview,
+    metadata_revision: revision,
+    fields: preview.fields.map((field) => {
+      const currentValue = metadata[field.field];
+      const state = !field.candidate_value
+        ? "unavailable"
+        : field.candidate_value === currentValue
+          ? "unchanged"
+          : currentValue ? "conflict" : "available";
+      return { ...field, current_value: currentValue, state };
+    }),
+  };
+}
+
+
 function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const [editor, setEditor] = useState(() => createReaderEditorState(snapshot));
+  const [enrichment, setEnrichment] = useState<EnrichmentState>({
+    status: "idle",
+    preview: null,
+    selectedFields: [],
+    message: "",
+  });
   const tagBook = useApiResource(
     "reader-canonical-tag-book",
     () => apiClient.getTags({ limit: 100 }),
@@ -107,7 +166,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   }, [hasDirtyDraft]);
 
   const saveMetadata = async () => {
-    if (!metadataChanged.length || editor.metadata.status === "saving" || editor.note.status === "saving") return;
+    if (!metadataChanged.length || editor.metadata.status === "saving" || editor.note.status === "saving" || enrichment.status === "saving") return;
     const changes = Object.fromEntries(
       metadataChanged.map((field) => [field, editor.metadata.draft[field]]),
     ) as Partial<EditablePaperMetadata>;
@@ -131,8 +190,92 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     }
   };
 
+  const fetchMetadataCandidates = async (preserveSelection = false) => {
+    if (enrichment.status === "loading" || enrichment.status === "saving") return;
+    setEnrichment((current) => ({
+      ...current,
+      status: "loading",
+      message: "Fetching metadata candidates…",
+    }));
+    try {
+      const preview = await apiClient.previewMetadataEnrichment(snapshot.paper.paper_id);
+      setEnrichment((current) => {
+        const selectable = new Set(
+          preview.fields
+            .filter((field) => field.candidate_value && field.state !== "unchanged")
+            .map((field) => field.field),
+        );
+        const selectedFields = preserveSelection
+          ? current.selectedFields.filter((field) => selectable.has(field))
+          : [];
+        return {
+          status: "ready",
+          preview,
+          selectedFields,
+          message: preview.candidate_sources.length
+            ? "Candidates are ready for review. Nothing has been saved."
+            : "No candidate values were available. Nothing has been saved.",
+        };
+      });
+    } catch (error) {
+      const failure = enrichmentStateForError(error, "fetch");
+      setEnrichment((current) => ({ ...current, ...failure }));
+    }
+  };
+
+  const toggleCandidateField = (field: keyof EditablePaperMetadata) => {
+    setEnrichment((current) => ({
+      ...current,
+      selectedFields: current.selectedFields.includes(field)
+        ? current.selectedFields.filter((item) => item !== field)
+        : [...current.selectedFields, field],
+      message: "",
+    }));
+  };
+
+  const applySelectedCandidates = async () => {
+    if (!enrichment.preview || !enrichment.selectedFields.length || enrichment.status === "saving") return;
+    const fieldsByName = new Map(enrichment.preview.fields.map((field) => [field.field, field]));
+    const selectedFields = enrichment.selectedFields.filter((field) => {
+      const candidate = fieldsByName.get(field);
+      return Boolean(candidate?.candidate_value && candidate.state !== "unchanged");
+    });
+    if (!selectedFields.length) return;
+    const changes = Object.fromEntries(selectedFields.map((field) => [
+      field,
+      fieldsByName.get(field)?.candidate_value ?? "",
+    ])) as Partial<EditablePaperMetadata>;
+    setEnrichment((current) => ({ ...current, status: "saving", message: "Applying selected metadata fields…" }));
+    try {
+      const response = await apiClient.saveReaderMetadata(
+        snapshot.paper.paper_id,
+        changes,
+        enrichment.preview.metadata_revision,
+      );
+      setEditor((current) => applyMetadataEnrichmentCommandResult(current, response, selectedFields));
+      setEnrichment((current) => {
+        if (!current.preview) return current;
+        const preview = refreshedCandidatePreview(current.preview, response.metadata, response.metadata_revision);
+        return {
+          status: "saved",
+          preview,
+          selectedFields: current.selectedFields.filter((field) => {
+            const candidate = preview.fields.find((item) => item.field === field);
+            return Boolean(candidate?.candidate_value && candidate.state !== "unchanged");
+          }),
+          message: response.status === "no_op"
+            ? "Selected fields already matched the saved metadata."
+            : `Saved selected fields: ${response.changed_fields.join(", ") || "none"}.`,
+        };
+      });
+    } catch (error) {
+      const failure = enrichmentStateForError(error, "apply");
+      setEnrichment((current) => ({ ...current, ...failure }));
+    }
+  };
+
   const saveNote = async () => {
-    if (editor.note.draft === editor.note.baseline || editor.note.status === "saving" || editor.metadata.status === "saving") return;
+    if (editor.note.draft === editor.note.baseline || editor.note.status === "saving" || editor.metadata.status === "saving" || enrichment.status === "saving") return;
     setEditor((current) => ({
       ...current,
       note: { ...current.note, status: "saving", message: "Saving Reading Note…" },
@@ -385,12 +528,83 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               {editor.metadata.message || `${metadataChanged.length} changed field${metadataChanged.length === 1 ? "" : "s"}.`}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={!metadataChanged.length || editor.metadata.status === "saving" || editor.note.status === "saving"} onClick={saveMetadata}>
+              <button className="reader-control" type="button" disabled={!metadataChanged.length || editor.metadata.status === "saving" || editor.note.status === "saving" || enrichment.status === "saving"} onClick={saveMetadata}>
                 <Save size={15} />{editor.metadata.status === "saving" ? "Saving…" : "Save Metadata"}
               </button>
               {editor.metadata.status === "conflict" ? (
                 <button className="reader-control reader-control--secondary" type="button" onClick={reloadMetadata}>
                   <RotateCcw size={15} />Reload current metadata
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="reader-editor metadata-enrichment" aria-labelledby="metadata-enrichment-title">
+            <div className="reader-note__heading">
+              <div>
+                <p className="eyebrow">Preview before save</p>
+                <h2 id="metadata-enrichment-title">Metadata enrichment</h2>
+              </div>
+              <StatusBadge tone={enrichment.status === "conflict" || enrichment.status === "error" ? "danger" : enrichment.status === "saved" ? "accent" : "neutral"}>
+                {enrichment.status === "ready" ? "Preview ready" : statusLabel(enrichment.status)}
+              </StatusBadge>
+            </div>
+            <p className="reader-editor__status" role="status" aria-live="polite">
+              {enrichment.message || "Fetch candidates from available DOI/Crossref, arXiv, and PDF-derived sources. This never saves metadata."}
+            </p>
+            {metadataChanged.length ? (
+              <p className="metadata-enrichment__notice">
+                The manual metadata editor has unsaved changes. Enrichment compares saved values and preserves every unselected manual draft field.
+              </p>
+            ) : null}
+            {enrichment.preview ? (
+              <>
+                <p className="metadata-enrichment__sources">
+                  Sources: {enrichment.preview.candidate_sources.length ? enrichment.preview.candidate_sources.join(", ") : "No candidate source supplied a supported field."}
+                </p>
+                <div className="metadata-enrichment__table" role="region" aria-label="Metadata candidate comparison">
+                  <div className="metadata-enrichment__row metadata-enrichment__row--heading" aria-hidden="true">
+                    <span>Apply</span><span>Field</span><span>Current saved value</span><span>Candidate value</span><span>Source / comparison</span>
+                  </div>
+                  {enrichment.preview.fields.map((field) => {
+                    const selectable = Boolean(field.candidate_value) && field.state !== "unchanged";
+                    const selected = enrichment.selectedFields.includes(field.field);
+                    return (
+                      <div className={`metadata-enrichment__row metadata-enrichment__row--${field.state}`} key={field.field}>
+                        <label className="metadata-enrichment__select">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            disabled={!selectable || enrichment.status === "saving"}
+                            onChange={() => toggleCandidateField(field.field)}
+                            aria-label={`Select ${FIELD_LABELS[field.field]} candidate`}
+                          />
+                        </label>
+                        <strong>{FIELD_LABELS[field.field]}</strong>
+                        <span className="metadata-enrichment__value">{field.current_value || "—"}</span>
+                        <span className="metadata-enrichment__value">{field.candidate_value || "Unavailable"}</span>
+                        <span className="metadata-enrichment__comparison">{field.source || "No source"}<br />{CANDIDATE_STATE_LABELS[field.state]}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {enrichment.preview.diagnostics.length ? (
+                  <ul className="metadata-enrichment__diagnostics">
+                    {enrichment.preview.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
+                  </ul>
+                ) : null}
+              </>
+            ) : null}
+            <div className="reader-editor__actions">
+              <button className="reader-control" type="button" disabled={enrichment.status === "loading" || enrichment.status === "saving"} onClick={() => fetchMetadataCandidates(enrichment.status === "conflict")}>
+                <RotateCcw size={15} />{enrichment.status === "loading" ? "Fetching…" : enrichment.preview ? "Fetch fresh candidates" : "Fetch candidates"}
+              </button>
+              <button className="reader-control" type="button" disabled={!enrichment.selectedFields.length || enrichment.status === "loading" || enrichment.status === "saving" || editor.metadata.status === "saving"} onClick={applySelectedCandidates}>
+                <Save size={15} />{enrichment.status === "saving" ? "Applying…" : "Apply selected fields"}
+              </button>
+              {enrichment.status === "conflict" ? (
+                <button className="reader-control reader-control--secondary" type="button" onClick={() => fetchMetadataCandidates(true)}>
+                  <RotateCcw size={15} />Reload candidates and retry
                 </button>
               ) : null}
             </div>
@@ -495,7 +709,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               {editor.note.message || (editor.note.exists ? "Editing the persisted Reading Note." : "No persisted note exists; Save will create it.")}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={editor.note.draft === editor.note.baseline || editor.note.status === "saving" || editor.metadata.status === "saving" || noteUnavailable} onClick={saveNote}>
+              <button className="reader-control" type="button" disabled={editor.note.draft === editor.note.baseline || editor.note.status === "saving" || editor.metadata.status === "saving" || enrichment.status === "saving" || noteUnavailable} onClick={saveNote}>
                 <Save size={15} />{editor.note.status === "saving" ? "Saving…" : "Save Reading Note"}
               </button>
               {editor.note.status === "conflict" ? (

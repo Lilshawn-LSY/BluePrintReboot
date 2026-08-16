@@ -14,6 +14,7 @@ from services.note_block_read_model import NoteBlockCollection
 from services.project_read_model import ProjectDetail, ProjectListItem
 from services.project_commands import ProjectCommandService
 from services.reader_commands import ReaderCommandService
+from services.metadata_enrichment import MetadataEnrichmentService
 from services.settings_read_model import SettingsSummary
 from services.tag_read_model import CandidateSummary, CanonicalTag
 
@@ -23,6 +24,7 @@ class ReadModelUnavailable(Exception):
 
 
 _reader_command_service = ReaderCommandService()
+_metadata_enrichment_service = MetadataEnrichmentService()
 _project_command_service = ProjectCommandService()
 _note_block_command_service = NoteBlockCommandService()
 
@@ -113,6 +115,10 @@ def get_settings_summary() -> SettingsSummary:
 
 def get_reader_command_service() -> ReaderCommandService:
     return _reader_command_service
+
+
+def get_metadata_enrichment_service() -> MetadataEnrichmentService:
+    return _metadata_enrichment_service
 
 
 def get_project_command_service() -> ProjectCommandService:

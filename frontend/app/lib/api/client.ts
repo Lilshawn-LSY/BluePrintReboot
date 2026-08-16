@@ -1,4 +1,4 @@
-import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
+import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -200,6 +200,10 @@ export const apiClient = {
   ) => request<MetadataCommandResponse>(
     `/papers/${encodeURIComponent(paperId)}/metadata`,
     { method: "PATCH", body: { changes, expected_revision: expectedRevision } },
+  ),
+  previewMetadataEnrichment: (paperId: string) => request<MetadataEnrichmentPreview>(
+    `/papers/${encodeURIComponent(paperId)}/metadata/enrichment-preview`,
+    { method: "POST", body: {} },
   ),
   addPaperTag: (
     paperId: string,

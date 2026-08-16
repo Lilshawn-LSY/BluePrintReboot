@@ -34,6 +34,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/release_notes/v1.5.5.md",
     "docs/release_notes/v1.5.6.md",
     "docs/release_notes/v1.5.7.md",
+    "docs/release_notes/v1.5.8.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -118,6 +119,25 @@ REQUIRED_NOTE_BLOCK_WRITE_MANUAL_CHECKS = frozenset(
         "orphan_navigation_archived_controls",
         "api_restart_draft_recovery",
         "network_privacy",
+    }
+)
+REQUIRED_METADATA_ENRICHMENT_MANUAL_CHECKS = frozenset(
+    {
+        "candidate_fetch_preview_only",
+        "current_candidate_provenance_display",
+        "selective_partial_apply_reload",
+        "unselected_manual_metadata_preserved",
+        "missing_candidate_abstract_preserves_existing",
+        "partial_provider_result_safe",
+        "provider_failure_preserves_paper_metadata",
+        "unsaved_reading_note_survives_candidate_fetch",
+        "unsaved_reading_note_survives_metadata_apply",
+        "unsaved_reading_note_survives_enrichment_error",
+        "stale_revision_conflict_no_silent_overwrite",
+        "other_tab_metadata_preserved_after_stale_conflict",
+        "repeated_apply_no_corruption",
+        "browser_reload_preserves_applied_metadata",
+        "reader_project_tag_workflow_smoke",
     }
 )
 PRIVATE_VALUE_PATTERNS = (
@@ -507,6 +527,36 @@ def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
         )
     _validate_evidence(note_block_write, "manual_validation.note_block_write_runtime")
 
+    metadata_enrichment = _mapping(
+        manual.get("metadata_enrichment_runtime"),
+        "manual_validation.metadata_enrichment_runtime",
+    )
+    enrichment_checks = _mapping(
+        metadata_enrichment.get("checks"),
+        "manual_validation.metadata_enrichment_runtime.checks",
+    )
+    if set(enrichment_checks) != REQUIRED_METADATA_ENRICHMENT_MANUAL_CHECKS:
+        missing = sorted(REQUIRED_METADATA_ENRICHMENT_MANUAL_CHECKS - set(enrichment_checks))
+        extra = sorted(set(enrichment_checks) - REQUIRED_METADATA_ENRICHMENT_MANUAL_CHECKS)
+        raise ReleaseStateError(
+            f"Metadata enrichment runtime checks differ; missing={missing}, extra={extra}"
+        )
+    for check_id, raw_item in enrichment_checks.items():
+        item = _mapping(
+            raw_item,
+            f"manual_validation.metadata_enrichment_runtime.checks.{check_id}",
+        )
+        _validate_evidence(
+            item,
+            f"manual_validation.metadata_enrichment_runtime.checks.{check_id}",
+        )
+    expected_metadata_enrichment_status = derive_reader_runtime_status(enrichment_checks)
+    if metadata_enrichment.get("status") != expected_metadata_enrichment_status:
+        raise ReleaseStateError(
+            "Metadata enrichment runtime aggregate status must derive from its child checks"
+        )
+    _validate_evidence(metadata_enrichment, "manual_validation.metadata_enrichment_runtime")
+
 
 def _validate_publication_and_operations(manifest: Mapping[str, Any]) -> None:
     publication = _mapping(manifest.get("publication_state"), "publication_state")
@@ -594,10 +644,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.5.7":
-        raise ReleaseStateError("product_version must identify the current 1.5.7 runtime target")
-    if manifest.get("release_name") != "v1.5.7-paper-tag-apply-remove":
-        raise ReleaseStateError("release_name must identify the current v1.5.7 runtime target")
+    if manifest.get("product_version") != "1.5.8":
+        raise ReleaseStateError("product_version must identify the current 1.5.8 runtime target")
+    if manifest.get("release_name") != "v1.5.8-metadata-enrichment-frontend":
+        raise ReleaseStateError("release_name must identify the current v1.5.8 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)
@@ -717,6 +767,7 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         f"| v1.5.1 Reader write runtime | {manual['reader_write_runtime']['status']} | {_escape_cell(manual['reader_write_runtime']['evidence']['summary'])} |",
         f"| v1.5.4 Project write runtime | {manual['project_write_runtime']['status']} | {_escape_cell(manual['project_write_runtime']['evidence']['summary'])} |",
         f"| v1.5.5 Note Block write runtime | {manual['note_block_write_runtime']['status']} | {_escape_cell(manual['note_block_write_runtime']['evidence']['summary'])} |",
+        f"| v1.5.8 Metadata enrichment runtime | {manual['metadata_enrichment_runtime']['status']} | {_escape_cell(manual['metadata_enrichment_runtime']['evidence']['summary'])} |",
         f"| Streamlit regression | {manual['streamlit_regression']['status']} | {_escape_cell(manual['streamlit_regression']['evidence']['summary'])} |",
         f"| GitHub Release publication | {publication['github_release']['status']} | {_escape_cell(publication['github_release']['evidence']['summary'])} |",
         f"| Clean-PC restore | {restore['status']} | Recurring operational procedure; no rehearsal is claimed. |",
@@ -805,6 +856,21 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         ]
     )
     for check_id, item in manual["note_block_write_runtime"]["checks"].items():
+        label = check_id.replace("_", " ").capitalize()
+        lines.append(f"| {label} | {item['status']} | {_escape_cell(_evidence_summary(item))} |")
+
+    lines.extend(
+        [
+            "",
+            "## v1.5.8 Metadata enrichment manual validation",
+            "",
+            f"Aggregate state: **{manual['metadata_enrichment_runtime']['status']}**.",
+            "",
+            "| Check | Status | Evidence |",
+            "|---|---|---|",
+        ]
+    )
+    for check_id, item in manual["metadata_enrichment_runtime"]["checks"].items():
         label = check_id.replace("_", " ").capitalize()
         lines.append(f"| {label} | {item['status']} | {_escape_cell(_evidence_summary(item))} |")
 

@@ -2,6 +2,18 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.8-metadata-enrichment-frontend
+
+- [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.8 while the immutable released baseline remains v1.4.0.
+- [x] `POST /papers/{paper_id}/metadata/enrichment-preview` is a separate non-persistent, Paper-scoped preview over the existing PDF DOI, Crossref, arXiv, and local fallback capabilities; it neither scans the library nor writes Paper state.
+- [x] The Reader compares current saved and candidate values for all editable metadata fields and visibly distinguishes source/provenance, unchanged values, conflicts, available candidates, and unavailable candidate fields.
+- [x] Apply is disabled without selected fields and sends only selected nonblank candidates through the existing revision-checked, lock-protected, atomic metadata command; missing values never clear stored metadata.
+- [x] Unselected/manual metadata, dirty metadata fields, and unsaved Reading Note drafts remain intact through preview, partial apply, provider failure, and stale-revision conflict; conflict recovery requires a deliberate reload/retry.
+- [x] Disposable backend/frontend tests cover non-persistent preview, candidate comparison/provenance, partial and repeated apply, missing values, provider fallback/failure, stale revisions, reload, bridge allowlisting, and draft preservation while existing metadata writes remain compatible.
+- [x] User-provided v1.5.8 manual verification is recorded in the canonical manifest and generated Current Release Status, covering preview non-mutation, comparison/provenance, selective apply/persistence, provider safety, draft preservation, stale conflict, reload, and Reader/Project/Tag smoke behavior.
+- [ ] v1.5.8 PR-head CI, merge to `main`, v1.5.8 tag, GitHub Release, post-merge `main` CI, and clean-PC restore remain open until separately observed.
+- [ ] Automatic/background or bulk enrichment, library scans/imports, full-text extraction/OCR, automatic overwrite, tag generation/governance, citation export, backup/recovery redesign, and Reader UX redesign are deferred to v1.5.9+.
+
 ## v1.5.7-paper-tag-apply-remove
 
 - [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.7 while the immutable released baseline remains v1.4.0.

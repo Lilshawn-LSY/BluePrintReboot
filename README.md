@@ -8,13 +8,15 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.7-paper-tag-apply-remove**.
+Current runtime target: **v1.5.8-metadata-enrichment-frontend**.
+
+v1.5.8 closes the existing Paper metadata-enrichment flow in the web Reader. A separate, non-persistent candidate preview combines supported DOI/PDF, Crossref, arXiv, and existing local fallback information. The Reader compares each stored value with a candidate and its provenance, marks unchanged, conflicting, available, and unavailable fields, and applies only explicitly selected nonblank fields through the established revision-checked metadata command. Fetches, errors, and conflicts do not change the Paper; unselected manual metadata and unsaved Reading Note/editor drafts remain intact.
 
 v1.5.7 adds bounded Paper-local tag apply/remove controls to the web Reader. Explicit add/remove commands use a tag-only revision, shared locking, reload-after-lock optimistic concurrency, atomic persistence, verified rollback, and canonical Reading Note header synchronization without replacing unsaved note bodies. The Reader prefers canonical Tag Book values while retaining compatible legacy/noncanonical stored Paper tags. There is no canonical Tag CRUD, alias governance, automatic or bulk tagging, or metadata-editor tag field.
 
 v1.5.6 closes the everyday Project workspace: one Project page now keeps explicit metadata/status/priority editing, Paper links, and a bounded existing Note Block picker together. The picker reads only the selected Paper's stored blocks and reuses the canonical typed Project-link command, including duplicate truthfulness, revision conflicts, and controlled unavailable/orphan states. Project and link writes remain independent, revision-checked, lock-protected, and atomic; there is no autosave, combined save, or storage migration.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.7. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.8. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, v1.5.7 Paper tags, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -47,7 +49,7 @@ Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the 
 
 ## Bounded Local API
 
-Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while two Reader commands, two independent Note Block commands, and seven Project/link commands form the exact mutation boundary. Project, Note Block, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
+Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while seven Reader commands and seven Project/link commands form the exact mutation boundary. Project, Note Block, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
 
 Start it from Windows PowerShell:
 
@@ -64,6 +66,7 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Paper detail: `http://127.0.0.1:8000/papers/{paper_id}`
 - Reader Snapshot: `GET http://127.0.0.1:8000/papers/{paper_id}/reader`
 - Managed PDF stream: `http://127.0.0.1:8000/papers/{paper_id}/pdf`
+- Metadata enrichment preview: `POST http://127.0.0.1:8000/papers/{paper_id}/metadata/enrichment-preview`
 - Metadata command: `PATCH http://127.0.0.1:8000/papers/{paper_id}/metadata`
 - Reading Note command: `PUT http://127.0.0.1:8000/papers/{paper_id}/reading-note`
 - Structured Note Block collection: `GET http://127.0.0.1:8000/papers/{paper_id}/note-blocks`
@@ -88,7 +91,7 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 
 `GET /settings/summary` has no query or write surface. It returns four strict sections: Application, Workspace, Data integrity, and Backup readiness. Its lightweight reader caps file discovery, index rows, per-file JSON reads, and total JSON bytes per request; checks only file presence and app-owned metadata; and never hashes or parses PDFs, extracts text, opens snapshot archives, verifies restores, or writes cache/report/status files. Missing diagnostics use `state: "unavailable"` with `count: null`, which is distinct from a verified zero.
 
-Metadata requests contain `changes` plus `expected_revision`. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
+Metadata enrichment preview is a separate explicit `POST` with no persistence side effect. It returns only allowlisted current values, nonblank candidate values, field provenance, safe diagnostics, and candidate state; unavailable provider fields never mean “clear this stored value.” Metadata requests contain `changes` plus `expected_revision`, so only the fields selected from a preview mutate. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
 
 Project update/archive requests use `expected_revision`; Paper-link add/remove requests use `expected_links_revision`. Both tokens are deterministic SHA-256 revisions over the complete relevant stored state. Commands acquire the shared workspace write lock, reload after lock acquisition, reject stale state without mutation, and verify persisted output. Project create/update/archive touch only Project storage; Paper-link commands touch only link storage. Archive preserves existing links and is not deletion.
 
@@ -166,7 +169,7 @@ Current support includes:
 - Fast recursive PDF/index sync from the canonical `papers/` directory without default metadata enrichment, with conservative hash reuse for unchanged indexed PDFs.
 - Stable paper identities and a local CSV metadata index.
 - Search and filtering by metadata, status, priority, and tags.
-- Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, and tags.
+- Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, tags, and explicit metadata-enrichment preview/selective apply.
 - Reading Note headers refresh from accepted paper metadata while preserving existing note body sections and unsaved draft text.
 - Manual/suggested tags, Edit metadata, DOI, DOI-less, and Crossref acceptance share one metadata coordinator; dirty bodies are never autosaved and explicit Save converges the latest header and body.
 - Reader note state survives metadata-triggered reruns while the same paper remains active; dirty Reload still requires explicit Keep/Discard.
@@ -182,6 +185,7 @@ Current support includes:
 - Explicit DOI extraction from PDFs through metadata assist, separate from the normal local scan.
 - Crossref metadata preview and explicit acceptance with classified diagnostics.
 - DOI-less metadata fallback for arXiv/preprint/workshop PDFs, including arXiv ID detection, optional arXiv metadata lookup, and weak title guesses from PDF text or filename.
+- Web Reader enrichment previews current stored metadata beside each candidate and source, requires per-field selection before save, and preserves unselected manual values and unrelated drafts on success, failure, or conflict.
 - Manual metadata editing when enrichment is incomplete or offline.
 - Fallback metadata suggestions are previewed and user-applied; they do not claim perfect extraction.
 - Deterministic tag suggestions and canonical tag governance through the local Tag Book.
@@ -272,6 +276,7 @@ Foundation release documents:
 - [v1.5.5 Note Block Write and Project Links release-note draft](docs/release_notes/v1.5.5.md)
 - [v1.5.6 Project Workspace Closure release-note draft](docs/release_notes/v1.5.6.md)
 - [v1.5.7 Paper Tag Apply/Remove release-note draft](docs/release_notes/v1.5.7.md)
+- [v1.5.8 Metadata Enrichment Frontend release-note draft](docs/release_notes/v1.5.8.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -335,6 +340,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.5.8-metadata-enrichment-frontend
+
+- Adds a non-persistent, Paper-scoped metadata candidate preview over the existing Crossref, PDF DOI, arXiv, and local fallback capabilities.
+- Shows stored value, candidate value, provenance, and unchanged/conflicting/available/unavailable state for every editable metadata field.
+- Applies only selected nonblank candidate fields through the established metadata revision and persistence command; a stale revision requires a deliberate reload/retry.
+- Retains unselected manual metadata and unrelated unsaved Reader metadata/Reading Note drafts during preview, apply, errors, and conflicts.
 
 ### v1.5.7-paper-tag-apply-remove
 

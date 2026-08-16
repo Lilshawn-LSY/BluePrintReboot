@@ -163,6 +163,25 @@ export interface MetadataCommandResponse {
   reading_note: PersistedReadingNote;
 }
 
+export type MetadataEnrichmentFieldName = keyof EditablePaperMetadata;
+export type MetadataEnrichmentFieldState = "unchanged" | "conflict" | "available" | "unavailable";
+
+export interface MetadataEnrichmentFieldPreview {
+  field: MetadataEnrichmentFieldName;
+  current_value: string;
+  candidate_value: string;
+  source: string;
+  state: MetadataEnrichmentFieldState;
+}
+
+export interface MetadataEnrichmentPreview {
+  paper_id: string;
+  metadata_revision: string;
+  candidate_sources: string[];
+  fields: MetadataEnrichmentFieldPreview[];
+  diagnostics: string[];
+}
+
 export interface PaperTagCommandResponse {
   status: "saved" | "no_op";
   tags: string[];

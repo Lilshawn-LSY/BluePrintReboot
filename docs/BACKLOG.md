@@ -1,6 +1,6 @@
 # BluePrintReboot Backlog
 
-Stable backlog last edited: 2026-08-02
+Stable backlog last edited: 2026-08-16
 
 Current release evidence and individually addressable pending checks live in the generated [Current Release Status](CURRENT_RELEASE_STATUS.md). This backlog does not duplicate mutable counts or verification state.
 
@@ -19,6 +19,13 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.3 Settings and health safe read parity implementation.
 - [x] v1.5.4 Project write and Paper–Project link command implementation.
 - [x] v1.5.5 Note Block write and Project-link vertical slice implementation.
+- [x] v1.5.8 Paper-scoped web metadata candidate preview and selective apply over existing enrichment providers.
+
+## v1.5.9+ metadata-enrichment follow-up
+
+- [ ] Keep automatic/background or bulk enrichment, library scans/imports, full-text extraction/OCR, automatic overwrite, tag generation/governance, citation export, backup/recovery redesign, and Reader UX redesign separately scoped from v1.5.8.
+- [x] Record user-provided v1.5.8 manual candidate-preview, partial-apply, conflict/retry, persistence, and Reader/Project/Tag smoke evidence in the generated release state.
+- [ ] Record v1.5.8 PR-head CI, merge, tag, GitHub Release, and post-merge main CI only after those events occur.
 
 ## v1.5.5 Note Block write and Project links
 
