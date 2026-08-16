@@ -63,6 +63,7 @@ class ProjectCommandState:
     links_revision: str
     link_count: int
     linked_paper_count: int
+    linked_note_block_count: int
 
 
 @dataclass(frozen=True)
@@ -307,6 +308,10 @@ def _project_state(
         link_count=len(matching_links),
         linked_paper_count=sum(
             str(link.get("target_type", "")) == "paper"
+            for link in matching_links
+        ),
+        linked_note_block_count=sum(
+            str(link.get("target_type", "")) == "note_block"
             for link in matching_links
         ),
     )
@@ -598,6 +603,8 @@ class ProjectCommandService:
         with _persistent_command_lock(self.projects_dir, self.index_csv):
             projects, links = self._load()
             project = _find_project(projects, project_id)
+            if project["status"] == "archived":
+                raise ProjectArchivedConflict
             if project_links_revision(project_id, links) != expected_links_revision:
                 raise ProjectCommandConflict
             link = next(

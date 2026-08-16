@@ -188,7 +188,7 @@ export function ProjectsView() {
           ) : (
             <DataTableShell label="Stored Projects">
               <table>
-                <thead><tr><th>Project</th><th>Status</th><th>Priority</th><th>Tags</th><th>Paper links</th><th>Updated</th></tr></thead>
+                <thead><tr><th>Project</th><th>Status</th><th>Priority</th><th>Tags</th><th>Paper links</th><th>Note Block links</th><th>Updated</th></tr></thead>
                 <tbody>
                   {resource.data.items.map((project) => (
                     <tr key={project.project_id}>
@@ -208,6 +208,7 @@ export function ProjectsView() {
                         </div>
                       </td>
                       <td>{project.linked_paper_count}</td>
+                      <td>{project.linked_note_block_count}</td>
                       <td>{project.updated_at}</td>
                     </tr>
                   ))}

@@ -75,6 +75,7 @@ def test_add_paper_link_uses_server_identity_and_fixed_paper_target(tmp_path: Pa
     assert result.link.paper_id == "paper-1"
     assert result.link.link_type == "key_reference"
     assert result.project.link_count == result.project.linked_paper_count == 1
+    assert result.project.linked_note_block_count == 0
     assert result.project.links_revision != created.project.links_revision
     stored = list_project_links(service.projects_dir)
     assert stored[0]["target_type"] == "paper"
@@ -109,6 +110,25 @@ def test_links_revision_is_deterministic_and_visible_in_project_detail(
     assert detail_two is not None
     assert detail_one["links_revision"] == linked.project.links_revision
     assert detail_two["links_revision"] == detail_one["links_revision"]
+    assert detail_one["linked_paper_count"] == 1
+    assert detail_one["linked_note_block_count"] == 0
+
+    removed = service.remove_paper_link(
+        created.project.project_id,
+        linked.link.link_id,
+        expected_links_revision=detail_one["links_revision"],
+    )
+    reloaded = build_project_detail(
+        created.project.project_id,
+        projects_dir=service.projects_dir,
+        index_csv=service.index_csv,
+    )
+
+    assert removed.status == "removed"
+    assert reloaded is not None
+    assert reloaded["links"] == []
+    assert reloaded["linked_paper_count"] == 0
+    assert reloaded["link_count"] == 0
 
 
 def test_duplicate_exact_add_returns_unchanged_without_duplicate_or_write(
@@ -158,6 +178,7 @@ def test_same_paper_with_different_allowed_link_type_is_distinct(tmp_path: Path)
     assert second.status == "created"
     assert second.link.link_id != first.link.link_id
     assert second.project.linked_paper_count == 2
+    assert second.project.linked_note_block_count == 0
 
 
 def test_paper_link_add_and_remove_routes_return_refreshed_revisions(
@@ -180,6 +201,7 @@ def test_paper_link_add_and_remove_routes_return_refreshed_revisions(
     assert added["status"] == "created"
     assert added["link"]["paper_id"] == "paper-1"
     assert added["project"]["linked_paper_count"] == 1
+    assert added["project"]["linked_note_block_count"] == 0
 
     removed_response = client.request(
         "DELETE",
@@ -195,6 +217,7 @@ def test_paper_link_add_and_remove_routes_return_refreshed_revisions(
     removed = removed_response.json()
     assert removed["status"] == "removed"
     assert removed["project"]["linked_paper_count"] == 0
+    assert removed["project"]["linked_note_block_count"] == 0
 
 
 def test_paper_link_route_not_found_and_stale_conflicts_are_controlled(
@@ -321,6 +344,7 @@ def test_remove_paper_link_changes_only_link_storage(tmp_path: Path) -> None:
     assert removed.status == "removed"
     assert removed.link == linked.link
     assert removed.project.link_count == removed.project.linked_paper_count == 0
+    assert removed.project.linked_note_block_count == 0
     assert list_project_links(service.projects_dir) == []
     assert _evidence(protected) == before
 
@@ -350,6 +374,39 @@ def test_remove_existing_orphaned_paper_link_is_allowed(tmp_path: Path) -> None:
     assert removed.status == "removed"
     assert removed.link.paper_id == "paper-no-longer-indexed"
     assert list_project_links(service.projects_dir) == []
+
+
+def test_archived_project_rejects_paper_unlink_without_mutation(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    created = service.create_project(name="Archived links")
+    linked = service.add_paper_link(
+        created.project.project_id,
+        paper_id="paper-1",
+        link_type="related",
+        expected_links_revision=created.project.links_revision,
+    )
+    archived = service.archive_project(
+        created.project.project_id,
+        created.project.project_revision,
+    )
+    path = project_links_path(service.projects_dir)
+    before = _evidence([path])
+
+    with pytest.raises(ProjectArchivedConflict):
+        service.remove_paper_link(
+            created.project.project_id,
+            linked.link.link_id,
+            expected_links_revision=archived.project.links_revision,
+        )
+
+    response = _client(service).request(
+        "DELETE",
+        f"/projects/{created.project.project_id}/paper-links/{linked.link.link_id}",
+        json={"expected_links_revision": archived.project.links_revision},
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Archived Projects do not allow this command."
+    assert _evidence([path]) == before
 
 
 def test_remove_rejects_unknown_cross_project_and_note_block_links(

@@ -25,6 +25,7 @@ class ProjectListItem(TypedDict):
     project_revision: str
     link_count: int
     linked_paper_count: int
+    linked_note_block_count: int
 
 
 class LinkedPaperSummary(TypedDict):
@@ -104,6 +105,9 @@ def _base_project(
     links: list[Mapping[str, Any]],
 ) -> ProjectListItem:
     paper_link_count = sum(link.get("target_type") == "paper" for link in links)
+    note_block_link_count = sum(
+        link.get("target_type") == "note_block" for link in links
+    )
     return {
         "project_id": str(project["id"]),
         "name": str(project["name"]),
@@ -116,6 +120,7 @@ def _base_project(
         "project_revision": project_revision(project),
         "link_count": len(links),
         "linked_paper_count": paper_link_count,
+        "linked_note_block_count": note_block_link_count,
     }
 
 

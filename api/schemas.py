@@ -77,6 +77,7 @@ class ProjectListItem(StrictResponseModel):
     project_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     link_count: int = Field(ge=0)
     linked_paper_count: int = Field(ge=0)
+    linked_note_block_count: int = Field(ge=0)
 
 
 class LinkedPaperSummary(StrictResponseModel):
@@ -152,6 +153,7 @@ class ProjectCommandState(StrictResponseModel):
     links_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     link_count: int = Field(ge=0)
     linked_paper_count: int = Field(ge=0)
+    linked_note_block_count: int = Field(ge=0)
 
 
 class PaperLinkCommandState(StrictResponseModel):

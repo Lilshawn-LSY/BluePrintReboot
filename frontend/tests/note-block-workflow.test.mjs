@@ -57,7 +57,8 @@ test("Reader Project linking is bounded, duplicate-truthful, confirmed, and non-
 
 test("Project Detail renders typed Note Block data, orphan state, and stable Reader navigation", async () => {
   const [, , detail] = await sources;
-  assert.match(detail, /Linked Papers and Note Blocks/);
+  assert.match(detail, /Linked Papers/);
+  assert.match(detail, /Linked Note Blocks/);
   assert.match(detail, /link\.note_block/);
   assert.match(detail, /text_preview/);
   assert.match(detail, /target_state\.startsWith\("orphaned"\)/);

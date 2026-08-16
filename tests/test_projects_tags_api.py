@@ -32,6 +32,7 @@ def project_item(project_id: str, name: str) -> dict[str, object]:
         "project_revision": "a" * 64,
         "link_count": 1,
         "linked_paper_count": 1,
+        "linked_note_block_count": 0,
         "storage_path": "C:/private/projects.json",
     }
 
@@ -75,6 +76,7 @@ def project_detail(project_id: str) -> dict[str, object]:
         ],
         "link_count": 2,
         "linked_paper_count": 2,
+        "linked_note_block_count": 0,
         "links_revision": "b" * 64,
         "orphaned_link_count": 1,
     }
@@ -372,6 +374,7 @@ def test_project_read_model_uses_real_links_and_orphans_without_path_leaks(tmp_p
 
     assert detail is not None
     assert detail["link_count"] == detail["linked_paper_count"] == 2
+    assert detail["linked_note_block_count"] == 0
     assert detail["orphaned_link_count"] == 1
     assert detail["links"][0]["paper"]["title"] == "Real linked paper"
     assert detail["links"][1]["target_state"] == "orphaned"
