@@ -260,6 +260,30 @@ def test_metadata_enrichment_manual_checks_are_complete_and_derived() -> None:
         validate_manifest(fabricated)
 
 
+def test_pdf_scan_import_manual_checks_record_user_runtime_evidence_without_claiming_network_privacy() -> None:
+    manifest = read_manifest()
+    runtime = manifest["manual_validation"]["pdf_scan_import_runtime"]
+
+    assert runtime["status"] == "PARTIALLY VERIFIED"
+    assert len(runtime["checks"]) == 8
+    assert {
+        check_id
+        for check_id, item in runtime["checks"].items()
+        if item["status"] == "NOT VERIFIED"
+    } == {"network_path_privacy"}
+    assert {
+        item["status"]
+        for check_id, item in runtime["checks"].items()
+        if check_id != "network_path_privacy"
+    } == {"VERIFIED"}
+    validate_manifest(manifest)
+
+    fabricated = copy.deepcopy(manifest)
+    fabricated["manual_validation"]["pdf_scan_import_runtime"]["status"] = "NOT VERIFIED"
+    with pytest.raises(ReleaseStateError, match="aggregate status must derive"):
+        validate_manifest(fabricated)
+
+
 @pytest.mark.parametrize(
     "summary",
     [

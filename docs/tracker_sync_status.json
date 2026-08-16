@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.8",
-  "release_name": "v1.5.8-metadata-enrichment-frontend",
+  "product_version": "1.5.9",
+  "release_name": "v1.5.9-pdf-scan-import-frontend",
   "as_of": "2026-08-16",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 127,
+        "passed": 129,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 local validation",
-        "summary": "The current offline repository readiness smoke completed with 127 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.9 local validation",
+        "summary": "The current offline repository readiness smoke completed with 129 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 737,
+        "passed": 743,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 local validation",
-        "summary": "The current full Python suite completed with 737 passed."
+        "reference": "v1.5.9 local validation",
+        "summary": "The current full Python suite completed with 743 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -165,16 +165,16 @@
     },
     "focused_pdf_api": {
       "status": "VERIFIED",
-      "scope": "managed PDF API contracts",
-      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_pdf_api.py -q",
+      "scope": "managed PDF and scan/import API contracts",
+      "command": ".venv/bin/python -m pytest tests/test_pdf_api.py tests/test_pdf_scan_import_api.py -q",
       "counts": {
-        "passed": 13,
+        "passed": 18,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 focused PDF regression",
-        "summary": "The focused managed-PDF API contract suite passed unchanged."
+        "date": "2026-08-16",
+        "reference": "v1.5.9 focused PDF scan/import validation",
+        "summary": "The focused managed-PDF and scan/import API contract suite passed."
       }
     },
     "focused_projects_tags": {
@@ -280,12 +280,12 @@
       "scope": "release and version contracts",
       "command": ".venv/bin/python -m pytest -q tests/test_release_contracts.py tests/test_release_state_reconciliation.py tests/test_contact.py tests/test_smoke_check.py",
       "counts": {
-        "passed": 54,
+        "passed": 55,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 focused release validation",
+        "reference": "v1.5.9 focused release validation",
         "summary": "The focused runtime-target, immutable-baseline, local release-document, reconciliation, contact, and smoke-contract suite passed."
       }
     },
@@ -324,7 +324,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 local validation",
+        "reference": "v1.5.9 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -335,7 +335,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 local validation",
+        "reference": "v1.5.9 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -344,14 +344,14 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm --prefix frontend test",
       "counts": {
-        "passed": 10,
+        "passed": 11,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 local validation",
+        "reference": "v1.5.9 local validation",
         "summary": "The complete frontend build and Node test suite passed."
       }
     },
@@ -440,12 +440,12 @@
       "scope": "tracked repository entries only",
       "command": ".venv/bin/python scripts/check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 280,
+        "entries_inspected": 283,
         "violations": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 local hygiene validation",
+        "reference": "v1.5.9 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -948,6 +948,80 @@
           }
         }
       }
+    },
+    "pdf_scan_import_runtime": {
+      "status": "PARTIALLY VERIFIED",
+      "evidence": {
+        "date": "2026-08-16",
+        "reference": "user-provided v1.5.9 manual verification",
+        "summary": "User-provided manual verification covers managed-PDF scan, selection, import, safe failure, Library/Reader visibility, restart persistence, and explicit metadata enrichment; browser Network path privacy remains separately unverified."
+      },
+      "checks": {
+        "scan_preview_non_mutating": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.9 manual verification",
+            "summary": "Explicit frontend scan discovered a new PDF without creating or mutating Paper records."
+          }
+        },
+        "candidate_states": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.9 manual verification",
+            "summary": "New and existing PDFs were distinguished, registered PDFs were separate, non-PDF files were excluded, spaces and Korean filenames worked, and invalid or disappeared files failed safely."
+          }
+        },
+        "selected_import": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.9 manual verification",
+            "summary": "Selected PDFs imported successfully while unselected candidates remained unimported, including partial selection across multiple PDFs."
+          }
+        },
+        "library_reader_visibility": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.9 manual verification",
+            "summary": "Imported Papers appeared in the Library, opened in the Reader, rendered their PDFs, and preserved existing Reader, Project, and Tag workflows."
+          }
+        },
+        "metadata_enrichment_follow_up": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.9 manual verification",
+            "summary": "The existing explicit v1.5.8 metadata-enrichment workflow worked on a newly imported Paper."
+          }
+        },
+        "partial_failure_feedback": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.9 manual verification",
+            "summary": "Invalid, unreadable, and disappeared selected PDFs failed without ghost records or registry corruption, and partial failures did not damage existing Papers."
+          }
+        },
+        "restart_persistence": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.9 manual verification",
+            "summary": "Imported Papers persisted after both browser reload and application restart, and repeated scan/import did not create duplicates."
+          }
+        },
+        "network_path_privacy": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "v1.5.9 manual verification plan",
+            "summary": "Manual browser Network confirmation that scan/import responses expose no absolute local path has not been performed."
+          }
+        }
+      }
     }
   },
   "publication_state": {
@@ -987,17 +1061,18 @@
       "automated_validation.post_merge_main_ci",
       "manual_validation.reader_snapshot_runtime",
       "manual_validation.reader_write_runtime",
+      "manual_validation.pdf_scan_import_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
     ]
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.5.8 PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.5.9+ enrichment extensions deferred",
+    "name": "v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; later ingestion and enrichment extensions deferred",
     "evidence": {
       "date": "2026-08-16",
-      "reference": "docs/release_notes/v1.5.8.md",
-      "summary": "Keep v1.5.8 PR-head CI, merge, tag, publication, post-merge main CI, and clean-PC restore evidence separate from the completed local manual verification and deferred v1.5.9+ enrichment extensions."
+      "reference": "docs/release_notes/v1.5.9.md",
+      "summary": "Keep the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, publication, post-merge main CI, and clean-PC restore evidence separate from recorded local manual and automated validation."
     }
   },
   "historical_evidence": {

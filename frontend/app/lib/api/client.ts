@@ -1,4 +1,4 @@
-import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
+import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -53,6 +53,11 @@ export function paperPdfUrl(paperId: string): string {
 export const apiClient = {
   getHealth: () => request<HealthSummary>("/health"),
   getLibraryStatus: () => request<LibraryStatus>("/library/status"),
+  scanManagedPdfs: () => request<ManagedPdfScanResponse>("/papers/scan", { method: "POST", body: {} }),
+  importManagedPdfs: (relativePaths: string[]) => request<ManagedPdfImportResponse>(
+    "/papers/import",
+    { method: "POST", body: { relative_paths: relativePaths } },
+  ),
   getPapers: (options: { limit?: number; offset?: number; archiveStatus?: "active" | "archived" | "all" } = {}) => {
     const params = new URLSearchParams({
       limit: String(options.limit ?? 20),

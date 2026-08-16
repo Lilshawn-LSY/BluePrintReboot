@@ -143,6 +143,14 @@ tbody tr:hover { background: var(--color-surface-subtle); }
 .deferred-note { margin-top: var(--space-4) !important; padding-top: var(--space-3); border-top: var(--border); font-size: var(--font-size-sm); }
 .abstract-text { max-width: 78rem; white-space: pre-wrap; color: var(--color-text-secondary); line-height: 1.7; }
 .warning-list { margin: 0; padding: var(--space-3) var(--space-4) var(--space-3) 2rem; border: var(--border); border-radius: var(--radius-md); background: var(--color-warning-soft); color: var(--color-warning); }
+.pdf-import-workflow, .pdf-import-result { display: grid; gap: var(--space-3); }
+.pdf-import-workflow__summary, .pdf-import-result p { margin: 0; color: var(--color-text-secondary); font-size: var(--font-size-sm); }
+.pdf-import-workflow td strong, .pdf-import-workflow td small { display: block; }
+.pdf-import-workflow td small { margin-top: var(--space-1); color: var(--color-text-muted); font-size: var(--font-size-xs); }
+.pdf-import-workflow input[type="checkbox"] { inline-size: 1rem; block-size: 1rem; accent-color: var(--color-accent); }
+.pdf-import-result { padding: var(--space-4); border: var(--border); border-radius: var(--radius-md); background: var(--color-surface-subtle); }
+.pdf-import-result ul { display: grid; gap: var(--space-2); margin: 0; padding-left: 1.25rem; color: var(--color-text-secondary); }
+.pdf-import-result li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .purpose-copy { max-width: 54rem; margin: 0; color: var(--color-text-secondary); }
 .mono-id { font-family: var(--font-geist-mono), ui-monospace, monospace; }
 .muted-text { color: var(--color-text-muted); }
