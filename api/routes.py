@@ -44,6 +44,8 @@ from api.dependencies import (
     get_reader_command_service,
     get_reader_snapshot,
     get_settings_summary,
+    get_tag_candidate_review_service,
+    get_tag_governance_service,
 )
 from api.pdf_files import ManagedPdfResult, ManagedPdfState
 from api.schemas import (
@@ -53,6 +55,12 @@ from api.schemas import (
     ArchiveProjectRequest,
     ArchiveStatus,
     CandidateSummaryResponse,
+    CanonicalTagAliasRequest,
+    CanonicalTagCreateRequest,
+    CanonicalTagDeprecateRequest,
+    CanonicalTagGovernanceResponse,
+    CanonicalTagGovernanceSnapshot,
+    CanonicalTagUpdateRequest,
     HealthSummaryResponse,
     LibraryStatusResponse,
     ManagedPdfImportRequest,
@@ -64,6 +72,12 @@ from api.schemas import (
     MetadataEnrichmentPreviewResponse,
     PaperTagCommandRequest,
     PaperTagCommandResponse,
+    TagCandidateApplyRequest,
+    TagCandidateApplyResponse,
+    TagCandidateCollectionResponse,
+    TagCandidateGenerateRequest,
+    TagCandidatePromoteRequest,
+    TagCandidateReviewRequest,
     NoteBlockCollectionResponse,
     NoteBlockCommandResponse,
     NoteBlockLinkCommandResponse,
@@ -112,6 +126,21 @@ from services.metadata_enrichment import (
 from services.pdf_scan_import import PdfScanImportService, PdfScanImportUnavailable
 from services.settings_read_model import SettingsSummary as DomainSettingsSummary
 from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
+from services.tag_candidate_review import (
+    CandidateCollection,
+    TagCandidateReviewConflict,
+    TagCandidateReviewInvalid,
+    TagCandidateReviewNotFound,
+    TagCandidateReviewService,
+    TagCandidateReviewUnavailable,
+)
+from services.tag_governance import (
+    CanonicalTagGovernanceService,
+    TagGovernanceConflict,
+    TagGovernanceInvalid,
+    TagGovernanceNotFound,
+    TagGovernanceUnavailable,
+)
 
 
 router = APIRouter()
@@ -131,6 +160,20 @@ NOTE_BLOCK_COMMAND_CONFLICT_DETAIL = "The saved Note Block collection changed. R
 NOTE_BLOCK_COMMAND_UNAVAILABLE_DETAIL = "The Note Block command could not be completed."
 NOTE_BLOCK_COMMAND_NOT_FOUND_DETAIL = "The requested Paper or Note Block was not found."
 PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL = "The managed PDF scan or import could not be completed."
+TAG_GOVERNANCE_CONFLICT_DETAIL = "The canonical Tag Book changed. Reload the current registry before retrying."
+TAG_GOVERNANCE_UNAVAILABLE_DETAIL = "The canonical Tag Book command could not be completed."
+TAG_CANDIDATE_CONFLICT_DETAIL = "The candidate review or Paper tags changed. Reload the current candidate review before retrying."
+TAG_CANDIDATE_UNAVAILABLE_DETAIL = "The tag candidate review command could not be completed."
+
+
+def _candidate_collection_response(collection: CandidateCollection) -> TagCandidateCollectionResponse:
+    return TagCandidateCollectionResponse(
+        paper_id=collection.paper_id,
+        review_revision=collection.review_revision,
+        tags_revision=collection.tags_revision,
+        state=collection.state,
+        items=list(collection.items),
+    )
 
 
 @router.get("/health", response_model=HealthSummaryResponse)
@@ -572,6 +615,165 @@ def tag_candidate_summary(
         raise ReadModelUnavailable from None
 
 
+@router.get(
+    "/tags/governance",
+    response_model=CanonicalTagGovernanceSnapshot,
+    summary="Read the mutable canonical Tag Book registry",
+    description="Return canonical tag metadata and the deterministic revision required by explicit governance commands.",
+)
+def tag_governance_snapshot(
+    commands: Annotated[CanonicalTagGovernanceService, Depends(get_tag_governance_service)],
+) -> CanonicalTagGovernanceSnapshot:
+    try:
+        items, revision = commands.snapshot()
+        return CanonicalTagGovernanceSnapshot(items=items, registry_revision=revision)
+    except TagGovernanceUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_GOVERNANCE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/tags",
+    response_model=CanonicalTagGovernanceResponse,
+    summary="Create a canonical tag",
+    description="Explicitly create one active canonical Tag Book entry without changing any stored Paper tag references.",
+)
+def create_canonical_tag(
+    request: CanonicalTagCreateRequest,
+    commands: Annotated[CanonicalTagGovernanceService, Depends(get_tag_governance_service)],
+) -> CanonicalTagGovernanceResponse:
+    try:
+        result = commands.create_tag(
+            label=request.label,
+            category=request.category,
+            description=request.description,
+            suggestion_strength=request.suggestion_strength,
+            expected_revision=request.expected_revision,
+        )
+        return CanonicalTagGovernanceResponse(
+            status=result.status,
+            tag=result.tag,
+            registry_revision=result.registry_revision,
+        )
+    except TagGovernanceConflict:
+        raise HTTPException(status_code=409, detail=TAG_GOVERNANCE_CONFLICT_DETAIL) from None
+    except TagGovernanceInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagGovernanceUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_GOVERNANCE_UNAVAILABLE_DETAIL) from None
+
+
+@router.patch(
+    "/tags/{canonical_key}",
+    response_model=CanonicalTagGovernanceResponse,
+    summary="Edit canonical tag metadata",
+    description="Explicitly update bounded canonical tag metadata; canonical identities and historical Paper references are preserved.",
+)
+def update_canonical_tag(
+    request: CanonicalTagUpdateRequest,
+    canonical_key: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[CanonicalTagGovernanceService, Depends(get_tag_governance_service)],
+) -> CanonicalTagGovernanceResponse:
+    try:
+        result = commands.update_tag(
+            canonical_key,
+            changes=request.changes.model_dump(exclude_unset=True),
+            expected_revision=request.expected_revision,
+        )
+        return CanonicalTagGovernanceResponse(
+            status=result.status,
+            tag=result.tag,
+            registry_revision=result.registry_revision,
+        )
+    except TagGovernanceNotFound:
+        raise HTTPException(status_code=404, detail="Canonical tag not found.") from None
+    except TagGovernanceConflict:
+        raise HTTPException(status_code=409, detail=TAG_GOVERNANCE_CONFLICT_DETAIL) from None
+    except TagGovernanceInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagGovernanceUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_GOVERNANCE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/tags/{canonical_key}/aliases",
+    response_model=CanonicalTagGovernanceResponse,
+    summary="Add a canonical tag alias",
+    description="Add one unique alias that predictably resolves to the requested canonical tag without rewriting Paper tags.",
+)
+def add_canonical_tag_alias(
+    request: CanonicalTagAliasRequest,
+    canonical_key: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[CanonicalTagGovernanceService, Depends(get_tag_governance_service)],
+) -> CanonicalTagGovernanceResponse:
+    try:
+        result = commands.add_alias(
+            canonical_key,
+            alias=request.alias,
+            expected_revision=request.expected_revision,
+        )
+        return CanonicalTagGovernanceResponse(status=result.status, tag=result.tag, registry_revision=result.registry_revision)
+    except TagGovernanceNotFound:
+        raise HTTPException(status_code=404, detail="Canonical tag not found.") from None
+    except TagGovernanceConflict:
+        raise HTTPException(status_code=409, detail=TAG_GOVERNANCE_CONFLICT_DETAIL) from None
+    except TagGovernanceInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagGovernanceUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_GOVERNANCE_UNAVAILABLE_DETAIL) from None
+
+
+@router.delete(
+    "/tags/{canonical_key}/aliases",
+    response_model=CanonicalTagGovernanceResponse,
+    summary="Remove a canonical tag alias",
+    description="Remove one alias from the registry only; Paper values are never rewritten or deleted.",
+)
+def remove_canonical_tag_alias(
+    request: CanonicalTagAliasRequest,
+    canonical_key: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[CanonicalTagGovernanceService, Depends(get_tag_governance_service)],
+) -> CanonicalTagGovernanceResponse:
+    try:
+        result = commands.remove_alias(
+            canonical_key,
+            alias=request.alias,
+            expected_revision=request.expected_revision,
+        )
+        return CanonicalTagGovernanceResponse(status=result.status, tag=result.tag, registry_revision=result.registry_revision)
+    except TagGovernanceNotFound:
+        raise HTTPException(status_code=404, detail="Canonical tag or alias not found.") from None
+    except TagGovernanceConflict:
+        raise HTTPException(status_code=409, detail=TAG_GOVERNANCE_CONFLICT_DETAIL) from None
+    except TagGovernanceInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagGovernanceUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_GOVERNANCE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/tags/{canonical_key}/deprecate",
+    response_model=CanonicalTagGovernanceResponse,
+    summary="Deprecate a canonical tag",
+    description="Mark a canonical tag deprecated while retaining the registry record and all historical Paper references.",
+)
+def deprecate_canonical_tag(
+    request: CanonicalTagDeprecateRequest,
+    canonical_key: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[CanonicalTagGovernanceService, Depends(get_tag_governance_service)],
+) -> CanonicalTagGovernanceResponse:
+    try:
+        result = commands.deprecate_tag(canonical_key, expected_revision=request.expected_revision)
+        return CanonicalTagGovernanceResponse(status=result.status, tag=result.tag, registry_revision=result.registry_revision)
+    except TagGovernanceNotFound:
+        raise HTTPException(status_code=404, detail="Canonical tag not found.") from None
+    except TagGovernanceConflict:
+        raise HTTPException(status_code=409, detail=TAG_GOVERNANCE_CONFLICT_DETAIL) from None
+    except TagGovernanceInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagGovernanceUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_GOVERNANCE_UNAVAILABLE_DETAIL) from None
+
+
 @router.post(
     "/papers/scan",
     response_model=ManagedPdfScanResponse,
@@ -898,6 +1100,185 @@ def preview_metadata_enrichment(
         ],
         diagnostics=list(preview.diagnostics),
     )
+
+
+@router.get(
+    "/papers/{paper_id}/tag-candidates",
+    response_model=TagCandidateCollectionResponse,
+    summary="Get persisted tag candidate review",
+    description="Return the current per-Paper candidate review context. Reading it never generates candidates or changes Paper tags.",
+)
+def get_tag_candidates(
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[TagCandidateReviewService, Depends(get_tag_candidate_review_service)],
+) -> TagCandidateCollectionResponse:
+    try:
+        return _candidate_collection_response(commands.collection(paper_id))
+    except TagCandidateReviewNotFound:
+        raise HTTPException(status_code=404, detail="Paper or candidate review not found.") from None
+    except TagCandidateReviewUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_CANDIDATE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/papers/{paper_id}/tag-candidates/generate",
+    response_model=TagCandidateCollectionResponse,
+    summary="Generate tag candidates for review",
+    description="Generate and persist an explicit review context from existing local candidate evidence. This command never applies a Paper tag.",
+)
+def generate_tag_candidates(
+    request: TagCandidateGenerateRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[TagCandidateReviewService, Depends(get_tag_candidate_review_service)],
+) -> TagCandidateCollectionResponse:
+    try:
+        return _candidate_collection_response(
+            commands.generate(paper_id, reset_rejections=request.reset_rejections)
+        )
+    except TagCandidateReviewNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except TagCandidateReviewUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_CANDIDATE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/papers/{paper_id}/tag-candidates/{candidate_id}/approve",
+    response_model=TagCandidateCollectionResponse,
+    summary="Approve a resolved tag candidate",
+    description="Record explicit review approval only. Approval does not apply the tag to the Paper.",
+)
+def approve_tag_candidate(
+    request: TagCandidateReviewRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    candidate_id: Annotated[str, Path(min_length=64, max_length=64)],
+    commands: Annotated[TagCandidateReviewService, Depends(get_tag_candidate_review_service)],
+) -> TagCandidateCollectionResponse:
+    try:
+        return _candidate_collection_response(
+            commands.approve(
+                paper_id,
+                candidate_id,
+                expected_review_revision=request.expected_review_revision,
+            )
+        )
+    except TagCandidateReviewNotFound:
+        raise HTTPException(status_code=404, detail="Paper or candidate review not found.") from None
+    except TagCandidateReviewConflict:
+        raise HTTPException(status_code=409, detail=TAG_CANDIDATE_CONFLICT_DETAIL) from None
+    except TagCandidateReviewInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagCandidateReviewUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_CANDIDATE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/papers/{paper_id}/tag-candidates/{candidate_id}/reject",
+    response_model=TagCandidateCollectionResponse,
+    summary="Reject a tag candidate",
+    description="Persist an explicit rejection. Rejected candidates remain excluded from normal review until explicitly regenerated with reset enabled.",
+)
+def reject_tag_candidate(
+    request: TagCandidateReviewRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    candidate_id: Annotated[str, Path(min_length=64, max_length=64)],
+    commands: Annotated[TagCandidateReviewService, Depends(get_tag_candidate_review_service)],
+) -> TagCandidateCollectionResponse:
+    try:
+        return _candidate_collection_response(
+            commands.reject(
+                paper_id,
+                candidate_id,
+                expected_review_revision=request.expected_review_revision,
+            )
+        )
+    except TagCandidateReviewNotFound:
+        raise HTTPException(status_code=404, detail="Paper or candidate review not found.") from None
+    except TagCandidateReviewConflict:
+        raise HTTPException(status_code=409, detail=TAG_CANDIDATE_CONFLICT_DETAIL) from None
+    except TagCandidateReviewInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagCandidateReviewUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_CANDIDATE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/papers/{paper_id}/tag-candidates/{candidate_id}/promote",
+    response_model=TagCandidateCollectionResponse,
+    summary="Promote a candidate to a canonical tag",
+    description="Create or resolve one active canonical tag through the Tag Book, preserving the candidate review context without changing Paper tags.",
+)
+def promote_tag_candidate(
+    request: TagCandidatePromoteRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    candidate_id: Annotated[str, Path(min_length=64, max_length=64)],
+    commands: Annotated[TagCandidateReviewService, Depends(get_tag_candidate_review_service)],
+) -> TagCandidateCollectionResponse:
+    try:
+        return _candidate_collection_response(
+            commands.promote(
+                paper_id,
+                candidate_id,
+                expected_review_revision=request.expected_review_revision,
+                label=request.label,
+                category=request.category,
+            )
+        )
+    except TagCandidateReviewNotFound:
+        raise HTTPException(status_code=404, detail="Paper or candidate review not found.") from None
+    except TagCandidateReviewConflict:
+        raise HTTPException(status_code=409, detail=TAG_CANDIDATE_CONFLICT_DETAIL) from None
+    except TagCandidateReviewInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagCandidateReviewUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_CANDIDATE_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/papers/{paper_id}/tag-candidates/{candidate_id}/apply",
+    response_model=TagCandidateApplyResponse,
+    summary="Apply an approved or resolved tag candidate to a Paper",
+    description="Explicitly apply the active canonical tag through the existing Paper tag command path. Candidate generation and approval alone never perform this mutation.",
+)
+def apply_tag_candidate(
+    request: TagCandidateApplyRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    candidate_id: Annotated[str, Path(min_length=64, max_length=64)],
+    commands: Annotated[TagCandidateReviewService, Depends(get_tag_candidate_review_service)],
+) -> TagCandidateApplyResponse:
+    try:
+        result = commands.apply(
+            paper_id,
+            candidate_id,
+            expected_review_revision=request.expected_review_revision,
+            expected_tags_revision=request.expected_tags_revision,
+        )
+        paper_tag = result.paper_tag_result
+        return TagCandidateApplyResponse(
+            candidate=result.candidate,
+            review_revision=result.review_revision,
+            paper_tag={
+                "status": paper_tag.status,
+                "tags": list(paper_tag.tags),
+                "tags_revision": paper_tag.tags_revision,
+                "note_header_status": paper_tag.note_header_status,
+                "canonical_note_header": paper_tag.canonical_note_header,
+                "canonical_note_header_text": paper_tag.canonical_note_header_text,
+                "reading_note": {
+                    "exists": paper_tag.reading_note.exists,
+                    "content": paper_tag.reading_note.content,
+                    "sha256": paper_tag.reading_note.sha256,
+                    "size_bytes": paper_tag.reading_note.size_bytes,
+                },
+            },
+        )
+    except TagCandidateReviewNotFound:
+        raise HTTPException(status_code=404, detail="Paper or candidate review not found.") from None
+    except TagCandidateReviewConflict:
+        raise HTTPException(status_code=409, detail=TAG_CANDIDATE_CONFLICT_DETAIL) from None
+    except TagCandidateReviewInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except TagCandidateReviewUnavailable:
+        raise HTTPException(status_code=503, detail=TAG_CANDIDATE_UNAVAILABLE_DETAIL) from None
 
 
 @router.post(

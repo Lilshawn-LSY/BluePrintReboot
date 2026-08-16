@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.9",
-  "release_name": "v1.5.9-pdf-scan-import-frontend",
+  "product_version": "1.5.10",
+  "release_name": "v1.5.10-tag-governance-candidate-review",
   "as_of": "2026-08-16",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 129,
+        "passed": 137,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.9 local validation",
-        "summary": "The current offline repository readiness smoke completed with 129 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.10 local validation",
+        "summary": "The current offline repository readiness smoke completed with 137 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 743,
+        "passed": 751,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.9 local validation",
-        "summary": "The current full Python suite completed with 743 passed."
+        "reference": "v1.5.10 local validation",
+        "summary": "The v1.5.10 full Python suite completed with 751 passed before the user-provided manual run changed the local Tag Book configuration; the manual configuration change is preserved separately."
       }
     },
     "focused_reader_snapshot": {
@@ -179,16 +179,16 @@
     },
     "focused_projects_tags": {
       "status": "VERIFIED",
-      "scope": "Projects and Tags read-model, API, privacy, and non-mutation contracts",
-      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_projects_tags_api.py -q",
+      "scope": "canonical Tag Book governance, candidate review, Paper-tag compatibility, API, and release contracts",
+      "command": ".venv/bin/python -m pytest -q tests/test_tag_book.py tests/test_tag_governance.py tests/test_tag_manager.py tests/test_paper_tag_commands.py tests/test_projects_tags_api.py tests/test_tag_candidate_review.py tests/test_tag_candidate_quality_baseline.py tests/test_release_contracts.py tests/test_release_state_reconciliation.py",
       "counts": {
-        "passed": 27,
+        "passed": 118,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.4 focused Projects and Tags backend regression",
-        "summary": "The focused deterministic pagination, detail, orphan, fallback, corruption, privacy, OpenAPI, and read-only storage suite passed."
+        "date": "2026-08-16",
+        "reference": "v1.5.10 focused Tag governance and candidate-review validation",
+        "summary": "The focused canonical create/edit/alias/deprecate, collision, legacy preservation, candidate non-mutation/review/promotion/apply, quality baseline, Paper-tag compatibility, API, and release-state suite passed."
       }
     },
     "focused_settings": {
@@ -285,8 +285,8 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.9 focused release validation",
-        "summary": "The focused runtime-target, immutable-baseline, local release-document, reconciliation, contact, and smoke-contract suite passed."
+        "reference": "v1.5.10 release validation",
+        "summary": "The focused runtime-target, immutable-baseline, v1.5.10 local release-document, reconciliation, contact, and smoke-contract suite passed."
       }
     },
     "release_reconciliation": {
@@ -299,8 +299,8 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.8 local release reconciliation",
-        "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
+        "reference": "v1.5.10 local release reconciliation",
+        "summary": "Canonical manifest validation and deterministic current-status rendering passed for the v1.5.10 runtime target."
       }
     },
     "tracker_export": {
@@ -324,7 +324,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.9 local validation",
+        "reference": "v1.5.10 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -335,7 +335,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.9 local validation",
+        "reference": "v1.5.10 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -351,24 +351,24 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.9 local validation",
+        "reference": "v1.5.10 local validation",
         "summary": "The complete frontend build and Node test suite passed."
       }
     },
     "frontend_projects_tags": {
       "status": "VERIFIED",
-      "scope": "Projects and Tags bridge, route, rendering-source, negative-state, and compatibility contracts",
+      "scope": "Tags governance, candidate-review bridge, rendering-source, negative-state, and compatibility contracts",
       "command": "node --test tests/projects-tags-read-parity.test.mjs tests/api-bridge.test.mjs",
       "counts": {
-        "passed": 26,
+        "passed": 28,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-07-27",
-        "reference": "v1.5.2 focused Projects and Tags frontend validation",
-        "summary": "The focused exact bridge allowlist, real-field read rendering, shared state, retry, no-fabrication, bounded Project command compatibility, and Tag read-only compatibility suite passed."
+        "date": "2026-08-16",
+        "reference": "v1.5.10 focused Tags and candidate-review frontend validation",
+        "summary": "The focused exact governance/candidate bridge allowlist, canonical registry rendering, explicit review/apply boundary, shared states, retry, and no-fabrication suite passed."
       }
     },
     "frontend_settings": {
@@ -440,12 +440,12 @@
       "scope": "tracked repository entries only",
       "command": ".venv/bin/python scripts/check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 283,
+        "entries_inspected": 287,
         "violations": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.9 local hygiene validation",
+        "reference": "v1.5.10 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -1022,6 +1022,80 @@
           }
         }
       }
+    },
+    "tag_candidate_review_runtime": {
+      "status": "PARTIALLY VERIFIED",
+      "evidence": {
+        "date": "2026-08-16",
+        "reference": "user-provided v1.5.10 manual verification",
+        "summary": "User-provided manual verification passed canonical governance, candidate review/promotion, explicit Paper apply, conflict safety, draft preservation, regression, and end-to-end workflow checks; candidate-route browser Network privacy remains separately unverified."
+      },
+      "checks": {
+        "canonical_registry_workflow": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.10 manual verification",
+            "summary": "Canonical tag creation, persistence after reload/restart, duplicate rejection, category update, and stable identity were verified."
+          }
+        },
+        "alias_collision_and_deprecation": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.10 manual verification",
+            "summary": "Alias resolution, canonical/alias collision rejection, category-safe updates, deprecation visibility, historical relationship preservation, and legacy-tag preservation were verified."
+          }
+        },
+        "candidate_generation_non_mutating": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.10 manual verification",
+            "summary": "Candidate generation was verified to leave Paper tags unchanged while resolving existing canonical and alias candidates correctly."
+          }
+        },
+        "candidate_review_transitions": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.10 manual verification",
+            "summary": "Explicit candidate approval and rejection were verified without Paper mutation, including the persisted rejected state."
+          }
+        },
+        "promotion_resolution": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.10 manual verification",
+            "summary": "Promotion of unresolved candidates and collision-aware resolution to existing canonical/alias identities were verified."
+          }
+        },
+        "explicit_apply_and_repeat": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.10 manual verification",
+            "summary": "Approval remained distinct from Apply; explicit application used the existing Paper-tag workflow, repeated apply was idempotent, and removal remained functional."
+          }
+        },
+        "stale_conflict_and_draft_preservation": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.10 manual verification",
+            "summary": "Stale governance/Paper-tag conflicts, unsaved Reading Note preservation through candidate actions/errors, and existing Reader/Note/Project compatibility were verified."
+          }
+        },
+        "network_privacy": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "v1.5.10 manual verification plan",
+            "summary": "Manual browser Network privacy verification for the governance and candidate-review routes has not been performed."
+          }
+        }
+      }
     }
   },
   "publication_state": {
@@ -1062,17 +1136,18 @@
       "manual_validation.reader_snapshot_runtime",
       "manual_validation.reader_write_runtime",
       "manual_validation.pdf_scan_import_runtime",
+      "manual_validation.tag_candidate_review_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
     ]
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; later ingestion and enrichment extensions deferred",
+    "name": "v1.5.10 manual tag-governance/candidate-review verification, the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.6.0 Reader Workspace UX Overhaul follows",
     "evidence": {
       "date": "2026-08-16",
-      "reference": "docs/release_notes/v1.5.9.md",
-      "summary": "Keep the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, publication, post-merge main CI, and clean-PC restore evidence separate from recorded local manual and automated validation."
+      "reference": "docs/release_notes/v1.5.10.md",
+      "summary": "Keep v1.5.10 manual browser/workspace verification, the remaining v1.5.9 Network check, hosted/source-control/publication evidence, and clean-PC restore separate from recorded local automated validation."
     }
   },
   "historical_evidence": {

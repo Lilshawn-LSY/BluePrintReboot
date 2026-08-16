@@ -1,4 +1,4 @@
-import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
+import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -176,6 +176,30 @@ export const apiClient = {
     return request<PaginatedTagList>(`/tags?${params}`);
   },
   getTagSummary: () => request<CandidateSummary>("/tags/summary"),
+  getTagGovernance: () => request<CanonicalTagGovernanceSnapshot>("/tags/governance"),
+  createCanonicalTag: (input: { label: string; category: string; description: string; suggestionStrength: number; expectedRevision: string }) => request<CanonicalTagGovernanceResponse>(
+    "/tags",
+    { method: "POST", body: { label: input.label, category: input.category, description: input.description, suggestion_strength: input.suggestionStrength, expected_revision: input.expectedRevision } },
+  ),
+  updateCanonicalTag: (canonicalKey: string, changes: { label?: string; category?: string; description?: string; suggestionStrength?: number }, expectedRevision: string) => {
+    const { suggestionStrength, ...supportedChanges } = changes;
+    return request<CanonicalTagGovernanceResponse>(
+      `/tags/${encodeURIComponent(canonicalKey)}`,
+      { method: "PATCH", body: { changes: { ...supportedChanges, ...(suggestionStrength === undefined ? {} : { suggestion_strength: suggestionStrength }) }, expected_revision: expectedRevision } },
+    );
+  },
+  addCanonicalTagAlias: (canonicalKey: string, alias: string, expectedRevision: string) => request<CanonicalTagGovernanceResponse>(
+    `/tags/${encodeURIComponent(canonicalKey)}/aliases`,
+    { method: "POST", body: { alias, expected_revision: expectedRevision } },
+  ),
+  removeCanonicalTagAlias: (canonicalKey: string, alias: string, expectedRevision: string) => request<CanonicalTagGovernanceResponse>(
+    `/tags/${encodeURIComponent(canonicalKey)}/aliases`,
+    { method: "DELETE", body: { alias, expected_revision: expectedRevision } },
+  ),
+  deprecateCanonicalTag: (canonicalKey: string, expectedRevision: string) => request<CanonicalTagGovernanceResponse>(
+    `/tags/${encodeURIComponent(canonicalKey)}/deprecate`,
+    { method: "POST", body: { expected_revision: expectedRevision } },
+  ),
   getSettingsSummary: () => request<SettingsSummary>("/settings/summary"),
   getReaderSnapshot: (paperId: string) => request<ReaderSnapshot>(`/papers/${encodeURIComponent(paperId)}/reader`),
   getNoteBlocks: (paperId: string) => request<NoteBlockCollection>(
@@ -225,6 +249,29 @@ export const apiClient = {
   ) => request<PaperTagCommandResponse>(
     `/papers/${encodeURIComponent(paperId)}/tags`,
     { method: "DELETE", body: { tag, expected_revision: expectedRevision } },
+  ),
+  getTagCandidates: (paperId: string) => request<TagCandidateCollection>(
+    `/papers/${encodeURIComponent(paperId)}/tag-candidates`,
+  ),
+  generateTagCandidates: (paperId: string, resetRejections = false) => request<TagCandidateCollection>(
+    `/papers/${encodeURIComponent(paperId)}/tag-candidates/generate`,
+    { method: "POST", body: { reset_rejections: resetRejections } },
+  ),
+  approveTagCandidate: (paperId: string, candidateId: string, expectedReviewRevision: string) => request<TagCandidateCollection>(
+    `/papers/${encodeURIComponent(paperId)}/tag-candidates/${encodeURIComponent(candidateId)}/approve`,
+    { method: "POST", body: { expected_review_revision: expectedReviewRevision } },
+  ),
+  rejectTagCandidate: (paperId: string, candidateId: string, expectedReviewRevision: string) => request<TagCandidateCollection>(
+    `/papers/${encodeURIComponent(paperId)}/tag-candidates/${encodeURIComponent(candidateId)}/reject`,
+    { method: "POST", body: { expected_review_revision: expectedReviewRevision } },
+  ),
+  promoteTagCandidate: (paperId: string, candidateId: string, expectedReviewRevision: string, category?: string) => request<TagCandidateCollection>(
+    `/papers/${encodeURIComponent(paperId)}/tag-candidates/${encodeURIComponent(candidateId)}/promote`,
+    { method: "POST", body: { expected_review_revision: expectedReviewRevision, ...(category ? { category } : {}) } },
+  ),
+  applyTagCandidate: (paperId: string, candidateId: string, expectedReviewRevision: string, expectedTagsRevision: string) => request<TagCandidateApplyResponse>(
+    `/papers/${encodeURIComponent(paperId)}/tag-candidates/${encodeURIComponent(candidateId)}/apply`,
+    { method: "POST", body: { expected_review_revision: expectedReviewRevision, expected_tags_revision: expectedTagsRevision } },
   ),
   saveReadingNote: (
     paperId: string,

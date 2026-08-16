@@ -4,6 +4,20 @@ Required before and after Codex-assisted release work, including `v1.5.5-note-bl
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
 
+## v1.5.10 Tag Governance & Candidate Review
+
+- [x] Validate canonical create, bounded metadata/category edit, alias add/remove, deterministic registry revisions, stale conflicts, and atomic/lock failure handling using disposable Tag Book fixtures.
+- [x] Validate duplicate canonical labels, canonical/alias collisions, duplicate/ambiguous aliases, self-aliases, and conservative normalization rejection.
+- [x] Validate deprecation remains inspectable, preserves existing canonical and legacy/noncanonical Paper tags, and blocks new ordinary candidate approval/promotion/application without deleting relationships.
+- [x] Validate generated/retrieved candidates do not mutate Paper tags; resolved and unresolved states, source/evidence, and existing score/confidence fields remain truthful.
+- [x] Validate explicit approve/reject/persist/reset/promote transitions; promotion resolves canonical/alias identities or creates one canonical tag without duplicates.
+- [x] Validate Apply delegates to the existing Paper-tag command, preserves repeated no-op and stale tag revision behavior, and never lets generation alone apply a tag.
+- [x] Validate candidate-review stale revisions, controlled API/bridge path/method errors, unrelated unsaved Reader note state, and Reader/Project/Note/PDF regressions.
+- [x] Run the deterministic candidate-quality fixture baseline and record expected-hit, miss, false-positive, and precision-like results without treating it as semantic optimization.
+- [x] User-provided manual verification covers canonical registry workflows, alias/deprecation display, review/promotion/rejection, explicit Apply/no-auto-apply, conflict recovery, unsaved draft preservation, regressions, and the end-to-end PDF-to-tag workflow.
+- [ ] Separately verify private-safe browser Network responses for governance and candidate-review routes.
+- [ ] Keep automatic tag application/cleanup, bulk retagging, destructive tag deletion, ontology/graph editing, embeddings/LLM tagging, and the v1.6.0 Reader visual overhaul out of this release.
+
 ## v1.5.5 Note Block Write and Project Links
 
 - [x] Validate empty and stored-order Note Block collections, normalized public fields, complete-state deterministic revisions, count bounds, missing Paper, corrupt JSON, duplicate identity, and private-field exclusion.

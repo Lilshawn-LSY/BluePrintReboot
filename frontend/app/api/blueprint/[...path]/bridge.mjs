@@ -29,6 +29,38 @@ export function isBlueprintPaperTagsPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "tags";
 }
 
+export function isBlueprintTagCandidatesPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "tag-candidates";
+}
+
+export function isBlueprintTagCandidateGeneratePath(parts) {
+  return Array.isArray(parts) && parts.length === 4 && parts[0] === "papers" && parts[2] === "tag-candidates" && parts[3] === "generate";
+}
+
+export function isBlueprintTagCandidateActionPath(parts) {
+  return Array.isArray(parts)
+    && parts.length === 5
+    && parts[0] === "papers"
+    && parts[2] === "tag-candidates"
+    && ["approve", "reject", "promote", "apply"].includes(parts[4]);
+}
+
+export function isBlueprintTagGovernancePath(parts) {
+  return Array.isArray(parts) && parts.length === 2 && parts[0] === "tags" && parts[1] === "governance";
+}
+
+export function isBlueprintCanonicalTagPath(parts) {
+  return Array.isArray(parts) && parts.length === 2 && parts[0] === "tags" && parts[1] !== "governance";
+}
+
+export function isBlueprintCanonicalTagAliasesPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "tags" && parts[2] === "aliases";
+}
+
+export function isBlueprintCanonicalTagDeprecatePath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "tags" && parts[2] === "deprecate";
+}
+
 export function isBlueprintReadingNotePath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "reading-note";
 }
@@ -94,11 +126,13 @@ export function isAllowedBlueprintPath(parts) {
     || path === "projects"
     || path === "tags"
     || path === "tags/summary"
+    || path === "tags/governance"
     || path === "settings/summary"
     || (parts.length === 2 && parts[0] === "papers" && !["scan", "import"].includes(parts[1]))
     || (parts.length === 2 && parts[0] === "projects")
     || isBlueprintPdfPath(parts)
     || isBlueprintReaderPath(parts)
+    || isBlueprintTagCandidatesPath(parts)
     || isBlueprintNoteBlocksPath(parts);
 }
 
@@ -115,16 +149,25 @@ export function isAllowedBlueprintRequest(method, parts) {
       || isBlueprintMetadataEnrichmentPreviewPath(parts)
       || isBlueprintManagedPdfScanPath(parts)
       || isBlueprintManagedPdfImportPath(parts)
-      || isBlueprintPaperTagsPath(parts);
+      || isBlueprintPaperTagsPath(parts)
+      || (parts.length === 1 && parts[0] === "tags")
+      || isBlueprintCanonicalTagAliasesPath(parts)
+      || isBlueprintCanonicalTagDeprecatePath(parts)
+      || isBlueprintTagCandidateGeneratePath(parts)
+      || isBlueprintTagCandidateActionPath(parts);
   }
   if (normalizedMethod === "PATCH") {
-    return isBlueprintMetadataPath(parts) || isBlueprintProjectPath(parts) || isBlueprintNoteBlockPath(parts);
+    return isBlueprintMetadataPath(parts)
+      || isBlueprintProjectPath(parts)
+      || isBlueprintNoteBlockPath(parts)
+      || isBlueprintCanonicalTagPath(parts);
   }
   if (normalizedMethod === "PUT") return isBlueprintReadingNotePath(parts);
   if (normalizedMethod === "DELETE") {
     return isBlueprintProjectPaperLinkPath(parts)
       || isBlueprintProjectNoteBlockLinkPath(parts)
-      || isBlueprintPaperTagsPath(parts);
+      || isBlueprintPaperTagsPath(parts)
+      || isBlueprintCanonicalTagAliasesPath(parts);
   }
   return false;
 }
