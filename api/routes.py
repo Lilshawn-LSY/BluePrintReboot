@@ -55,6 +55,8 @@ from api.schemas import (
     LibraryStatusResponse,
     MetadataCommandRequest,
     MetadataCommandResponse,
+    PaperTagCommandRequest,
+    PaperTagCommandResponse,
     NoteBlockCollectionResponse,
     NoteBlockCommandResponse,
     NoteBlockLinkCommandResponse,
@@ -783,6 +785,106 @@ def save_reader_metadata(
         metadata=result.metadata,
         metadata_revision=result.metadata_revision,
         changed_fields=list(result.changed_fields),
+        note_header_status=result.note_header_status,
+        canonical_note_header=result.canonical_note_header,
+        canonical_note_header_text=result.canonical_note_header_text,
+        reading_note={
+            "exists": result.reading_note.exists,
+            "content": result.reading_note.content,
+            "sha256": result.reading_note.sha256,
+            "size_bytes": result.reading_note.size_bytes,
+        },
+    )
+
+
+@router.post(
+    "/papers/{paper_id}/tags",
+    response_model=PaperTagCommandResponse,
+    summary="Add one Paper tag",
+    description=(
+        "Explicitly add one normalized Paper tag when the supplied deterministic "
+        "tag revision still matches."
+    ),
+    responses={
+        404: {"model": APIError, "description": "No paper has the requested identity."},
+        409: {"model": APIError, "description": "The Paper tag revision is stale."},
+        422: {"model": APIError, "description": "The requested tag is invalid."},
+        503: {"model": APIError, "description": "The persistent command could not complete consistently."},
+    },
+)
+def add_paper_tag(
+    request: PaperTagCommandRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200, description="Stable BluePrintReboot paper identity.")],
+    commands: Annotated[ReaderCommandService, Depends(get_reader_command_service)],
+) -> PaperTagCommandResponse:
+    try:
+        result = commands.add_paper_tag(
+            paper_id,
+            request.tag,
+            request.expected_revision,
+        )
+    except ReaderCommandNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except ReaderCommandConflict:
+        raise HTTPException(status_code=409, detail=COMMAND_CONFLICT_DETAIL) from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except ReaderCommandUnavailable:
+        raise HTTPException(status_code=503, detail=COMMAND_UNAVAILABLE_DETAIL) from None
+    return PaperTagCommandResponse(
+        status=result.status,
+        tags=list(result.tags),
+        tags_revision=result.tags_revision,
+        note_header_status=result.note_header_status,
+        canonical_note_header=result.canonical_note_header,
+        canonical_note_header_text=result.canonical_note_header_text,
+        reading_note={
+            "exists": result.reading_note.exists,
+            "content": result.reading_note.content,
+            "sha256": result.reading_note.sha256,
+            "size_bytes": result.reading_note.size_bytes,
+        },
+    )
+
+
+@router.delete(
+    "/papers/{paper_id}/tags",
+    response_model=PaperTagCommandResponse,
+    summary="Remove one Paper tag",
+    description=(
+        "Explicitly remove one normalized Paper tag when the supplied deterministic "
+        "tag revision still matches. Removing an absent tag returns a truthful no-op."
+    ),
+    responses={
+        404: {"model": APIError, "description": "No paper has the requested identity."},
+        409: {"model": APIError, "description": "The Paper tag revision is stale."},
+        422: {"model": APIError, "description": "The requested tag is invalid."},
+        503: {"model": APIError, "description": "The persistent command could not complete consistently."},
+    },
+)
+def remove_paper_tag(
+    request: PaperTagCommandRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200, description="Stable BluePrintReboot paper identity.")],
+    commands: Annotated[ReaderCommandService, Depends(get_reader_command_service)],
+) -> PaperTagCommandResponse:
+    try:
+        result = commands.remove_paper_tag(
+            paper_id,
+            request.tag,
+            request.expected_revision,
+        )
+    except ReaderCommandNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except ReaderCommandConflict:
+        raise HTTPException(status_code=409, detail=COMMAND_CONFLICT_DETAIL) from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except ReaderCommandUnavailable:
+        raise HTTPException(status_code=503, detail=COMMAND_UNAVAILABLE_DETAIL) from None
+    return PaperTagCommandResponse(
+        status=result.status,
+        tags=list(result.tags),
+        tags_revision=result.tags_revision,
         note_header_status=result.note_header_status,
         canonical_note_header=result.canonical_note_header,
         canonical_note_header_text=result.canonical_note_header_text,

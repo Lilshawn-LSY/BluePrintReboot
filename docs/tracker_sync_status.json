@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.6",
-  "release_name": "v1.5.6-project-workspace-closure",
+  "product_version": "1.5.7",
+  "release_name": "v1.5.7-paper-tag-apply-remove",
   "as_of": "2026-08-16",
   "controlled_statuses": [
     "VERIFIED",
@@ -116,7 +116,7 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.6 local validation",
+        "reference": "v1.5.7 local validation",
         "summary": "The current offline repository readiness smoke completed with 124 passed, 0 warnings, and 0 failed."
       }
     },
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 723,
+        "passed": 725,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.6 local validation",
-        "summary": "The current full Python suite completed with 723 passed."
+        "reference": "v1.5.7 local validation",
+        "summary": "The current full Python suite completed with 725 passed."
       }
     },
     "focused_reader_snapshot": {
@@ -151,16 +151,16 @@
     },
     "focused_reader_commands": {
       "status": "VERIFIED",
-      "scope": "Reader metadata and Reading Note command contracts",
-      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_reader_commands.py -q",
+      "scope": "Reader metadata, Paper tag, and Reading Note command contracts",
+      "command": ".venv/bin/python -m pytest -q tests/test_paper_tag_commands.py tests/test_reader_commands.py tests/test_reader_snapshot_api.py tests/test_api.py tests/test_read_models.py",
       "counts": {
-        "passed": 32,
+        "passed": 80,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-07-26",
-        "reference": "v1.5.4 focused Reader command regression",
-        "summary": "The focused Reader command schema, concurrency, locking, normalization, canonicalization, failure-injection, rollback, and privacy suite passed."
+        "date": "2026-08-16",
+        "reference": "v1.5.7 focused Reader tag validation",
+        "summary": "The focused Reader tag, metadata, snapshot, read-parity, concurrency, normalization, header synchronization, rollback, and privacy suite passed."
       }
     },
     "focused_pdf_api": {
@@ -278,28 +278,28 @@
     "focused_release_version": {
       "status": "VERIFIED",
       "scope": "release and version contracts",
-      "command": ".venv/bin/python -m pytest -q tests/test_release_contracts.py",
+      "command": ".venv/bin/python -m pytest -q tests/test_release_contracts.py tests/test_release_state_reconciliation.py tests/test_contact.py tests/test_smoke_check.py",
       "counts": {
-        "passed": 9,
+        "passed": 53,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.6 focused release validation",
-        "summary": "The focused runtime-target, immutable-baseline, and release-document contract suite passed."
+        "reference": "v1.5.7 focused release validation",
+        "summary": "The focused runtime-target, immutable-baseline, local release-document, reconciliation, contact, and smoke-contract suite passed."
       }
     },
     "release_reconciliation": {
       "status": "VERIFIED",
       "scope": "canonical release-state reconciliation contracts",
-      "command": ".\\.venv\\Scripts\\python.exe -m pytest tests\\test_release_state_reconciliation.py -q",
+      "command": ".venv/bin/python scripts/reconcile_release_state.py --check",
       "counts": {
         "passed": 30,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-02",
-        "reference": "v1.5.5 local release reconciliation",
+        "date": "2026-08-16",
+        "reference": "v1.5.7 local release reconciliation",
         "summary": "Canonical manifest validation, deterministic rendering, stale-output checks, and evidence-boundary regressions passed."
       }
     },
@@ -320,29 +320,29 @@
     "frontend_lint": {
       "status": "VERIFIED",
       "scope": "frontend static analysis",
-      "command": "npm run lint",
+      "command": "npm --prefix frontend run lint",
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.6 local validation",
+        "reference": "v1.5.7 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
     "frontend_production_build": {
       "status": "VERIFIED",
       "scope": "frontend production build",
-      "command": "npm test",
+      "command": "npm --prefix frontend test",
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.6 local validation",
+        "reference": "v1.5.7 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
     "frontend_node_tests": {
       "status": "VERIFIED",
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
-      "command": "npm test",
+      "command": "npm --prefix frontend test",
       "counts": {
         "passed": 10,
         "failed": 0,
@@ -351,8 +351,8 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.6 local validation",
-        "summary": "All 10 frontend Node test files passed."
+        "reference": "v1.5.7 local validation",
+        "summary": "The complete frontend build and Node test suite passed."
       }
     },
     "frontend_projects_tags": {
@@ -389,7 +389,7 @@
     },
     "frontend_reader_commands": {
       "status": "VERIFIED",
-      "scope": "Reader editor state and exact command bridge allowlist",
+      "scope": "Reader editor state and exact command bridge allowlist, including Paper tags",
       "command": "node --test tests/api-bridge.test.mjs tests/reader-editor-state.test.mjs",
       "counts": {
         "passed": 27,
@@ -400,7 +400,7 @@
       "evidence": {
         "date": "2026-07-27",
         "reference": "v1.5.2 focused frontend Reader command validation",
-        "summary": "The exact bridge method/path allowlist and Reader editor state, draft preservation, header refresh, conflict, and transition suites passed."
+        "summary": "The exact bridge method/path allowlist and Reader editor state, Paper-tag draft preservation, header refresh, conflict, and transition suites passed."
       }
     },
     "frontend_project_commands": {
@@ -438,14 +438,14 @@
     "repository_hygiene": {
       "status": "VERIFIED",
       "scope": "tracked repository entries only",
-      "command": ".\\.venv\\Scripts\\python.exe scripts\\check_repo_hygiene.py",
+      "command": ".venv/bin/python scripts/check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 277,
+        "entries_inspected": 276,
         "violations": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.6 local hygiene validation",
+        "reference": "v1.5.7 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -863,11 +863,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.5.6 hosted and publication evidence; v1.6 Reader/shared UX deferred",
+    "name": "v1.5.7 manual, hosted, and publication evidence; v1.6 Reader/shared UX deferred",
     "evidence": {
       "date": "2026-08-16",
-      "reference": "docs/ROADMAP.md",
-      "summary": "Preserve completed local v1.5.6 runtime evidence while keeping hosted CI, merge, tag, publication, clean-PC restore, and the deferred v1.6 Reader/shared UX work separately evidenced."
+      "reference": "docs/release_notes/v1.5.7.md",
+      "summary": "Keep v1.5.7 manual, hosted CI, merge, tag, publication, and clean-PC restore evidence separate from the implemented local Paper-tag command slice and deferred v1.6 Reader/shared UX work."
     }
   },
   "historical_evidence": {

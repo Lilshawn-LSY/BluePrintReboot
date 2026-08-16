@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
     ) -> JSONResponse:
         reader_command = (
             request.url.path.endswith("/metadata")
+            or request.url.path.endswith("/tags")
             or request.url.path.endswith("/reading-note")
             or (
                 request.method in {"POST", "PATCH"}

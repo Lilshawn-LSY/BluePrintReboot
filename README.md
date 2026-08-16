@@ -8,11 +8,13 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.6-project-workspace-closure**.
+Current runtime target: **v1.5.7-paper-tag-apply-remove**.
+
+v1.5.7 adds bounded Paper-local tag apply/remove controls to the web Reader. Explicit add/remove commands use a tag-only revision, shared locking, reload-after-lock optimistic concurrency, atomic persistence, verified rollback, and canonical Reading Note header synchronization without replacing unsaved note bodies. The Reader prefers canonical Tag Book values while retaining compatible legacy/noncanonical stored Paper tags. There is no canonical Tag CRUD, alias governance, automatic or bulk tagging, or metadata-editor tag field.
 
 v1.5.6 closes the everyday Project workspace: one Project page now keeps explicit metadata/status/priority editing, Paper links, and a bounded existing Note Block picker together. The picker reads only the selected Paper's stored blocks and reuses the canonical typed Project-link command, including duplicate truthfulness, revision conflicts, and controlled unavailable/orphan states. Project and link writes remain independent, revision-checked, lock-protected, and atomic; there is no autosave, combined save, or storage migration.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.6. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.7. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -269,6 +271,7 @@ Foundation release documents:
 - [v1.5.4 Project Write and Paper–Project Link Commands release-note draft](docs/release_notes/v1.5.4.md)
 - [v1.5.5 Note Block Write and Project Links release-note draft](docs/release_notes/v1.5.5.md)
 - [v1.5.6 Project Workspace Closure release-note draft](docs/release_notes/v1.5.6.md)
+- [v1.5.7 Paper Tag Apply/Remove release-note draft](docs/release_notes/v1.5.7.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -332,6 +335,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.5.7-paper-tag-apply-remove
+
+- Adds independent explicit Paper-tag add/remove commands with a tag-only revision, truthful no-ops, shared locking, atomic verification, and rollback.
+- Preserves legacy/noncanonical stored tags while normalizing only the added tag through existing repository semantics.
+- Refreshes the canonical Reading Note header after a successful tag mutation without replacing an unsaved note body.
+- Adds Paper-local Reader controls with canonical Tag Book suggestions, visible tag state, remove actions, and conflict/error reload behavior.
 
 ### v1.5.6-project-workspace-closure
 

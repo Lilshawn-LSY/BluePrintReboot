@@ -1,4 +1,4 @@
-import type { EditablePaperMetadata, MetadataCommandResponse, ReaderSnapshot } from "../api/types";
+import type { EditablePaperMetadata, MetadataCommandResponse, PaperTagCommandResponse, ReaderSnapshot } from "../api/types";
 
 export const METADATA_FIELDS: Array<keyof EditablePaperMetadata>;
 
@@ -34,6 +34,13 @@ export interface ReaderEditorState {
     status: "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
     message: string;
   };
+  tags: {
+    values: string[];
+    revision: string;
+    draft: string;
+    status: "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
+    message: string;
+  };
   note: {
     draft: string;
     baseline: string;
@@ -48,4 +55,8 @@ export function createReaderEditorState(snapshot: ReaderSnapshot): ReaderEditorS
 export function applyMetadataCommandResult(
   state: ReaderEditorState,
   response: MetadataCommandResponse,
+): ReaderEditorState;
+export function applyPaperTagCommandResult(
+  state: ReaderEditorState,
+  response: PaperTagCommandResponse,
 ): ReaderEditorState;

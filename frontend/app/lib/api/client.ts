@@ -1,4 +1,4 @@
-import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
+import type { CandidateSummary, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, MetadataCommandResponse, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -200,6 +200,22 @@ export const apiClient = {
   ) => request<MetadataCommandResponse>(
     `/papers/${encodeURIComponent(paperId)}/metadata`,
     { method: "PATCH", body: { changes, expected_revision: expectedRevision } },
+  ),
+  addPaperTag: (
+    paperId: string,
+    tag: string,
+    expectedRevision: string,
+  ) => request<PaperTagCommandResponse>(
+    `/papers/${encodeURIComponent(paperId)}/tags`,
+    { method: "POST", body: { tag, expected_revision: expectedRevision } },
+  ),
+  removePaperTag: (
+    paperId: string,
+    tag: string,
+    expectedRevision: string,
+  ) => request<PaperTagCommandResponse>(
+    `/papers/${encodeURIComponent(paperId)}/tags`,
+    { method: "DELETE", body: { tag, expected_revision: expectedRevision } },
   ),
   saveReadingNote: (
     paperId: string,

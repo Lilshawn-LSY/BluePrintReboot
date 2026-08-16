@@ -21,6 +21,10 @@ export function isBlueprintMetadataPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "metadata";
 }
 
+export function isBlueprintPaperTagsPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "tags";
+}
+
 export function isBlueprintReadingNotePath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "reading-note";
 }
@@ -95,14 +99,17 @@ export function isAllowedBlueprintRequest(method, parts) {
       || isBlueprintProjectArchivePath(parts)
       || isBlueprintProjectPaperLinksPath(parts)
       || isBlueprintProjectNoteBlockLinksPath(parts)
-      || isBlueprintNoteBlocksPath(parts);
+      || isBlueprintNoteBlocksPath(parts)
+      || isBlueprintPaperTagsPath(parts);
   }
   if (normalizedMethod === "PATCH") {
     return isBlueprintMetadataPath(parts) || isBlueprintProjectPath(parts) || isBlueprintNoteBlockPath(parts);
   }
   if (normalizedMethod === "PUT") return isBlueprintReadingNotePath(parts);
   if (normalizedMethod === "DELETE") {
-    return isBlueprintProjectPaperLinkPath(parts) || isBlueprintProjectNoteBlockLinkPath(parts);
+    return isBlueprintProjectPaperLinkPath(parts)
+      || isBlueprintProjectNoteBlockLinkPath(parts)
+      || isBlueprintPaperTagsPath(parts);
   }
   return false;
 }

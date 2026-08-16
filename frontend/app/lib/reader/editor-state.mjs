@@ -54,6 +54,13 @@ export function createReaderEditorState(snapshot) {
       status: "clean",
       message: "",
     },
+    tags: {
+      values: [...snapshot.paper.tags],
+      revision: snapshot.tags_revision,
+      draft: "",
+      status: "clean",
+      message: "",
+    },
     note: {
       draft: snapshot.saved_note_content,
       baseline: snapshot.saved_note_content,
@@ -107,6 +114,53 @@ export function applyMetadataCommandResult(state, response) {
         ? "Metadata changed the canonical header; the unsaved note body was retained."
         : response.note_header_status === "updated"
           ? "Metadata changed the canonical Reading Note header."
+          : state.note.message,
+    },
+  };
+}
+
+export function applyPaperTagCommandResult(state, response) {
+  const noteWasDirty = state.note.draft !== state.note.baseline;
+  let noteDraft = state.note.draft;
+  let headerChanged = false;
+  if (noteWasDirty) {
+    const headerSource = response.reading_note.exists
+      ? response.reading_note.content
+      : response.canonical_note_header_text;
+    const refreshed = refreshDirtyDraftHeader(noteDraft, headerSource);
+    noteDraft = refreshed.content;
+    headerChanged = refreshed.changed;
+  } else if (response.reading_note.exists) {
+    noteDraft = response.reading_note.content;
+  }
+  const noteBaseline = response.reading_note.exists
+    ? response.reading_note.content
+    : state.note.baseline;
+  const headerNotice = response.note_header_status === "updated"
+    ? " Paper tags changed the canonical Reading Note header."
+    : "";
+  return {
+    ...state,
+    tags: {
+      ...state.tags,
+      values: [...response.tags],
+      revision: response.tags_revision,
+      status: "saved",
+      message: response.status === "no_op"
+        ? "Paper tags already matched the saved version."
+        : `Paper tags saved.${headerNotice}`,
+    },
+    note: {
+      ...state.note,
+      draft: noteDraft,
+      baseline: noteBaseline,
+      sha256: response.reading_note.sha256,
+      exists: response.reading_note.exists,
+      status: noteDraft === noteBaseline ? "clean" : "dirty",
+      message: headerChanged
+        ? "Paper tags changed the canonical header; the unsaved note body was retained."
+        : response.note_header_status === "updated"
+          ? "Paper tags changed the canonical Reading Note header."
           : state.note.message,
     },
   };
