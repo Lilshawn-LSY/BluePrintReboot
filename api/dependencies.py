@@ -15,6 +15,7 @@ from services.project_read_model import ProjectDetail, ProjectListItem
 from services.project_commands import ProjectCommandService
 from services.reader_commands import ReaderCommandService
 from services.metadata_enrichment import MetadataEnrichmentService
+from services.pdf_scan_import import PdfScanImportService
 from services.settings_read_model import SettingsSummary
 from services.tag_read_model import CandidateSummary, CanonicalTag
 
@@ -25,6 +26,7 @@ class ReadModelUnavailable(Exception):
 
 _reader_command_service = ReaderCommandService()
 _metadata_enrichment_service = MetadataEnrichmentService()
+_pdf_scan_import_service = PdfScanImportService()
 _project_command_service = ProjectCommandService()
 _note_block_command_service = NoteBlockCommandService()
 
@@ -119,6 +121,10 @@ def get_reader_command_service() -> ReaderCommandService:
 
 def get_metadata_enrichment_service() -> MetadataEnrichmentService:
     return _metadata_enrichment_service
+
+
+def get_pdf_scan_import_service() -> PdfScanImportService:
+    return _pdf_scan_import_service
 
 
 def get_project_command_service() -> ProjectCommandService:

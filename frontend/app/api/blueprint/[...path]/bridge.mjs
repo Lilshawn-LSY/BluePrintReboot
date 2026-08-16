@@ -33,6 +33,14 @@ export function isBlueprintReadingNotePath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "reading-note";
 }
 
+export function isBlueprintManagedPdfScanPath(parts) {
+  return Array.isArray(parts) && parts.length === 2 && parts[0] === "papers" && parts[1] === "scan";
+}
+
+export function isBlueprintManagedPdfImportPath(parts) {
+  return Array.isArray(parts) && parts.length === 2 && parts[0] === "papers" && parts[1] === "import";
+}
+
 export function isBlueprintNoteBlocksPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "note-blocks";
 }
@@ -87,7 +95,7 @@ export function isAllowedBlueprintPath(parts) {
     || path === "tags"
     || path === "tags/summary"
     || path === "settings/summary"
-    || (parts.length === 2 && parts[0] === "papers")
+    || (parts.length === 2 && parts[0] === "papers" && !["scan", "import"].includes(parts[1]))
     || (parts.length === 2 && parts[0] === "projects")
     || isBlueprintPdfPath(parts)
     || isBlueprintReaderPath(parts)
@@ -105,6 +113,8 @@ export function isAllowedBlueprintRequest(method, parts) {
       || isBlueprintProjectNoteBlockLinksPath(parts)
       || isBlueprintNoteBlocksPath(parts)
       || isBlueprintMetadataEnrichmentPreviewPath(parts)
+      || isBlueprintManagedPdfScanPath(parts)
+      || isBlueprintManagedPdfImportPath(parts)
       || isBlueprintPaperTagsPath(parts);
   }
   if (normalizedMethod === "PATCH") {

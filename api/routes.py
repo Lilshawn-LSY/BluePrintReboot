@@ -37,6 +37,7 @@ from api.dependencies import (
     get_note_block_command_service,
     get_paper_detail,
     get_paper_list_items,
+    get_pdf_scan_import_service,
     get_project_detail,
     get_project_command_service,
     get_project_list_items,
@@ -54,6 +55,9 @@ from api.schemas import (
     CandidateSummaryResponse,
     HealthSummaryResponse,
     LibraryStatusResponse,
+    ManagedPdfImportRequest,
+    ManagedPdfImportResponse,
+    ManagedPdfScanResponse,
     MetadataCommandRequest,
     MetadataCommandResponse,
     MetadataEnrichmentPreviewRequest,
@@ -105,6 +109,7 @@ from services.metadata_enrichment import (
     MetadataEnrichmentService,
     MetadataEnrichmentUnavailable,
 )
+from services.pdf_scan_import import PdfScanImportService, PdfScanImportUnavailable
 from services.settings_read_model import SettingsSummary as DomainSettingsSummary
 from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
 
@@ -125,6 +130,7 @@ PROJECT_COMMAND_NOT_FOUND_DETAIL = "The requested Project, Paper, or Paper link 
 NOTE_BLOCK_COMMAND_CONFLICT_DETAIL = "The saved Note Block collection changed. Reload the current collection before retrying."
 NOTE_BLOCK_COMMAND_UNAVAILABLE_DETAIL = "The Note Block command could not be completed."
 NOTE_BLOCK_COMMAND_NOT_FOUND_DETAIL = "The requested Paper or Note Block was not found."
+PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL = "The managed PDF scan or import could not be completed."
 
 
 @router.get("/health", response_model=HealthSummaryResponse)
@@ -564,6 +570,50 @@ def tag_candidate_summary(
         return adapt_candidate_summary(summary)
     except TagContractError:
         raise ReadModelUnavailable from None
+
+
+@router.post(
+    "/papers/scan",
+    response_model=ManagedPdfScanResponse,
+    summary="Preview managed PDF scan",
+    description=(
+        "Discover PDFs already placed in the managed papers directory without creating "
+        "or changing any Paper record."
+    ),
+    responses={
+        503: {"model": APIError, "description": "The managed PDF scan could not be completed."},
+    },
+)
+def scan_managed_pdfs(
+    commands: Annotated[PdfScanImportService, Depends(get_pdf_scan_import_service)],
+) -> ManagedPdfScanResponse:
+    try:
+        return ManagedPdfScanResponse.model_validate(commands.scan())
+    except PdfScanImportUnavailable:
+        raise HTTPException(status_code=503, detail=PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/papers/import",
+    response_model=ManagedPdfImportResponse,
+    summary="Register selected managed PDFs",
+    description=(
+        "Revalidate and register only selected new PDFs from the managed papers directory. "
+        "This command does not enrich metadata or create tags."
+    ),
+    responses={
+        422: {"model": APIError, "description": "The managed PDF selection is invalid."},
+        503: {"model": APIError, "description": "The managed PDF import could not be completed."},
+    },
+)
+def import_managed_pdfs(
+    request: ManagedPdfImportRequest,
+    commands: Annotated[PdfScanImportService, Depends(get_pdf_scan_import_service)],
+) -> ManagedPdfImportResponse:
+    try:
+        return ManagedPdfImportResponse.model_validate(commands.import_selected(request.relative_paths))
+    except PdfScanImportUnavailable:
+        raise HTTPException(status_code=503, detail=PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL) from None
 
 
 @router.get(

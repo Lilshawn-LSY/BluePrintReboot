@@ -47,7 +47,8 @@ def create_app() -> FastAPI:
                 or request.url.path.startswith("/projects/")
             )
         )
-        if not (reader_command or project_command):
+        pdf_import_command = request.method == "POST" and request.url.path == "/papers/import"
+        if not (reader_command or project_command or pdf_import_command):
             return await request_validation_exception_handler(request, exception)
         return JSONResponse(
             status_code=422,

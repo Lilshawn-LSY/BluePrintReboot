@@ -131,6 +131,56 @@ def extract_doi_from_pdf(pdf_path: Path, max_pages: int = 3) -> str:
     return extract_doi_metadata_from_pdf(pdf_path, max_pages=max_pages).doi
 
 
+def scan_pdf_path(
+    pdf_path: Path,
+    papers_dir: Path = PAPERS_DIR,
+    notes_dir: Path = NOTES_DIR,
+    *,
+    hash_metadata: Mapping[str, object] | None = None,
+) -> dict[str, str]:
+    """Build the canonical initial record for one managed PDF.
+
+    Callers are responsible for validating that ``pdf_path`` is a readable PDF
+    below ``papers_dir``. Keeping record construction here ensures the normal
+    full-directory scan and bounded import commands use the same stable ID,
+    filename fallback, hash metadata, and initial metadata defaults.
+    """
+
+    papers_dir = Path(papers_dir).resolve(strict=False)
+    notes_dir = Path(notes_dir)
+    pdf_path = Path(pdf_path).resolve(strict=False)
+    paper_id = make_paper_id(pdf_path, papers_dir)
+    resolved_hash_metadata = pdf_sha256_with_metadata(pdf_path, hash_metadata)
+    scanned_at = _now_iso()
+    return {
+        "paper_id": paper_id,
+        "filename": pdf_path.name,
+        "filepath": str(pdf_path),
+        "pdf_sha256": resolved_hash_metadata["pdf_sha256"],
+        "pdf_size_bytes": resolved_hash_metadata["pdf_size_bytes"],
+        "pdf_modified_at": resolved_hash_metadata["pdf_modified_at"],
+        "title": pdf_path.stem,
+        "authors": "",
+        "year": "",
+        "journal": "",
+        "doi": "",
+        "abstract": "",
+        "keywords": "",
+        "tags": "",
+        "status": "unread",
+        "reading_priority": "normal",
+        "doi_source": "",
+        "extraction_source": "",
+        "extraction_checked_at": "",
+        "metadata_source": "",
+        "metadata_confidence": "",
+        "metadata_checked_at": "",
+        "note_path": str((notes_dir / f"{paper_id}.md").resolve()),
+        "added_at": scanned_at,
+        "updated_at": scanned_at,
+    }
+
+
 def scan_papers(
     papers_dir: Path = PAPERS_DIR,
     notes_dir: Path = NOTES_DIR,
@@ -142,41 +192,21 @@ def scan_papers(
     if not papers_dir.exists():
         return []
 
-    scanned_at = _now_iso()
     records: list[dict[str, str]] = []
-    for pdf_path in sorted(papers_dir.rglob("*.pdf"), key=lambda path: path.as_posix().lower()):
-        paper_id = make_paper_id(pdf_path, papers_dir)
-        hash_metadata = pdf_sha256_with_metadata(
-            pdf_path,
-            (hash_metadata_by_path or {}).get(pdf_hash_metadata_key(pdf_path)),
-        )
+    for pdf_path in sorted(
+        (
+            path
+            for path in papers_dir.rglob("*")
+            if path.is_file() and path.suffix.casefold() == ".pdf"
+        ),
+        key=lambda path: path.as_posix().lower(),
+    ):
         records.append(
-            {
-                "paper_id": paper_id,
-                "filename": pdf_path.name,
-                "filepath": str(pdf_path.resolve()),
-                "pdf_sha256": hash_metadata["pdf_sha256"],
-                "pdf_size_bytes": hash_metadata["pdf_size_bytes"],
-                "pdf_modified_at": hash_metadata["pdf_modified_at"],
-                "title": pdf_path.stem,
-                "authors": "",
-                "year": "",
-                "journal": "",
-                "doi": "",
-                "abstract": "",
-                "keywords": "",
-                "tags": "",
-                "status": "unread",
-                "reading_priority": "normal",
-                "doi_source": "",
-                "extraction_source": "",
-                "extraction_checked_at": "",
-                "metadata_source": "",
-                "metadata_confidence": "",
-                "metadata_checked_at": "",
-                "note_path": str((notes_dir / f"{paper_id}.md").resolve()),
-                "added_at": scanned_at,
-                "updated_at": scanned_at,
-            }
+            scan_pdf_path(
+                pdf_path,
+                papers_dir=papers_dir,
+                notes_dir=notes_dir,
+                hash_metadata=(hash_metadata_by_path or {}).get(pdf_hash_metadata_key(pdf_path)),
+            )
         )
     return records

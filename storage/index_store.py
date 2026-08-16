@@ -254,23 +254,15 @@ def save_index(df: pd.DataFrame, index_csv: Path = INDEX_CSV) -> None:
             temporary_path.unlink()
 
 
-def update_index_from_scan(
-    index_csv: Path = INDEX_CSV,
-    papers_dir: Path = PAPERS_DIR,
-    notes_dir: Path = NOTES_DIR,
-) -> pd.DataFrame:
-    df = load_index(index_csv, papers_dir=papers_dir)
+def _merge_scanned_records(df: pd.DataFrame, scanned: list[dict[str, str]]) -> pd.DataFrame:
+    """Merge canonical scanner records without changing user metadata fields."""
+
     existing_records = df.to_dict("records")
     existing_by_path = {
         pdf_hash_metadata_key(str(record.get("filepath", ""))): record
         for record in existing_records
         if str(record.get("filepath", "")).strip()
     }
-    scanned = scan_papers(
-        papers_dir=papers_dir,
-        notes_dir=notes_dir,
-        hash_metadata_by_path=existing_by_path,
-    )
     existing_by_hash: dict[str, list[dict[str, str]]] = {}
     for record in existing_records:
         digest = str(record.get("pdf_sha256", "")).strip()
@@ -324,8 +316,47 @@ def update_index_from_scan(
         else:
             df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
 
-    save_index(df, index_csv)
     return df
+
+
+def register_scanned_paper_records(
+    scanned: list[dict[str, str]],
+    *,
+    index_csv: Path = INDEX_CSV,
+    papers_dir: Path = PAPERS_DIR,
+) -> pd.DataFrame:
+    """Atomically register only explicitly selected, already-scanned PDFs.
+
+    The caller provides records built by :func:`ingest.scanner.scan_pdf_path`.
+    This preserves the established scanner merge and stable-identity semantics
+    without broadening a selected import into a full directory sync.
+    """
+
+    dataframe = load_index(index_csv, papers_dir=papers_dir)
+    merged = _merge_scanned_records(dataframe, scanned)
+    save_index(merged, index_csv)
+    return merged
+
+
+def update_index_from_scan(
+    index_csv: Path = INDEX_CSV,
+    papers_dir: Path = PAPERS_DIR,
+    notes_dir: Path = NOTES_DIR,
+) -> pd.DataFrame:
+    df = load_index(index_csv, papers_dir=papers_dir)
+    existing_by_path = {
+        pdf_hash_metadata_key(str(record.get("filepath", ""))): record
+        for record in df.to_dict("records")
+        if str(record.get("filepath", "")).strip()
+    }
+    scanned = scan_papers(
+        papers_dir=papers_dir,
+        notes_dir=notes_dir,
+        hash_metadata_by_path=existing_by_path,
+    )
+    merged = _merge_scanned_records(df, scanned)
+    save_index(merged, index_csv)
+    return merged
 
 
 def enrich_paper_doi_from_pdf(

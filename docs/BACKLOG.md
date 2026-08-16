@@ -20,12 +20,14 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.4 Project write and Paper–Project link command implementation.
 - [x] v1.5.5 Note Block write and Project-link vertical slice implementation.
 - [x] v1.5.8 Paper-scoped web metadata candidate preview and selective apply over existing enrichment providers.
+- [x] v1.5.9 bounded managed-directory web PDF scan, candidate preview, explicit selective import, and Reader/PDF follow-through without automatic enrichment or tags.
 
-## v1.5.9+ metadata-enrichment follow-up
+## v1.5.10+ ingestion and metadata follow-up
 
-- [ ] Keep automatic/background or bulk enrichment, library scans/imports, full-text extraction/OCR, automatic overwrite, tag generation/governance, citation export, backup/recovery redesign, and Reader UX redesign separately scoped from v1.5.8.
+- [ ] Keep drag/drop, watcher/background import, OCR/full-text extraction, automatic/background or bulk enrichment, automatic overwrite/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, citation export, backup/recovery redesign, folder management, and Reader UX redesign separately scoped from v1.5.9.
 - [x] Record user-provided v1.5.8 manual candidate-preview, partial-apply, conflict/retry, persistence, and Reader/Project/Tag smoke evidence in the generated release state.
-- [ ] Record v1.5.8 PR-head CI, merge, tag, GitHub Release, and post-merge main CI only after those events occur.
+- [x] Record user-provided v1.5.9 manual PDF scan/import evidence, excluding the separately outstanding browser Network path-privacy check.
+- [ ] Record the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, GitHub Release, and post-merge main CI only after those events occur.
 
 ## v1.5.5 Note Block write and Project links
 

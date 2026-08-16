@@ -8,6 +8,8 @@ import {
   isAllowedBlueprintRequest,
   isBlueprintMetadataPath,
   isBlueprintMetadataEnrichmentPreviewPath,
+  isBlueprintManagedPdfImportPath,
+  isBlueprintManagedPdfScanPath,
   isBlueprintPaperTagsPath,
   isBlueprintNoteBlockPath,
   isBlueprintNoteBlocksPath,
@@ -41,12 +43,16 @@ test("allows the bounded read routes plus the exact managed PDF, Reader, and Not
   assert.equal(isBlueprintMetadataEnrichmentPreviewPath(["papers", "paper-123", "metadata", "enrichment-preview"]), true);
   assert.equal(isBlueprintPaperTagsPath(["papers", "paper-123", "tags"]), true);
   assert.equal(isBlueprintReadingNotePath(["papers", "paper-123", "reading-note"]), true);
+  assert.equal(isBlueprintManagedPdfScanPath(["papers", "scan"]), true);
+  assert.equal(isBlueprintManagedPdfImportPath(["papers", "import"]), true);
   assert.equal(isBlueprintNoteBlocksPath(["papers", "paper-123", "note-blocks"]), true);
   assert.equal(isBlueprintNoteBlockPath(["papers", "paper-123", "note-blocks", "block-1"]), true);
 });
 
 test("allows only the exact method and path pairs for Reader commands", () => {
   assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "metadata"]), true);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "scan"]), true);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "import"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "metadata", "enrichment-preview"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "tags"]), true);
   assert.equal(isAllowedBlueprintRequest("DELETE", ["papers", "paper-1", "tags"]), true);
@@ -64,6 +70,10 @@ test("allows only the exact method and path pairs for Reader commands", () => {
     ["DELETE", ["papers", "paper-1", "reading-note"]],
     ["PATCH", ["papers", "paper-1", "reader"]],
     ["GET", ["papers", "paper-1", "metadata"]],
+    ["GET", ["papers", "scan"]],
+    ["GET", ["papers", "import"]],
+    ["PATCH", ["papers", "scan"]],
+    ["PUT", ["papers", "import"]],
     ["POST", ["settings", "summary"]],
     ["PUT", ["settings", "summary"]],
     ["PATCH", ["settings", "summary"]],

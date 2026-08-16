@@ -2,6 +2,19 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.9-pdf-scan-import-frontend
+
+- [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.9 while the immutable released baseline remains v1.4.0.
+- [x] `POST /papers/scan` is a preview-only recursive managed-directory scan. It returns safe relative candidates without creating or changing a Paper record or triggering enrichment/tags.
+- [x] `POST /papers/import` accepts only selected safe relative `.pdf` paths, revalidates them under the shared workspace lock, and uses the established atomic index merge for selected new records only.
+- [x] New, already-registered, invalid, unavailable, and disappeared-file outcomes are actionable and per-file; repeated scan/import does not create a duplicate Paper according to existing canonical path/registry handling.
+- [x] Imported Papers appear through existing Paper/read models, open through the Reader/PDF API, and retain the explicit v1.5.8 metadata-enrichment follow-up rather than automatic provider calls or tags.
+- [x] Disposable backend/frontend tests cover preview non-mutation, non-PDF rejection, registration, partial selection/failure, duplicate safety, Reader/PDF compatibility, reload, metadata follow-up, bridge method/path limits, candidate rendering, selection, and error state sources.
+- [x] User-provided v1.5.9 manual verification covers real-library scan preview non-mutation, selected and partial import, duplicate/new/invalid distinctions, filename compatibility, failure safety, collection/Reader visibility, reload/restart persistence, metadata-enrichment follow-up, and existing Reader/Project/Tag workflow compatibility.
+- [ ] Manually verify private-safe browser Network responses for the scan/import routes; this remains separate from the recorded workflow evidence.
+- [ ] v1.5.9 PR-head CI, merge to `main`, v1.5.9 tag, GitHub Release, post-merge `main` CI, and clean-PC restore remain open until separately observed.
+- [ ] Drag/drop, watcher, OCR, full-text extraction, automatic enrichment/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, migration, backup redesign, citation workflow, and free-form folder management remain excluded.
+
 ## v1.5.8-metadata-enrichment-frontend
 
 - [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.8 while the immutable released baseline remains v1.4.0.
@@ -12,7 +25,7 @@ Current evidence is generated from the canonical manifest. Inspect [Current Rele
 - [x] Disposable backend/frontend tests cover non-persistent preview, candidate comparison/provenance, partial and repeated apply, missing values, provider fallback/failure, stale revisions, reload, bridge allowlisting, and draft preservation while existing metadata writes remain compatible.
 - [x] User-provided v1.5.8 manual verification is recorded in the canonical manifest and generated Current Release Status, covering preview non-mutation, comparison/provenance, selective apply/persistence, provider safety, draft preservation, stale conflict, reload, and Reader/Project/Tag smoke behavior.
 - [ ] v1.5.8 PR-head CI, merge to `main`, v1.5.8 tag, GitHub Release, post-merge `main` CI, and clean-PC restore remain open until separately observed.
-- [ ] Automatic/background or bulk enrichment, library scans/imports, full-text extraction/OCR, automatic overwrite, tag generation/governance, citation export, backup/recovery redesign, and Reader UX redesign are deferred to v1.5.9+.
+- [ ] Automatic/background or bulk enrichment, full-text extraction/OCR, automatic overwrite, tag generation/governance, citation export, backup/recovery redesign, and Reader UX redesign remain separately scoped; v1.5.9 later delivered only bounded manual managed-directory scan/import.
 
 ## v1.5.7-paper-tag-apply-remove
 

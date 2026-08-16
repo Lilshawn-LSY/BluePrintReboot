@@ -8,15 +8,15 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.8-metadata-enrichment-frontend**.
+Current runtime target: **v1.5.9-pdf-scan-import-frontend**.
 
-v1.5.8 closes the existing Paper metadata-enrichment flow in the web Reader. A separate, non-persistent candidate preview combines supported DOI/PDF, Crossref, arXiv, and existing local fallback information. The Reader compares each stored value with a candidate and its provenance, marks unchanged, conflicting, available, and unavailable fields, and applies only explicitly selected nonblank fields through the established revision-checked metadata command. Fetches, errors, and conflicts do not change the Paper; unselected manual metadata and unsaved Reading Note/editor drafts remain intact.
+v1.5.9 closes the web PDF-ingestion workflow for files already placed in the canonical `papers/` directory. **Scan PDFs** is a preview-only operation: it discovers recursive managed-directory PDF candidates and marks new, already-registered, invalid, or unavailable files without changing `paper_index.csv`. A separate explicit import revalidates only the selected new relative paths under the workspace lock and registers them through the established atomic index path. Per-file failures are reported without creating broken Paper rows or corrupting existing records. Import does not enrich metadata or apply tags; v1.5.8 enrichment remains an explicit Reader action after import.
 
 v1.5.7 adds bounded Paper-local tag apply/remove controls to the web Reader. Explicit add/remove commands use a tag-only revision, shared locking, reload-after-lock optimistic concurrency, atomic persistence, verified rollback, and canonical Reading Note header synchronization without replacing unsaved note bodies. The Reader prefers canonical Tag Book values while retaining compatible legacy/noncanonical stored Paper tags. There is no canonical Tag CRUD, alias governance, automatic or bulk tagging, or metadata-editor tag field.
 
 v1.5.6 closes the everyday Project workspace: one Project page now keeps explicit metadata/status/priority editing, Paper links, and a bounded existing Note Block picker together. The picker reads only the selected Paper's stored blocks and reuses the canonical typed Project-link command, including duplicate truthfulness, revision conflicts, and controlled unavailable/orphan states. Project and link writes remain independent, revision-checked, lock-protected, and atomic; there is no autosave, combined save, or storage migration.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.8. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, v1.5.7 Paper tags, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.9. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, v1.5.7 Paper tags, v1.5.8 metadata enrichment, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -45,11 +45,11 @@ For a Streamlit-only machine, `.\scripts\dev_setup.ps1` still performs Python se
 
 After setup, `start_blueprint.bat` is available as a convenience launcher from File Explorer or Command Prompt. It starts the existing `.venv` app; it does not run setup automatically.
 
-Add PDFs directly to `papers/`, then select **Scan papers (local sync)** in the app. Open **Library** to choose a paper and continue in **Paper Detail** or **Reader Workspace**.
+Add PDFs directly to `papers/`, then open **Library** in the web app and choose **Scan PDFs**. Review candidates, select new PDFs, and choose **Import selected**. A scan alone never registers a Paper. Imported Papers appear in the collection and can open in Paper Detail or Reader; metadata enrichment remains an explicit follow-up action.
 
 ## Bounded Local API
 
-Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while seven Reader commands and seven Project/link commands form the exact mutation boundary. Project, Note Block, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
+Streamlit remains a complete BluePrintReboot interface. The FastAPI service is local-only: its GET routes are bounded read models, while explicit Reader, Project/link, and managed-PDF scan/import commands form the exact mutation boundary. Project, Note Block, Tag, and Settings GET routes delegate through read-model services and adapters; they never serialize arbitrary storage dictionaries or perform migration, repair, normalization write-back, backup, restore, or configuration changes.
 
 Start it from Windows PowerShell:
 
@@ -66,6 +66,8 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Paper detail: `http://127.0.0.1:8000/papers/{paper_id}`
 - Reader Snapshot: `GET http://127.0.0.1:8000/papers/{paper_id}/reader`
 - Managed PDF stream: `http://127.0.0.1:8000/papers/{paper_id}/pdf`
+- Managed PDF scan preview: `POST http://127.0.0.1:8000/papers/scan`
+- Managed PDF selective import: `POST http://127.0.0.1:8000/papers/import`
 - Metadata enrichment preview: `POST http://127.0.0.1:8000/papers/{paper_id}/metadata/enrichment-preview`
 - Metadata command: `PATCH http://127.0.0.1:8000/papers/{paper_id}/metadata`
 - Reading Note command: `PUT http://127.0.0.1:8000/papers/{paper_id}/reading-note`
@@ -91,7 +93,7 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 
 `GET /settings/summary` has no query or write surface. It returns four strict sections: Application, Workspace, Data integrity, and Backup readiness. Its lightweight reader caps file discovery, index rows, per-file JSON reads, and total JSON bytes per request; checks only file presence and app-owned metadata; and never hashes or parses PDFs, extracts text, opens snapshot archives, verifies restores, or writes cache/report/status files. Missing diagnostics use `state: "unavailable"` with `count: null`, which is distinct from a verified zero.
 
-Metadata enrichment preview is a separate explicit `POST` with no persistence side effect. It returns only allowlisted current values, nonblank candidate values, field provenance, safe diagnostics, and candidate state; unavailable provider fields never mean “clear this stored value.” Metadata requests contain `changes` plus `expected_revision`, so only the fields selected from a preview mutate. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
+Managed PDF scan and import are separate explicit `POST` commands. Scan returns only safe relative candidate paths and status; it has no registry persistence side effect. Import accepts only selected managed-relative `.pdf` paths, rechecks them under the shared workspace lock, and reports per-file imported, already-registered, missing, invalid, or unavailable outcomes. It never accepts arbitrary server filesystem paths, enriches metadata, tags a Paper, repairs moved files, or creates a broken record. Metadata enrichment preview is likewise a separate explicit `POST` with no persistence side effect. It returns only allowlisted current values, nonblank candidate values, field provenance, safe diagnostics, and candidate state; unavailable provider fields never mean “clear this stored value.” Metadata requests contain `changes` plus `expected_revision`, so only the fields selected from a preview mutate. Reading Note requests contain `content` plus `expected_sha256`. Both saves are explicit; there is no autosave or combined save endpoint. `404`, `409`, `422`, and `503` responses are controlled and do not expose local storage paths or submitted note content.
 
 Project update/archive requests use `expected_revision`; Paper-link add/remove requests use `expected_links_revision`. Both tokens are deterministic SHA-256 revisions over the complete relevant stored state. Commands acquire the shared workspace write lock, reload after lock acquisition, reject stale state without mutation, and verify persisted output. Project create/update/archive touch only Project storage; Paper-link commands touch only link storage. Archive preserves existing links and is not deletion.
 
@@ -123,7 +125,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
 
 If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
-Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags, and Settings use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. Projects provides an explicit create form. Active Project detail provides explicit edit/save/cancel/archive and a bounded picker for existing Papers; conflicts and offline failures preserve drafts or selections, duplicate links report an honest unchanged result, unlink requires confirmation, and archived Projects retain read detail without write controls. Settings remains read-only. The Reader retains its two bounded explicit saves, with the PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser.
+Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags, and Settings use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. Library provides an explicit managed-PDF scan, preview, selection, and import workflow; only safe relative paths cross the API and import failures remain per-file. Projects provides an explicit create form. Active Project detail provides explicit edit/save/cancel/archive and a bounded picker for existing Papers; conflicts and offline failures preserve drafts or selections, duplicate links report an honest unchanged result, unlink requires confirmation, and archived Projects retain read detail without write controls. Settings remains read-only. The Reader retains its two bounded explicit saves, with the PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser.
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
@@ -167,6 +169,7 @@ The main loop is:
 Current support includes:
 
 - Fast recursive PDF/index sync from the canonical `papers/` directory without default metadata enrichment, with conservative hash reuse for unchanged indexed PDFs.
+- Web Library scan/preview and selected import for PDFs already under `papers/`; scan never writes the index, repeated imports report existing registration, and per-file failures leave existing records intact.
 - Stable paper identities and a local CSV metadata index.
 - Search and filtering by metadata, status, priority, and tags.
 - Reader Workspace with PDF viewing, the canonical BluePrint Reading Note, status, priority, tags, and explicit metadata-enrichment preview/selective apply.
@@ -277,6 +280,7 @@ Foundation release documents:
 - [v1.5.6 Project Workspace Closure release-note draft](docs/release_notes/v1.5.6.md)
 - [v1.5.7 Paper Tag Apply/Remove release-note draft](docs/release_notes/v1.5.7.md)
 - [v1.5.8 Metadata Enrichment Frontend release-note draft](docs/release_notes/v1.5.8.md)
+- [v1.5.9 PDF Scan / Import Frontend release-note draft](docs/release_notes/v1.5.9.md)
 - [Manual v1.0 smoke test checklist](docs/checklists/v1.0_smoke_test.md)
 - [New-PC restore checklist](docs/checklists/new_pc_restore_checklist.md)
 - [v1.0.26 Streamlit finalization release notes](docs/release_notes/v1.0.26.md)
@@ -340,6 +344,13 @@ Do not commit, push, merge, or tag release work until review and explicit releas
 - `exports/` - snapshots and exports; ignored by Git.
 
 ## Version History
+
+### v1.5.9-pdf-scan-import-frontend
+
+- Adds an explicit Library workflow for scanning PDFs already placed in `papers/`, previewing candidate state, selecting new files, and registering selected Papers.
+- Keeps scan preview-only and path-safe; repeated scans/imports expose already-registered files instead of duplicate Paper records.
+- Revalidates selected files under the workspace lock, uses existing atomic index persistence, and reports missing, invalid, unavailable, and duplicate outcomes per file.
+- Leaves metadata enrichment and tagging explicit, subsequent Reader actions; no watcher, drag/drop, OCR, hashing redesign, moved-file repair, or broad folder management is added.
 
 ### v1.5.8-metadata-enrichment-frontend
 

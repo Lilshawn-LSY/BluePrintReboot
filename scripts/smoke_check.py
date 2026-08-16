@@ -32,6 +32,7 @@ REQUIRED_FILES = (
     "services/project_commands.py",
     "services/note_block_commands.py",
     "services/note_block_read_model.py",
+    "services/pdf_scan_import.py",
     "requirements.txt",
     "README.md",
     "docs/BLUEPRINT_PRINCIPLES.md",
@@ -72,6 +73,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.5.6.md",
     "docs/release_notes/v1.5.7.md",
     "docs/release_notes/v1.5.8.md",
+    "docs/release_notes/v1.5.9.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -298,6 +300,8 @@ def check_api_contract() -> SmokeCheckResult:
             "/health": {"get"},
             "/library/status": {"get"},
             "/papers": {"get"},
+            "/papers/scan": {"post"},
+            "/papers/import": {"post"},
             "/papers/{paper_id}": {"get"},
             "/papers/{paper_id}/reader": {"get"},
             "/papers/{paper_id}/pdf": {"get"},
@@ -325,7 +329,7 @@ def check_api_contract() -> SmokeCheckResult:
     return SmokeCheckResult(
         "api:application-contract",
         "pass",
-        f"twelve GET routes, seven Reader commands, and seven Project commands for {APP_VERSION}",
+        f"twelve GET routes, seven Reader commands, seven Project commands, and two managed-PDF commands for {APP_VERSION}",
     )
 
 
@@ -350,6 +354,8 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
         for method in (
             "getHealth",
             "getLibraryStatus",
+            "scanManagedPdfs",
+            "importManagedPdfs",
             "getPapers",
             "getPaper",
             "getProjects",

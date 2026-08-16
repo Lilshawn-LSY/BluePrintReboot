@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -471,8 +472,70 @@ class ReaderSnapshotResponse(StrictResponseModel):
     unavailable_reason: str
 
 
+class ManagedPdfScanCandidate(StrictResponseModel):
+    """One safe, managed-directory-only PDF scan result."""
+
+    relative_path: str
+    filename: str
+    status: Literal["new", "already_registered", "invalid", "unavailable"]
+    message: str
+    can_import: bool
+    size_bytes: int = Field(ge=0)
+
+
+class ManagedPdfScanResponse(StrictResponseModel):
+    status: Literal["ok", "unavailable"]
+    message: str
+    candidates: list[ManagedPdfScanCandidate]
+
+
+class ManagedPdfImportResult(StrictResponseModel):
+    relative_path: str
+    filename: str
+    status: Literal["imported", "already_registered", "missing", "invalid", "unavailable"]
+    message: str
+    can_import: bool
+    size_bytes: int = Field(ge=0)
+    paper_id: str = ""
+
+
+class ManagedPdfImportResponse(StrictResponseModel):
+    message: str
+    imported_count: int = Field(ge=0)
+    results: list[ManagedPdfImportResult]
+
+
 class StrictRequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class ManagedPdfImportRequest(StrictRequestModel):
+    relative_paths: list[str] = Field(min_length=1, max_length=100)
+
+    @field_validator("relative_paths")
+    @classmethod
+    def validate_relative_paths(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("PDF selections must be relative path strings.")
+            path = item.strip().replace("\\", "/")
+            posix_path = PurePosixPath(path)
+            windows_path = PureWindowsPath(path)
+            if (
+                not path
+                or posix_path.is_absolute()
+                or windows_path.is_absolute()
+                or windows_path.drive
+                or windows_path.root
+                or any(part in {"", ".", ".."} for part in posix_path.parts)
+                or posix_path.suffix.casefold() != ".pdf"
+            ):
+                raise ValueError("PDF selections must be safe managed-relative PDF paths.")
+            canonical = posix_path.as_posix()
+            if canonical not in normalized:
+                normalized.append(canonical)
+        return normalized
 
 
 class ProjectTagsMixin:

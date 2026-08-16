@@ -199,6 +199,41 @@ export interface ReadingNoteCommandResponse {
   size_bytes: number;
 }
 
+export type ManagedPdfScanStatus = "new" | "already_registered" | "invalid" | "unavailable";
+
+export interface ManagedPdfScanCandidate {
+  relative_path: string;
+  filename: string;
+  status: ManagedPdfScanStatus;
+  message: string;
+  can_import: boolean;
+  size_bytes: number;
+}
+
+export interface ManagedPdfScanResponse {
+  status: "ok" | "unavailable";
+  message: string;
+  candidates: ManagedPdfScanCandidate[];
+}
+
+export type ManagedPdfImportStatus = "imported" | "already_registered" | "missing" | "invalid" | "unavailable";
+
+export interface ManagedPdfImportResult {
+  relative_path: string;
+  filename: string;
+  status: ManagedPdfImportStatus;
+  message: string;
+  can_import: boolean;
+  size_bytes: number;
+  paper_id: string;
+}
+
+export interface ManagedPdfImportResponse {
+  message: string;
+  imported_count: number;
+  results: ManagedPdfImportResult[];
+}
+
 export interface PaginatedPaperList {
   items: PaperListItem[];
   total: number;
