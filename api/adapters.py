@@ -1149,6 +1149,11 @@ def adapt_reader_snapshot(source: Mapping[str, Any]) -> ReaderSnapshotResponse:
         character not in "0123456789abcdef" for character in metadata_revision
     ):
         raise PaperContractError("Reader metadata_revision must be a lowercase SHA-256 value.")
+    tags_revision = _strict_string(source.get("tags_revision"), "tags_revision")
+    if len(tags_revision) != 64 or any(
+        character not in "0123456789abcdef" for character in tags_revision
+    ):
+        raise PaperContractError("Reader tags_revision must be a lowercase SHA-256 value.")
 
     note_exists = baseline_source.get("exists")
     if not isinstance(note_exists, bool):
@@ -1170,6 +1175,7 @@ def adapt_reader_snapshot(source: Mapping[str, Any]) -> ReaderSnapshotResponse:
         paper=paper,
         editable_metadata=editable_metadata,
         metadata_revision=metadata_revision,
+        tags_revision=tags_revision,
         pdf_state=pdf_state,
         saved_note_available=saved_note_available,
         saved_note_content=saved_note_content,

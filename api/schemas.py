@@ -461,6 +461,7 @@ class ReaderSnapshotResponse(StrictResponseModel):
     paper: PaperDetail
     editable_metadata: EditablePaperMetadata
     metadata_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    tags_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
     pdf_state: ReaderPdfState
     saved_note_available: bool
     saved_note_content: str
@@ -739,6 +740,29 @@ class MetadataCommandResponse(StrictResponseModel):
         Literal["title", "authors", "year", "journal", "doi", "abstract", "keywords"]
     ]
     note_header_status: Literal["updated", "unchanged", "not_present", "not_required"]
+    canonical_note_header: ReaderNoteHeader
+    canonical_note_header_text: str
+    reading_note: PersistedReadingNote
+
+
+class PaperTagCommandRequest(StrictRequestModel):
+    tag: str = Field(min_length=1, max_length=100)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("tag")
+    @classmethod
+    def validate_tag(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Paper tag must not be empty.")
+        return normalized
+
+
+class PaperTagCommandResponse(StrictResponseModel):
+    status: Literal["saved", "no_op"]
+    tags: list[str]
+    tags_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    note_header_status: Literal["updated", "unchanged", "not_present"]
     canonical_note_header: ReaderNoteHeader
     canonical_note_header_text: str
     reading_note: PersistedReadingNote

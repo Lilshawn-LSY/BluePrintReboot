@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, MutableMapping
 
 from ingest.doi import normalize_doi
-from ingest.tag_suggester import merge_tags
+from ingest.tag_suggester import merge_tags, normalize_tag
 from services.reader_state_keys import (
     note_baseline_key,
     note_draft_key,
@@ -91,6 +91,45 @@ def paper_metadata_revision(record: dict[str, object]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def paper_tag_values(record: dict[str, object]) -> list[str]:
+    """Return Paper tags in their current display order without rewriting them.
+
+    Existing Paper records predate canonical Tag Book governance.  Commands therefore
+    retain legacy stored values and use the shared tag normalizer only for identity
+    comparison and for a newly added value.
+    """
+
+    return [item.strip() for item in _paper_tag_storage_values(record)]
+
+
+def _paper_tag_storage_values(record: dict[str, object]) -> list[str]:
+    """Return non-empty stored tag fragments in their established display form."""
+
+    return [
+        item.strip()
+        for item in str(record.get("tags", "") or "").replace(";", ",").split(",")
+        if item.strip()
+    ]
+
+
+def normalized_paper_tag(value: object) -> str:
+    """Normalize one explicit Paper-tag command value with repository semantics."""
+
+    return normalize_tag(str(value or ""))
+
+
+def paper_tags_revision(record: dict[str, object]) -> str:
+    """Hash the path-free persisted Paper tag sequence for tag-only concurrency."""
+
+    payload = json.dumps(
+        {"tags": _paper_tag_storage_values(record)},
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _record(dataframe, paper_id: str) -> dict[str, str] | None:
     matches = dataframe[dataframe["paper_id"] == paper_id]
     if matches.empty:
@@ -106,6 +145,7 @@ def _apply_paper_metadata_change_unlocked(
     index_csv: Path = INDEX_CSV,
     notes_dir: Path = NOTES_DIR,
     create_missing_note: bool = True,
+    preserve_tag_values: bool = False,
 ) -> MetadataMutationResult:
     dataframe = load_index(index_csv)
     current = _record(dataframe, paper_id)
@@ -113,7 +153,11 @@ def _apply_paper_metadata_change_unlocked(
         return MetadataMutationResult(paper_id=paper_id, status="missing_paper", paper_found=False, index_updated=False)
 
     normalized = {
-        field_name: normalize_paper_metadata_value(field_name, value)
+        field_name: (
+            ", ".join(_paper_tag_storage_values({"tags": value}))
+            if field_name == "tags" and preserve_tag_values
+            else normalize_paper_metadata_value(field_name, value)
+        )
         for field_name, value in changes.items()
         if field_name in MUTABLE_METADATA_FIELDS
     }
@@ -252,6 +296,96 @@ def apply_paper_metadata_change(
         return _apply_paper_metadata_change_unlocked(
             paper_id,
             changes,
+            session_state=session_state,
+            index_csv=index_csv,
+            notes_dir=notes_dir,
+            create_missing_note=create_missing_note,
+        )
+
+
+def _apply_paper_tag_change_unlocked(
+    paper_id: str,
+    tag: object,
+    *,
+    operation: str,
+    session_state: MutableMapping[str, object] | None = None,
+    index_csv: Path = INDEX_CSV,
+    notes_dir: Path = NOTES_DIR,
+    create_missing_note: bool = True,
+) -> MetadataMutationResult:
+    """Apply one tag addition or removal through the canonical index mutation path."""
+
+    normalized_tag = normalized_paper_tag(tag)
+    if not normalized_tag:
+        raise ValueError("Paper tag must not be empty.")
+    if operation not in {"add", "remove"}:
+        raise ValueError("Unsupported Paper tag operation.")
+
+    dataframe = load_index(index_csv)
+    current = _record(dataframe, paper_id)
+    if current is None:
+        return MetadataMutationResult(
+            paper_id=paper_id,
+            status="missing_paper",
+            paper_found=False,
+            index_updated=False,
+        )
+
+    existing = _paper_tag_storage_values(current)
+    if operation == "add":
+        updated_values = (
+            existing
+            if any(normalized_paper_tag(item) == normalized_tag for item in existing)
+            else [*existing, normalized_tag]
+        )
+    else:
+        updated_values = [
+            item for item in existing if normalized_paper_tag(item) != normalized_tag
+        ]
+
+    if updated_values == existing:
+        return MetadataMutationResult(
+            paper_id=paper_id,
+            status="no_op",
+            paper_found=True,
+            index_updated=False,
+            updated_record=current,
+        )
+
+    return _apply_paper_metadata_change_unlocked(
+        paper_id,
+        {"tags": ", ".join(updated_values)},
+        session_state=session_state,
+        index_csv=index_csv,
+        notes_dir=notes_dir,
+        create_missing_note=create_missing_note,
+        preserve_tag_values=True,
+    )
+
+
+def apply_paper_tag_change(
+    paper_id: str,
+    tag: object,
+    *,
+    operation: str,
+    session_state: MutableMapping[str, object] | None = None,
+    index_csv: Path = INDEX_CSV,
+    notes_dir: Path = NOTES_DIR,
+    create_missing_note: bool = True,
+) -> MetadataMutationResult:
+    """Apply one Paper-tag mutation under the shared workspace write lock."""
+
+    index_path = Path(index_csv).resolve(strict=False)
+    workspace_root = (
+        index_path.parent.parent
+        if index_path.parent.name.casefold() == "data"
+        else index_path.parent
+    )
+    with workspace_write_lock(workspace_root):
+        return _apply_paper_tag_change_unlocked(
+            paper_id,
+            tag,
+            operation=operation,
             session_state=session_state,
             index_csv=index_csv,
             notes_dir=notes_dir,

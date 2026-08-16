@@ -11,7 +11,7 @@ from api import dependencies
 from api.adapters import PaperContractError, adapt_reader_snapshot
 from api.main import UNAVAILABLE_DETAIL, create_app
 from api.schemas import ReaderSnapshotResponse
-from services.paper_metadata_mutation import paper_metadata_revision
+from services.paper_metadata_mutation import paper_metadata_revision, paper_tags_revision
 
 
 def reader_snapshot(
@@ -61,6 +61,7 @@ def reader_snapshot(
         },
         "editable_metadata": editable_metadata,
         "metadata_revision": paper_metadata_revision(editable_metadata),
+        "tags_revision": paper_tags_revision({"tags": "reader"}),
         "pdf_state": "missing" if missing_pdf else "available",
         "saved_note_available": bool(note),
         "saved_note_content": note,

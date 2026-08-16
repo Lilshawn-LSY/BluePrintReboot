@@ -13,6 +13,7 @@ import { ApiClientError, apiClient } from "../lib/api/client";
 import type { EditablePaperMetadata, ReaderSnapshot } from "../lib/api/types";
 import {
   applyMetadataCommandResult,
+  applyPaperTagCommandResult,
   changedMetadataFields,
   createReaderEditorState,
   refreshDirtyDraftHeader,
@@ -64,6 +65,10 @@ function errorState(error: unknown): { status: EditorStatus; message: string } {
 
 function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const [editor, setEditor] = useState(() => createReaderEditorState(snapshot));
+  const tagBook = useApiResource(
+    "reader-canonical-tag-book",
+    () => apiClient.getTags({ limit: 100 }),
+  );
   const metadataChanged = useMemo(
     () => changedMetadataFields(editor.metadata.draft, editor.metadata.baseline),
     [editor.metadata.draft, editor.metadata.baseline],
@@ -73,7 +78,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     editor.metadata.baseline,
     editor.note.draft,
     editor.note.baseline,
-  );
+  ) || Boolean(editor.tags.draft.trim());
 
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -159,6 +164,40 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     }
   };
 
+  const changePaperTag = async (operation: "add" | "remove", tag: string) => {
+    const selectedTag = tag.trim();
+    if (!selectedTag || editor.tags.status === "saving") return;
+    setEditor((current) => ({
+      ...current,
+      tags: {
+        ...current.tags,
+        status: "saving",
+        message: operation === "add" ? "Adding Paper tag…" : "Removing Paper tag…",
+      },
+    }));
+    try {
+      const response = operation === "add"
+        ? await apiClient.addPaperTag(snapshot.paper.paper_id, selectedTag, editor.tags.revision)
+        : await apiClient.removePaperTag(snapshot.paper.paper_id, selectedTag, editor.tags.revision);
+      setEditor((current) => {
+        const updated = applyPaperTagCommandResult(current, response);
+        return {
+          ...updated,
+          tags: {
+            ...updated.tags,
+            draft: operation === "add" ? "" : current.tags.draft,
+          },
+        };
+      });
+    } catch (error) {
+      const failure = errorState(error);
+      setEditor((current) => ({
+        ...current,
+        tags: { ...current.tags, ...failure },
+      }));
+    }
+  };
+
   const reloadMetadata = async () => {
     if (metadataChanged.length && !window.confirm("Replace this metadata draft with the current saved version?")) return;
     try {
@@ -221,6 +260,44 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       setEditor((current) => ({
         ...current,
         note: { ...current.note, status: "error", message: "Current Reading Note could not be loaded. Your draft remains unchanged." },
+      }));
+    }
+  };
+
+  const reloadPaperTags = async () => {
+    try {
+      const current = await apiClient.getReaderSnapshot(snapshot.paper.paper_id);
+      setEditor((state) => {
+        const noteDirty = state.note.draft !== state.note.baseline;
+        const refreshed = noteDirty && current.saved_note_content
+          ? refreshDirtyDraftHeader(state.note.draft, current.saved_note_content)
+          : { content: state.note.draft, changed: false };
+        return {
+          ...state,
+          tags: {
+            ...state.tags,
+            values: [...current.paper.tags],
+            revision: current.tags_revision,
+            status: "clean",
+            message: "Current Paper tags loaded. Your selected tag is still here.",
+          },
+          note: current.saved_note_available ? {
+            ...state.note,
+            draft: refreshed.content,
+            baseline: current.saved_note_content,
+            sha256: current.saved_note_baseline.sha256,
+            exists: current.saved_note_baseline.exists,
+            status: refreshed.content === current.saved_note_content ? "clean" : "dirty",
+            message: refreshed.changed
+              ? "The current canonical header was applied; the unsaved note body was retained."
+              : state.note.message,
+          } : state.note,
+        };
+      });
+    } catch {
+      setEditor((current) => ({
+        ...current,
+        tags: { ...current.tags, status: "error", message: "Current Paper tags could not be loaded. Your selected tag remains unchanged." },
       }));
     }
   };
@@ -314,6 +391,68 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               {editor.metadata.status === "conflict" ? (
                 <button className="reader-control reader-control--secondary" type="button" onClick={reloadMetadata}>
                   <RotateCcw size={15} />Reload current metadata
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="reader-editor" aria-labelledby="paper-tags-editor-title">
+            <div className="reader-note__heading">
+              <div>
+                <p className="eyebrow">Independent tag command</p>
+                <h2 id="paper-tags-editor-title">Paper tags</h2>
+              </div>
+              <StatusBadge tone={editor.tags.status === "conflict" || editor.tags.status === "error" ? "danger" : editor.tags.status === "saved" ? "accent" : "neutral"}>
+                {statusLabel(editor.tags.status)}
+              </StatusBadge>
+            </div>
+            <div className="tag-list" aria-label="Current Paper tags">
+              {editor.tags.values.length ? editor.tags.values.map((tag) => (
+                <button
+                  className="reader-control reader-control--secondary"
+                  type="button"
+                  key={tag}
+                  disabled={editor.tags.status === "saving"}
+                  onClick={() => changePaperTag("remove", tag)}
+                  aria-label={`Remove ${tag}`}
+                >
+                  Remove {tag}
+                </button>
+              )) : <span className="muted-text">No Paper tags are stored.</span>}
+            </div>
+            <label className="reader-field">
+              <span>Add one tag</span>
+              <input
+                type="text"
+                list="reader-canonical-tag-options"
+                value={editor.tags.draft}
+                disabled={editor.tags.status === "saving"}
+                onChange={(event) => setEditor((current) => ({
+                  ...current,
+                  tags: {
+                    ...current.tags,
+                    draft: event.target.value,
+                    status: event.target.value.trim() ? "dirty" : "clean",
+                    message: "",
+                  },
+                }))}
+              />
+              <datalist id="reader-canonical-tag-options">
+                {tagBook.status === "success" ? tagBook.data.items.map((tag) => (
+                  <option key={tag.canonical_key} value={tag.canonical_key}>{tag.label}</option>
+                )) : null}
+              </datalist>
+            </label>
+            <p className="reader-editor__status" role="status" aria-live="polite">
+              {editor.tags.message || (tagBook.status === "success" ? "Choose a canonical Tag Book value or enter one explicit compatible tag." : "Enter one explicit tag. Canonical Tag Book choices load when available.")}
+            </p>
+            <div className="reader-editor__actions">
+              <button className="reader-control" type="button" disabled={!editor.tags.draft.trim() || editor.tags.status === "saving"} onClick={() => changePaperTag("add", editor.tags.draft)}>
+                <Save size={15} />{editor.tags.status === "saving" ? "Saving…" : "Add Tag"}
+              </button>
+              {editor.tags.status === "conflict" ? (
+                <button className="reader-control reader-control--secondary" type="button" onClick={reloadPaperTags}>
+                  <RotateCcw size={15} />Reload current tags
                 </button>
               ) : null}
             </div>

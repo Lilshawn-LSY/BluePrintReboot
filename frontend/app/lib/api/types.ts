@@ -90,6 +90,7 @@ export interface ReaderSnapshot {
   paper: PaperDetail;
   editable_metadata: EditablePaperMetadata;
   metadata_revision: string;
+  tags_revision: string;
   pdf_state: ReaderPdfState;
   saved_note_available: boolean;
   saved_note_content: string;
@@ -157,6 +158,16 @@ export interface MetadataCommandResponse {
   metadata_revision: string;
   changed_fields: Array<keyof EditablePaperMetadata>;
   note_header_status: "updated" | "unchanged" | "not_present" | "not_required";
+  canonical_note_header: ReaderNoteHeader;
+  canonical_note_header_text: string;
+  reading_note: PersistedReadingNote;
+}
+
+export interface PaperTagCommandResponse {
+  status: "saved" | "no_op";
+  tags: string[];
+  tags_revision: string;
+  note_header_status: "updated" | "unchanged" | "not_present";
   canonical_note_header: ReaderNoteHeader;
   canonical_note_header_text: string;
   reading_note: PersistedReadingNote;

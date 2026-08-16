@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyMetadataCommandResult,
+  applyPaperTagCommandResult,
   changedMetadataFields,
   createReaderEditorState,
   deriveEditorStatus,
@@ -20,13 +21,14 @@ const metadata = {
   keywords: "one, two",
 };
 
-function snapshot(paperId = "paper-a") {
+function snapshot(paperId = "paper-a", tags = ["reader"]) {
   const content = [
     "# BluePrint Reading Note",
     "",
     "template_version: 1.0",
     `paper_id: ${paperId}`,
     `title: ${metadata.title}`,
+    "tags: reader",
     "",
     "## Raw Notes",
     "",
@@ -34,9 +36,10 @@ function snapshot(paperId = "paper-a") {
     "",
   ].join("\n");
   return {
-    paper: { paper_id: paperId },
+    paper: { paper_id: paperId, tags },
     editable_metadata: { ...metadata },
     metadata_revision: "a".repeat(64),
+    tags_revision: "e".repeat(64),
     saved_note_content: content,
     saved_note_baseline: { exists: true, sha256: "b".repeat(64), size_bytes: content.length },
   };
@@ -139,6 +142,70 @@ test("metadata success refreshes a canonical dirty draft even when no note exist
   assert.match(updated.note.draft, /Unsaved absent-note body/);
   assert.equal(updated.note.baseline, "");
   assert.equal(updated.note.status, "dirty");
+});
+
+test("Paper tag success refreshes the canonical header without erasing a dirty note body", () => {
+  const state = createReaderEditorState(snapshot());
+  state.note.draft = state.note.draft.replace("Saved body for paper-a", "Private tag-note body");
+  state.tags.draft = "new tag";
+  const persisted = state.note.baseline.replace("tags:", "tags: reader, new-tag");
+  const response = {
+    status: "saved",
+    tags: ["reader", "new-tag"],
+    tags_revision: "f".repeat(64),
+    note_header_status: "updated",
+    canonical_note_header: {},
+    canonical_note_header_text: persisted.slice(0, persisted.indexOf("## ")),
+    reading_note: {
+      exists: true,
+      content: persisted,
+      sha256: "1".repeat(64),
+      size_bytes: persisted.length,
+    },
+  };
+
+  const updated = applyPaperTagCommandResult(state, response);
+
+  assert.deepEqual(updated.tags.values, ["reader", "new-tag"]);
+  assert.equal(updated.tags.revision, "f".repeat(64));
+  assert.equal(updated.tags.status, "saved");
+  assert.match(updated.note.draft, /tags: reader, new-tag/);
+  assert.match(updated.note.draft, /Private tag-note body/);
+  assert.doesNotMatch(updated.note.baseline, /Private tag-note body/);
+});
+
+test("Paper tag no-op reports truthfully and keeps the canonical stored tag set", () => {
+  const state = createReaderEditorState(snapshot());
+  const response = {
+    status: "no_op",
+    tags: ["reader"],
+    tags_revision: "2".repeat(64),
+    note_header_status: "unchanged",
+    canonical_note_header: {},
+    canonical_note_header_text: "",
+    reading_note: {
+      exists: true,
+      content: state.note.baseline,
+      sha256: "3".repeat(64),
+      size_bytes: state.note.baseline.length,
+    },
+  };
+
+  const updated = applyPaperTagCommandResult(state, response);
+
+  assert.equal(updated.tags.status, "saved");
+  assert.equal(updated.tags.message, "Paper tags already matched the saved version.");
+  assert.deepEqual(updated.tags.values, ["reader"]);
+});
+
+test("Reader reload initializes Paper tags from the persisted snapshot", () => {
+  const reloaded = snapshot("paper-a", ["legacy tag", "persisted-tag"]);
+  reloaded.tags_revision = "4".repeat(64);
+
+  const state = createReaderEditorState(reloaded);
+
+  assert.deepEqual(state.tags.values, ["legacy tag", "persisted-tag"]);
+  assert.equal(state.tags.revision, "4".repeat(64));
 });
 
 test("paper transition state is isolated and dirty replacement requires a warning", () => {

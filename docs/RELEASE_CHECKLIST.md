@@ -2,6 +2,17 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.5.7-paper-tag-apply-remove
+
+- [x] Runtime, package/lockfile, README, local release manifest, release-note draft, and generated status identify v1.5.7 while the immutable released baseline remains v1.4.0.
+- [x] Paper tag add/remove commands use stable Paper identity, a tag-only revision, shared workspace locking, reload-after-lock checks, atomic index persistence, verification, and rollback.
+- [x] Existing normalization applies only to the intended added/removal tag identity; legacy/noncanonical unrelated stored tags remain intact.
+- [x] Successful mutations refresh the canonical Reading Note header while keeping its body exact and retaining unsaved Reader note drafts.
+- [x] The Reader shows current tags, explicit add/remove controls, saving/no-op/conflict/error states, retry/reload behavior, and canonical Tag Book choices when available.
+- [x] Disposable backend/frontend regressions cover persistence, duplicate/absent no-ops, stale revisions, read parity, draft preservation, rollback, API privacy, bridge allowlisting, and existing Reader/Library/Project/Tag/PDF behavior.
+- [ ] User-performed browser and real-data validation, hosted CI, merge to `main`, v1.5.7 tag, GitHub Release, and post-merge `main` CI remain open until separately observed.
+- [ ] Canonical Tag CRUD, alias governance, automatic/bulk tagging, drag and drop, metadata-editor tag fields, and design-system work remain excluded.
+
 ## v1.5.6-project-workspace-closure
 
 - [x] Project Detail keeps explicit metadata/status/priority editing, Paper-link management, and existing Note Block-link management together without a second storage path.

@@ -1,6 +1,6 @@
 # BluePrintReboot frontend
 
-The v1.5.6 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. Project Detail is an explicit workspace for metadata/status/priority, Paper links, and typed Note Block links: it reads a selected Paper's stored Note Blocks and reuses the canonical link command without creating or editing blocks. Reader Metadata, Reading Note, Note Block, Project, and link command states remain independent. There is no autosave, combined save, Note Block delete/reorder, Project delete/unarchive, Tag write, or Settings write.
+The v1.5.7 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. Project Detail remains an explicit workspace for metadata/status/priority, Paper links, and typed existing Note Block links. The Reader includes independent Paper metadata, Paper tag, Reading Note, and Note Block workflows. Paper tags use explicit add/remove actions, a tag-only revision, canonical Tag Book suggestions when available, conflict reload, and Reading Note draft-preserving header refresh. There is no autosave, combined save, canonical Tag CRUD, alias governance, bulk tagging, Note Block delete/reorder, Project delete/unarchive, or Settings write.
 
 ## Local development
 

@@ -10,9 +10,13 @@ from typing import Literal
 from services.paper_metadata_mutation import (
     CANONICAL_NOTE_HEADER_FIELDS,
     WEB_EDITABLE_METADATA_FIELDS,
+    apply_paper_tag_change,
     apply_paper_metadata_change,
     normalized_web_metadata,
+    normalized_paper_tag,
     paper_metadata_revision,
+    paper_tag_values,
+    paper_tags_revision,
 )
 from services.reading_note_template import (
     reading_note_header_values,
@@ -60,6 +64,17 @@ class MetadataCommandResult:
     metadata_revision: str
     changed_fields: tuple[str, ...]
     note_header_status: Literal["updated", "unchanged", "not_present", "not_required"]
+    canonical_note_header: dict[str, str]
+    canonical_note_header_text: str
+    reading_note: PersistedNote
+
+
+@dataclass(frozen=True)
+class PaperTagCommandResult:
+    status: Literal["saved", "no_op"]
+    tags: tuple[str, ...]
+    tags_revision: str
+    note_header_status: Literal["updated", "unchanged", "not_present"]
     canonical_note_header: dict[str, str]
     canonical_note_header_text: str
     reading_note: PersistedNote
@@ -201,7 +216,7 @@ def _canonical_note_header_text(record: dict[str, str]) -> str:
 
 
 class ReaderCommandService:
-    """Transaction boundary for the two bounded Reader write commands."""
+    """Transaction boundary for bounded Reader metadata, tag, and note writes."""
 
     def __init__(self, *, index_csv: Path = INDEX_CSV, notes_dir: Path = NOTES_DIR) -> None:
         self.index_csv = Path(index_csv)
@@ -301,6 +316,141 @@ class ReaderCommandService:
                 metadata=updated_metadata,
                 metadata_revision=paper_metadata_revision(updated),
                 changed_fields=changed_fields,
+                note_header_status=note_header_status,
+                canonical_note_header=reading_note_header_values(updated),
+                canonical_note_header_text=_canonical_note_header_text(updated),
+                reading_note=persisted_note,
+            )
+
+    def add_paper_tag(
+        self,
+        paper_id: str,
+        tag: str,
+        expected_revision: str,
+    ) -> PaperTagCommandResult:
+        return self._change_paper_tag(
+            paper_id,
+            tag,
+            expected_revision,
+            operation="add",
+        )
+
+    def remove_paper_tag(
+        self,
+        paper_id: str,
+        tag: str,
+        expected_revision: str,
+    ) -> PaperTagCommandResult:
+        return self._change_paper_tag(
+            paper_id,
+            tag,
+            expected_revision,
+            operation="remove",
+        )
+
+    def _change_paper_tag(
+        self,
+        paper_id: str,
+        tag: str,
+        expected_revision: str,
+        *,
+        operation: Literal["add", "remove"],
+    ) -> PaperTagCommandResult:
+        with _persistent_command_lock(self.index_csv):
+            try:
+                current = _record_for(paper_id, self.index_csv)
+            except Exception:
+                raise ReaderCommandUnavailable from None
+            if current is None:
+                raise ReaderCommandNotFound
+            if paper_tags_revision(current) != expected_revision:
+                raise ReaderCommandConflict
+
+            normalized_tag = normalized_paper_tag(tag)
+            if not normalized_tag:
+                raise ValueError("Paper tag must not be empty.")
+            current_tags = tuple(paper_tag_values(current))
+            if operation == "add":
+                expected_tags = (
+                    current_tags
+                    if any(normalized_paper_tag(item) == normalized_tag for item in current_tags)
+                    else (*current_tags, normalized_tag)
+                )
+            else:
+                expected_tags = tuple(
+                    item
+                    for item in current_tags
+                    if normalized_paper_tag(item) != normalized_tag
+                )
+
+            note_path = _safe_note_path(current, self.notes_dir)
+            try:
+                index_before = _snapshot_text(self.index_csv)
+                note_before = _snapshot_text(note_path)
+            except Exception:
+                raise ReaderCommandUnavailable from None
+            try:
+                mutation = apply_paper_tag_change(
+                    paper_id,
+                    tag,
+                    operation=operation,
+                    index_csv=self.index_csv,
+                    notes_dir=self.notes_dir,
+                    create_missing_note=False,
+                )
+            except ValueError:
+                raise
+            except Exception:
+                try:
+                    _restore_transaction(self.index_csv, index_before, note_path, note_before)
+                except ReaderCommandUnavailable:
+                    pass
+                raise ReaderCommandUnavailable from None
+
+            if not mutation.ok:
+                try:
+                    _restore_transaction(self.index_csv, index_before, note_path, note_before)
+                except ReaderCommandUnavailable:
+                    raise ReaderCommandUnavailable from None
+                raise ReaderCommandUnavailable
+
+            try:
+                updated = _record_for(paper_id, self.index_csv)
+                if updated is None:
+                    raise ReaderCommandUnavailable
+                persisted_tags = tuple(paper_tag_values(updated))
+                if persisted_tags != expected_tags:
+                    raise ReaderCommandUnavailable
+                persisted_note = _persisted_note(note_path)
+                changed = current_tags != persisted_tags
+                if changed and note_before.exists:
+                    canonical_note = _canonicalize_complete_note(
+                        persisted_note.content,
+                        updated,
+                    )
+                    if canonical_note != persisted_note.content:
+                        save_note_text(updated, canonical_note, self.notes_dir)
+                        persisted_note = _persisted_note(note_path)
+            except Exception:
+                try:
+                    _restore_transaction(self.index_csv, index_before, note_path, note_before)
+                except ReaderCommandUnavailable:
+                    pass
+                raise ReaderCommandUnavailable from None
+
+            if not changed or not note_before.exists:
+                note_header_status: Literal["updated", "unchanged", "not_present"] = (
+                    "not_present" if not note_before.exists else "unchanged"
+                )
+            elif persisted_note.content != note_before.content:
+                note_header_status = "updated"
+            else:
+                note_header_status = "unchanged"
+
+            return PaperTagCommandResult(
+                status="saved" if changed else "no_op",
+                tags=persisted_tags,
+                tags_revision=paper_tags_revision(updated),
                 note_header_status=note_header_status,
                 canonical_note_header=reading_note_header_values(updated),
                 canonical_note_header_text=_canonical_note_header_text(updated),

@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any, Mapping, TypedDict
 
 from services.library_health import run_library_health_check
-from services.paper_metadata_mutation import normalized_web_metadata, paper_metadata_revision
+from services.paper_metadata_mutation import (
+    normalized_web_metadata,
+    paper_metadata_revision,
+    paper_tags_revision,
+)
 from services.reading_note_template import reading_note_header_values
 from storage.extracted_text_store import extracted_text_path
 from storage.index_store import read_index_snapshot
@@ -79,6 +83,7 @@ class ReaderSnapshot(TypedDict):
     paper: PaperDetail
     editable_metadata: dict[str, str]
     metadata_revision: str
+    tags_revision: str
     pdf_state: str
     saved_note_available: bool
     saved_note_content: str
@@ -328,6 +333,7 @@ def build_reader_snapshot(
         "paper": detail,
         "editable_metadata": normalized_web_metadata(record),
         "metadata_revision": paper_metadata_revision(record),
+        "tags_revision": paper_tags_revision(record),
         "pdf_state": "missing" if detail["missing_pdf"] else "available",
         "saved_note_available": note_exists and not bool(note_read_warning),
         "saved_note_content": saved_note,
