@@ -260,26 +260,37 @@ def test_metadata_enrichment_manual_checks_are_complete_and_derived() -> None:
         validate_manifest(fabricated)
 
 
-def test_pdf_scan_import_manual_checks_record_user_runtime_evidence_without_claiming_network_privacy() -> None:
+def test_pdf_scan_import_manual_checks_record_user_runtime_and_network_privacy_evidence() -> None:
     manifest = read_manifest()
     runtime = manifest["manual_validation"]["pdf_scan_import_runtime"]
 
-    assert runtime["status"] == "PARTIALLY VERIFIED"
+    assert runtime["status"] == "VERIFIED"
     assert len(runtime["checks"]) == 8
-    assert {
-        check_id
-        for check_id, item in runtime["checks"].items()
-        if item["status"] == "NOT VERIFIED"
-    } == {"network_path_privacy"}
-    assert {
-        item["status"]
-        for check_id, item in runtime["checks"].items()
-        if check_id != "network_path_privacy"
-    } == {"VERIFIED"}
+    assert {item["status"] for item in runtime["checks"].values()} == {"VERIFIED"}
+    assert runtime["checks"]["network_path_privacy"]["evidence"]["reference"] == (
+        "user-provided v1.5.11 manual browser/runtime validation"
+    )
     validate_manifest(manifest)
 
     fabricated = copy.deepcopy(manifest)
     fabricated["manual_validation"]["pdf_scan_import_runtime"]["status"] = "NOT VERIFIED"
+    with pytest.raises(ReleaseStateError, match="aggregate status must derive"):
+        validate_manifest(fabricated)
+
+
+def test_library_paper_workflow_manual_checks_are_complete_and_derived() -> None:
+    manifest = read_manifest()
+    runtime = manifest["manual_validation"]["library_paper_workflow_runtime"]
+
+    assert runtime["status"] == "VERIFIED"
+    assert len(runtime["checks"]) == 13
+    assert {item["status"] for item in runtime["checks"].values()} == {"VERIFIED"}
+    assert {item["evidence"]["date"] for item in runtime["checks"].values()} == {"2026-08-16"}
+    assert "paper_id" in runtime["checks"]["reconnect_preserves_paper_state"]["evidence"]["summary"]
+    validate_manifest(manifest)
+
+    fabricated = copy.deepcopy(manifest)
+    fabricated["manual_validation"]["library_paper_workflow_runtime"]["status"] = "PARTIALLY VERIFIED"
     with pytest.raises(ReleaseStateError, match="aggregate status must derive"):
         validate_manifest(fabricated)
 

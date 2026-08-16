@@ -14,7 +14,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
   const resource = useApiResource(`paper:${paperId}`, () => apiClient.getPaper(paperId));
   return (
     <div className="page-stack">
-      <Link className="back-link" href="/papers"><ArrowLeft size={15} />Back to papers</Link>
+      <Link className="back-link" href="/library"><ArrowLeft size={15} />Back to Library</Link>
       {resource.status === "loading" ? <LoadingState label="Loading paper detail" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} /> : null}
       {resource.status === "not-found" ? <EmptyState title="Paper not found" description="The requested paper identity is not present in the local read model." /> : null}
@@ -40,7 +40,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
                 <div><dt>Profile</dt><dd>{resource.data.profile_available ? "Available" : "Unavailable"}</dd></div>
                 <div><dt>Projects</dt><dd>{resource.data.project_links.length}</dd></div>
               </dl>
-              <p className="deferred-note">Open Reader for bounded metadata and Reading Note saves. Other write and maintenance actions remain in Streamlit.</p>
+              <p className="deferred-note">Open Reader for Reading Notes and the full metadata editor. Library also supports explicit metadata candidate preview and selective application.</p>
             </DetailPanel>
           </div>
           <Section title="Abstract"><div className="abstract-text">{resource.data.abstract || <span className="muted-text">No abstract is stored for this paper.</span>}</div></Section>

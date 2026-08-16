@@ -1,4 +1,4 @@
-import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection } from "./types";
+import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -58,12 +58,20 @@ export const apiClient = {
     "/papers/import",
     { method: "POST", body: { relative_paths: relativePaths } },
   ),
-  getPapers: (options: { limit?: number; offset?: number; archiveStatus?: "active" | "archived" | "all" } = {}) => {
+  reconnectManagedPdf: (paperId: string, relativePath: string) => request<ManagedPdfReconnectResponse>(
+    "/papers/reconnect",
+    { method: "POST", body: { paper_id: paperId, relative_path: relativePath } },
+  ),
+  getPapers: (options: { limit?: number; offset?: number; archiveStatus?: "active" | "archived" | "all"; q?: string; tag?: string; year?: string; status?: string } = {}) => {
     const params = new URLSearchParams({
       limit: String(options.limit ?? 20),
       offset: String(options.offset ?? 0),
       archive_status: options.archiveStatus ?? "active",
     });
+    if (options.q) params.set("q", options.q);
+    if (options.tag) params.set("tag", options.tag);
+    if (options.year) params.set("year", options.year);
+    if (options.status) params.set("status", options.status);
     return request<PaginatedPaperList>(`/papers?${params}`);
   },
   getPaper: (paperId: string) => request<PaperDetail>(`/papers/${encodeURIComponent(paperId)}`),

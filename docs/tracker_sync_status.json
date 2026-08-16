@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.10",
-  "release_name": "v1.5.10-tag-governance-candidate-review",
+  "product_version": "1.5.11",
+  "release_name": "v1.5.11-library-paper-workflow-closure",
   "as_of": "2026-08-16",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 137,
+        "passed": 138,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.10 local validation",
-        "summary": "The current offline repository readiness smoke completed with 137 passed, 0 warnings, and 0 failed."
+        "reference": "v1.5.11 local validation",
+        "summary": "The current offline repository readiness smoke completed with 138 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 751,
+        "passed": 757,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.10 local validation",
-        "summary": "The v1.5.10 full Python suite completed with 751 passed before the user-provided manual run changed the local Tag Book configuration; the manual configuration change is preserved separately."
+        "reference": "v1.5.11 local validation",
+        "summary": "The v1.5.11 full Python suite completed with 757 passed, 0 failed, and 0 skipped using disposable fixtures for the new Library/Paper workflow coverage."
       }
     },
     "focused_reader_snapshot": {
@@ -324,7 +324,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.10 local validation",
+        "reference": "v1.5.11 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -335,7 +335,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.10 local validation",
+        "reference": "v1.5.11 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -351,7 +351,7 @@
       },
       "evidence": {
         "date": "2026-08-16",
-        "reference": "v1.5.10 local validation",
+        "reference": "v1.5.11 local validation",
         "summary": "The complete frontend build and Node test suite passed."
       }
     },
@@ -950,11 +950,11 @@
       }
     },
     "pdf_scan_import_runtime": {
-      "status": "PARTIALLY VERIFIED",
+      "status": "VERIFIED",
       "evidence": {
         "date": "2026-08-16",
-        "reference": "user-provided v1.5.9 manual verification",
-        "summary": "User-provided manual verification covers managed-PDF scan, selection, import, safe failure, Library/Reader visibility, restart persistence, and explicit metadata enrichment; browser Network path privacy remains separately unverified."
+        "reference": "user-provided v1.5.11 manual browser/runtime validation",
+        "summary": "User-provided manual validation now covers managed-PDF scan/import behavior, safe failure, Library/Reader visibility, restart persistence, explicit metadata enrichment, and browser Network path privacy."
       },
       "checks": {
         "scan_preview_non_mutating": {
@@ -1014,11 +1014,125 @@
           }
         },
         "network_path_privacy": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-08-16",
-            "reference": "v1.5.9 manual verification plan",
-            "summary": "Manual browser Network confirmation that scan/import responses expose no absolute local path has not been performed."
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Browser Network inspection confirmed scan/import responses exposed no absolute filesystem paths, workspace roots, private configuration, or tracebacks."
+          }
+        }
+      }
+    },
+    "library_paper_workflow_runtime": {
+      "status": "VERIFIED",
+      "evidence": {
+        "date": "2026-08-16",
+        "reference": "user-provided v1.5.11 manual browser/runtime validation",
+        "summary": "User-provided manual validation completed the planned v1.5.11 Library/Paper browser workflow, runtime, privacy, regression, and restart-persistence checks."
+      },
+      "checks": {
+        "library_primary_and_papers_signpost": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Library was verified as the primary Paper workflow, with legacy /papers retained as a signpost."
+          }
+        },
+        "stable_urls_navigation": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Paper Detail and Reader URLs and navigation remained stable."
+          }
+        },
+        "server_side_search_filters_pagination": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Server-side search across title, author, journal, DOI, tag, and keyword, including filters and pagination, was verified."
+          }
+        },
+        "browsing_and_missing_pdf_state": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Existing Paper browsing and missing-PDF states were verified."
+          }
+        },
+        "scan_import_without_auto_enrichment_tagging": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Managed PDF scan/import was verified without automatic enrichment or tagging."
+          }
+        },
+        "enrichment_preview_selective_apply": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Library metadata enrichment preview and selective apply were verified."
+          }
+        },
+        "exact_sha256_duplicate_detection": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Exact SHA-256 duplicate detection was verified."
+          }
+        },
+        "reconnect_preserves_paper_state": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Moved or renamed PDF explicit reconnect preserved the same paper_id, metadata, Reading Note, tags, Note Blocks, and Project links."
+          }
+        },
+        "ambiguous_repair_non_mutating": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Ambiguous repair remained non-mutating."
+          }
+        },
+        "offline_failure_conflict_behavior": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Offline, failure, and conflict behavior was verified."
+          }
+        },
+        "browser_network_privacy": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Browser Network responses exposed no absolute filesystem paths, workspace roots, private configuration, or tracebacks."
+          }
+        },
+        "existing_surface_regressions": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Existing Reader, Project, Tag, Note Block, and Settings regressions were verified."
+          }
+        },
+        "restart_persistence": {
+          "status": "VERIFIED",
+          "evidence": {
+            "date": "2026-08-16",
+            "reference": "user-provided v1.5.11 manual browser/runtime validation",
+            "summary": "Restart persistence was verified."
           }
         }
       }
@@ -1135,7 +1249,6 @@
       "automated_validation.post_merge_main_ci",
       "manual_validation.reader_snapshot_runtime",
       "manual_validation.reader_write_runtime",
-      "manual_validation.pdf_scan_import_runtime",
       "manual_validation.tag_candidate_review_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
@@ -1143,11 +1256,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.5.10 manual tag-governance/candidate-review verification, the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.6.0 Reader Workspace UX Overhaul follows",
+    "name": "remaining v1.5.10 candidate-route browser Network privacy, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.6.0 Reader Workspace UX Overhaul follows",
     "evidence": {
       "date": "2026-08-16",
-      "reference": "docs/release_notes/v1.5.10.md",
-      "summary": "Keep v1.5.10 manual browser/workspace verification, the remaining v1.5.9 Network check, hosted/source-control/publication evidence, and clean-PC restore separate from recorded local automated validation."
+      "reference": "docs/release_notes/v1.5.11.md",
+      "summary": "Keep the remaining v1.5.10 candidate-route Network privacy check, hosted/source-control/publication evidence, and clean-PC restore separate from recorded v1.5.11 manual browser/runtime validation."
     }
   },
   "historical_evidence": {

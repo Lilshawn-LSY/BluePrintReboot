@@ -95,7 +95,8 @@ test("read parity contains no fabricated records and preserves existing views", 
   assert.match(tags, /no values are fabricated/);
   assert.doesNotMatch(projects + projectDetail + tags, /const\s+(?:projects|tags|papers)\s*=\s*\[/i);
   assert.match(library, /apiClient\.getLibraryStatus/);
-  assert.match(papers, /apiClient\.getPapers/);
+  assert.match(library, /apiClient\.getPapers/);
+  assert.match(papers, /Library is the primary Paper collection surface/);
   assert.match(reader, /apiClient\.getReaderSnapshot/);
   for (const operation of ["generateTagCandidates", "approveTagCandidate", "rejectTagCandidate", "promoteTagCandidate", "applyTagCandidate"]) {
     assert.match(reader, new RegExp(`apiClient\\.${operation}`));

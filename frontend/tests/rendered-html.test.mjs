@@ -31,7 +31,7 @@ test("server-renders the stable research workspace shell", async () => {
   assert.match(html, /<title>BluePrintReboot<\/title>/i);
   assert.match(html, /class="app-shell"/);
   assert.match(html, /aria-label="Primary navigation"/);
-  for (const label of ["Dashboard", "Library", "Papers", "Projects", "Tags", "Settings"]) {
+  for (const label of ["Dashboard", "Library", "Projects", "Tags", "Settings"]) {
     assert.match(html, new RegExp(`>${label}<`));
   }
   assert.match(html, /Loading workspace overview/);
@@ -126,7 +126,7 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /return "Reader"/);
-  assert.equal(JSON.parse(packageJson).version, "1.5.10");
+  assert.equal(JSON.parse(packageJson).version, "1.5.11");
   assert.match(shell, /packageMetadata\.version/);
   assert.match(shell, /Local workspace/);
   assert.doesNotMatch(shell, /v1\.5\.4|Project commands/);

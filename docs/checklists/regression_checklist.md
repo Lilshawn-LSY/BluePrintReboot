@@ -4,7 +4,16 @@ Required before and after Codex-assisted release work, including `v1.5.5-note-bl
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
 
-## v1.5.10 Tag Governance & Candidate Review
+## v1.5.11 Library / Paper Workflow Closure
+
+- [x] Validate server-side case-insensitive metadata search for zero, one, special-character, and multi-page results; confirm lifecycle, exact tag, year, and reading-status filters apply before pagination.
+- [x] Validate Library scan/import remains preview-first and explicit; distinguish new, same-path registered, exact duplicate-content, missing-PDF, unique reconnect, and ambiguous reconnect states without client-only collection filtering.
+- [x] Validate Library enrichment preview is non-mutating, selection sends only confirmed fields with the preview revision, and unavailable/conflict/retry states do not silently overwrite metadata.
+- [x] Validate exact-content reconnect stays inside the managed directory, rejects stale or ambiguous candidates, preserves the stable `paper_id` and Paper-owned/linked state, and changes only file identity fields.
+- [x] Validate stable Paper Detail/Reader URLs, Library back-navigation, Reader dirty-draft protection, exact bridge allowlisting, privacy-safe errors, and PDF Range regression behavior.
+- [x] User-provided manual validation verified the complete real-library workflow, browser Network payload privacy, offline/failure/conflict behavior, existing-surface regressions, and restart persistence.
+
+## Historical v1.5.10 Tag Governance & Candidate Review
 
 - [x] Validate canonical create, bounded metadata/category edit, alias add/remove, deterministic registry revisions, stale conflicts, and atomic/lock failure handling using disposable Tag Book fixtures.
 - [x] Validate duplicate canonical labels, canonical/alias collisions, duplicate/ambiguous aliases, self-aliases, and conservative normalization rejection.

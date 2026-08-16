@@ -56,6 +56,12 @@ Canonical sources and precedence are:
 
 Older indexes need no migration during reads: the read-only index snapshot supplies safe defaults for absent canonical columns. PaperTextProfile is a derived cache and is not a fallback for this contract. API reads do not call Crossref, OpenAlex, arXiv, PDF extraction, or any other network/enrichment path, and they do not parse extracted full text.
 
+## Extended in v1.5.11
+
+`GET /papers` remains the existing bounded Paper collection contract, extended with optional `q`, `tag`, `year`, and reading `status` query parameters. The Paper read model constructs normalized internal search context from stored title, authors, journal, DOI, tags, and keywords; it does not expose that context or any raw index row. Search is case-insensitive substring matching, filters are applied before pagination, and the existing active/archived lifecycle selection remains orthogonal to reading status.
+
+`POST /papers/reconnect` is an explicit managed-PDF command rather than a read-model route. Its scan preview exposes only safe relative paths, controlled state, and stable Paper identity where a unique repair is available. The command rechecks the exact hash identity under the shared lock and updates only the existing Paper row's managed-file identity fields. It never serializes an absolute path, SHA-256 value, raw exception, or stored Paper metadata.
+
 ## Consumed by the v1.2.0 frontend shell
 
 The initial desktop-first web shell consumed `GET /health`, `GET /library/status`, `GET /papers`, and `GET /papers/{paper_id}` through a centralized typed client. Browser components do not call FastAPI directly; a same-origin server bridge forwards only allowlisted GET paths to the configured local API URL.

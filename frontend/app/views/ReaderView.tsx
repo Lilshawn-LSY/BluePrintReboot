@@ -561,7 +561,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const detailHref = `/papers/${encodeURIComponent(snapshot.paper.paper_id)}`;
   return (
     <>
-      <Link className="back-link" href={detailHref}><ArrowLeft size={15} />Back to Paper Detail</Link>
+      <div className="reader-editor__actions"><Link className="back-link" href={detailHref}><ArrowLeft size={15} />Back to Paper Detail</Link><Link className="back-link" href="/library"><ArrowLeft size={15} />Library</Link></div>
       <PageHeader
         eyebrow="Reader"
         title={editor.metadata.draft.title || snapshot.paper.title}

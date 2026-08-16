@@ -27,6 +27,7 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 - v1.5.8 adds a separate Paper-scoped metadata candidate preview in the web Reader, source-labelled field comparison, and selective application through the existing metadata command without automatic overwrite or new storage.
 - v1.5.9 adds bounded web Library scan/preview/selective-import commands for PDFs already in `papers/`, preserving scan/import separation, managed-relative path validation, stable Paper identities, per-file failures, Reader/PDF compatibility, and explicit post-import metadata enrichment.
 - v1.5.10 combines the planned canonical-tag governance and candidate-review packages: the existing Tag Book gains revision-checked canonical create/edit/alias/deprecate commands; rulebook candidates gain persisted explicit review, promotion, and separate application through the existing Paper-tag command. Legacy Paper tag text remains untouched, and no candidate is automatically applied.
+- v1.5.11 closes the Library/Paper workflow with bounded server-side metadata search/filter/pagination, Library metadata-enrichment reuse, coherent collection navigation, and explicit exact-content reconnect for missing managed PDFs without creating or merging Papers.
 
 ## Decision gates
 
@@ -48,11 +49,15 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | v1.5.4 Project write and Paper–Project links | Runtime parity closed | Five strict command routes and disposable regressions are implemented; the 2026-08-02 user-performed real-data runtime checks are VERIFIED. Hosted, merge, tag, and publication evidence remain separate. |
 | v1.5.5 Note Block write and Project links | Runtime parity closed | Five exact read/command routes, complete-state revisions, lock/reload atomicity, failure rollback, typed orphan states, exact bridge paths, explicit UI actions, and disposable regressions are implemented; the 2026-08-02 user-performed runtime checks are VERIFIED. Hosted evidence remains separate. |
 
-## Current product milestone: v1.5.10 Tag Governance & Candidate Review
+## Current product milestone: v1.5.11 Library / Paper Workflow Closure
 
-v1.5.10 is the final v1.5.x functional package. It does not relabel the immutable v1.4.0 released baseline and does not claim manual browser verification, hosted validation, merge, tag, or publication. The planned v1.5.11 candidate-review package is absorbed here; v1.6.0 is the next functional release and remains the Reader Workspace UX Overhaul.
+v1.5.11 is the final Library/Paper workflow closure before the v1.6 UX redesign. It does not relabel the immutable v1.4.0 released baseline and does not claim hosted validation, merge, tag, or publication.
 
 ### Implemented product slice
+
+- Library is the primary collection surface. Its server-backed query applies bounded case-insensitive normalized metadata search and exact tag/year/reading-status/lifecycle filters before pagination; `/papers/{paper_id}` and `/papers/{paper_id}/reader` remain stable resource URLs.
+- The existing metadata enrichment preview and revision-protected selective metadata command are available from Library as well as Reader; no import-time or background enrichment is introduced.
+- Exact-content reconnect is explicit and managed-root-contained. It rechecks a unique missing Paper/hash match under the workspace lock and only updates that existing row's file identity fields; notes, blocks, links, metadata, tags, and `paper_id` are preserved.
 
 - The canonical registry exposes bounded create/edit/alias/deprecate operations through a Tag Book service. Canonical keys remain stable and changes require a Tag Book revision under the shared lock.
 - Alias and label collisions are rejected using the existing normalization rules. Categories remain bounded metadata; a deprecated tag stays visible and is not physically deleted.
@@ -64,7 +69,7 @@ v1.5.10 is the final v1.5.x functional package. It does not relabel the immutabl
 
 ### Evidence state
 
-- Local service/API/frontend validation is recorded in the release manifest; manual browser/workspace verification, hosted CI, merge, tag, GitHub Release, post-merge, and clean-PC restore remain separately unclaimed.
+- Local service/API/frontend validation and user-provided v1.5.11 manual browser/runtime validation are recorded in the release manifest; hosted CI, merge, tag, GitHub Release, post-merge, and clean-PC restore remain separately unclaimed.
 - Existing v1.5.4-v1.5.9 runtime evidence remains historical context and is not relabeled as v1.5.10 evidence.
 
 ### Roadmap item status

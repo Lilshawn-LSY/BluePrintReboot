@@ -145,6 +145,35 @@ def test_ordering_is_deterministic_for_unsorted_input_and_title_ties(papers) -> 
     assert [item["paper_id"] for item in forward] == ["a-active", "archived", "same-a", "same-b", "z-active"]
 
 
+def test_bounded_collection_search_filters_before_pagination_and_is_case_insensitive(papers) -> None:
+    papers.extend([
+        {**paper_item("doi", "DOI & Symbols"), "_search_text": "doi & symbols\nAda Lovelace\nJournal\n10.1234/a-b\nmethods\nexact-match"},
+        {**paper_item("journal", "Other title"), "_search_text": "other title\nGrace Hopper\nSpecial Journal\n\nreview\nkeyword"},
+    ])
+    client = client_for(papers)
+
+    special = client.get("/papers", params={"q": "10.1234/A-B", "limit": 1})
+    assert special.status_code == 200
+    assert [item["paper_id"] for item in special.json()["items"]] == ["doi"]
+    assert special.json()["total"] == 1
+
+    first = client.get("/papers", params={"q": "paper", "limit": 2, "offset": 0})
+    second = client.get("/papers", params={"q": "paper", "limit": 2, "offset": 2})
+    assert first.json()["total"] == 4
+    assert first.json()["has_more"] is True
+    assert second.json()["has_more"] is False
+    assert len(first.json()["items"] + second.json()["items"]) == 4
+
+
+def test_exact_tag_year_and_reading_status_filters_compose_with_lifecycle(papers) -> None:
+    papers[0].update({"year": "2024", "status": "unread", "tags": ["Review"]})
+    papers[1].update({"year": "2024", "status": "unread", "tags": ["Review"]})
+    active = client_for(papers).get("/papers", params={"tag": "review", "year": "2024", "status": "UNREAD"})
+    all_lifecycle = client_for(papers).get("/papers", params={"tag": "review", "year": "2024", "status": "UNREAD", "archive_status": "all"})
+    assert [item["paper_id"] for item in active.json()["items"]] == ["z-active"]
+    assert [item["paper_id"] for item in all_lifecycle.json()["items"]] == ["archived", "z-active"]
+
+
 @pytest.mark.parametrize("limit", [1, 100])
 def test_minimum_and_maximum_limits_are_valid(papers, limit: int) -> None:
     response = client_for(papers).get("/papers", params={"limit": limit})
@@ -161,6 +190,8 @@ def test_minimum_and_maximum_limits_are_valid(papers, limit: int) -> None:
         {"limit": 101},
         {"offset": -1},
         {"archive_status": "deleted"},
+        {"q": "x" * 201},
+        {"year": "24"},
     ],
 )
 def test_invalid_collection_parameters_return_validation_errors(papers, params) -> None:

@@ -9,6 +9,7 @@ import {
   isBlueprintMetadataPath,
   isBlueprintMetadataEnrichmentPreviewPath,
   isBlueprintManagedPdfImportPath,
+  isBlueprintManagedPdfReconnectPath,
   isBlueprintManagedPdfScanPath,
   isBlueprintPaperTagsPath,
   isBlueprintTagCandidatesPath,
@@ -59,6 +60,7 @@ test("allows the bounded read routes plus the exact managed PDF, Reader, and Not
   assert.equal(isBlueprintReadingNotePath(["papers", "paper-123", "reading-note"]), true);
   assert.equal(isBlueprintManagedPdfScanPath(["papers", "scan"]), true);
   assert.equal(isBlueprintManagedPdfImportPath(["papers", "import"]), true);
+  assert.equal(isBlueprintManagedPdfReconnectPath(["papers", "reconnect"]), true);
   assert.equal(isBlueprintNoteBlocksPath(["papers", "paper-123", "note-blocks"]), true);
   assert.equal(isBlueprintNoteBlockPath(["papers", "paper-123", "note-blocks", "block-1"]), true);
 });
@@ -67,6 +69,7 @@ test("allows only the exact method and path pairs for Reader commands", () => {
   assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "metadata"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "scan"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "import"]), true);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "reconnect"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "metadata", "enrichment-preview"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "tags"]), true);
   assert.equal(isAllowedBlueprintRequest("DELETE", ["papers", "paper-1", "tags"]), true);
@@ -100,6 +103,7 @@ test("allows only the exact method and path pairs for Reader commands", () => {
     ["GET", ["papers", "import"]],
     ["PATCH", ["papers", "scan"]],
     ["PUT", ["papers", "import"]],
+    ["PATCH", ["papers", "reconnect"]],
     ["POST", ["settings", "summary"]],
     ["PUT", ["settings", "summary"]],
     ["PATCH", ["settings", "summary"]],

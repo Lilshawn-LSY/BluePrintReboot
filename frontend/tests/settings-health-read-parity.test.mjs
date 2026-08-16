@@ -87,7 +87,8 @@ test("existing read-parity views remain wired to their established clients", asy
 
   assert.match(dashboard, /apiClient\.getDashboard/);
   assert.match(library, /apiClient\.getLibraryStatus/);
-  assert.match(papers, /apiClient\.getPapers/);
+  assert.match(library, /apiClient\.getPapers/);
+  assert.match(papers, /Library is the primary Paper collection surface/);
   assert.match(reader, /apiClient\.getReaderSnapshot/);
   assert.match(projects, /apiClient\.getProjects/);
   assert.match(tags, /apiClient\.getTags/);

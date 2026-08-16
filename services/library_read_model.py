@@ -62,6 +62,14 @@ class PaperListItem(TypedDict):
     health: list[str]
 
 
+class _SearchablePaperListItem(dict[str, Any]):
+    """A normal public list mapping with non-serialized search context."""
+
+    def __init__(self, payload: PaperListItem, search_text: str) -> None:
+        super().__init__(payload)
+        self.search_text = search_text
+
+
 class PaperDetail(PaperListItem):
     authors: list[str]
     journal: str
@@ -219,7 +227,7 @@ def build_paper_list_items(
     for record in read_index_snapshot(index_csv).to_dict("records"):
         paper_id = str(record.get("paper_id", ""))
         missing, health = _paper_health(paper_id, report)
-        items.append({
+        payload: PaperListItem = {
             "paper_id": paper_id,
             "title": str(record.get("title", "") or record.get("filename", "") or ""),
             "first_author": _first_author(record),
@@ -230,8 +238,57 @@ def build_paper_list_items(
             "archived": _archived(record),
             "missing_pdf": missing,
             "health": health,
-        })
+        }
+        items.append(_SearchablePaperListItem(
+            payload,
+            "\n".join(
+                [
+                    _metadata_text(record.get("title") or record.get("filename")),
+                    _metadata_text(record.get("authors")),
+                    _metadata_text(record.get("journal")),
+                    _metadata_text(record.get("doi")),
+                    _metadata_text(record.get("tags")),
+                    _metadata_text(record.get("keywords")),
+                ]
+            ).casefold(),
+        ))
     return sorted(items, key=lambda item: (item["title"].casefold(), item["paper_id"]))
+
+
+def filter_paper_list_items(
+    papers: list[PaperListItem],
+    *,
+    q: str = "",
+    tag: str = "",
+    year: str = "",
+    status: str = "",
+) -> list[PaperListItem]:
+    """Return deterministic metadata-filtered collection items.
+
+    Filtering is deliberately performed against the complete read-model result
+    before the HTTP adapter applies pagination.  Search uses only normalized
+    public bibliographic fields and never consults PDFs or filesystem paths.
+    """
+
+    normalized_q = q.strip().casefold()
+    normalized_tag = tag.strip().casefold()
+    normalized_year = year.strip()
+    normalized_status = status.strip().casefold()
+    result: list[PaperListItem] = []
+    for paper in papers:
+        search_text = str(getattr(paper, "search_text", "") or paper.get("_search_text", "")).casefold() or "\n".join(
+            [paper["title"], paper["first_author"], *paper["tags"]]
+        ).casefold()
+        if normalized_q and normalized_q not in search_text:
+            continue
+        if normalized_tag and not any(item.casefold() == normalized_tag for item in paper["tags"]):
+            continue
+        if normalized_year and paper["year"] != normalized_year:
+            continue
+        if normalized_status and paper["status"].casefold() != normalized_status:
+            continue
+        result.append(paper)
+    return result
 
 
 def build_paper_detail(
