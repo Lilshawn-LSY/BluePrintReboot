@@ -5,6 +5,7 @@ This is the acceptance contract for a future frontend adapter. v1.0.26 freezes b
 ## Reader invariants
 
 - [ ] Save is always explicit. Metadata changes never save dirty body text.
+- [x] Metadata, enrichment apply, Reading Note, Paper tag, and Tag Candidate mutations share one exclusive Reader mutation gate. Conflicting commands and their editable inputs are disabled until the accepted response updates its baseline/revision, so a later-started response cannot overwrite newer state.
 - [x] Draft, baseline, and pending operations survive metadata-triggered reruns only while the same paper remains active.
 - [ ] Keep draft preserves exact unsaved content; Discard changes and reload restores the last persisted note.
 - [ ] Canonical title/author/year/DOI/tag changes converge with the Reading Note header. Clean notes refresh atomically; dirty drafts keep their body, remain dirty, and receive a pending non-destructive header refresh. Explicit Save writes the latest canonical header and body, then applies saved widget/baseline state only during the next pre-widget initialization.
@@ -12,6 +13,7 @@ This is the acceptance contract for a future frontend adapter. v1.0.26 freezes b
 - [ ] Archived papers remain explicitly viewable in Reader without moving or deleting PDFs.
 - [ ] Missing/large/external PDF guidance, active-paper isolation, project links, structured blocks, imports, extraction/profile state, and confirmation feedback remain equivalent. v1.5.12 exposes backend-owned full-text status/content plus explicit extract/re-extract without browser extraction, automatic scheduling, or editing cached text.
 - [ ] Streamlit may rerun and rerender the PDF after widget interaction. Avoidable application-triggered reruns stay removed; deeper renderer isolation is deferred to PDF.js.
+- [x] Canonical Reader tag choices load every API page; the first 100 tags are not a functional boundary.
 
 ## Lifecycle invariants
 
@@ -26,6 +28,8 @@ This is the acceptance contract for a future frontend adapter. v1.0.26 freezes b
 ## May redesign
 
 Layout, components, state container, dialogs, feedback presentation, and PDF renderer may change when the invariants above have adapter-level parity tests. Public read contracts may be exposed unchanged through future read-only endpoints.
+
+Project and Note Block selectors likewise consume all paginated Paper/Project results. The Projects collection itself remains paginated with explicit navigation, and Project detail assembles link pages only from one stable revision.
 
 ## Deferred
 

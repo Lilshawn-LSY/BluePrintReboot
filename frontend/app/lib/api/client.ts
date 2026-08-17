@@ -1,4 +1,5 @@
 import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, FullTextDocument, FullTextStatus, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection } from "./types";
+import { collectAllPaginatedItems } from "./pagination.mjs";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -50,6 +51,79 @@ export function paperPdfUrl(paperId: string): string {
   return `${API_BASE_URL}/papers/${encodeURIComponent(paperId)}/pdf`;
 }
 
+type PaperListOptions = { limit?: number; offset?: number; archiveStatus?: "active" | "archived" | "all"; q?: string; tag?: string; year?: string; status?: string };
+
+function getPapers(options: PaperListOptions = {}) {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 20),
+    offset: String(options.offset ?? 0),
+    archive_status: options.archiveStatus ?? "active",
+  });
+  if (options.q) params.set("q", options.q);
+  if (options.tag) params.set("tag", options.tag);
+  if (options.year) params.set("year", options.year);
+  if (options.status) params.set("status", options.status);
+  return request<PaginatedPaperList>(`/papers?${params}`);
+}
+
+function getProjects(options: { limit?: number; offset?: number } = {}) {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 20),
+    offset: String(options.offset ?? 0),
+  });
+  return request<PaginatedProjectList>(`/projects?${params}`);
+}
+
+function getProject(projectId: string, options: { linksLimit?: number; linksOffset?: number } = {}) {
+  const params = new URLSearchParams({
+    links_limit: String(options.linksLimit ?? 20),
+    links_offset: String(options.linksOffset ?? 0),
+  });
+  return request<ProjectDetail>(
+    `/projects/${encodeURIComponent(projectId)}?${params}`,
+    { notFoundMessage: "The requested Project was not found." },
+  );
+}
+
+async function getCompleteProject(projectId: string): Promise<ProjectDetail> {
+  let first: ProjectDetail | null = null;
+  const links: ProjectDetail["links"] = [];
+  let offset = 0;
+  while (true) {
+    const page = await getProject(projectId, { linksLimit: 100, linksOffset: offset });
+    if (first === null) first = page;
+    if (
+      page.project_revision !== first.project_revision
+      || page.links_revision !== first.links_revision
+      || page.links_total !== first.links_total
+    ) {
+      throw new ApiClientError("The Project changed while its links were being loaded. Retry the read.", "conflict", 409);
+    }
+    links.push(...page.links);
+    if (!page.links_has_more) {
+      return {
+        ...first,
+        links,
+        links_limit: links.length,
+        links_offset: 0,
+        links_has_more: false,
+      };
+    }
+    if (page.links.length === 0) {
+      throw new ApiClientError("The Project link response did not make progress.", "read-model");
+    }
+    offset += page.links.length;
+  }
+}
+
+function getTags(options: { limit?: number; offset?: number } = {}) {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 20),
+    offset: String(options.offset ?? 0),
+  });
+  return request<PaginatedTagList>(`/tags?${params}`);
+}
+
 export const apiClient = {
   getHealth: () => request<HealthSummary>("/health"),
   getLibraryStatus: () => request<LibraryStatus>("/library/status"),
@@ -62,36 +136,15 @@ export const apiClient = {
     "/papers/reconnect",
     { method: "POST", body: { paper_id: paperId, relative_path: relativePath } },
   ),
-  getPapers: (options: { limit?: number; offset?: number; archiveStatus?: "active" | "archived" | "all"; q?: string; tag?: string; year?: string; status?: string } = {}) => {
-    const params = new URLSearchParams({
-      limit: String(options.limit ?? 20),
-      offset: String(options.offset ?? 0),
-      archive_status: options.archiveStatus ?? "active",
-    });
-    if (options.q) params.set("q", options.q);
-    if (options.tag) params.set("tag", options.tag);
-    if (options.year) params.set("year", options.year);
-    if (options.status) params.set("status", options.status);
-    return request<PaginatedPaperList>(`/papers?${params}`);
-  },
+  getPapers,
+  getAllPapers: (options: Omit<PaperListOptions, "limit" | "offset"> = {}) => collectAllPaginatedItems(
+    ({ limit, offset }) => getPapers({ ...options, limit, offset }),
+  ),
   getPaper: (paperId: string) => request<PaperDetail>(`/papers/${encodeURIComponent(paperId)}`),
-  getProjects: (options: { limit?: number; offset?: number } = {}) => {
-    const params = new URLSearchParams({
-      limit: String(options.limit ?? 20),
-      offset: String(options.offset ?? 0),
-    });
-    return request<PaginatedProjectList>(`/projects?${params}`);
-  },
-  getProject: (projectId: string, options: { linksLimit?: number; linksOffset?: number } = {}) => {
-    const params = new URLSearchParams({
-      links_limit: String(options.linksLimit ?? 20),
-      links_offset: String(options.linksOffset ?? 0),
-    });
-    return request<ProjectDetail>(
-      `/projects/${encodeURIComponent(projectId)}?${params}`,
-      { notFoundMessage: "The requested Project was not found." },
-    );
-  },
+  getProjects,
+  getAllProjects: () => collectAllPaginatedItems(getProjects),
+  getProject,
+  getCompleteProject,
   createProject: (project: EditableProjectMetadata) => request<ProjectCommandResponse>(
     "/projects",
     { method: "POST", body: project },
@@ -176,13 +229,8 @@ export const apiClient = {
       notFoundMessage: "The requested Project or Note Block link was not found.",
     },
   ),
-  getTags: (options: { limit?: number; offset?: number } = {}) => {
-    const params = new URLSearchParams({
-      limit: String(options.limit ?? 20),
-      offset: String(options.offset ?? 0),
-    });
-    return request<PaginatedTagList>(`/tags?${params}`);
-  },
+  getTags,
+  getAllTags: () => collectAllPaginatedItems(getTags),
   getTagSummary: () => request<CandidateSummary>("/tags/summary"),
   getTagGovernance: () => request<CanonicalTagGovernanceSnapshot>("/tags/governance"),
   createCanonicalTag: (input: { label: string; category: string; description: string; suggestionStrength: number; expectedRevision: string }) => request<CanonicalTagGovernanceResponse>(

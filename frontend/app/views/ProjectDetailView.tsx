@@ -22,7 +22,7 @@ import {
 import type {
   EditableProjectStatus,
   NoteBlockCollection,
-  PaginatedPaperList,
+  PaperListItem,
   ProjectDetail,
   ProjectLinkType,
   ProjectPriority,
@@ -39,7 +39,7 @@ const LINK_TYPES: Array<{ value: ProjectLinkType; label: string }> = [
 
 type PaperPickerState =
   | { status: "loading" }
-  | { status: "ready"; data: PaginatedPaperList }
+  | { status: "ready"; data: PaperListItem[] }
   | { status: "unavailable"; message: string }
   | { status: "error"; message: string };
 
@@ -71,11 +71,11 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   useEffect(() => {
     if (archived) return;
     let active = true;
-    apiClient.getPapers({ limit: 100, archiveStatus: "all" })
+    apiClient.getAllPapers({ archiveStatus: "all" })
       .then((data) => {
         if (!active) return;
         setPaperPicker({ status: "ready", data });
-        setPaperId((current) => current || data.items[0]?.paper_id || "");
+        setPaperId((current) => current || data[0]?.paper_id || "");
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -153,7 +153,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   async function reloadProject() {
     if (dirty && !window.confirm("Reload the current Project and discard your preserved draft?")) return;
     try {
-      const current = await apiClient.getProject(project.project_id, { linksLimit: 100 });
+      const current = await apiClient.getCompleteProject(project.project_id);
       setProject(current);
       setEditor(createProjectEditorState(current));
       setTagDraft(current.tags.join(", "));
@@ -439,11 +439,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
             <div><dt>Orphaned links</dt><dd>{project.orphaned_link_count}</dd></div>
             <div><dt>Shown</dt><dd>{project.links.length} of {project.links_total}</dd></div>
           </dl>
-          {project.links_has_more ? <p className="deferred-note">Only the first bounded page of links is shown.</p> : null}
         </DetailPanel>
       </div>
       {!archived && !dirty ? (
-        <Section title="Add a Paper link" description="Choose an existing Paper from the bounded local Paper index. No Paper or Note Block is created.">
+        <Section title="Add a Paper link" description="Choose any existing Paper from the paginated local Paper index. No Paper or Note Block is created.">
           <form className="project-link-form" onSubmit={addPaperLink}>
             {paperPicker.status === "loading" ? <span className="muted-text">Loading existing Papers…</span> : null}
             {paperPicker.status === "error" || paperPicker.status === "unavailable" ? (
@@ -459,10 +458,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                 >Retry Paper picker</button>
               </span>
             ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.items.length === 0 ? (
+            {paperPicker.status === "ready" && paperPicker.data.length === 0 ? (
               <span className="muted-text">No existing Papers are available to link.</span>
             ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.items.length > 0 ? (
+            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? (
               <>
                 <label className="reader-field">
                   <span>Existing Paper</span>
@@ -472,7 +471,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                     setNoteBlockId("");
                     setNoteBlockPicker({ status: "loading", paperId: nextPaperId });
                   }}>
-                    {paperPicker.data.items.map((paper) => (
+                    {paperPicker.data.map((paper) => (
                       <option key={paper.paper_id} value={paper.paper_id}>
                         {paper.title || paper.paper_id}{paper.archived ? " (archived Paper)" : ""}
                       </option>
@@ -486,9 +485,6 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                   </select>
                 </label>
                 <button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId}><Link2 size={15} />Add Paper link</button>
-                {paperPicker.data.has_more ? (
-                  <span className="muted-text project-form-wide">Only the first 100 existing Papers are available in this bounded picker.</span>
-                ) : null}
               </>
             ) : null}
           </form>
@@ -519,10 +515,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                 >Retry Paper picker</button>
               </span>
             ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.items.length === 0 ? (
+            {paperPicker.status === "ready" && paperPicker.data.length === 0 ? (
               <span className="muted-text">No existing Papers are available; a source Paper is required to link a Note Block.</span>
             ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.items.length > 0 ? (
+            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? (
               <>
                 <label className="reader-field">
                   <span>Source Paper</span>
@@ -532,7 +528,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                     setNoteBlockId("");
                     setNoteBlockPicker({ status: "loading", paperId: nextPaperId });
                   }}>
-                    {paperPicker.data.items.map((paper) => (
+                    {paperPicker.data.map((paper) => (
                       <option key={paper.paper_id} value={paper.paper_id}>
                         {paper.title || paper.paper_id}{paper.archived ? " (archived Paper)" : ""}
                       </option>
@@ -577,9 +573,6 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                     <button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId || !noteBlockId}><Link2 size={15} />Add Note Block link</button>
                   </>
                 ) : null}
-                {paperPicker.data.has_more ? (
-                  <span className="muted-text project-form-wide">Only the first 100 existing Papers are available in this bounded picker.</span>
-                ) : null}
               </>
             ) : null}
           </form>
@@ -593,7 +586,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
       ) : null}
       <Section title="Linked Papers" description="Stored Paper links remain distinct from structured Note Block links; missing targets are never repaired automatically.">
         {paperLinks.length === 0 ? (
-          <EmptyState title="No linked Papers" description="This Project has no linked Papers in the current bounded link page." />
+          <EmptyState title="No linked Papers" description="This Project has no linked Papers." />
         ) : (
           <DataTableShell label="Linked Papers">
             <table>
@@ -636,7 +629,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
       </Section>
       <Section title="Linked Note Blocks" description="Stored structured Note Block links retain their source-Paper identity and explicit target state.">
         {noteBlockLinks.length === 0 ? (
-          <EmptyState title="No linked Note Blocks" description="This Project has no linked Note Blocks in the current bounded link page." />
+          <EmptyState title="No linked Note Blocks" description="This Project has no linked Note Blocks." />
         ) : (
           <DataTableShell label="Linked Note Blocks">
             <table>
@@ -690,7 +683,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
 export function ProjectDetailView({ projectId }: { projectId: string }) {
   const resource = useApiResource(
     `project:${projectId}`,
-    () => apiClient.getProject(projectId, { linksLimit: 100 }),
+    () => apiClient.getCompleteProject(projectId),
   );
   return (
     <div className="page-stack">

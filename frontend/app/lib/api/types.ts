@@ -511,7 +511,7 @@ export interface CandidateSummary {
 export type SettingsState = "healthy" | "warning" | "unavailable" | "empty";
 
 export interface SettingsWorkspaceResource {
-  code: "papers" | "notes" | "projects" | "tags" | "note_blocks" | "project_links";
+  code: "papers" | "notes" | "projects" | "tags" | "note_blocks" | "project_links" | "tag_candidate_reviews";
   label: string;
   state: SettingsState;
   count: number | null;
@@ -519,7 +519,7 @@ export interface SettingsWorkspaceResource {
 }
 
 export interface SettingsIntegrityIssue {
-  code: "missing_pdfs" | "unindexed_pdfs" | "orphan_notes" | "orphan_note_blocks" | "orphan_project_links" | "corrupt_json";
+  code: "missing_pdfs" | "unindexed_pdfs" | "orphan_notes" | "orphan_note_blocks" | "orphan_project_links" | "corrupt_json" | "corrupt_index";
   state: "healthy" | "warning" | "unavailable";
   count: number | null;
   severity: "warning" | "error";

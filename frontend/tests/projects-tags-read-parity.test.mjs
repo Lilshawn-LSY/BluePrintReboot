@@ -25,14 +25,15 @@ test("Projects and Tags routes no longer render deferred placeholders", async ()
   }
 });
 
-test("Projects renders real collection fields and bounded typed-link detail", async () => {
+test("Projects renders real paginated collection fields and complete typed-link detail", async () => {
   const [, , , projects, projectDetail, , , , client] = await sources;
 
-  assert.match(projects, /apiClient\.getProjects\(\{ limit: 100 \}\)/);
+  assert.match(projects, /apiClient\.getProjects\(\{ limit: pageSize, offset \}\)/);
+  assert.match(projects, />Next<\/button>/);
   for (const field of ["project.name", "project.project_id", "project.status", "project.priority", "project.tags", "project.linked_paper_count", "project.linked_note_block_count", "project.updated_at"]) {
     assert.match(projects, new RegExp(field.replace(".", "\\.")));
   }
-  assert.match(projectDetail, /apiClient\.getProject\(projectId, \{ linksLimit: 100 \}\)/);
+  assert.match(projectDetail, /apiClient\.getCompleteProject\(projectId\)/);
   assert.match(projectDetail, /link\.link_type/);
   assert.match(projectDetail, /link\.target_state/);
   assert.match(projectDetail, /link\.paper\.title/);
@@ -51,7 +52,7 @@ test("Projects renders real collection fields and bounded typed-link detail", as
 test("Tags renders canonical identity, label, category, aliases, status, and real summary counts", async () => {
   const [, , , , , tags, , , client] = await sources;
 
-  assert.match(tags, /apiClient\.getTags\(\{ limit: 100 \}\)/);
+  assert.match(tags, /apiClient\.getAllTags\(\)/);
   assert.match(tags, /apiClient\.getTagSummary\(\)/);
   assert.match(tags, /apiClient\.getTagGovernance\(\)/);
   for (const field of ["tag.label", "tag.canonical_key", "tag.category", "tag.aliases", "tag.status", "selected.suggestion_strength"]) {

@@ -21,8 +21,12 @@ from services import tag_book
 from services.tag_book import CATEGORY_VALUES, save_tag_book_canonical_registry
 from storage.atomic_json import atomic_write_json
 from storage.index_store import save_index
-from storage.paths import INDEX_CSV
-from storage.workspace_lock import WorkspaceLockUnavailable, workspace_write_lock
+from storage.paths import INDEX_CSV, PROJECT_ROOT
+from storage.workspace_lock import (
+    WorkspaceLockUnavailable,
+    workspace_root_for_path,
+    workspace_write_lock,
+)
 
 
 CANONICAL_TAG_CATEGORIES = CATEGORY_VALUES
@@ -446,24 +450,35 @@ def apply_used_tag_merge_to_index(
     registry: dict,
     index_csv: str | Path = INDEX_CSV,
 ) -> dict:
-    records = load_tag_manager_records(index_csv)
-    preview = preview_used_tag_merge(records, source_tag, target_tag, registry)
-    if preview["affected_records"]:
-        merged = apply_tag_merge_to_records(
-            records,
-            source_tag,
-            target_tag,
-            registry,
-            exact_source=True,
-        )
-        save_index(pd.DataFrame(merged), Path(index_csv))
-    return preview
+    with workspace_write_lock(workspace_root_for_path(Path(index_csv))):
+        records = load_tag_manager_records(index_csv)
+        preview = preview_used_tag_merge(records, source_tag, target_tag, registry)
+        if preview["affected_records"]:
+            merged = apply_tag_merge_to_records(
+                records,
+                source_tag,
+                target_tag,
+                registry,
+                exact_source=True,
+            )
+            save_index(pd.DataFrame(merged), Path(index_csv))
+        return preview
 
 
 def register_tag_alias(
     raw_alias: str,
     target_tag: str,
     registry_path: str | Path | None = None,
+) -> dict:
+    root = workspace_root_for_path(Path(registry_path)) if registry_path else PROJECT_ROOT
+    with workspace_write_lock(root):
+        return _register_tag_alias_locked(raw_alias, target_tag, registry_path)
+
+
+def _register_tag_alias_locked(
+    raw_alias: str,
+    target_tag: str,
+    registry_path: str | Path | None,
 ) -> dict:
     registry = load_canonical_tags(registry_path)
     canonical_target = resolve_canonical_tag(target_tag, registry)
@@ -493,6 +508,17 @@ def create_canonical_tag(
     label: str,
     category: str,
     registry_path: str | Path | None = None,
+) -> dict:
+    root = workspace_root_for_path(Path(registry_path)) if registry_path else PROJECT_ROOT
+    with workspace_write_lock(root):
+        return _create_canonical_tag_locked(raw_alias, label, category, registry_path)
+
+
+def _create_canonical_tag_locked(
+    raw_alias: str,
+    label: str,
+    category: str,
+    registry_path: str | Path | None,
 ) -> dict:
     clean_label = str(label).strip()
     canonical_tag = normalize_tag(clean_label)

@@ -469,7 +469,9 @@ def test_reader_writes_reject_cross_platform_path_identities_without_mutation_or
     service, index_csv, notes, record = _service(tmp_path)
     dataframe = pd.read_csv(index_csv, dtype=str).fillna("")
     dataframe.loc[0, "paper_id"] = paper_id
-    save_index(dataframe, index_csv)
+    # Simulate a manually corrupted legacy index; the public save boundary now
+    # rejects these identities before they can reach storage.
+    dataframe.to_csv(index_csv, index=False)
     malicious_record = {**record, "paper_id": paper_id}
     before = _workspace_file_bytes(tmp_path)
     private_note_draft = "submitted private Reading Note draft"

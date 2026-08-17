@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from storage.atomic_json import atomic_write_json, read_json_file, require_json_list
 from storage.paths import PROJECTS_DIR
+from storage.workspace_lock import workspace_root_for_path, workspace_write_lock
 
 
 ALLOWED_PROJECT_STATUSES = ("active", "paused", "done", "archived")
@@ -34,13 +35,13 @@ def save_projects(
     projects: Sequence[Mapping[str, Any]],
     base_dir: Path = PROJECTS_DIR,
 ) -> Path:
-    normalized_projects = [_normalize_project(project) for project in projects]
-    project_ids = [project["id"] for project in normalized_projects]
-    if len(project_ids) != len(set(project_ids)):
-        raise ValueError("Project IDs must be unique.")
-
-    path = projects_path(base_dir)
-    return atomic_write_json(path, normalized_projects, indent=2, ensure_ascii=False)
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        normalized_projects = [_normalize_project(project) for project in projects]
+        project_ids = [project["id"] for project in normalized_projects]
+        if len(project_ids) != len(set(project_ids)):
+            raise ValueError("Project IDs must be unique.")
+        path = projects_path(base_dir)
+        return atomic_write_json(path, normalized_projects, indent=2, ensure_ascii=False)
 
 
 def create_project(
@@ -51,23 +52,13 @@ def create_project(
     tags: object | None = None,
     base_dir: Path = PROJECTS_DIR,
 ) -> dict[str, Any]:
-    timestamp = _utc_now_iso()
-    project = _normalize_project(
-        {
-            "id": str(uuid4()),
-            "name": name,
-            "description": description,
-            "status": status,
-            "priority": priority,
-            "tags": normalize_project_tags(tags),
-            "created_at": timestamp,
-            "updated_at": timestamp,
-        }
-    )
-    projects = list_projects(base_dir)
-    projects.append(project)
-    save_projects(projects, base_dir)
-    return project
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        timestamp = _utc_now_iso()
+        project = _normalize_project({"id": str(uuid4()), "name": name, "description": description, "status": status, "priority": priority, "tags": normalize_project_tags(tags), "created_at": timestamp, "updated_at": timestamp})
+        projects = list_projects(base_dir)
+        projects.append(project)
+        save_projects(projects, base_dir)
+        return project
 
 
 def get_project(project_id: str, base_dir: Path = PROJECTS_DIR) -> dict[str, Any] | None:
@@ -82,28 +73,30 @@ def update_project(
     updates: Mapping[str, Any],
     base_dir: Path = PROJECTS_DIR,
 ) -> dict[str, Any]:
-    projects = list_projects(base_dir)
-    for index, project in enumerate(projects):
-        if project["id"] != project_id:
-            continue
-        updated = {**project, **dict(updates)}
-        updated["id"] = project["id"]
-        updated["created_at"] = project["created_at"]
-        updated["updated_at"] = _utc_now_iso()
-        normalized = _normalize_project(updated)
-        projects[index] = normalized
-        save_projects(projects, base_dir)
-        return normalized
-    raise KeyError(f"Project not found: {project_id}")
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        projects = list_projects(base_dir)
+        for index, project in enumerate(projects):
+            if project["id"] != project_id:
+                continue
+            updated = {**project, **dict(updates)}
+            updated["id"] = project["id"]
+            updated["created_at"] = project["created_at"]
+            updated["updated_at"] = _utc_now_iso()
+            normalized = _normalize_project(updated)
+            projects[index] = normalized
+            save_projects(projects, base_dir)
+            return normalized
+        raise KeyError(f"Project not found: {project_id}")
 
 
 def delete_project(project_id: str, base_dir: Path = PROJECTS_DIR) -> bool:
-    projects = list_projects(base_dir)
-    remaining = [project for project in projects if project["id"] != project_id]
-    if len(remaining) == len(projects):
-        return False
-    save_projects(remaining, base_dir)
-    return True
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        projects = list_projects(base_dir)
+        remaining = [project for project in projects if project["id"] != project_id]
+        if len(remaining) == len(projects):
+            return False
+        save_projects(remaining, base_dir)
+        return True
 
 
 def normalize_project_tags(tags: object | None) -> list[str]:

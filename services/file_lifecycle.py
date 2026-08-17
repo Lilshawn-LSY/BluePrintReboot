@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -10,12 +11,24 @@ import pandas as pd
 from ingest.scanner import pdf_sha256_with_metadata
 from storage.index_store import INDEX_COLUMNS, load_index, save_index
 from storage.paths import INDEX_CSV, PAPERS_DIR
+from storage.workspace_lock import WorkspaceLockUnavailable, workspace_write_lock
 
 
 class FileLifecycleRepairError(RuntimeError):
     def __init__(self, message: str, plan: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.plan = plan
+
+
+@contextmanager
+def _write_lock(index_csv: Path):
+    path = Path(index_csv).resolve(strict=False)
+    root = path.parent.parent if path.parent.name.casefold() == "data" else path.parent
+    try:
+        with workspace_write_lock(root):
+            yield
+    except WorkspaceLockUnavailable:
+        raise FileLifecycleRepairError("The workspace write lock is unavailable; no repair was applied.") from None
 
 
 def _now_iso() -> str:
@@ -283,36 +296,28 @@ def reconnect_duplicate_pdf(
     papers_dir: Path = PAPERS_DIR,
     confirm_hash_mismatch: bool = False,
 ) -> dict[str, Any]:
-    plan = build_duplicate_reconnect_plan(
-        paper_id,
-        target_pdf,
-        index_csv=index_csv,
-        papers_dir=papers_dir,
-    )
-    if not plan["can_reconnect"]:
-        raise FileLifecycleRepairError(f"Reconnect is blocked with status {plan['status']}.", plan)
-    if plan["requires_hash_mismatch_confirmation"] and not confirm_hash_mismatch:
-        raise FileLifecycleRepairError("Hash mismatch requires explicit confirmation.", plan)
-
-    dataframe = load_index(index_csv, papers_dir=papers_dir)
-    row_mask = dataframe["paper_id"] == str(paper_id)
-    if row_mask.sum() != 1:
-        raise FileLifecycleRepairError(f"Expected one index record for paper_id {paper_id!r}.", plan)
-    dataframe.loc[row_mask, "filename"] = str(plan["target_filename"])
-    dataframe.loc[row_mask, "filepath"] = str(plan["target_path"])
-    dataframe.loc[row_mask, "pdf_sha256"] = str(plan["target_pdf_sha256"])
-    dataframe.loc[row_mask, "pdf_size_bytes"] = str(plan.get("target_pdf_size_bytes", "0"))
-    dataframe.loc[row_mask, "pdf_modified_at"] = str(plan.get("target_pdf_modified_at", ""))
-    dataframe.loc[row_mask, "updated_at"] = _now_iso()
-    save_index(dataframe, index_csv)
-
-    result = dict(plan)
-    result.update(
-        status="reconnected",
-        message="Duplicate lifecycle reconnect updated only file identity fields and preserved paper_id-linked data.",
-        can_reconnect=False,
-    )
-    return result
+    with _write_lock(index_csv):
+        plan = build_duplicate_reconnect_plan(
+            paper_id, target_pdf, index_csv=index_csv, papers_dir=papers_dir
+        )
+        if not plan["can_reconnect"]:
+            raise FileLifecycleRepairError(f"Reconnect is blocked with status {plan['status']}.", plan)
+        if plan["requires_hash_mismatch_confirmation"] and not confirm_hash_mismatch:
+            raise FileLifecycleRepairError("Hash mismatch requires explicit confirmation.", plan)
+        dataframe = load_index(index_csv, papers_dir=papers_dir)
+        row_mask = dataframe["paper_id"] == str(paper_id)
+        if row_mask.sum() != 1:
+            raise FileLifecycleRepairError(f"Expected one index record for paper_id {paper_id!r}.", plan)
+        dataframe.loc[row_mask, "filename"] = str(plan["target_filename"])
+        dataframe.loc[row_mask, "filepath"] = str(plan["target_path"])
+        dataframe.loc[row_mask, "pdf_sha256"] = str(plan["target_pdf_sha256"])
+        dataframe.loc[row_mask, "pdf_size_bytes"] = str(plan.get("target_pdf_size_bytes", "0"))
+        dataframe.loc[row_mask, "pdf_modified_at"] = str(plan.get("target_pdf_modified_at", ""))
+        dataframe.loc[row_mask, "updated_at"] = _now_iso()
+        save_index(dataframe, index_csv)
+        result = dict(plan)
+        result.update(status="reconnected", message="Duplicate lifecycle reconnect updated only file identity fields and preserved paper_id-linked data.", can_reconnect=False)
+        return result
 
 
 def build_duplicate_remove_plan(
@@ -359,22 +364,15 @@ def remove_duplicate_index_row(
     papers_dir: Path = PAPERS_DIR,
     confirm: bool = False,
 ) -> dict[str, Any]:
-    plan = build_duplicate_remove_plan(paper_id, index_csv=index_csv, papers_dir=papers_dir)
-    if not plan["can_remove"]:
-        raise FileLifecycleRepairError(f"Remove is blocked with status {plan['status']}.", plan)
-    if not confirm:
-        raise FileLifecycleRepairError("Duplicate index-row removal requires explicit confirmation.", plan)
-
-    dataframe = load_index(index_csv, papers_dir=papers_dir)
-    updated = dataframe[dataframe["paper_id"] != str(paper_id)].copy()
-    save_index(updated, index_csv)
-    result = dict(plan)
-    result.update(
-        status="removed_duplicate_index_row",
-        message=(
-            "Duplicate index row removed. Notes, note blocks, project links, PDFs, and extracted text "
-            "were left untouched."
-        ),
-        can_remove=False,
-    )
-    return result
+    with _write_lock(index_csv):
+        plan = build_duplicate_remove_plan(paper_id, index_csv=index_csv, papers_dir=papers_dir)
+        if not plan["can_remove"]:
+            raise FileLifecycleRepairError(f"Remove is blocked with status {plan['status']}.", plan)
+        if not confirm:
+            raise FileLifecycleRepairError("Duplicate index-row removal requires explicit confirmation.", plan)
+        dataframe = load_index(index_csv, papers_dir=papers_dir)
+        updated = dataframe[dataframe["paper_id"] != str(paper_id)].copy()
+        save_index(updated, index_csv)
+        result = dict(plan)
+        result.update(status="removed_duplicate_index_row", message="Duplicate index row removed. Notes, note blocks, project links, PDFs, and extracted text were left untouched.", can_remove=False)
+        return result

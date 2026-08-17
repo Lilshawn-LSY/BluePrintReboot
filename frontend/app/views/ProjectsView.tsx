@@ -28,7 +28,12 @@ function parsedTags(value: string): string[] {
 
 export function ProjectsView() {
   const router = useRouter();
-  const resource = useApiResource("projects", () => apiClient.getProjects({ limit: 100 }));
+  const [offset, setOffset] = useState(0);
+  const pageSize = 50;
+  const resource = useApiResource(
+    `projects:${offset}`,
+    () => apiClient.getProjects({ limit: pageSize, offset }),
+  );
   const [showCreate, setShowCreate] = useState(false);
   const [draft, setDraft] = useState<EditableProjectMetadata>(EMPTY_PROJECT);
   const [tagDraft, setTagDraft] = useState("");
@@ -186,8 +191,9 @@ export function ProjectsView() {
           {resource.data.items.length === 0 ? (
             <EmptyState title="No Projects" description="The local Project store is empty. This view never substitutes sample Projects." />
           ) : (
-            <DataTableShell label="Stored Projects">
-              <table>
+            <>
+              <DataTableShell label="Stored Projects">
+                <table>
                 <thead><tr><th>Project</th><th>Status</th><th>Priority</th><th>Tags</th><th>Paper links</th><th>Note Block links</th><th>Updated</th></tr></thead>
                 <tbody>
                   {resource.data.items.map((project) => (
@@ -213,8 +219,14 @@ export function ProjectsView() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </DataTableShell>
+                </table>
+              </DataTableShell>
+              <div className="reader-editor__actions" aria-label="Project pages">
+                <button className="reader-control reader-control--secondary" type="button" disabled={resource.data.offset === 0} onClick={() => setOffset(Math.max(0, resource.data.offset - pageSize))}>Previous</button>
+                <span className="muted-text">Showing {resource.data.offset + 1}–{resource.data.offset + resource.data.items.length} of {resource.data.total}</span>
+                <button className="reader-control reader-control--secondary" type="button" disabled={!resource.data.has_more} onClick={() => setOffset(resource.data.offset + resource.data.items.length)}>Next</button>
+              </div>
+            </>
           )}
         </Section>
       ) : null}

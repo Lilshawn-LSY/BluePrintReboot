@@ -1,8 +1,13 @@
 ﻿import pandas as pd
+import pytest
 
 from ingest.pdf_inspector_adapter import StructuredPdfExtraction, StructuredPdfPage
 from ingest.text_extractor import FullTextExtractionResult
-from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper
+from services.full_text_workflow import (
+    FullTextTransactionError,
+    clear_text_cache_for_paper,
+    extract_text_for_paper,
+)
 from storage.extracted_text_store import (
     extraction_cache_status,
     extraction_metadata_path,
@@ -19,16 +24,22 @@ def make_index(workspace, record):
     return index_csv
 
 
+def write_managed_pdf(workspace, contents=b"%PDF-1.4\n"):
+    pdf_path = workspace / "papers" / "paper.pdf"
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.write_bytes(contents)
+    return pdf_path.resolve()
+
+
 def test_successful_extraction_updates_cache_and_index(monkeypatch) -> None:
     workspace = make_workspace("full-text-service-success")
     cache_dir = workspace / "cache"
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
-        "filepath": str(workspace / "paper.pdf"),
+        "filepath": str(write_managed_pdf(workspace)),
         "title": "Paper",
     }
-    (workspace / "paper.pdf").write_bytes(b"%PDF-1.4\n")
     index_csv = make_index(workspace, record)
     monkeypatch.setattr(
         "services.full_text_workflow.extract_full_text_from_pdf",
@@ -63,7 +74,7 @@ def test_failed_extraction_saves_metadata_but_is_not_reusable(monkeypatch) -> No
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
-        "filepath": str(workspace / "missing.pdf"),
+        "filepath": str(write_managed_pdf(workspace)),
         "title": "Paper",
     }
     index_csv = make_index(workspace, record)
@@ -97,7 +108,7 @@ def test_force_false_reuses_successful_cache(monkeypatch) -> None:
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
-        "filepath": str(workspace / "paper.pdf"),
+        "filepath": str(write_managed_pdf(workspace)),
         "title": "Paper",
     }
     index_csv = make_index(workspace, record)
@@ -127,8 +138,7 @@ def test_force_false_reuses_successful_cache(monkeypatch) -> None:
 def test_ocr_needed_cache_is_reused_deterministically_after_reload(monkeypatch) -> None:
     workspace = make_workspace("full-text-service-ocr-needed-reuse")
     cache_dir = workspace / "cache"
-    pdf_path = workspace / "paper.pdf"
-    pdf_path.write_bytes(b"scanned PDF")
+    pdf_path = write_managed_pdf(workspace, b"scanned PDF")
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
@@ -182,8 +192,7 @@ def test_ocr_needed_cache_is_reused_deterministically_after_reload(monkeypatch) 
 def test_force_false_reextracts_stale_cache(monkeypatch) -> None:
     workspace = make_workspace("full-text-service-stale")
     cache_dir = workspace / "cache"
-    pdf_path = workspace / "paper.pdf"
-    pdf_path.write_bytes(b"original PDF")
+    pdf_path = write_managed_pdf(workspace, b"original PDF")
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
@@ -220,8 +229,7 @@ def test_force_false_reextracts_stale_cache(monkeypatch) -> None:
 def test_failed_stale_reextraction_preserves_previous_good_cache(monkeypatch) -> None:
     workspace = make_workspace("full-text-service-stale-failure")
     cache_dir = workspace / "cache"
-    pdf_path = workspace / "paper.pdf"
-    pdf_path.write_bytes(b"original PDF")
+    pdf_path = write_managed_pdf(workspace, b"original PDF")
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
@@ -283,7 +291,7 @@ def test_force_true_bypasses_reusable_cache(monkeypatch) -> None:
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
-        "filepath": str(workspace / "paper.pdf"),
+        "filepath": str(write_managed_pdf(workspace)),
         "title": "Paper",
     }
     index_csv = make_index(workspace, record)
@@ -314,7 +322,7 @@ def test_clear_text_cache_for_paper_removes_files_and_resets_index(monkeypatch) 
     record = {
         "paper_id": "paper-1",
         "filename": "paper.pdf",
-        "filepath": str(workspace / "paper.pdf"),
+        "filepath": str(write_managed_pdf(workspace)),
         "title": "Paper",
     }
     index_csv = make_index(workspace, record)
@@ -340,3 +348,68 @@ def test_clear_text_cache_for_paper_removes_files_and_resets_index(monkeypatch) 
     assert row["text_source"] == ""
     assert row["text_char_count"] == ""
     assert row["text_extracted_at"] == ""
+
+
+def test_index_failure_rolls_back_new_cache_and_does_not_report_success(monkeypatch) -> None:
+    workspace = make_workspace("full-text-index-rollback")
+    cache_dir = workspace / "data" / "extracted_text"
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(write_managed_pdf(workspace)),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    monkeypatch.setattr(
+        "services.full_text_workflow.extract_full_text_from_pdf",
+        lambda path: FullTextExtractionResult(
+            text="new extracted text",
+            source="pypdf",
+            char_count=18,
+            errors=[],
+            status="success",
+            attempted_methods=["pypdf"],
+        ),
+    )
+    monkeypatch.setattr(
+        "services.full_text_workflow.update_paper_metadata",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("forced index failure")),
+    )
+
+    with pytest.raises(FullTextTransactionError, match="rolled back"):
+        extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+
+    assert not extracted_text_path("paper-1", cache_dir).exists()
+    assert not extraction_metadata_path("paper-1", cache_dir).exists()
+    assert load_index(index_csv).iloc[0]["text_status"] == ""
+
+
+def test_legacy_filename_only_row_uses_managed_papers_fallback(monkeypatch) -> None:
+    workspace = make_workspace("full-text-filename-fallback")
+    cache_dir = workspace / "data" / "extracted_text"
+    pdf_path = write_managed_pdf(workspace)
+    record = {
+        "paper_id": "paper-1",
+        "filename": pdf_path.name,
+        "filepath": "",
+        "title": "Legacy Paper",
+    }
+    index_csv = make_index(workspace, record)
+    observed: list[object] = []
+
+    def extract(path):
+        observed.append(path)
+        return FullTextExtractionResult(
+            text="legacy text",
+            source="pypdf",
+            char_count=11,
+            errors=[],
+            status="success",
+            attempted_methods=["pypdf"],
+        )
+
+    monkeypatch.setattr("services.full_text_workflow.extract_full_text_from_pdf", extract)
+    result = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+
+    assert result.status == "success"
+    assert observed == [pdf_path]

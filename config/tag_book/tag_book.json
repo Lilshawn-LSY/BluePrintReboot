@@ -73,8 +73,7 @@
       "canonical": "method",
       "label": "Method",
       "category": "paper_type",
-      "aliases": [
-      ],
+      "aliases": [],
       "status": "deprecated",
       "suggestion_strength": 5,
       "description": "Paper type tag for method papers.",
@@ -104,6 +103,16 @@
       "suggestion_strength": 5,
       "description": "Paper type tag for computational or experimental pipelines.",
       "created_from": "config/tag_rules.json"
+    },
+    {
+      "canonical": "promprmr",
+      "label": "PromprMR+",
+      "category": "model_or_algorithm",
+      "aliases": [],
+      "status": "active",
+      "suggestion_strength": 7,
+      "description": "AI and machine-learning methods used in biology papers.",
+      "created_from": "tag_governance"
     },
     {
       "canonical": "protein-design",

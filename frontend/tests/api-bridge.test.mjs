@@ -35,6 +35,7 @@ import {
   isBlueprintReadingNotePath,
   proxyBlueprintGet,
   proxyBlueprintRequest,
+  MAX_COMMAND_BODY_BYTES,
 } from "../app/api/blueprint/[...path]/bridge.mjs";
 
 const API_URL = "http://127.0.0.1:8000";
@@ -347,6 +348,45 @@ test("rejects command bodies without JSON Content-Type", async () => {
   );
   assert.equal(response.status, 415);
   assert.equal(fetched, false);
+});
+
+test("rejects oversized command bodies before buffering or contacting upstream", async () => {
+  let fetched = false;
+  let read = false;
+  const response = await proxyBlueprintRequest(
+    {
+      method: "PUT",
+      url: "http://localhost/api/blueprint/papers/paper-1/reading-note",
+      headers: new Headers({
+        "Content-Type": "application/json",
+        "Content-Length": String(MAX_COMMAND_BODY_BYTES + 1),
+      }),
+      text: async () => { read = true; return "{}"; },
+    },
+    ["papers", "paper-1", "reading-note"],
+    { apiUrl: API_URL, fetchImpl: async () => { fetched = true; return new Response(); } },
+  );
+
+  assert.equal(response.status, 413);
+  assert.equal(read, false);
+  assert.equal(fetched, false);
+});
+
+test("aborts an upstream request after the configured timeout", async () => {
+  const response = await proxyBlueprintRequest(
+    new Request("http://localhost/api/blueprint/health"),
+    ["health"],
+    {
+      apiUrl: API_URL,
+      timeoutMs: 5,
+      fetchImpl: async (_url, options) => new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(new Error("timed out")), { once: true });
+      }),
+    },
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get("X-Blueprint-Error-State"), "api-unavailable");
 });
 
 test("maps command body read failures to a controlled local 503", async () => {

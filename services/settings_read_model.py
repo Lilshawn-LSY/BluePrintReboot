@@ -14,6 +14,7 @@ from services.tag_book import (
     LEGACY_CANONICAL_TAG_PATH,
     LEGACY_RULE_PATH,
 )
+from services.managed_pdf import resolve_indexed_pdf
 from storage.paths import (
     EXPORTS_DIR,
     INDEX_CSV,
@@ -21,6 +22,12 @@ from storage.paths import (
     NOTE_BLOCKS_DIR,
     PAPERS_DIR,
     PROJECTS_DIR,
+)
+from storage.identities import is_safe_paper_id
+from storage.persistent_state import (
+    PERSISTENT_JSON_STORES,
+    json_shape_error,
+    note_block_shape_error,
 )
 
 
@@ -40,6 +47,7 @@ WORKSPACE_RESOURCE_CODES = (
     "tags",
     "note_blocks",
     "project_links",
+    "tag_candidate_reviews",
 )
 INTEGRITY_ISSUE_CODES = (
     "missing_pdfs",
@@ -48,6 +56,7 @@ INTEGRITY_ISSUE_CODES = (
     "orphan_note_blocks",
     "orphan_project_links",
     "corrupt_json",
+    "corrupt_index",
 )
 
 
@@ -183,13 +192,21 @@ def _read_index_records(path: Path) -> list[dict[str, str]]:
     reader = csv.DictReader(text.splitlines())
     if reader.fieldnames is None:
         return []
-    if "paper_id" not in reader.fieldnames:
+    required_columns = {"paper_id", "filename", "filepath"}
+    if not required_columns <= set(reader.fieldnames):
         raise ValueError("The paper index contract is unavailable.")
     records: list[dict[str, str]] = []
     for row in reader:
         if len(records) >= MAX_INDEX_ROWS:
             raise RuntimeError("The bounded Settings row limit was exceeded.")
         records.append({str(key): str(value or "") for key, value in row.items() if key is not None})
+    paper_ids = [record.get("paper_id", "") for record in records]
+    if any(not is_safe_paper_id(paper_id) for paper_id in paper_ids):
+        raise ValueError("The paper index contains an invalid paper_id.")
+    if len(paper_ids) != len(set(paper_ids)):
+        raise ValueError("The paper index contains duplicate paper_id values.")
+    if any(not record.get("filename", "").strip() and not record.get("filepath", "").strip() for record in records):
+        raise ValueError("The paper index contains an unusable PDF identity.")
     return records
 
 
@@ -203,19 +220,8 @@ def _indexed_pdf_path(
     index_csv: Path,
     papers_dir: Path,
 ) -> Path | None:
-    raw_path = str(record.get("filepath", "")).strip()
-    filename = str(record.get("filename", "")).strip()
-    if raw_path:
-        candidate = Path(raw_path)
-        if not candidate.is_absolute():
-            workspace_root = Path(index_csv).parent.parent
-            candidate = (
-                workspace_root / candidate
-                if candidate.parts and candidate.parts[0].casefold() == "papers"
-                else Path(papers_dir) / candidate
-            )
-        return candidate
-    return Path(papers_dir) / filename if filename else None
+    del index_csv
+    return resolve_indexed_pdf(record, papers_dir=Path(papers_dir)).path
 
 
 def _aggregate(count: int | None, *, warning: bool = False) -> SettingsAggregate:
@@ -289,6 +295,7 @@ def build_settings_summary(
     legacy_rule_path: Path = LEGACY_RULE_PATH,
     legacy_canonical_tag_path: Path = LEGACY_CANONICAL_TAG_PATH,
     exports_dir: Path = EXPORTS_DIR,
+    review_store_path: Path | None = None,
     app_version: str = APP_VERSION,
 ) -> SettingsSummary:
     """Build a bounded, deterministic Settings summary without mutating workspace state."""
@@ -305,9 +312,19 @@ def build_settings_summary(
     tag_book_dir = Path(tag_book_dir)
     legacy_rule_path = Path(legacy_rule_path)
     legacy_canonical_tag_path = Path(legacy_canonical_tag_path)
+    review_store_path = Path(review_store_path) if review_store_path is not None else index_csv.parent / "tag_candidate_reviews.json"
 
-    index_result = _safe_call(lambda: _read_index_records(index_csv))
-    paper_records = list(index_result.value) if index_result.available else []
+    index_corrupt = False
+    try:
+        paper_records = _read_index_records(index_csv)
+        index_result = _Result(True, paper_records)
+    except (ValueError, UnicodeDecodeError, csv.Error):
+        index_result = _Result(False)
+        paper_records = []
+        index_corrupt = True
+    except Exception:
+        index_result = _Result(False)
+        paper_records = []
     paper_ids = {
         str(record.get("paper_id", "")).strip()
         for record in paper_records
@@ -327,16 +344,12 @@ def build_settings_summary(
         lambda: _bounded_files(tag_book_dir, suffix=".json", recursive=False)
     )
 
+    workspace_root = index_csv.parent.parent
     fixed_json_paths = [
-        projects_dir / "projects.json",
-        projects_dir / "project_links.json",
-        index_csv.parent / "note_imports.json",
-        index_csv.parent / "lifecycle_decisions.json",
-        index_csv.parent / "settings.json",
-        index_csv.parent.parent / "config" / "settings.json",
-        legacy_rule_path,
-        legacy_canonical_tag_path,
+        workspace_root / definition.relative_path
+        for definition in PERSISTENT_JSON_STORES
     ]
+    fixed_json_paths.extend([legacy_rule_path, legacy_canonical_tag_path, review_store_path])
     discovered_json_paths = [
         *(list(note_block_file_result.value) if note_block_file_result.available else []),
         *(list(tag_config_file_result.value) if tag_config_file_result.available else []),
@@ -351,6 +364,19 @@ def build_settings_summary(
         for key, path in json_paths.items()
     }
     shape_corrupt: set[str] = set()
+    definitions = {
+        _path_key(workspace_root / definition.relative_path): definition
+        for definition in PERSISTENT_JSON_STORES
+    }
+    for key, value_probe in probes.items():
+        definition = definitions.get(key)
+        if definition is not None and value_probe.state == "available":
+            if json_shape_error(definition, value_probe.value):
+                shape_corrupt.add(key)
+        elif value_probe.state == "available" and Path(json_paths[key]).parent.name == "note_blocks":
+            path = Path(json_paths[key])
+            if note_block_shape_error(value_probe.value, paper_id=path.stem):
+                shape_corrupt.add(key)
 
     def probe(path: Path) -> _JsonProbe:
         key = _path_key(path)
@@ -373,6 +399,18 @@ def build_settings_summary(
 
     projects_result = list_store(projects_dir / "projects.json")
     project_links_result = list_store(projects_dir / "project_links.json")
+
+    review_probe = probe(review_store_path)
+    if review_probe.state == "missing":
+        candidate_reviews_result = _Result(True, 0)
+    elif review_probe.state == "available" and _path_key(review_store_path) not in shape_corrupt:
+        papers = review_probe.value.get("papers", {})
+        candidate_reviews_result = _Result(
+            True,
+            sum(len(context.get("candidates", [])) for context in papers.values()),
+        )
+    else:
+        candidate_reviews_result = _Result(False)
 
     tag_book_path = tag_book_dir / "tag_book.json"
     tag_probe = probe(tag_book_path)
@@ -518,6 +556,7 @@ def build_settings_summary(
         ),
         "orphan_project_links": _issue(orphan_project_link_count),
         "corrupt_json": _issue(corrupt_json_count),
+        "corrupt_index": _issue(1 if index_corrupt else (0 if index_result.available else None)),
     }
 
     def has_issue(code: str) -> bool:
@@ -549,6 +588,12 @@ def build_settings_summary(
             if project_links_result.available
             else None,
             warning=has_issue("orphan_project_links"),
+        ),
+        "tag_candidate_reviews": _aggregate(
+            int(candidate_reviews_result.value)
+            if candidate_reviews_result.available
+            else None,
+            warning=_path_key(review_store_path) in shape_corrupt,
         ),
     }
 

@@ -11,6 +11,7 @@ import pandas as pd
 from storage.extracted_text_store import pdf_fingerprint
 from storage.index_store import update_index_from_scan
 from storage.paths import INDEX_CSV, NOTES_DIR, PAPERS_DIR
+from storage.workspace_lock import workspace_root_for_path, workspace_write_lock
 
 
 ONLINE_ONLY_MESSAGE = (
@@ -261,6 +262,26 @@ def import_pdf_from_inbox(
     notes_dir: Path = NOTES_DIR,
     *,
     index_updater: Callable[..., pd.DataFrame] | None = None,
+) -> dict[str, Any]:
+    with workspace_write_lock(workspace_root_for_path(Path(index_csv))):
+        return _import_pdf_from_inbox_locked(
+            source_path,
+            inbox_dir,
+            papers_dir,
+            index_csv,
+            notes_dir,
+            index_updater=index_updater,
+        )
+
+
+def _import_pdf_from_inbox_locked(
+    source_path: str | Path,
+    inbox_dir: str | Path | None,
+    papers_dir: Path,
+    index_csv: Path,
+    notes_dir: Path,
+    *,
+    index_updater: Callable[..., pd.DataFrame] | None,
 ) -> dict[str, Any]:
     papers_dir = _absolute(papers_dir)
     plan = build_inbox_import_plan(source_path, inbox_dir, papers_dir)

@@ -14,6 +14,7 @@ from services.tag_candidate_review import (
     TagCandidateReviewConflict,
     TagCandidateReviewInvalid,
     TagCandidateReviewService,
+    TagCandidateReviewUnavailable,
 )
 from services.tag_governance import (
     CanonicalTagGovernanceService,
@@ -306,6 +307,72 @@ def test_candidate_apply_propagates_existing_paper_tag_revision_conflicts(tmp_pa
             expected_tags_revision=approved.tags_revision,
         )
     assert _paper_tags(index_csv) == "Legacy Manual, current"
+
+
+def test_candidate_promotion_rolls_back_canonical_tag_when_review_save_fails(tmp_path: Path, monkeypatch) -> None:
+    _index_csv, _notes_dir, tag_book_dir, governance, candidates = _workspace(tmp_path)
+    generated = candidates.generate("paper-1")
+    unresolved = next(item for item in generated.items if item["normalized_tag"] == "crispr-screen")
+    review_before = candidates.review_store_path.read_bytes()
+    registry_path = tag_book_dir / "tag_book.json"
+    registry_before = registry_path.read_bytes()
+    monkeypatch.setattr(
+        candidates,
+        "_save_context",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("forced review save failure")),
+    )
+
+    with pytest.raises(TagCandidateReviewUnavailable):
+        candidates.promote(
+            "paper-1",
+            unresolved["candidate_id"],
+            expected_review_revision=generated.review_revision,
+        )
+
+    assert candidates.review_store_path.read_bytes() == review_before
+    assert registry_path.read_bytes() == registry_before
+    assert governance.resolve("crispr-screen") is None
+
+
+def test_candidate_apply_rolls_back_paper_and_retries_idempotently_after_review_failure(tmp_path: Path, monkeypatch) -> None:
+    index_csv, notes_dir, _tag_book_dir, _governance, candidates = _workspace(tmp_path)
+    generated = candidates.generate("paper-1")
+    known = next(item for item in generated.items if item["normalized_tag"] == "single-cell-rna-seq")
+    approved = candidates.approve(
+        "paper-1",
+        known["candidate_id"],
+        expected_review_revision=generated.review_revision,
+    )
+    before = {
+        index_csv: index_csv.read_bytes(),
+        notes_dir / "paper-1.md": (notes_dir / "paper-1.md").read_bytes(),
+        candidates.review_store_path: candidates.review_store_path.read_bytes(),
+    }
+    original_save_context = candidates._save_context
+    monkeypatch.setattr(
+        candidates,
+        "_save_context",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("forced review save failure")),
+    )
+
+    with pytest.raises(TagCandidateReviewUnavailable):
+        candidates.apply(
+            "paper-1",
+            known["candidate_id"],
+            expected_review_revision=approved.review_revision,
+            expected_tags_revision=approved.tags_revision,
+        )
+
+    assert {path: path.read_bytes() for path in before} == before
+    monkeypatch.setattr(candidates, "_save_context", original_save_context)
+    retried = candidates.apply(
+        "paper-1",
+        known["candidate_id"],
+        expected_review_revision=approved.review_revision,
+        expected_tags_revision=approved.tags_revision,
+    )
+    assert retried.paper_tag_result.status == "saved"
+    assert _paper_tags(index_csv) == "Legacy Manual, single-cell-rna-seq"
 
 
 def test_candidate_and_governance_api_commands_are_explicit_and_bounded(tmp_path: Path) -> None:

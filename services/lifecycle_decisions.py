@@ -6,6 +6,7 @@ from typing import Any
 
 from storage.atomic_json import atomic_write_json, read_json_file, require_json_list
 from storage.paths import LIFECYCLE_DECISIONS_JSON, PROJECT_ROOT
+from storage.workspace_lock import workspace_write_lock
 
 
 def _relative(path: str | Path, workspace_root: str | Path) -> str:
@@ -32,20 +33,21 @@ def ignore_exact_duplicate(
     decision_path: Path = LIFECYCLE_DECISIONS_JSON,
     workspace_root: Path = PROJECT_ROOT,
 ) -> dict[str, Any]:
-    relative = _relative(filepath, workspace_root)
-    decisions = load_duplicate_decisions(decision_path)
-    decision = {
-        "decision_type": "ignore_exact_duplicate",
-        "workspace_relative_path": relative,
-        "pdf_sha256": str(pdf_sha256),
-        "size_bytes": int(size_bytes),
-        "modified_at": str(modified_at),
-        "decided_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-    }
-    decisions = [item for item in decisions if not (item.get("decision_type") == decision["decision_type"] and item.get("workspace_relative_path") == relative)]
-    decisions.append(decision)
-    atomic_write_json(decision_path, decisions, indent=2, ensure_ascii=False, trailing_newline=True)
-    return decision
+    with workspace_write_lock(Path(workspace_root)):
+        relative = _relative(filepath, workspace_root)
+        decisions = load_duplicate_decisions(decision_path)
+        decision = {
+            "decision_type": "ignore_exact_duplicate",
+            "workspace_relative_path": relative,
+            "pdf_sha256": str(pdf_sha256),
+            "size_bytes": int(size_bytes),
+            "modified_at": str(modified_at),
+            "decided_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        }
+        decisions = [item for item in decisions if not (item.get("decision_type") == decision["decision_type"] and item.get("workspace_relative_path") == relative)]
+        decisions.append(decision)
+        atomic_write_json(decision_path, decisions, indent=2, ensure_ascii=False, trailing_newline=True)
+        return decision
 
 
 def is_exact_duplicate_ignored(filepath: str | Path, pdf_sha256: str, *, decision_path: Path = LIFECYCLE_DECISIONS_JSON, workspace_root: Path = PROJECT_ROOT) -> bool:
@@ -54,10 +56,11 @@ def is_exact_duplicate_ignored(filepath: str | Path, pdf_sha256: str, *, decisio
 
 
 def unignore_exact_duplicate(filepath: str | Path, *, decision_path: Path = LIFECYCLE_DECISIONS_JSON, workspace_root: Path = PROJECT_ROOT) -> bool:
-    relative = _relative(filepath, workspace_root)
-    decisions = load_duplicate_decisions(decision_path)
-    retained = [item for item in decisions if not (item.get("decision_type") == "ignore_exact_duplicate" and item.get("workspace_relative_path") == relative)]
-    if len(retained) == len(decisions):
-        return False
-    atomic_write_json(decision_path, retained, indent=2, ensure_ascii=False, trailing_newline=True)
-    return True
+    with workspace_write_lock(Path(workspace_root)):
+        relative = _relative(filepath, workspace_root)
+        decisions = load_duplicate_decisions(decision_path)
+        retained = [item for item in decisions if not (item.get("decision_type") == "ignore_exact_duplicate" and item.get("workspace_relative_path") == relative)]
+        if len(retained) == len(decisions):
+            return False
+        atomic_write_json(decision_path, retained, indent=2, ensure_ascii=False, trailing_newline=True)
+        return True

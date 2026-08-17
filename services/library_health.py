@@ -4,6 +4,11 @@ import json
 import hashlib
 import os
 import tempfile
+import threading
+import time
+from copy import deepcopy
+from collections import Counter
+from functools import wraps
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -14,6 +19,7 @@ import pandas as pd
 from ingest.doi import normalize_doi
 from storage.extracted_text_store import extraction_cache_status, pdf_fingerprint
 from storage.index_store import INDEX_COLUMNS
+from storage.identities import is_safe_paper_id
 from storage.atomic_json import (
     JsonStoreError,
     JsonShapeError,
@@ -35,12 +41,30 @@ from storage.paths import (
     PAPER_PROFILES_DIR,
     LIFECYCLE_DECISIONS_JSON,
 )
+from storage.persistent_state import (
+    PERSISTENT_JSON_STORES,
+    json_shape_error,
+    note_block_shape_error,
+)
+from services.managed_pdf import (
+    ManagedPdfState,
+    indexed_pdf_candidate,
+    resolve_indexed_pdf,
+)
+from storage.workspace_lock import (
+    workspace_root_for_path,
+    workspace_state_generation,
+    workspace_write_lock,
+)
 from services.lifecycle_decisions import is_exact_duplicate_ignored
 
 
 ORPHAN_PRESERVE_ACTION = "Preserve for now; reattach manually later or export before deletion."
 ORPHAN_PROJECT_LINK_ACTION = "Remove only this project link after confirmation."
 ORPHAN_EXPORT_ACTION = "Export a recovery copy before reattaching or deleting orphan data."
+_HEALTH_CACHE_TTL_SECONDS = 1.0
+_HEALTH_CACHE_LOCK = threading.Lock()
+_HEALTH_CACHE: dict[tuple[tuple[str, str], ...], tuple[float, int, dict[str, Any]]] = {}
 
 ISSUE_GUIDANCE: dict[str, dict[str, str]] = {
     "missing_pdfs": {
@@ -121,6 +145,12 @@ ISSUE_GUIDANCE: dict[str, dict[str, str]] = {
         "meaning": "A local JSON store could not be parsed or has the wrong top-level shape.",
         "next_action": "Do not overwrite the file. Restore from backup or repair a copy manually, then rerun Health Check.",
     },
+    "corrupt_index": {
+        "severity": "error",
+        "category": "storage",
+        "meaning": "paper_index.csv violates required identity or schema invariants.",
+        "next_action": "Preserve the file and repair or restore it explicitly; Health Check never rewrites the index.",
+    },
     "backup_snapshot_warnings": {
         "severity": "warning",
         "category": "backup",
@@ -148,6 +178,18 @@ class OrphanProjectLinkRepairError(RuntimeError):
         self.plan = plan
 
 
+def _workspace_mutation(func):
+    """Serialize Health repair plans and their writes as one workspace command."""
+
+    @wraps(func)
+    def locked(*args, **kwargs):
+        index_csv = Path(kwargs.get("index_csv", INDEX_CSV))
+        with workspace_write_lock(workspace_root_for_path(index_csv)):
+            return func(*args, **kwargs)
+
+    return locked
+
+
 def _absolute(path: str | Path) -> Path:
     return Path(path).expanduser().resolve(strict=False)
 
@@ -172,10 +214,37 @@ def _read_index(index_csv: Path) -> tuple[pd.DataFrame, list[str]]:
         dataframe = pd.read_csv(index_csv, dtype=str).fillna("")
     except Exception as exc:
         return pd.DataFrame(columns=INDEX_COLUMNS), [f"paper_index.csv could not be read: {exc}"]
+    errors: list[str] = []
+    required_columns = {"paper_id", "filename", "filepath"}
+    missing_columns = sorted(required_columns - set(dataframe.columns))
+    if missing_columns:
+        errors.append(
+            "paper_index.csv is missing required column(s): "
+            + ", ".join(missing_columns)
+            + "."
+        )
+    if "paper_id" in dataframe:
+        paper_ids = dataframe["paper_id"].astype(str).tolist()
+        if any(not value for value in paper_ids):
+            errors.append("paper_index.csv contains an empty paper_id.")
+        duplicate_ids = sorted(
+            value for value, count in Counter(paper_ids).items() if value and count > 1
+        )
+        if duplicate_ids:
+            errors.append("paper_index.csv contains duplicate paper_id values.")
+        if any(value and not is_safe_paper_id(value) for value in paper_ids):
+            errors.append("paper_index.csv contains an unsafe paper_id.")
+    if {"filename", "filepath"} <= set(dataframe.columns):
+        if any(
+            not str(row.get("filename", "")).strip()
+            and not str(row.get("filepath", "")).strip()
+            for row in dataframe.to_dict("records")
+        ):
+            errors.append("paper_index.csv contains a row with no filename or filepath.")
     for column in INDEX_COLUMNS:
         if column not in dataframe.columns:
             dataframe[column] = ""
-    return dataframe, []
+    return dataframe, errors
 
 
 def _pdf_files(papers_dir: Path) -> list[Path]:
@@ -326,7 +395,13 @@ def _load_json_list(
             _remember_json_issue(corrupt_json, exc)
         errors.append(f"{path.name} could not be read: {exc}")
         return []
-    return [item for item in value if isinstance(item, dict)]
+    if any(not isinstance(item, dict) for item in value):
+        shape_error = JsonShapeError(path, f"{store_name} must contain only JSON objects")
+        if corrupt_json is not None:
+            _remember_json_issue(corrupt_json, shape_error)
+        errors.append(f"{path.name} could not be read: {shape_error}")
+        return []
+    return list(value)
 
 
 def _health_json_files(
@@ -338,15 +413,10 @@ def _health_json_files(
 ) -> list[Path]:
     data_dir = Path(index_csv).parent
     config_dir = data_dir.parent / "config"
+    workspace_root = data_dir.parent
     candidates: list[Path] = [
-        projects_dir / "projects.json",
-        projects_dir / "project_links.json",
-        data_dir / "note_imports.json",
-        config_dir / "tag_rules.json",
-        config_dir / "canonical_tags.json",
-        config_dir / "settings.json",
-        data_dir / "settings.json",
-        data_dir / "lifecycle_decisions.json",
+        workspace_root / definition.relative_path
+        for definition in PERSISTENT_JSON_STORES
     ]
     for directory in (
         note_blocks_dir,
@@ -366,18 +436,29 @@ def _health_json_files(
 def _scan_corrupt_json(
     paths: list[Path],
     issues: dict[str, dict[str, str]],
+    *,
+    workspace_root: Path,
 ) -> None:
+    definitions = {
+        definition.relative_path: definition for definition in PERSISTENT_JSON_STORES
+    }
     for path in paths:
         try:
             value = read_json_file(path, store_name="App-owned JSON file")
-            list_store = (
-                path.name in {"projects.json", "project_links.json", "note_imports.json", "lifecycle_decisions.json"}
-                or path.parent.name == "note_blocks"
-            )
-            object_store = path.parent.name in {"extracted_text", "paper_profiles"}
-            if list_store and not isinstance(value, list):
-                raise JsonShapeError(path, "App-owned JSON file must contain a JSON list")
-            if object_store and not isinstance(value, dict):
+            try:
+                relative = path.resolve(strict=False).relative_to(
+                    workspace_root.resolve(strict=False)
+                ).as_posix()
+            except ValueError:
+                relative = ""
+            definition = definitions.get(relative)
+            if definition is not None:
+                if error := json_shape_error(definition, value):
+                    raise JsonShapeError(path, f"App-owned JSON file {error}")
+            elif path.parent.name == "note_blocks":
+                if error := note_block_shape_error(value, paper_id=path.stem):
+                    raise JsonShapeError(path, f"Note block file {error}")
+            elif path.parent.name in {"extracted_text", "paper_profiles"} and not isinstance(value, dict):
                 raise JsonShapeError(path, "App-owned cache JSON must contain a JSON object")
         except JsonStoreError as exc:
             _remember_json_issue(issues, exc)
@@ -710,14 +791,15 @@ def _duplicate_pdf_hashes(
     project_link_counts: dict[str, int],
     workspace_root: Path,
     lifecycle_decisions_json: Path,
+    papers_dir: Path,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     items_by_hash: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for record in records:
-        filepath = str(record.get("filepath", "")).strip()
-        resolved = _absolute(filepath) if filepath else None
-        digest = str(record.get("pdf_sha256", "")).strip()
-        if resolved is not None and resolved.exists() and resolved.is_file():
-            digest = _pdf_sha256(resolved, errors, record)
+        pdf = resolve_indexed_pdf(record, papers_dir=papers_dir)
+        resolved = pdf.path if pdf.state is ManagedPdfState.available else None
+        # Stored digests are historical metadata, not proof of current content.
+        # Exact-duplicate groups are formed only from bytes hashed in this scan.
+        digest = _pdf_sha256(resolved, errors, record) if resolved is not None else ""
         if not digest:
             continue
         paper_id = str(record.get("paper_id", ""))
@@ -815,26 +897,39 @@ def run_library_health_check(
         if not _is_within(diagnostic_root, workspace_root):
             raise ValueError(f"Health Check path is outside the BluePrintReboot workspace: {diagnostic_root}")
     dataframe, errors = _read_index(index_csv)
+    index_errors = [error for error in errors if error.startswith("paper_index.csv")]
     corrupt_json_by_path: dict[str, dict[str, str]] = {}
-    records = dataframe.to_dict("records")
+    raw_records = dataframe.to_dict("records")
+    index_row_count = len(raw_records)
+    records = [
+        record
+        for record in raw_records
+        if is_safe_paper_id(str(record.get("paper_id", "")))
+    ]
     paper_ids = {str(record.get("paper_id", "")) for record in records if record.get("paper_id")}
 
     missing_pdfs: list[dict[str, str]] = []
     noncanonical_filepaths: list[dict[str, str]] = []
     indexed_paths: set[str] = set()
     for record in records:
-        filepath = str(record.get("filepath", "")).strip()
-        resolved = _absolute(filepath) if filepath else _absolute(papers_dir / str(record.get("filename", "")))
-        indexed_paths.add(_path_key(resolved))
+        pdf = resolve_indexed_pdf(record, papers_dir=papers_dir)
+        candidate = pdf.path or indexed_pdf_candidate(record, papers_dir)
+        resolved = (
+            candidate.resolve(strict=False)
+            if candidate is not None
+            else papers_dir / str(record.get("filename", ""))
+        )
+        if pdf.path is not None:
+            indexed_paths.add(_path_key(pdf.path))
         item = {
             "paper_id": str(record.get("paper_id", "")),
             "filename": str(record.get("filename", "")),
             "filepath": str(resolved),
             "pdf_sha256": str(record.get("pdf_sha256", "")),
         }
-        if not resolved.exists() or not resolved.is_file():
+        if pdf.state is not ManagedPdfState.available:
             missing_pdfs.append(item)
-        if not _is_within(resolved, papers_dir):
+        if pdf.state is ManagedPdfState.invalid:
             noncanonical_filepaths.append(item)
 
     managed_pdfs = _pdf_files(papers_dir)
@@ -867,6 +962,7 @@ def run_library_health_check(
         project_link_counts=project_link_counts,
         workspace_root=workspace_root,
         lifecycle_decisions_json=lifecycle_decisions_json,
+        papers_dir=papers_dir,
     )
     ignored_paths = {_path_key(item["filepath"]) for item in ignored_duplicates}
     unindexed_pdfs = [path for path in unindexed_pdfs if _path_key(path) not in ignored_paths]
@@ -928,6 +1024,7 @@ def run_library_health_check(
             extracted_text_dir=extracted_text_dir,
         ),
         corrupt_json_by_path,
+        workspace_root=workspace_root,
     )
     corrupt_json: list[dict[str, Any]] = []
     for item in corrupt_json_by_path.values():
@@ -936,6 +1033,19 @@ def run_library_health_check(
     cache_issues = _diagnose_cache_storage(root=workspace_root, extracted_text_dir=extracted_text_dir, paper_profiles_dir=paper_profiles_dir)
     cache_paths = {item["path"] for item in cache_issues}
     corrupt_json = sorted([item for item in corrupt_json if item["path"] not in cache_paths] + cache_issues, key=lambda item: (item["path"], item["classification"]))
+    corrupt_index = []
+    if index_errors:
+        corrupt_index.append(
+            _structured_storage_issue(
+                index_csv,
+                root=workspace_root,
+                extracted_text_dir=extracted_text_dir,
+                paper_profiles_dir=paper_profiles_dir,
+                classification="invalid paper index",
+                error_type="IndexInvariantError",
+                issue=" ".join(index_errors),
+            )
+        )
     backup_snapshot_warnings = _backup_snapshot_warnings(exports_dir)
     quarantined_caches: list[dict[str, Any]] = []
     if quarantine_dir.is_dir():
@@ -950,12 +1060,12 @@ def run_library_health_check(
 
     stale_extracted_text: list[dict[str, str]] = []
     for record in records:
-        filepath = str(record.get("filepath", "")).strip()
         paper_id = str(record.get("paper_id", ""))
-        if not filepath or not paper_id or not Path(filepath).is_file():
+        pdf = resolve_indexed_pdf(record, papers_dir=papers_dir)
+        if not paper_id or pdf.state is not ManagedPdfState.available or pdf.path is None:
             continue
         try:
-            cache_status = extraction_cache_status(paper_id, extracted_text_dir, pdf_path=filepath)
+            cache_status = extraction_cache_status(paper_id, extracted_text_dir, pdf_path=pdf.path)
         except OSError as exc:
             errors.append(f"Extracted-text cache check failed for {paper_id}: {exc}")
             continue
@@ -985,6 +1095,7 @@ def run_library_health_check(
         "stale_extracted_text": stale_extracted_text,
         "noncanonical_filepaths": noncanonical_filepaths,
         "corrupt_json": corrupt_json,
+        "corrupt_index": corrupt_index,
         "backup_snapshot_warnings": backup_snapshot_warnings,
         "errors": errors,
     }
@@ -997,13 +1108,43 @@ def run_library_health_check(
         "checked_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "healthy": issue_count == 0,
         "summary": {
-            "index_rows": len(records),
+            "index_rows": index_row_count,
             "managed_pdfs": len(managed_pdfs),
             "issue_count": issue_count,
         },
         "issue_guidance": _active_issue_guidance(issue_sections),
         **issue_sections,
     }
+
+
+def cached_library_health_check(**health_kwargs: Any) -> dict[str, Any]:
+    """Share one bounded recent Health Check across related API reads.
+
+    Same-process write-lock completion invalidates immediately through the
+    workspace generation. Changes from another local process can remain cached
+    for at most the short TTL.
+    """
+
+    index_csv = Path(health_kwargs.get("index_csv", INDEX_CSV))
+    workspace_root = workspace_root_for_path(index_csv)
+    generation = workspace_state_generation(workspace_root)
+    key = tuple(sorted((str(name), str(value)) for name, value in health_kwargs.items()))
+    now = time.monotonic()
+    with _HEALTH_CACHE_LOCK:
+        cached = _HEALTH_CACHE.get(key)
+        if cached is not None and cached[0] > now and cached[1] == generation:
+            return deepcopy(cached[2])
+        report = run_library_health_check(**health_kwargs)
+        if len(_HEALTH_CACHE) >= 16:
+            oldest = min(_HEALTH_CACHE, key=lambda item: _HEALTH_CACHE[item][0])
+            _HEALTH_CACHE.pop(oldest, None)
+        _HEALTH_CACHE[key] = (now + _HEALTH_CACHE_TTL_SECONDS, generation, report)
+        return deepcopy(report)
+
+
+def invalidate_library_health_cache() -> None:
+    with _HEALTH_CACHE_LOCK:
+        _HEALTH_CACHE.clear()
 
 
 def build_orphan_project_link_removal_plan(
@@ -1063,6 +1204,7 @@ def build_orphan_project_link_removal_plan(
     return plan
 
 
+@_workspace_mutation
 def remove_orphan_project_link(
     link_id: str,
     *,
@@ -1176,6 +1318,7 @@ def export_orphan_note(
     return result
 
 
+@_workspace_mutation
 def reattach_orphan_note(
     orphan_paper_id: str,
     target_paper_id: str,
@@ -1215,6 +1358,7 @@ def reattach_orphan_note(
     return result
 
 
+@_workspace_mutation
 def delete_orphan_note(
     orphan_paper_id: str,
     *,
@@ -1306,6 +1450,7 @@ def export_orphan_note_blocks(
     return result
 
 
+@_workspace_mutation
 def reattach_orphan_note_blocks(
     orphan_paper_id: str,
     target_paper_id: str,
@@ -1351,6 +1496,7 @@ def reattach_orphan_note_blocks(
     return result
 
 
+@_workspace_mutation
 def delete_orphan_note_blocks(
     orphan_paper_id: str,
     *,
@@ -1445,6 +1591,7 @@ def build_orphan_project_link_reattach_plan(
     return plan
 
 
+@_workspace_mutation
 def reattach_orphan_project_link(
     link_id: str,
     target_paper_id: str,

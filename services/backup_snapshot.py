@@ -3,13 +3,18 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
 from config.contact import APP_VERSION
+from storage.atomic_text import fsync_parent_directory
 from storage.paths import EXPORTS_DIR, PROJECT_ROOT
+from storage.persistent_state import BACKUP_FILE_PATHS
+from storage.workspace_lock import workspace_write_lock
 
 
 IGNORED_NAMES = {
@@ -35,19 +40,25 @@ TAG_CONFIG_FILES = (
     "config/tag_book/candidate_patterns.json",
 )
 LOCAL_SETTING_FILES = (".streamlit/config.toml", "config/settings.json", "data/settings.json")
-LOCAL_LIBRARY_FILES = ("data/note_imports.json", "data/lifecycle_decisions.json")
 SNAPSHOT_INCLUDED_BY_DEFAULT = (
     "data/paper_index.csv",
     "data/projects/",
     "data/note_blocks/",
     "data/note_imports.json",
     "data/lifecycle_decisions.json",
+    "data/tag_candidate_reviews.json",
     "notes/",
     "config/tag_rules.json",
     "config/canonical_tags.json",
     "config/tag_book/",
     ".streamlit/config.toml",
 )
+COPY_CHUNK_BYTES = 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 100_000
+MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+MAX_COUNTED_STATE_MEMBER_BYTES = 64 * 1024 * 1024
+MAX_VERIFICATION_MEMBER_BYTES = 32 * 1024 * 1024 * 1024
+MAX_VERIFICATION_UNCOMPRESSED_BYTES = 512 * 1024 * 1024 * 1024
 SNAPSHOT_EXCLUDED_BY_DEFAULT = (
     ".git/",
     ".venv/",
@@ -111,7 +122,7 @@ def collect_snapshot_files(
         candidates.append(index_path)
     for relative_directory in ("data/projects", "notes", "data/note_blocks"):
         candidates.extend(_files_under(project_root / relative_directory, project_root))
-    for relative_file in (*TAG_CONFIG_FILES, *LOCAL_SETTING_FILES, *LOCAL_LIBRARY_FILES):
+    for relative_file in (*BACKUP_FILE_PATHS, *LOCAL_SETTING_FILES):
         path = project_root / relative_file
         if path.is_file() and not _is_ignored(path, project_root):
             candidates.append(path)
@@ -126,6 +137,27 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _archive_member_digest(archive: ZipFile, member_path: str) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    size = 0
+    with archive.open(member_path, "r") as source:
+        for chunk in iter(lambda: source.read(COPY_CHUNK_BYTES), b""):
+            size += len(chunk)
+            digest.update(chunk)
+    return size, digest.hexdigest()
+
+
+def _read_member_limited(archive: ZipFile, member_path: str, maximum: int) -> bytes:
+    info = archive.getinfo(member_path)
+    if info.file_size > maximum:
+        raise ValueError(f"{member_path} exceeds the bounded state-validation limit.")
+    with archive.open(info, "r") as source:
+        content = source.read(maximum + 1)
+    if len(content) > maximum:
+        raise ValueError(f"{member_path} exceeds the bounded state-validation limit.")
+    return content
 
 
 def _json_list_count(path: Path) -> int:
@@ -194,6 +226,89 @@ def build_snapshot_manifest(
     }
 
 
+def _build_manifest_from_archive(
+    snapshot_path: Path,
+    *,
+    include_pdfs: bool,
+    created_at: datetime,
+) -> dict[str, Any]:
+    with ZipFile(snapshot_path, mode="r") as archive:
+        paths = sorted(archive.namelist(), key=str.casefold)
+        included_files = []
+        for member_path in paths:
+            size_bytes, digest = _archive_member_digest(archive, member_path)
+            included_files.append(
+                {"path": member_path, "size_bytes": size_bytes, "sha256": digest}
+            )
+        path_set = set(paths)
+        try:
+            index_rows = (
+                _csv_row_count_bytes(
+                    _read_member_limited(
+                        archive,
+                        "data/paper_index.csv",
+                        MAX_COUNTED_STATE_MEMBER_BYTES,
+                    )
+                )
+                if "data/paper_index.csv" in path_set
+                else 0
+            )
+            projects = (
+                _json_list_count_bytes(
+                    _read_member_limited(
+                        archive,
+                        "data/projects/projects.json",
+                        MAX_COUNTED_STATE_MEMBER_BYTES,
+                    )
+                )
+                if "data/projects/projects.json" in path_set
+                else 0
+            )
+            project_links = (
+                _json_list_count_bytes(
+                    _read_member_limited(
+                        archive,
+                        "data/projects/project_links.json",
+                        MAX_COUNTED_STATE_MEMBER_BYTES,
+                    )
+                )
+                if "data/projects/project_links.json" in path_set
+                else 0
+            )
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+        if index_rows is None or projects is None or project_links is None:
+            raise RuntimeError("Snapshot state counts could not be derived from the archived bytes.")
+
+    return {
+        "created_at": created_at.isoformat().replace("+00:00", "Z"),
+        "app_version": APP_VERSION,
+        "snapshot_type": "full" if include_pdfs else "light",
+        "includes_pdfs": include_pdfs,
+        "policy": {
+            "purpose": "Backup private local library data. Source code remains in GitHub.",
+            "included_by_default": list(SNAPSHOT_INCLUDED_BY_DEFAULT),
+            "extra_when_full": ["papers/**/*.pdf"],
+            "excluded_by_default": list(SNAPSHOT_EXCLUDED_BY_DEFAULT),
+            "extracted_text_cache": {
+                "included": False,
+                "reason": "Extracted text and paper profile caches are regenerable and excluded from conservative snapshots.",
+            },
+            "restore": "Manual restore only; create or inspect backups before repair actions.",
+        },
+        "included_files": included_files,
+        "counts": {
+            "included_files": len(included_files),
+            "index_rows": index_rows,
+            "projects": projects,
+            "project_links": project_links,
+            "notes": sum(path.startswith("notes/") for path in path_set),
+            "note_block_files": sum(path.startswith("data/note_blocks/") for path in path_set),
+            "pdfs": sum(path.startswith("papers/") for path in path_set),
+        },
+    }
+
+
 def _available_snapshot_path(exports_dir: Path, base_name: str) -> Path:
     candidate = exports_dir / f"{base_name}.zip"
     suffix = 2
@@ -216,27 +331,53 @@ def create_backup_snapshot(
     created_at = _timestamp(now)
     snapshot_type = "full" if include_pdfs else "light"
     base_name = f"blueprint_snapshot_{created_at.strftime('%Y%m%dT%H%M%SZ')}_{snapshot_type}"
-    snapshot_path = _available_snapshot_path(exports_dir, base_name)
-    files = collect_snapshot_files(project_root, include_pdfs=include_pdfs)
-    manifest = build_snapshot_manifest(
-        files,
-        project_root,
-        include_pdfs=include_pdfs,
-        created_at=created_at,
-    )
-
+    temporary_path: Path | None = None
     try:
-        with ZipFile(snapshot_path, mode="x", compression=ZIP_DEFLATED) as archive:
-            for path in files:
-                archive.write(path, arcname=path.relative_to(project_root).as_posix())
-            archive.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
+        with workspace_write_lock(project_root):
+            snapshot_path = _available_snapshot_path(exports_dir, base_name)
+            with tempfile.NamedTemporaryFile(
+                dir=exports_dir,
+                prefix=f".{base_name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+            files = collect_snapshot_files(project_root, include_pdfs=include_pdfs)
+            with ZipFile(temporary_path, mode="w", compression=ZIP_DEFLATED) as archive:
+                for path in files:
+                    member_path = path.relative_to(project_root).as_posix()
+                    with path.open("rb") as source, archive.open(member_path, "w", force_zip64=True) as destination:
+                        for chunk in iter(lambda: source.read(COPY_CHUNK_BYTES), b""):
+                            destination.write(chunk)
+            manifest = _build_manifest_from_archive(
+                temporary_path,
+                include_pdfs=include_pdfs,
+                created_at=created_at,
+            )
+            with ZipFile(temporary_path, mode="a", compression=ZIP_DEFLATED) as archive:
+                archive.writestr(
+                    "manifest.json",
+                    json.dumps(manifest, indent=2, ensure_ascii=False),
+                )
+            with temporary_path.open("rb") as staged:
+                os.fsync(staged.fileno())
+            verification = verify_backup_snapshot(temporary_path)
+            if not verification["valid"]:
+                raise RuntimeError(
+                    "Snapshot verification failed before publication: "
+                    + "; ".join(verification["errors"])
+                )
+            os.replace(temporary_path, snapshot_path)
+            temporary_path = None
+            fsync_parent_directory(snapshot_path)
     except Exception:
-        if snapshot_path.exists():
-            snapshot_path.unlink()
+        if temporary_path is not None and temporary_path.exists():
+            temporary_path.unlink()
         raise
     return {
         "snapshot_path": str(snapshot_path),
         "manifest": manifest,
+        "verification": {**verification, "snapshot_path": str(snapshot_path)},
     }
 
 
@@ -276,7 +417,16 @@ def verify_backup_snapshot(snapshot_path: str | Path) -> dict[str, Any]:
     checked_files = 0
     try:
         with ZipFile(path, mode="r") as archive:
-            names = archive.namelist()
+            infos = archive.infolist()
+            names = [info.filename for info in infos]
+            if len(infos) > MAX_ARCHIVE_MEMBERS:
+                errors.append("Archive contains too many members to verify safely.")
+                infos = infos[:MAX_ARCHIVE_MEMBERS]
+                names = [info.filename for info in infos]
+            total_size = sum(max(0, info.file_size) for info in infos)
+            archive_size_safe = total_size <= MAX_VERIFICATION_UNCOMPRESSED_BYTES
+            if not archive_size_safe:
+                errors.append("Archive uncompressed size exceeds the verification safety limit.")
             name_set = set(names)
             if len(names) != len(name_set):
                 errors.append("Archive contains duplicate member paths.")
@@ -287,8 +437,14 @@ def verify_backup_snapshot(snapshot_path: str | Path) -> dict[str, Any]:
                 errors.append("manifest.json is missing from the archive root.")
             else:
                 try:
-                    loaded_manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
-                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    loaded_manifest = json.loads(
+                        _read_member_limited(
+                            archive,
+                            "manifest.json",
+                            MAX_MANIFEST_BYTES,
+                        ).decode("utf-8")
+                    )
+                except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
                     errors.append(f"manifest.json is not valid UTF-8 JSON: {exc}.")
                 else:
                     if isinstance(loaded_manifest, dict):
@@ -311,7 +467,6 @@ def verify_backup_snapshot(snapshot_path: str | Path) -> dict[str, Any]:
                     errors.append("included_files must be a list.")
                     entries = []
                 listed_paths: list[str] = []
-                content_by_path: dict[str, bytes] = {}
                 for index, entry in enumerate(entries):
                     if not isinstance(entry, dict):
                         errors.append(f"included_files[{index}] must be an object.")
@@ -324,16 +479,24 @@ def verify_backup_snapshot(snapshot_path: str | Path) -> dict[str, Any]:
                     if member_path not in name_set:
                         errors.append(f"Listed file is missing from the archive: {member_path}.")
                         continue
-                    content = archive.read(member_path)
-                    content_by_path[member_path] = content
+                    member_info = archive.getinfo(member_path)
+                    if member_info.file_size > MAX_VERIFICATION_MEMBER_BYTES:
+                        errors.append(f"Archive member exceeds the verification safety limit: {member_path}.")
+                        continue
+                    if not archive_size_safe:
+                        continue
+                    try:
+                        actual_size, actual_sha256 = _archive_member_digest(archive, member_path)
+                    except (OSError, RuntimeError, BadZipFile) as exc:
+                        errors.append(f"Could not stream {member_path}: {exc}.")
+                        continue
                     checked_files += 1
                     size_bytes = entry.get("size_bytes")
                     if type(size_bytes) is not int or size_bytes < 0:
                         errors.append(f"Invalid size_bytes for {member_path}.")
-                    elif size_bytes != len(content):
+                    elif size_bytes != actual_size:
                         errors.append(f"size_bytes mismatch for {member_path}.")
                     expected_sha256 = entry.get("sha256")
-                    actual_sha256 = hashlib.sha256(content).hexdigest()
                     if not isinstance(expected_sha256, str) or expected_sha256.lower() != actual_sha256:
                         errors.append(f"sha256 mismatch for {member_path}.")
 
@@ -345,17 +508,30 @@ def verify_backup_snapshot(snapshot_path: str | Path) -> dict[str, Any]:
                 if includes_pdfs is False and any(item.startswith("papers/") for item in listed_paths):
                     errors.append("A light snapshot must not list files under papers/.")
 
+                try:
+                    index_count = (
+                        _csv_row_count_bytes(_read_member_limited(archive, "data/paper_index.csv", MAX_COUNTED_STATE_MEMBER_BYTES))
+                        if "data/paper_index.csv" in name_set
+                        else 0
+                    )
+                    project_count = (
+                        _json_list_count_bytes(_read_member_limited(archive, "data/projects/projects.json", MAX_COUNTED_STATE_MEMBER_BYTES))
+                        if "data/projects/projects.json" in name_set
+                        else 0
+                    )
+                    project_link_count = (
+                        _json_list_count_bytes(_read_member_limited(archive, "data/projects/project_links.json", MAX_COUNTED_STATE_MEMBER_BYTES))
+                        if "data/projects/project_links.json" in name_set
+                        else 0
+                    )
+                except ValueError as exc:
+                    errors.append(str(exc))
+                    index_count = project_count = project_link_count = None
                 computed_counts: dict[str, int | None] = {
                     "included_files": len(entries),
-                    "index_rows": _csv_row_count_bytes(content_by_path["data/paper_index.csv"])
-                    if "data/paper_index.csv" in content_by_path
-                    else 0,
-                    "projects": _json_list_count_bytes(content_by_path["data/projects/projects.json"])
-                    if "data/projects/projects.json" in content_by_path
-                    else 0,
-                    "project_links": _json_list_count_bytes(content_by_path["data/projects/project_links.json"])
-                    if "data/projects/project_links.json" in content_by_path
-                    else 0,
+                    "index_rows": index_count,
+                    "projects": project_count,
+                    "project_links": project_link_count,
                     "notes": sum(item.startswith("notes/") for item in listed_paths),
                     "note_block_files": sum(item.startswith("data/note_blocks/") for item in listed_paths),
                     "pdfs": sum(item.startswith("papers/") for item in listed_paths),

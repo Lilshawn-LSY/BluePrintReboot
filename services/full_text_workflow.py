@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 from ingest.text_extractor import extract_full_text_from_pdf
+from services.managed_pdf import ManagedPdfState, resolve_indexed_pdf
+from storage.atomic_text import atomic_write_text
 from storage.extracted_text_store import (
     build_extraction_metadata,
     build_preserved_cache_failure_metadata,
@@ -17,6 +19,8 @@ from storage.extracted_text_store import (
 )
 from storage.index_store import read_index_snapshot, update_paper_metadata
 from storage.paths import EXTRACTED_TEXT_DIR, INDEX_CSV
+from storage.identities import require_safe_paper_id
+from storage.workspace_lock import workspace_write_lock
 
 
 @dataclass(frozen=True)
@@ -45,6 +49,16 @@ FullTextExtractionState = Literal["not_extracted", "success", "failed", "ocr_nee
 
 class FullTextServiceUnavailable(Exception):
     """The bounded full-text service could not read or update cache state safely."""
+
+
+class FullTextTransactionError(RuntimeError):
+    """A multi-file extraction update failed and was rolled back."""
+
+
+@dataclass(frozen=True)
+class _FileSnapshot:
+    exists: bool
+    content: str = ""
 
 
 @dataclass(frozen=True)
@@ -86,14 +100,15 @@ class FullTextService:
         if record is None:
             return None
         try:
+            resolved_pdf = _managed_pdf(record, self.index_csv)
             status = extraction_cache_status(
                 paper_id,
                 self.cache_dir,
-                pdf_path=Path(record.get("filepath", "")),
+                pdf_path=resolved_pdf.path,
             )
         except Exception:
             raise FullTextServiceUnavailable from None
-        return _public_full_text_status(record, status)
+        return _public_full_text_status(record, status, resolved_pdf.state)
 
     def document(self, paper_id: str) -> FullTextDocument | None:
         status = self.status(paper_id)
@@ -147,8 +162,35 @@ def extract_text_for_paper(
     cache_dir: Path = EXTRACTED_TEXT_DIR,
     index_csv: Path = INDEX_CSV,
 ) -> FullTextWorkflowResult:
-    paper_id = record["paper_id"]
-    pdf_path = Path(str(record.get("filepath", "")))
+    paper_id = require_safe_paper_id(record.get("paper_id", ""))
+    index_path = Path(index_csv)
+    workspace_root = _workspace_root(index_path)
+    with workspace_write_lock(workspace_root):
+        current = _record_from_index(paper_id, index_path)
+        if current is None:
+            raise FullTextTransactionError("Paper disappeared before extraction could begin.")
+        resolved_pdf = _managed_pdf(current, index_path)
+        if resolved_pdf.state is not ManagedPdfState.available or resolved_pdf.path is None:
+            raise FullTextTransactionError("The Paper does not reference an available managed PDF.")
+        pdf_path = resolved_pdf.path
+        return _extract_text_for_paper_locked(
+            current,
+            pdf_path=pdf_path,
+            force=force,
+            cache_dir=Path(cache_dir),
+            index_csv=index_path,
+        )
+
+
+def _extract_text_for_paper_locked(
+    record: dict[str, str],
+    *,
+    pdf_path: Path,
+    force: bool,
+    cache_dir: Path,
+    index_csv: Path,
+) -> FullTextWorkflowResult:
+    paper_id = require_safe_paper_id(record.get("paper_id", ""))
     previous_status = extraction_cache_status(paper_id, cache_dir, pdf_path=pdf_path)
     previous_cache_is_reusable = bool(previous_status["has_reusable_extraction_cache"])
 
@@ -181,16 +223,18 @@ def extract_text_for_paper(
     if not extraction_succeeded and previous_cache_is_reusable:
         previous_metadata = load_extraction_metadata(paper_id, cache_dir)
         metadata = build_preserved_cache_failure_metadata(previous_metadata, pdf_path, result)
-        save_extraction_metadata(paper_id, metadata, cache_dir)
-        update_paper_metadata(
+        _persist_extraction_transaction(
             paper_id,
-            {
-                "text_status": "recovery_failed",
-                "text_source": previous_status["source"],
-                "text_char_count": str(previous_status["char_count"]),
-                "text_extracted_at": previous_status["extracted_at"],
-            },
+            cache_dir=cache_dir,
             index_csv=index_csv,
+            text=None,
+            metadata=metadata,
+            index_changes={
+                "text_status": "recovery_failed",
+                "text_source": str(previous_status["source"]),
+                "text_char_count": str(previous_status["char_count"]),
+                "text_extracted_at": str(previous_status["extracted_at"]),
+            },
         )
         return FullTextWorkflowResult(
             paper_id=paper_id,
@@ -211,18 +255,19 @@ def extract_text_for_paper(
             ocr_needed_pages=list(previous_status["ocr_needed_pages"]),
         )
 
-    save_extracted_text(paper_id, result.text, cache_dir)
     metadata = build_extraction_metadata(paper_id, str(pdf_path), result, cache_dir)
-    save_extraction_metadata(paper_id, metadata, cache_dir)
-    update_paper_metadata(
+    _persist_extraction_transaction(
         paper_id,
-        {
+        cache_dir=cache_dir,
+        index_csv=index_csv,
+        text=result.text,
+        metadata=metadata,
+        index_changes={
             "text_status": result.status,
             "text_source": result.source,
             "text_char_count": str(result.char_count),
             "text_extracted_at": metadata["extracted_at"],
         },
-        index_csv=index_csv,
     )
     return FullTextWorkflowResult(
         paper_id=paper_id,
@@ -268,7 +313,11 @@ def _workflow_error(result: Any) -> str:
     return "Full-text extraction failed."
 
 
-def _public_full_text_status(record: dict[str, str], status: dict[str, Any]) -> FullTextStatus:
+def _public_full_text_status(
+    record: dict[str, str],
+    status: dict[str, Any],
+    pdf_state: ManagedPdfState,
+) -> FullTextStatus:
     raw_state = str(status.get("cache_state") or "not_extracted")
     state: FullTextCacheState = (
         raw_state
@@ -286,8 +335,7 @@ def _public_full_text_status(record: dict[str, str], status: dict[str, Any]) -> 
         for value in list(status.get("ocr_needed_pages") or [])
         if (page_number := _positive_page_number(value)) is not None
     })
-    pdf_path = Path(record.get("filepath", ""))
-    can_extract = pdf_path.is_file() and not bool(status.get("metadata_corrupt", False))
+    can_extract = pdf_state is ManagedPdfState.available and not bool(status.get("metadata_corrupt", False))
     raw_extraction_state = str(status.get("extraction_state") or "not_extracted")
     extraction_state: FullTextExtractionState = (
         raw_extraction_state
@@ -351,15 +399,105 @@ def clear_text_cache_for_paper(
     cache_dir: Path = EXTRACTED_TEXT_DIR,
     index_csv: Path = INDEX_CSV,
 ) -> None:
-    paper_id = record["paper_id"]
-    clear_extraction_cache(paper_id, cache_dir)
-    update_paper_metadata(
-        paper_id,
-        {
-            "text_status": "",
-            "text_source": "",
-            "text_char_count": "",
-            "text_extracted_at": "",
-        },
-        index_csv=index_csv,
+    paper_id = require_safe_paper_id(record.get("paper_id", ""))
+    with workspace_write_lock(_workspace_root(Path(index_csv))):
+        snapshots = _transaction_snapshots(paper_id, Path(cache_dir), Path(index_csv))
+        try:
+            clear_extraction_cache(paper_id, cache_dir)
+            changes = {
+                "text_status": "",
+                "text_source": "",
+                "text_char_count": "",
+                "text_extracted_at": "",
+            }
+            update_paper_metadata(paper_id, changes, index_csv=index_csv)
+            _verify_index_changes(paper_id, changes, Path(index_csv))
+        except Exception as exc:
+            _restore_transaction_snapshots(snapshots)
+            raise FullTextTransactionError("Full-text cache clear failed and was rolled back.") from exc
+
+
+def _workspace_root(index_csv: Path) -> Path:
+    path = Path(index_csv).resolve(strict=False)
+    return path.parent.parent if path.parent.name.casefold() == "data" else path.parent
+
+
+def _papers_dir(index_csv: Path) -> Path:
+    return _workspace_root(index_csv) / "papers"
+
+
+def _managed_pdf(record: dict[str, str], index_csv: Path):
+    return resolve_indexed_pdf(record, papers_dir=_papers_dir(index_csv))
+
+
+def _record_from_index(paper_id: str, index_csv: Path) -> dict[str, str] | None:
+    dataframe = read_index_snapshot(index_csv)
+    matches = dataframe[dataframe["paper_id"] == paper_id]
+    if matches.empty:
+        return None
+    return {str(key): str(value) for key, value in matches.iloc[0].fillna("").to_dict().items()}
+
+
+def _snapshot_text(path: Path) -> _FileSnapshot:
+    if not path.is_file():
+        return _FileSnapshot(False)
+    return _FileSnapshot(True, path.read_text(encoding="utf-8"))
+
+
+def _transaction_snapshots(
+    paper_id: str,
+    cache_dir: Path,
+    index_csv: Path,
+) -> dict[Path, _FileSnapshot]:
+    from storage.extracted_text_store import extracted_text_path, extraction_metadata_path
+
+    paths = (
+        extracted_text_path(paper_id, cache_dir),
+        extraction_metadata_path(paper_id, cache_dir),
+        index_csv,
     )
+    return {path: _snapshot_text(path) for path in paths}
+
+
+def _restore_transaction_snapshots(snapshots: dict[Path, _FileSnapshot]) -> None:
+    failures = 0
+    for path, snapshot in snapshots.items():
+        try:
+            if snapshot.exists:
+                atomic_write_text(path, snapshot.content)
+            elif path.exists():
+                path.unlink()
+        except Exception:
+            failures += 1
+    if failures:
+        raise FullTextTransactionError("Full-text rollback could not restore every previous file.")
+
+
+def _verify_index_changes(paper_id: str, changes: dict[str, str], index_csv: Path) -> None:
+    persisted = _record_from_index(paper_id, index_csv)
+    if persisted is None or any(persisted.get(key, "") != str(value) for key, value in changes.items()):
+        raise FullTextTransactionError("paper_index.csv did not persist the extraction state.")
+
+
+def _persist_extraction_transaction(
+    paper_id: str,
+    *,
+    cache_dir: Path,
+    index_csv: Path,
+    text: str | None,
+    metadata: dict[str, Any],
+    index_changes: dict[str, str],
+) -> None:
+    snapshots = _transaction_snapshots(paper_id, cache_dir, index_csv)
+    try:
+        if text is not None:
+            save_extracted_text(paper_id, text, cache_dir)
+        save_extraction_metadata(paper_id, metadata, cache_dir)
+        update_paper_metadata(paper_id, index_changes, index_csv=index_csv)
+        _verify_index_changes(paper_id, index_changes, index_csv)
+    except Exception as exc:
+        try:
+            _restore_transaction_snapshots(snapshots)
+        except FullTextTransactionError as rollback_error:
+            raise rollback_error from exc
+        raise FullTextTransactionError("Full-text persistence failed and was rolled back.") from exc

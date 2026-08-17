@@ -44,9 +44,10 @@ test("Note Block conflict and API failure preserve drafts and reload independent
   assert.match(reader, /editor\.note/);
 });
 
-test("Reader Project linking is bounded, duplicate-truthful, confirmed, and non-destructive", async () => {
+test("Reader Project linking loads every page, stays duplicate-truthful, confirmed, and non-destructive", async () => {
   const [workspace, , , client] = await sources;
-  assert.match(workspace, /apiClient\.getProjects\(\{ limit: 100 \}\)/);
+  assert.match(workspace, /apiClient\.getAllProjects\(\)/);
+  assert.match(client, /collectAllPaginatedItems\(getProjects\)/);
   assert.match(workspace, /project\.status !== "archived"/);
   assert.match(workspace, /exact Note Block link already exists; nothing was written/);
   assert.match(workspace, /window\.confirm/);

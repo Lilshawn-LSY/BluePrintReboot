@@ -10,11 +10,12 @@ from core.paper_text_profile import (
     paper_text_profile_to_dict,
 )
 from storage.atomic_json import JsonStoreError, atomic_write_json, read_json_file
+from storage.identities import require_safe_paper_id
 from storage.paths import PAPER_PROFILES_DIR
 
 
 def paper_profile_path(paper_id: str, profile_dir: Path = PAPER_PROFILES_DIR) -> Path:
-    return Path(profile_dir) / f"{paper_id}.json"
+    return Path(profile_dir) / f"{require_safe_paper_id(paper_id)}.json"
 
 
 def profile_exists(paper_id: str, profile_dir: Path = PAPER_PROFILES_DIR) -> bool:

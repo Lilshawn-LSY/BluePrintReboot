@@ -16,7 +16,10 @@ from ingest.scanner import (
     pdf_sha256_with_metadata,
     scan_papers,
 )
-from storage.paths import INDEX_CSV, NOTES_DIR, PAPERS_DIR, ensure_workspace_dirs
+from storage.paths import INDEX_CSV, NOTES_DIR, PAPERS_DIR
+from storage.atomic_text import fsync_parent_directory
+from storage.identities import is_safe_paper_id
+from storage.workspace_lock import workspace_write_lock
 
 
 INDEX_COLUMNS = [
@@ -206,21 +209,18 @@ def backfill_pdf_sha256(df: pd.DataFrame, papers_dir: Path) -> pd.DataFrame:
 
 
 def ensure_index(index_csv: Path = INDEX_CSV) -> None:
-    ensure_workspace_dirs()
     index_csv = Path(index_csv)
-    index_csv.parent.mkdir(parents=True, exist_ok=True)
-    if not index_csv.exists():
-        save_index(empty_index(), index_csv)
+    with workspace_write_lock(_workspace_root(index_csv)):
+        index_csv.parent.mkdir(parents=True, exist_ok=True)
+        if not index_csv.exists():
+            save_index(empty_index(), index_csv)
 
 
 def load_index(index_csv: Path = INDEX_CSV, papers_dir: Path | None = None) -> pd.DataFrame:
-    ensure_index(index_csv)
-    df = pd.read_csv(index_csv, dtype=str).fillna("")
-    migrated = migrate_index_dataframe(df)
-    backfilled = backfill_pdf_sha256(migrated, papers_dir or _infer_papers_dir(index_csv))
-    if list(df.columns) != list(backfilled.columns) or df.shape != backfilled.shape or not df.equals(backfilled):
-        save_index(backfilled, index_csv)
-    return backfilled
+    """Backward-compatible read alias with no create, migration write, or hash I/O."""
+
+    del papers_dir
+    return read_index_snapshot(index_csv)
 
 
 def read_index_snapshot(index_csv: Path = INDEX_CSV) -> pd.DataFrame:
@@ -233,25 +233,66 @@ def read_index_snapshot(index_csv: Path = INDEX_CSV) -> pd.DataFrame:
 
 def save_index(df: pd.DataFrame, index_csv: Path = INDEX_CSV) -> None:
     index_csv = Path(index_csv)
-    index_csv.parent.mkdir(parents=True, exist_ok=True)
-    output = backfill_pdf_sha256(migrate_index_dataframe(df), _infer_papers_dir(index_csv))
-    temporary_path: Path | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="",
-            dir=index_csv.parent,
-            delete=False,
-        ) as temporary:
-            temporary_path = Path(temporary.name)
-            output.to_csv(temporary, index=False)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-        os.replace(temporary_path, index_csv)
-    finally:
-        if temporary_path and temporary_path.exists():
-            temporary_path.unlink()
+    with workspace_write_lock(_workspace_root(index_csv)):
+        index_csv.parent.mkdir(parents=True, exist_ok=True)
+        output = migrate_index_dataframe(df)
+        _validate_paper_ids_for_write(output)
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                newline="",
+                dir=index_csv.parent,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+                output.to_csv(temporary, index=False)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.replace(temporary_path, index_csv)
+            fsync_parent_directory(index_csv)
+        finally:
+            if temporary_path and temporary_path.exists():
+                temporary_path.unlink()
+
+
+def migrate_index_storage(
+    index_csv: Path = INDEX_CSV,
+    *,
+    papers_dir: Path | None = None,
+    backfill_hashes: bool = True,
+) -> pd.DataFrame:
+    """Explicitly migrate/backfill an index under the workspace write lock."""
+
+    path = Path(index_csv)
+    with workspace_write_lock(_workspace_root(path)):
+        if not path.is_file():
+            migrated = empty_index()
+        else:
+            migrated = migrate_index_dataframe(pd.read_csv(path, dtype=str).fillna(""))
+        if backfill_hashes:
+            migrated = backfill_pdf_sha256(
+                migrated,
+                papers_dir or _infer_papers_dir(path),
+            )
+        save_index(migrated, path)
+        return read_index_snapshot(path)
+
+
+def _workspace_root(index_csv: Path) -> Path:
+    path = Path(index_csv).resolve(strict=False)
+    return path.parent.parent if path.parent.name.casefold() == "data" else path.parent
+
+
+def _validate_paper_ids_for_write(dataframe: pd.DataFrame) -> None:
+    if "paper_id" not in dataframe:
+        raise ValueError("paper_index.csv requires a paper_id column.")
+    paper_ids = [str(value) for value in dataframe["paper_id"].tolist()]
+    if any(not is_safe_paper_id(value) for value in paper_ids):
+        raise ValueError("paper_index.csv contains an unsafe or empty paper_id.")
+    if len(paper_ids) != len(set(paper_ids)):
+        raise ValueError("paper_index.csv paper_id values must be unique.")
 
 
 def _merge_scanned_records(df: pd.DataFrame, scanned: list[dict[str, str]]) -> pd.DataFrame:
@@ -332,10 +373,11 @@ def register_scanned_paper_records(
     without broadening a selected import into a full directory sync.
     """
 
-    dataframe = load_index(index_csv, papers_dir=papers_dir)
-    merged = _merge_scanned_records(dataframe, scanned)
-    save_index(merged, index_csv)
-    return merged
+    with workspace_write_lock(_workspace_root(index_csv)):
+        dataframe = load_index(index_csv, papers_dir=papers_dir)
+        merged = _merge_scanned_records(dataframe, scanned)
+        save_index(merged, index_csv)
+        return read_index_snapshot(index_csv)
 
 
 def update_index_from_scan(
@@ -343,20 +385,21 @@ def update_index_from_scan(
     papers_dir: Path = PAPERS_DIR,
     notes_dir: Path = NOTES_DIR,
 ) -> pd.DataFrame:
-    df = load_index(index_csv, papers_dir=papers_dir)
-    existing_by_path = {
-        pdf_hash_metadata_key(str(record.get("filepath", ""))): record
-        for record in df.to_dict("records")
-        if str(record.get("filepath", "")).strip()
-    }
-    scanned = scan_papers(
-        papers_dir=papers_dir,
-        notes_dir=notes_dir,
-        hash_metadata_by_path=existing_by_path,
-    )
-    merged = _merge_scanned_records(df, scanned)
-    save_index(merged, index_csv)
-    return merged
+    with workspace_write_lock(_workspace_root(index_csv)):
+        df = load_index(index_csv, papers_dir=papers_dir)
+        existing_by_path = {
+            pdf_hash_metadata_key(str(record.get("filepath", ""))): record
+            for record in df.to_dict("records")
+            if str(record.get("filepath", "")).strip()
+        }
+        scanned = scan_papers(
+            papers_dir=papers_dir,
+            notes_dir=notes_dir,
+            hash_metadata_by_path=existing_by_path,
+        )
+        merged = _merge_scanned_records(df, scanned)
+        save_index(merged, index_csv)
+        return read_index_snapshot(index_csv)
 
 
 def enrich_paper_doi_from_pdf(
@@ -366,26 +409,27 @@ def enrich_paper_doi_from_pdf(
     papers_dir: Path | None = None,
     overwrite_existing: bool = False,
 ) -> dict[str, str | bool]:
-    diagnosis = detect_paper_doi_from_pdf(
-        paper_id,
-        index_csv=index_csv,
-        papers_dir=papers_dir,
-        overwrite_existing=overwrite_existing,
-    )
-    if diagnosis["status"] in {"missing_paper", "existing_doi", "missing_pdf"}:
+    with workspace_write_lock(_workspace_root(index_csv)):
+        diagnosis = detect_paper_doi_from_pdf(
+            paper_id,
+            index_csv=index_csv,
+            papers_dir=papers_dir,
+            overwrite_existing=overwrite_existing,
+        )
+        if diagnosis["status"] in {"missing_paper", "existing_doi", "missing_pdf"}:
+            return diagnosis
+        checked_at = _now_iso()
+        df = load_index(index_csv, papers_dir=papers_dir)
+        row_mask = df["paper_id"] == paper_id
+        df.loc[row_mask, "extraction_source"] = diagnosis["source"]
+        df.loc[row_mask, "extraction_checked_at"] = checked_at
+        detected_doi = str(diagnosis["doi"])
+        if detected_doi:
+            df.loc[row_mask, "doi"] = detected_doi
+            df.loc[row_mask, "doi_source"] = diagnosis["source"]
+        df.loc[row_mask, "updated_at"] = checked_at
+        save_index(df, index_csv)
         return diagnosis
-    checked_at = _now_iso()
-    df = load_index(index_csv, papers_dir=papers_dir)
-    row_mask = df["paper_id"] == paper_id
-    df.loc[row_mask, "extraction_source"] = diagnosis["source"]
-    df.loc[row_mask, "extraction_checked_at"] = checked_at
-    detected_doi = str(diagnosis["doi"])
-    if detected_doi:
-        df.loc[row_mask, "doi"] = detected_doi
-        df.loc[row_mask, "doi_source"] = diagnosis["source"]
-    df.loc[row_mask, "updated_at"] = checked_at
-    save_index(df, index_csv)
-    return diagnosis
 
 
 def detect_paper_doi_from_pdf(
@@ -425,15 +469,16 @@ def update_paper_status(paper_id: str, status: str, index_csv: Path = INDEX_CSV)
 
 
 def set_paper_archived(paper_id: str, archived: bool, index_csv: Path = INDEX_CSV) -> pd.DataFrame:
-    df = load_index(index_csv)
-    row_mask = df["paper_id"] == paper_id
-    if not row_mask.any():
-        return df
-    df.loc[row_mask, "is_archived"] = "true" if archived else "false"
-    df.loc[row_mask, "archived_at"] = _now_iso() if archived else ""
-    df.loc[row_mask, "updated_at"] = _now_iso()
-    save_index(df, index_csv)
-    return load_index(index_csv)
+    with workspace_write_lock(_workspace_root(index_csv)):
+        df = load_index(index_csv)
+        row_mask = df["paper_id"] == paper_id
+        if not row_mask.any():
+            return df
+        df.loc[row_mask, "is_archived"] = "true" if archived else "false"
+        df.loc[row_mask, "archived_at"] = _now_iso() if archived else ""
+        df.loc[row_mask, "updated_at"] = _now_iso()
+        save_index(df, index_csv)
+        return load_index(index_csv)
 
 
 def filter_archived(df: pd.DataFrame, *, include_archived: bool = False, archived_only: bool = False) -> pd.DataFrame:
@@ -450,21 +495,22 @@ def update_paper_metadata(
     metadata: dict[str, str],
     index_csv: Path = INDEX_CSV,
 ) -> pd.DataFrame:
-    df = load_index(index_csv)
-    row_mask = df["paper_id"] == paper_id
-    if not row_mask.any():
-        return df
+    with workspace_write_lock(_workspace_root(index_csv)):
+        df = load_index(index_csv)
+        row_mask = df["paper_id"] == paper_id
+        if not row_mask.any():
+            return df
 
-    for column in EDITABLE_METADATA_COLUMNS:
-        if column in metadata:
-            value = str(metadata[column]).strip()
-            if column == "doi":
-                value = normalize_doi(value)
-                df.loc[row_mask, "doi_source"] = str(metadata.get("doi_source", "manual" if value else "")).strip()
-            df.loc[row_mask, column] = value
-    df.loc[row_mask, "updated_at"] = _now_iso()
-    save_index(df, index_csv)
-    return load_index(index_csv)
+        for column in EDITABLE_METADATA_COLUMNS:
+            if column in metadata:
+                value = str(metadata[column]).strip()
+                if column == "doi":
+                    value = normalize_doi(value)
+                    df.loc[row_mask, "doi_source"] = str(metadata.get("doi_source", "manual" if value else "")).strip()
+                df.loc[row_mask, column] = value
+        df.loc[row_mask, "updated_at"] = _now_iso()
+        save_index(df, index_csv)
+        return load_index(index_csv)
 
 
 def accept_crossref_metadata(
@@ -472,20 +518,21 @@ def accept_crossref_metadata(
     metadata: dict[str, str],
     index_csv: Path = INDEX_CSV,
 ) -> pd.DataFrame:
-    df = load_index(index_csv)
-    row_mask = df["paper_id"] == paper_id
-    if not row_mask.any():
-        return df
+    with workspace_write_lock(_workspace_root(index_csv)):
+        df = load_index(index_csv)
+        row_mask = df["paper_id"] == paper_id
+        if not row_mask.any():
+            return df
 
-    for column in CROSSREF_ACCEPT_COLUMNS:
-        if column in metadata:
-            value = str(metadata[column]).strip()
-            if not value:
-                continue
-            if column == "doi":
-                value = normalize_doi(value)
-                df.loc[row_mask, "doi_source"] = str(metadata.get("doi_source", "crossref" if value else "")).strip()
-            df.loc[row_mask, column] = value
-    df.loc[row_mask, "updated_at"] = _now_iso()
-    save_index(df, index_csv)
-    return load_index(index_csv)
+        for column in CROSSREF_ACCEPT_COLUMNS:
+            if column in metadata:
+                value = str(metadata[column]).strip()
+                if not value:
+                    continue
+                if column == "doi":
+                    value = normalize_doi(value)
+                    df.loc[row_mask, "doi_source"] = str(metadata.get("doi_source", "crossref" if value else "")).strip()
+                df.loc[row_mask, column] = value
+        df.loc[row_mask, "updated_at"] = _now_iso()
+        save_index(df, index_csv)
+        return load_index(index_csv)

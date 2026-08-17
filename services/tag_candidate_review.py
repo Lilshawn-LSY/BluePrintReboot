@@ -22,8 +22,9 @@ from services.tag_governance import (
     TagGovernanceConflict,
     TagGovernanceInvalid,
     TagGovernanceUnavailable,
-    canonical_tag_registry_revision,
 )
+from storage.atomic_text import atomic_write_text
+from storage.identities import require_safe_paper_id
 from storage.index_store import read_index_snapshot
 from storage.paper_profile_store import load_profile
 from storage.paths import INDEX_CSV, NOTES_DIR, TAG_CANDIDATE_REVIEWS_JSON
@@ -74,6 +75,12 @@ class CandidateApplyResult:
     paper_tag_result: PaperTagCommandResult
 
 
+@dataclass(frozen=True)
+class _FileSnapshot:
+    exists: bool
+    content: str = ""
+
+
 def candidate_review_revision(candidates: list[dict[str, Any]]) -> str:
     encoded = json.dumps(
         candidates,
@@ -98,6 +105,7 @@ class TagCandidateReviewService:
         reader_commands: ReaderCommandService | None = None,
     ) -> None:
         self.index_csv = Path(index_csv)
+        self.notes_dir = Path(notes_dir)
         self.review_store_path = Path(review_store_path)
         self.tag_book_dir = Path(tag_book_dir)
         self.workspace_root = _workspace_root(self.index_csv)
@@ -107,7 +115,7 @@ class TagCandidateReviewService:
         )
         self.reader_commands = reader_commands or ReaderCommandService(
             index_csv=self.index_csv,
-            notes_dir=Path(notes_dir),
+            notes_dir=self.notes_dir,
         )
 
     def collection(self, paper_id: str) -> CandidateCollection:
@@ -202,6 +210,10 @@ class TagCandidateReviewService:
         category: str | None = None,
     ) -> CandidateCollection:
         with self._locked():
+            snapshots = self._snapshots(
+                self.review_store_path,
+                self.tag_book_dir / "tag_book.json",
+            )
             record, reviews, candidates, index = self._mutable_candidate(
                 paper_id,
                 candidate_id,
@@ -224,11 +236,11 @@ class TagCandidateReviewService:
                 canonical = resolved["canonical_key"]
             else:
                 try:
-                    loaded = self.governance._load()  # The shared lock makes this a single governance transition.
+                    _items, registry_revision = self.governance.snapshot()
                     created = self.governance.create_tag(
                         label=requested_label,
                         category=requested_category,
-                        expected_revision=canonical_tag_registry_revision(loaded),
+                        expected_revision=registry_revision,
                     )
                     canonical = created.tag["canonical_key"]
                     candidate_identity = tag_book.normalize_tag(candidate.get("tag_text", ""))
@@ -239,16 +251,24 @@ class TagCandidateReviewService:
                             expected_revision=created.registry_revision,
                         )
                 except (TagGovernanceConflict, TagGovernanceInvalid) as error:
-                    raise TagCandidateReviewInvalid(str(error)) from None
+                    self._rollback_or_unavailable(
+                        snapshots,
+                        TagCandidateReviewInvalid(str(error)),
+                    )
                 except TagGovernanceUnavailable:
-                    raise TagCandidateReviewUnavailable from None
-
-            candidate["resolved_canonical"] = canonical
-            candidate["canonical_status"] = "active"
-            candidate["state"] = "approved"
-            candidates[index] = candidate
-            self._save_context(reviews, paper_id, candidates)
-            return self._collection_from(record, candidates, generated=True)
+                    self._rollback_or_unavailable(
+                        snapshots,
+                        TagCandidateReviewUnavailable(),
+                    )
+            try:
+                candidate["resolved_canonical"] = canonical
+                candidate["canonical_status"] = "active"
+                candidate["state"] = "approved"
+                candidates[index] = candidate
+                self._save_context(reviews, paper_id, candidates)
+                return self._collection_from(record, candidates, generated=True)
+            except Exception as exc:
+                self._rollback_or_unavailable(snapshots, exc)
 
     def apply(
         self,
@@ -259,7 +279,7 @@ class TagCandidateReviewService:
         expected_tags_revision: str,
     ) -> CandidateApplyResult:
         with self._locked():
-            _record, reviews, candidates, index = self._mutable_candidate(
+            record, reviews, candidates, index = self._mutable_candidate(
                 paper_id,
                 candidate_id,
                 expected_review_revision,
@@ -272,6 +292,12 @@ class TagCandidateReviewService:
             if not self._is_active_resolution(candidate):
                 raise TagCandidateReviewInvalid("A deprecated or unresolved candidate cannot be applied to a Paper.")
             canonical = str(candidate["resolved_canonical"])
+            paper_identity = require_safe_paper_id(record.get("paper_id", ""))
+            snapshots = self._snapshots(
+                self.review_store_path,
+                self.index_csv,
+                self.notes_dir / f"{paper_identity}.md",
+            )
             try:
                 result = self.reader_commands.add_paper_tag(
                     paper_id,
@@ -283,15 +309,21 @@ class TagCandidateReviewService:
             except ReaderCommandNotFound:
                 raise TagCandidateReviewNotFound from None
             except ReaderCommandUnavailable:
-                raise TagCandidateReviewUnavailable from None
-            candidate["state"] = "applied"
-            candidates[index] = candidate
-            self._save_context(reviews, paper_id, candidates)
-            return CandidateApplyResult(
-                candidate=self._public_candidate(candidate),
-                review_revision=candidate_review_revision(candidates),
-                paper_tag_result=result,
-            )
+                self._rollback_or_unavailable(
+                    snapshots,
+                    TagCandidateReviewUnavailable(),
+                )
+            try:
+                candidate["state"] = "applied"
+                candidates[index] = candidate
+                self._save_context(reviews, paper_id, candidates)
+                return CandidateApplyResult(
+                    candidate=self._public_candidate(candidate),
+                    review_revision=candidate_review_revision(candidates),
+                    paper_tag_result=result,
+                )
+            except Exception as exc:
+                self._rollback_or_unavailable(snapshots, exc)
 
     def _mutable_candidate(
         self,
@@ -464,13 +496,54 @@ class TagCandidateReviewService:
         return self.index_csv.parent / "paper_profiles"
 
     def _extracted_text_preview(self, paper_id: str) -> str:
-        if not paper_id:
+        try:
+            safe_paper_id = require_safe_paper_id(paper_id)
+        except ValueError:
             return ""
-        path = self.index_csv.parent / "extracted_text" / f"{paper_id}.txt"
+        path = self.index_csv.parent / "extracted_text" / f"{safe_paper_id}.txt"
         try:
             return path.read_text(encoding="utf-8")[:5000] if path.is_file() else ""
         except OSError:
             return ""
+
+    @staticmethod
+    def _snapshots(*paths: Path) -> dict[Path, _FileSnapshot]:
+        snapshots: dict[Path, _FileSnapshot] = {}
+        for path in paths:
+            target = Path(path)
+            snapshots[target] = (
+                _FileSnapshot(True, target.read_text(encoding="utf-8"))
+                if target.is_file()
+                else _FileSnapshot(False)
+            )
+        return snapshots
+
+    @staticmethod
+    def _restore_snapshots(snapshots: dict[Path, _FileSnapshot]) -> None:
+        failures = 0
+        for path, snapshot in snapshots.items():
+            try:
+                if snapshot.exists:
+                    atomic_write_text(path, snapshot.content)
+                elif path.exists():
+                    path.unlink()
+            except Exception:
+                failures += 1
+        if failures:
+            raise TagCandidateReviewUnavailable
+
+    def _rollback_or_unavailable(
+        self,
+        snapshots: dict[Path, _FileSnapshot],
+        original_error: Exception,
+    ) -> None:
+        try:
+            self._restore_snapshots(snapshots)
+        except Exception:
+            raise TagCandidateReviewUnavailable from original_error
+        if isinstance(original_error, TagCandidateReviewError):
+            raise original_error
+        raise TagCandidateReviewUnavailable from original_error
 
 
 def _workspace_root(index_csv: Path) -> Path:

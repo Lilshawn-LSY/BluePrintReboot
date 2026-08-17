@@ -8,15 +8,16 @@ from ingest.scanner import pdf_sha256_with_metadata
 from ingest.text_extractor import FullTextExtractionResult
 from storage.atomic_json import JsonStoreError, atomic_write_json, read_json_file
 from storage.atomic_text import ReplaceFile, atomic_write_text
+from storage.identities import require_safe_paper_id
 from storage.paths import EXTRACTED_TEXT_DIR
 
 
 def extracted_text_path(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> Path:
-    return Path(cache_dir) / f"{paper_id}.txt"
+    return Path(cache_dir) / f"{require_safe_paper_id(paper_id)}.txt"
 
 
 def extraction_metadata_path(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> Path:
-    return Path(cache_dir) / f"{paper_id}.json"
+    return Path(cache_dir) / f"{require_safe_paper_id(paper_id)}.json"
 
 
 def utc_now_iso() -> str:

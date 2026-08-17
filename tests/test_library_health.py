@@ -17,6 +17,8 @@ from services.library_health import (
     reattach_orphan_note_blocks,
     reattach_orphan_project_link,
     build_orphan_project_link_removal_plan,
+    cached_library_health_check,
+    invalidate_library_health_cache,
     remove_orphan_project_link,
     run_library_health_check,
 )
@@ -24,6 +26,7 @@ from services.file_lifecycle import remove_duplicate_index_row
 from storage.note_block_store import list_note_blocks
 from storage.project_link_store import create_project_link, list_project_links
 from storage.project_store import create_project
+from storage.workspace_lock import workspace_write_lock
 from tests.helpers import make_workspace
 
 
@@ -89,6 +92,36 @@ def test_health_check_detects_missing_indexed_pdf() -> None:
     ]
 
 
+def test_health_check_uses_filename_fallback_inside_managed_papers() -> None:
+    paths = _workspace("health-filename-fallback")
+    papers_dir, *_, index_csv = paths
+    pdf_path = papers_dir / "Legacy.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\nlegacy")
+    record = _record("paper-1", pdf_path)
+    record["filepath"] = ""
+    pd.DataFrame([record]).to_csv(index_csv, index=False)
+
+    report = _run_health(paths)
+
+    assert report["missing_pdfs"] == []
+    assert report["noncanonical_filepaths"] == []
+    assert report["unindexed_pdfs"] == []
+
+
+def test_health_check_treats_existing_external_pdf_as_unmanaged() -> None:
+    paths = _workspace("health-external-pdf")
+    index_csv = paths[-1]
+    external_pdf = index_csv.parent.parent / "external" / "Outside.pdf"
+    external_pdf.parent.mkdir()
+    external_pdf.write_bytes(b"%PDF-1.4\noutside")
+    pd.DataFrame([_record("paper-1", external_pdf)]).to_csv(index_csv, index=False)
+
+    report = _run_health(paths)
+
+    assert len(report["missing_pdfs"]) == 1
+    assert len(report["noncanonical_filepaths"]) == 1
+
+
 def test_health_check_detects_unindexed_pdf() -> None:
     paths = _workspace("health-unindexed-pdf")
     papers_dir, *_, index_csv = paths
@@ -128,6 +161,83 @@ def test_health_check_surfaces_corrupt_json_with_recovery_action() -> None:
     assert issue["allowed_recovery_actions"] == ["export recovery copy", "manual repair"]
     assert report["issue_guidance"]["corrupt_json"]["next_action"].startswith("Do not overwrite")
     assert corrupt_path.read_text(encoding="utf-8") == before
+
+
+def test_health_check_rejects_parseable_but_malformed_persistent_items() -> None:
+    paths = _workspace("health-malformed-items")
+    projects_dir = paths[3]
+    index_csv = paths[-1]
+    pd.DataFrame(columns=["paper_id", "filename", "filepath"]).to_csv(index_csv, index=False)
+    projects_path = projects_dir / "projects.json"
+    projects_path.write_text('[{"id": "project-1"}]', encoding="utf-8")
+    review_path = index_csv.parent / "tag_candidate_reviews.json"
+    review_path.write_text(
+        json.dumps({"version": "1", "papers": {"paper-1": {"candidates": [{}]}}}),
+        encoding="utf-8",
+    )
+
+    report = _run_health(paths)
+    corrupt_paths = {item["path"] for item in report["corrupt_json"]}
+
+    assert str(projects_path.resolve()) in corrupt_paths
+    assert str(review_path.resolve()) in corrupt_paths
+
+
+def test_health_check_reports_index_identity_invariant_corruption_without_repair() -> None:
+    paths = _workspace("health-corrupt-index-invariants")
+    index_csv = paths[-1]
+    pd.DataFrame(
+        [
+            {"paper_id": "paper-1", "filename": "one.pdf", "filepath": ""},
+            {"paper_id": "paper-1", "filename": "two.pdf", "filepath": ""},
+            {"paper_id": "../escape", "filename": "three.pdf", "filepath": ""},
+            {"paper_id": "", "filename": "", "filepath": ""},
+        ]
+    ).to_csv(index_csv, index=False)
+    before = index_csv.read_bytes()
+
+    report = _run_health(paths)
+
+    assert len(report["corrupt_index"]) == 1
+    issue = report["corrupt_index"][0]["issue"]
+    assert "empty paper_id" in issue
+    assert "duplicate paper_id" in issue
+    assert "unsafe paper_id" in issue
+    assert "no filename or filepath" in issue
+    assert index_csv.read_bytes() == before
+
+
+def test_cached_health_scan_is_shared_and_invalidated_by_workspace_write(monkeypatch) -> None:
+    paths = _workspace("health-cache-invalidation")
+    pd.DataFrame(columns=["paper_id", "filename", "filepath"]).to_csv(paths[-1], index=False)
+    papers_dir, notes_dir, note_blocks_dir, projects_dir, extracted_text_dir, index_csv = paths
+    kwargs = {
+        "index_csv": index_csv,
+        "papers_dir": papers_dir,
+        "notes_dir": notes_dir,
+        "note_blocks_dir": note_blocks_dir,
+        "projects_dir": projects_dir,
+        "extracted_text_dir": extracted_text_dir,
+    }
+    import services.library_health as health
+    original = health.run_library_health_check
+    calls = 0
+
+    def counted(**options):
+        nonlocal calls
+        calls += 1
+        return original(**options)
+
+    invalidate_library_health_cache()
+    monkeypatch.setattr(health, "run_library_health_check", counted)
+    cached_library_health_check(**kwargs)
+    cached_library_health_check(**kwargs)
+    assert calls == 1
+
+    with workspace_write_lock(index_csv.parent.parent):
+        pass
+    cached_library_health_check(**kwargs)
+    assert calls == 2
 
 
 def test_health_check_classifies_invalid_utf8_text_cache_as_rebuildable() -> None:

@@ -17,7 +17,7 @@ const CATEGORIES = [
 export function TagsView() {
   const resource = useApiResource("tags", async () => {
     const [tags, summary, governance] = await Promise.all([
-      apiClient.getTags({ limit: 100 }),
+      apiClient.getAllTags(),
       apiClient.getTagSummary(),
       apiClient.getTagGovernance(),
     ]);
@@ -100,7 +100,7 @@ export function TagsView() {
             </form>
           </Section>
 
-          <Section title="Canonical registry" description={`${resource.data.tags.total} canonical Tag${resource.data.tags.total === 1 ? "" : "s"}; deprecated entries remain inspectable and are excluded from new candidate application.`}>
+          <Section title="Canonical registry" description={`${resource.data.tags.length} canonical Tag${resource.data.tags.length === 1 ? "" : "s"}; deprecated entries remain inspectable and are excluded from new candidate application.`}>
             {resource.data.governance.items.length === 0 ? (
               <EmptyState title="Tag Book is empty" description="Create an explicit canonical tag to begin managing the registry." />
             ) : (
