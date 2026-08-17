@@ -18,6 +18,7 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 type SidebarNavigationProps = {
+  applicationVersion: string;
   readerMode: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
@@ -29,6 +30,7 @@ type SidebarNavigationProps = {
 };
 
 export function SidebarNavigation({
+  applicationVersion,
   readerMode,
   collapsed,
   onToggleCollapsed,
@@ -50,7 +52,7 @@ export function SidebarNavigation({
       <div className="sidebar__header">
         <Link href="/dashboard" className="brand" aria-label="BluePrintReboot dashboard">
           <span className="brand__mark" aria-hidden="true">B</span>
-          <span className="brand__copy"><strong>BluePrint</strong><small>Research workspace</small></span>
+          <span className="brand__copy"><strong>BluePrint</strong><small>Research workspace · v{applicationVersion}</small></span>
         </Link>
         {readerMode ? (
           <div className="sidebar__reader-actions">

@@ -51,7 +51,7 @@ test("all required routes render inside the shared shell", async () => {
 });
 
 test("uses a bounded PDF.js Reader with independent metadata and Reading Note commands", async () => {
-  const [detail, readerView, reader, adapter, controller, client, shell, packageJson, packageLock, workerSource, workerDeclaration] = await Promise.all([
+  const [detail, readerView, reader, adapter, controller, client, shell, sidebar, packageJson, packageLock, workerSource, workerDeclaration] = await Promise.all([
     readFile(new URL("../app/views/PaperDetailView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/components/PdfJsReader.tsx", import.meta.url), "utf8"),
@@ -59,6 +59,7 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
     readFile(new URL("../app/lib/pdf/reader-controller.mjs", import.meta.url), "utf8"),
     readFile(new URL("../app/lib/api/client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/components/AppShell.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/SidebarNavigation.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
     readFile(new URL("../node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs", import.meta.url), "utf8"),
@@ -130,7 +131,10 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(shell, /isReaderRoute/);
   assert.equal(JSON.parse(packageJson).version, "1.5.12");
   assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
-  assert.doesNotMatch(shell, /packageMetadata|Local workspace|version-label/);
+  assert.match(shell, /packageMetadata\.version/);
+  assert.match(shell, /applicationVersion=\{packageMetadata\.version\}/);
+  assert.match(sidebar, /v\{applicationVersion\}/);
+  assert.doesNotMatch(shell, /Local workspace|version-label/);
   assert.doesNotMatch(shell, /v1\.5\.4|Project commands/);
 });
 

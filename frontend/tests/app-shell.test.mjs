@@ -19,13 +19,16 @@ test("the shared shell preserves normal navigation preference independently from
   assert.match(shell, /readerSidebarPinned/);
   assert.match(shell, /readerSidebarOpen/);
   assert.match(shell, /reader-navigation-zone/);
-  assert.doesNotMatch(shell, /packageMetadata|Local workspace|version-label/);
+  assert.match(shell, /packageMetadata\.version/);
+  assert.match(shell, /applicationVersion=\{packageMetadata\.version\}/);
+  assert.doesNotMatch(shell, /Local workspace|version-label/);
 
   assert.match(sidebar, /Collapse sidebar/);
   assert.match(sidebar, /Expand sidebar/);
   assert.match(sidebar, /Pin navigation/);
   assert.match(sidebar, /Close navigation/);
   assert.match(sidebar, /aria-label=\{collapsed \? label : undefined\}/);
+  assert.match(sidebar, /v\{applicationVersion\}/);
 
   assert.match(breadcrumbs, /aria-label="Breadcrumb"/);
   assert.match(breadcrumbs, /aria-current="page"/);

@@ -28,6 +28,7 @@ def test_version_contract_is_consistent() -> None:
     readme = read_text("README.md")
     manifest = read_manifest()
     shell = read_text("frontend/app/components/AppShell.tsx")
+    sidebar = read_text("frontend/app/components/SidebarNavigation.tsx")
 
     assert APP_VERSION == "1.5.12"
     assert package["version"] == APP_VERSION
@@ -40,7 +41,10 @@ def test_version_contract_is_consistent() -> None:
     assert manifest["release_name"] in readme
     assert 'import packageMetadata from "../../package.json"' in shell
     assert "packageMetadata.version" in shell
-    assert "Local workspace" in shell
+    assert "applicationVersion={packageMetadata.version}" in shell
+    assert "v{applicationVersion}" in sidebar
+    assert "Local workspace" not in shell
+    assert "version-label" not in shell
     assert "v1.5.4" not in shell
     assert "Project commands" not in shell
 
