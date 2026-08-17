@@ -1,10 +1,23 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.5.5-note-block-write-project-links`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
+Required before and after Codex-assisted release work. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
 
-## v1.5.11 Library / Paper Workflow Closure
+## v1.5.12 R-145 PDF Foundation
+
+- [x] Validate DPR 1, 1.25, 1.5, and 2 backing-canvas sizing while logical CSS page size and Reader zoom remain invariant.
+- [x] Validate page/zoom rerenders reuse one PDF document, rapid renders cancel safely, and canvas/text layers clean up together.
+- [x] Validate selectable text follows page and zoom changes and native fallback remains mutually exclusive with the PDF.js layers.
+- [x] Validate selection rectangles normalize to top-left page-relative coordinates with canonical 1-based page numbers independent of DPR/zoom.
+- [x] Validate text, scanned, image-based, and mixed classifications, per-page state, positioned text, 1-based normalization, and OCR-needed versus failure.
+- [x] Validate optional dependency absence and extractor failure retain MarkItDown/pypdf fallback.
+- [x] Validate reusable/stale/restart cache states and valid old-cache preservation using disposable fixtures only.
+- [ ] Manually verify ordinary biology and multi-column AI/ML PDFs at DPR 1, 1.25, 1.5, and 2 through several zoom levels.
+- [ ] Manually verify text selection alignment and normalized coordinate stability across zoom/DPR.
+- [ ] Manually verify scanned and mixed PDFs report OCR-needed pages, restart reuses valid cache, changed PDF bytes become stale, and Library to Paper Detail to Reader remains intact.
+
+## Historical v1.5.11 Library / Paper Workflow Closure
 
 - [x] Validate server-side case-insensitive metadata search for zero, one, special-character, and multi-page results; confirm lifecycle, exact tag, year, and reading-status filters apply before pagination.
 - [x] Validate Library scan/import remains preview-first and explicit; distinguish new, same-path registered, exact duplicate-content, missing-PDF, unique reconnect, and ambiguous reconnect states without client-only collection filtering.

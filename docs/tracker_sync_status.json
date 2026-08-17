@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.11",
-  "release_name": "v1.5.11-library-paper-workflow-closure",
-  "as_of": "2026-08-16",
+  "product_version": "1.5.12",
+  "release_name": "v1.5.12-pre-ux-pdf-foundation",
+  "as_of": "2026-08-17",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 138,
+        "passed": 141,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.11 local validation",
-        "summary": "The current offline repository readiness smoke completed with 138 passed, 0 warnings, and 0 failed."
+        "date": "2026-08-17",
+        "reference": "v1.5.12 local validation",
+        "summary": "The current offline repository readiness smoke completed with 141 passed, 0 warnings, and 0 failed."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 757,
+        "passed": 768,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.11 local validation",
-        "summary": "The v1.5.11 full Python suite completed with 757 passed, 0 failed, and 0 skipped using disposable fixtures for the new Library/Paper workflow coverage."
+        "date": "2026-08-17",
+        "reference": "v1.5.12 local validation",
+        "summary": "The v1.5.12 full Python suite completed with 768 passed, 0 failed, and 0 skipped using disposable fixtures for the PDF foundation coverage."
       }
     },
     "focused_reader_snapshot": {
@@ -175,6 +175,20 @@
         "date": "2026-08-16",
         "reference": "v1.5.9 focused PDF scan/import validation",
         "summary": "The focused managed-PDF and scan/import API contract suite passed."
+      }
+    },
+    "focused_pdf_foundation": {
+      "status": "VERIFIED",
+      "scope": "PDF.js DPR/text-layer/selection contracts and structured extraction/cache compatibility",
+      "command": ".venv/bin/python -m pytest -q tests/test_pdf_inspector_adapter.py tests/test_text_extractor.py tests/test_extracted_text_store.py tests/test_full_text_workflow.py tests/test_pdf_profile_extraction.py tests/test_paper_text_profile_builder.py; cd frontend && node --test tests/pdf-reader-controller.test.mjs",
+      "counts": {
+        "passed": 57,
+        "failed": 0
+      },
+      "evidence": {
+        "date": "2026-08-17",
+        "reference": "v1.5.12 focused PDF foundation validation",
+        "summary": "The focused Python extraction/cache suite passed 37 tests and the PDF Reader controller file passed 20 subtests covering DPR, text-layer lifecycle, selection normalization, navigation, cancellation, and fallback exclusivity."
       }
     },
     "focused_projects_tags": {
@@ -280,13 +294,13 @@
       "scope": "release and version contracts",
       "command": ".venv/bin/python -m pytest -q tests/test_release_contracts.py tests/test_release_state_reconciliation.py tests/test_contact.py tests/test_smoke_check.py",
       "counts": {
-        "passed": 55,
+        "passed": 57,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.10 release validation",
-        "summary": "The focused runtime-target, immutable-baseline, v1.5.10 local release-document, reconciliation, contact, and smoke-contract suite passed."
+        "date": "2026-08-17",
+        "reference": "v1.5.12 release validation",
+        "summary": "The focused runtime-target, immutable-baseline, v1.5.12 release-document, reconciliation, contact, and smoke-contract suite passed."
       }
     },
     "release_reconciliation": {
@@ -294,13 +308,13 @@
       "scope": "canonical release-state reconciliation contracts",
       "command": ".venv/bin/python scripts/reconcile_release_state.py --check",
       "counts": {
-        "passed": 30,
+        "passed": 34,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.10 local release reconciliation",
-        "summary": "Canonical manifest validation and deterministic current-status rendering passed for the v1.5.10 runtime target."
+        "date": "2026-08-17",
+        "reference": "v1.5.12 local release reconciliation",
+        "summary": "Canonical manifest validation and deterministic current-status rendering passed for the v1.5.12 runtime target."
       }
     },
     "tracker_export": {
@@ -323,8 +337,8 @@
       "command": "npm --prefix frontend run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.11 local validation",
+        "date": "2026-08-17",
+        "reference": "v1.5.12 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -334,8 +348,8 @@
       "command": "npm --prefix frontend run build",
       "counts": null,
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.11 local validation",
+        "date": "2026-08-17",
+        "reference": "v1.5.12 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -350,8 +364,8 @@
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.11 local validation",
+        "date": "2026-08-17",
+        "reference": "v1.5.12 local validation",
         "summary": "The complete frontend build and Node test suite passed."
       }
     },
@@ -440,12 +454,12 @@
       "scope": "tracked repository entries only",
       "command": ".venv/bin/python scripts/check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 287,
+        "entries_inspected": 295,
         "violations": 0
       },
       "evidence": {
-        "date": "2026-08-16",
-        "reference": "v1.5.10 local hygiene validation",
+        "date": "2026-08-17",
+        "reference": "v1.5.12 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -1137,6 +1151,88 @@
         }
       }
     },
+    "pdf_foundation_runtime": {
+      "status": "NOT VERIFIED",
+      "evidence": {
+        "date": "2026-08-17",
+        "reference": "docs/release_notes/v1.5.12.md",
+        "summary": "No user-performed v1.5.12 representative real-PDF runtime result is recorded."
+      },
+      "checks": {
+        "sharp_rendering_dpr": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed DPR 1, 1.25, 1.5, and 2 sharp-rendering result is recorded."
+          }
+        },
+        "sharp_rendering_zoom": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed multi-zoom sharp-rendering result is recorded."
+          }
+        },
+        "text_selection_alignment": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed text-selection alignment result is recorded."
+          }
+        },
+        "selection_coordinate_stability": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed selection-coordinate stability result is recorded."
+          }
+        },
+        "text_pdf_classification_extraction": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed ordinary biology or multi-column AI/ML extraction result is recorded."
+          }
+        },
+        "scanned_mixed_ocr_state": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed scanned or mixed PDF OCR-needed state result is recorded."
+          }
+        },
+        "cache_restart_reuse": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed restart cache-reuse result is recorded."
+          }
+        },
+        "source_replacement_stale": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed source replacement and stale-cache result is recorded."
+          }
+        },
+        "library_reader_workflow": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed Library to Paper Detail to Reader regression result is recorded."
+          }
+        }
+      }
+    },
     "tag_candidate_review_runtime": {
       "status": "PARTIALLY VERIFIED",
       "evidence": {
@@ -1250,17 +1346,18 @@
       "manual_validation.reader_snapshot_runtime",
       "manual_validation.reader_write_runtime",
       "manual_validation.tag_candidate_review_runtime",
+      "manual_validation.pdf_foundation_runtime",
       "publication_state.github_release",
       "recurring_operational_procedures.clean_pc_restore"
     ]
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "remaining v1.5.10 candidate-route browser Network privacy, PR-head CI, merge, tag, publication, post-merge, and clean-PC restore evidence; v1.6.0 Reader Workspace UX Overhaul follows",
+    "name": "v1.5.12 representative real-PDF validation, hosted/source-control/publication evidence, and clean-PC restore remain open; v1.6.0 Reader Workspace UX Overhaul follows under a separate scope",
     "evidence": {
-      "date": "2026-08-16",
-      "reference": "docs/release_notes/v1.5.11.md",
-      "summary": "Keep the remaining v1.5.10 candidate-route Network privacy check, hosted/source-control/publication evidence, and clean-PC restore separate from recorded v1.5.11 manual browser/runtime validation."
+      "date": "2026-08-17",
+      "reference": "docs/release_notes/v1.5.12.md",
+      "summary": "Keep v1.5.12 real-PDF runtime, hosted/source-control/publication, and clean-PC restore evidence separate from local implementation and automated validation."
     }
   },
   "historical_evidence": {
@@ -1301,7 +1398,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-08-16",
+    "last_reconciled": "2026-08-17",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",
@@ -1484,6 +1581,13 @@
         "evidence": "The v1.4.0 tag is verified while GitHub Release publication remains NOT VERIFIED.",
         "disposition": "Keep tag evidence and publication evidence separate.",
         "last_verified": "2026-07-25"
+      },
+      {
+        "task_id": "R-145",
+        "status": "PARTIALLY VERIFIED",
+        "evidence": "The v1.5.12 PDF foundation implementation and focused local automation are recorded; representative real-PDF runtime and external release evidence remain open.",
+        "disposition": "Complete user-performed real-PDF checks and record hosted/source-control/publication evidence only after observation.",
+        "last_verified": "2026-08-17"
       }
     ]
   }

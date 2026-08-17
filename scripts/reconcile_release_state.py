@@ -38,6 +38,7 @@ CURRENT_REFERENCE_DOCS = (
     "docs/release_notes/v1.5.9.md",
     "docs/release_notes/v1.5.10.md",
     "docs/release_notes/v1.5.11.md",
+    "docs/release_notes/v1.5.12.md",
 )
 REQUIRED_AUTOMATED_CHECKS = frozenset(
     {
@@ -48,6 +49,7 @@ REQUIRED_AUTOMATED_CHECKS = frozenset(
         "focused_reader_snapshot",
         "focused_reader_commands",
         "focused_pdf_api",
+        "focused_pdf_foundation",
         "focused_projects_tags",
         "focused_settings",
         "focused_project_commands",
@@ -184,6 +186,19 @@ REQUIRED_LIBRARY_PAPER_WORKFLOW_MANUAL_CHECKS = frozenset(
         "restart_persistence",
     }
 )
+REQUIRED_PDF_FOUNDATION_MANUAL_CHECKS = frozenset(
+    {
+        "sharp_rendering_dpr",
+        "sharp_rendering_zoom",
+        "text_selection_alignment",
+        "selection_coordinate_stability",
+        "text_pdf_classification_extraction",
+        "scanned_mixed_ocr_state",
+        "cache_restart_reuse",
+        "source_replacement_stale",
+        "library_reader_workflow",
+    }
+)
 PRIVATE_VALUE_PATTERNS = (
     re.compile(r"(?<![A-Za-z])[A-Za-z]:[\\/]"),
     re.compile(r"/(?:Users|home)/", re.IGNORECASE),
@@ -217,6 +232,7 @@ EXPECTED_UNRESOLVED_EVIDENCE = (
     "manual_validation.reader_snapshot_runtime",
     "manual_validation.reader_write_runtime",
     "manual_validation.tag_candidate_review_runtime",
+    "manual_validation.pdf_foundation_runtime",
     "publication_state.github_release",
     "recurring_operational_procedures.clean_pc_restore",
 )
@@ -692,6 +708,36 @@ def _validate_manual_validation(manifest: Mapping[str, Any]) -> None:
         )
     _validate_evidence(library_paper_workflow, "manual_validation.library_paper_workflow_runtime")
 
+    pdf_foundation = _mapping(
+        manual.get("pdf_foundation_runtime"),
+        "manual_validation.pdf_foundation_runtime",
+    )
+    pdf_foundation_checks = _mapping(
+        pdf_foundation.get("checks"),
+        "manual_validation.pdf_foundation_runtime.checks",
+    )
+    if set(pdf_foundation_checks) != REQUIRED_PDF_FOUNDATION_MANUAL_CHECKS:
+        missing = sorted(REQUIRED_PDF_FOUNDATION_MANUAL_CHECKS - set(pdf_foundation_checks))
+        extra = sorted(set(pdf_foundation_checks) - REQUIRED_PDF_FOUNDATION_MANUAL_CHECKS)
+        raise ReleaseStateError(
+            f"PDF foundation runtime checks differ; missing={missing}, extra={extra}"
+        )
+    for check_id, raw_item in pdf_foundation_checks.items():
+        item = _mapping(
+            raw_item,
+            f"manual_validation.pdf_foundation_runtime.checks.{check_id}",
+        )
+        _validate_evidence(
+            item,
+            f"manual_validation.pdf_foundation_runtime.checks.{check_id}",
+        )
+    expected_pdf_foundation_status = derive_reader_runtime_status(pdf_foundation_checks)
+    if pdf_foundation.get("status") != expected_pdf_foundation_status:
+        raise ReleaseStateError(
+            "PDF foundation runtime aggregate status must derive from its child checks"
+        )
+    _validate_evidence(pdf_foundation, "manual_validation.pdf_foundation_runtime")
+
 
 def _validate_publication_and_operations(manifest: Mapping[str, Any]) -> None:
     publication = _mapping(manifest.get("publication_state"), "publication_state")
@@ -726,10 +772,10 @@ def _validate_external_tracker(manifest: Mapping[str, Any]) -> None:
     if _text(external.get("last_reconciled"), "external_tracker.last_reconciled") != manifest["as_of"]:
         raise ReleaseStateError("external_tracker.last_reconciled must equal manifest as_of")
     tasks = _list(external.get("tasks"), "external_tracker.tasks")
-    expected_ids = [f"R-{number:03d}" for number in range(1, 26)]
+    expected_ids = [f"R-{number:03d}" for number in range(1, 26)] + ["R-145"]
     task_ids = [task.get("task_id") if isinstance(task, dict) else None for task in tasks]
     if task_ids != expected_ids:
-        raise ReleaseStateError("external tracker tasks must be ordered R-001 through R-025")
+        raise ReleaseStateError("external tracker tasks must be ordered R-001 through R-025, then R-145")
     for index, raw_task in enumerate(tasks):
         task = _mapping(raw_task, f"external_tracker.tasks[{index}]")
         if set(task) != {"disposition", "evidence", "last_verified", "status", "task_id"}:
@@ -779,10 +825,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.5.11":
-        raise ReleaseStateError("product_version must identify the current 1.5.11 runtime target")
-    if manifest.get("release_name") != "v1.5.11-library-paper-workflow-closure":
-        raise ReleaseStateError("release_name must identify the current v1.5.11 runtime target")
+    if manifest.get("product_version") != "1.5.12":
+        raise ReleaseStateError("product_version must identify the current 1.5.12 runtime target")
+    if manifest.get("release_name") != "v1.5.12-pre-ux-pdf-foundation":
+        raise ReleaseStateError("release_name must identify the current v1.5.12 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)
@@ -898,6 +944,7 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
         f"Python `{pr_jobs['python']}`, frontend `{pr_jobs['frontend']}`. |",
         f"| Post-merge `main` GitHub Actions | {automated['post_merge_main_ci']['status']} | {_escape_cell(automated['post_merge_main_ci']['evidence']['summary'])} |",
         f"| Reader runtime | {manual['reader_runtime']['status']} | {_escape_cell(manual['reader_runtime']['evidence']['summary'])} |",
+        f"| v1.5.12 PDF foundation runtime | {manual['pdf_foundation_runtime']['status']} | {_escape_cell(manual['pdf_foundation_runtime']['evidence']['summary'])} |",
         f"| v1.5.11 Library/Paper workflow runtime | {manual['library_paper_workflow_runtime']['status']} | {_escape_cell(manual['library_paper_workflow_runtime']['evidence']['summary'])} |",
         f"| v1.5.0 Reader Snapshot runtime | {manual['reader_snapshot_runtime']['status']} | {_escape_cell(manual['reader_snapshot_runtime']['evidence']['summary'])} |",
         f"| v1.5.1 Reader write runtime | {manual['reader_write_runtime']['status']} | {_escape_cell(manual['reader_write_runtime']['evidence']['summary'])} |",
@@ -939,6 +986,21 @@ def render_current_status(manifest: Mapping[str, Any]) -> str:
             f"The current smoke result is {smoke_counts['passed']} passed, {smoke_counts['warnings']} warnings, "
             f"{smoke_counts['failed']} failed. The two conflicting "
             "v1.4.0 records remain historical evidence and do not override this current result.",
+            "",
+            "## v1.5.12 PDF foundation manual validation",
+            "",
+            f"Aggregate state: **{manual['pdf_foundation_runtime']['status']}**.",
+            "",
+            "| Check | Status | Evidence |",
+            "|---|---|---|",
+        ]
+    )
+    for check_id, item in manual["pdf_foundation_runtime"]["checks"].items():
+        label = check_id.replace("_", " ").capitalize()
+        lines.append(f"| {label} | {item['status']} | {_escape_cell(_evidence_summary(item))} |")
+
+    lines.extend(
+        [
             "",
             "## v1.5.11 Library/Paper workflow manual validation",
             "",

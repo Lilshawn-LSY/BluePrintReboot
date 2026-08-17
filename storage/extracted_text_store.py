@@ -31,7 +31,9 @@ def build_extraction_metadata(
 ) -> dict[str, Any]:
     text_path = extracted_text_path(paper_id, cache_dir)
     fingerprint = pdf_fingerprint(pdf_path)
+    structured = result.structured_extraction.to_dict() if result.structured_extraction else None
     return {
+        "schema_version": 2,
         "paper_id": paper_id,
         "pdf_path": str(pdf_path),
         "text_path": str(text_path),
@@ -40,8 +42,15 @@ def build_extraction_metadata(
         "extracted_at": utc_now_iso(),
         "char_count": result.char_count,
         "status": result.status,
+        "extraction_state": result.status,
         "errors": result.errors,
+        "warnings": result.warnings,
         "attempted_methods": result.attempted_methods,
+        "structured_extraction": structured,
+        "classification": structured.get("classification", "unknown") if structured else "unknown",
+        "classification_confidence": structured.get("classification_confidence") if structured else None,
+        "page_count": structured.get("page_count", 0) if structured else 0,
+        "ocr_needed_pages": structured.get("ocr_needed_pages", []) if structured else [],
     }
 
 
@@ -61,6 +70,7 @@ def build_preserved_cache_failure_metadata(
             "recovery_attempted_at": utc_now_iso(),
             "recovery_attempted_methods": result.attempted_methods,
             "recovery_errors": result.errors,
+            "recovery_warnings": result.warnings,
             "recovery_error": _extraction_result_error(result),
             "recovery_pdf_sha256": pdf_fingerprint(pdf_path, metadata)["pdf_sha256"],
         }
@@ -153,8 +163,15 @@ def extraction_cache_status(
     char_count = _safe_int(metadata.get("char_count"))
     has_reusable_text_cache = (
         has_text_file
-        and metadata.get("status") == "success"
+        and metadata.get("status") in {"success", "ocr_needed"}
         and char_count > 0
+    )
+    has_reusable_extraction_cache = bool(
+        has_text_file
+        and (
+            (metadata.get("status") == "success" and char_count > 0)
+            or metadata.get("status") == "ocr_needed"
+        )
     )
 
     cached_pdf_sha256 = str(metadata.get("pdf_sha256") or "")
@@ -163,7 +180,7 @@ def extraction_cache_status(
     if pdf_path is not None:
         current_pdf_sha256 = str(pdf_fingerprint(pdf_path, metadata)["pdf_sha256"])
         is_stale = _hashes_show_stale(
-            has_reusable_text_cache,
+            has_reusable_extraction_cache,
             current_pdf_sha256,
             cached_pdf_sha256,
         )
@@ -176,16 +193,26 @@ def extraction_cache_status(
     if not error and errors:
         error = str(errors[0])
 
+    extraction_state = str(metadata.get("extraction_state") or metadata.get("status") or "not_extracted")
+    cache_state = _cache_state(
+        has_metadata_file=has_metadata_file,
+        has_reusable_extraction_cache=has_reusable_extraction_cache,
+        is_stale=is_stale,
+        extraction_state=extraction_state,
+    )
     return {
         "text_path": text_path,
         "metadata_path": metadata_path,
         "has_text_file": has_text_file,
         "has_metadata_file": has_metadata_file,
         "has_reusable_text_cache": has_reusable_text_cache,
+        "has_reusable_extraction_cache": has_reusable_extraction_cache,
         "is_stale": is_stale,
         "pdf_sha256": current_pdf_sha256,
         "cached_pdf_sha256": cached_pdf_sha256,
         "status": metadata.get("status", "not_extracted"),
+        "extraction_state": extraction_state,
+        "cache_state": cache_state,
         "char_count": char_count,
         "error": error,
         "source": metadata.get("source", ""),
@@ -201,6 +228,12 @@ def extraction_cache_status(
         "recovery_failed": recovery_failed,
         "recovery_status": metadata.get("recovery_status", ""),
         "recovery_attempted_at": metadata.get("recovery_attempted_at", ""),
+        "classification": metadata.get("classification", "unknown"),
+        "classification_confidence": metadata.get("classification_confidence"),
+        "page_count": _safe_int(metadata.get("page_count")),
+        "ocr_needed_pages": metadata.get("ocr_needed_pages", []),
+        "warnings": metadata.get("recovery_warnings" if recovery_failed else "warnings", []),
+        "structured_extraction": metadata.get("structured_extraction"),
     }
 
 
@@ -209,7 +242,7 @@ def is_extraction_cache_stale(
     pdf_path: str | Path,
     cache_dir: Path = EXTRACTED_TEXT_DIR,
 ) -> bool:
-    if not has_reusable_extracted_text_cache(paper_id, cache_dir):
+    if not has_reusable_extraction_cache(paper_id, cache_dir):
         return False
 
     metadata = load_extraction_metadata(paper_id, cache_dir)
@@ -238,6 +271,24 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _cache_state(
+    *,
+    has_metadata_file: bool,
+    has_reusable_extraction_cache: bool,
+    is_stale: bool,
+    extraction_state: str,
+) -> str:
+    if not has_metadata_file:
+        return "not_extracted"
+    if is_stale:
+        return "stale"
+    if has_reusable_extraction_cache:
+        return "ocr_needed" if extraction_state == "ocr_needed" else "cached"
+    if extraction_state in {"failed", "empty", "metadata_error"}:
+        return "failed"
+    return extraction_state
+
+
 def _extraction_result_error(result: FullTextExtractionResult) -> str:
     if result.errors:
         return "; ".join(str(error) for error in result.errors)
@@ -248,6 +299,10 @@ def _extraction_result_error(result: FullTextExtractionResult) -> str:
 
 def has_reusable_extracted_text_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> bool:
     return bool(extraction_cache_status(paper_id, cache_dir)["has_reusable_text_cache"])
+
+
+def has_reusable_extraction_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> bool:
+    return bool(extraction_cache_status(paper_id, cache_dir)["has_reusable_extraction_cache"])
 
 
 def clear_extraction_cache(paper_id: str, cache_dir: Path = EXTRACTED_TEXT_DIR) -> None:

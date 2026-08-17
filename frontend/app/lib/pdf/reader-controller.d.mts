@@ -32,13 +32,33 @@ export const DEFAULT_ZOOM: number;
 export const MIN_ZOOM: number;
 export const MAX_ZOOM: number;
 export const ZOOM_STEP: number;
+export const MAX_OUTPUT_SCALE: number;
+export function normalizeOutputScale(value: unknown): number;
+export function canvasRenderGeometry(
+  viewport: { width: number; height: number },
+  outputScale: unknown,
+): {
+  cssWidth: number;
+  cssHeight: number;
+  canvasWidth: number;
+  canvasHeight: number;
+  outputScale: number;
+  transform: [number, number, number, number, number, number] | undefined;
+};
 export function isPdfCancellation(error: unknown): boolean;
 export function classifyPdfError(error: unknown, phase?: "load" | "render"): Pick<PdfReaderState, "errorKind" | "message">;
 
 export class PdfReaderController {
   constructor(options: {
     createLoadingTask: (url: string) => Promise<PdfLoadingTaskLike>;
+    createTextLayer?: ((options: {
+      page: unknown;
+      container: HTMLElement;
+      viewport: unknown;
+    }) => Promise<{ render?: () => Promise<void>; cancel?: () => void }>) | null;
     getCanvas: () => HTMLCanvasElement | null;
+    getTextLayerContainer?: () => HTMLElement | null;
+    getOutputScale?: () => number;
     onState?: (state: PdfReaderState) => void;
     onDiagnostics?: (diagnostics: PdfReaderDiagnostics) => void;
     getNetworkDiagnostics?: (url: string) => Partial<PdfReaderDiagnostics>;

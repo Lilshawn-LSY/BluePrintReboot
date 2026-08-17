@@ -8,9 +8,13 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.11-library-paper-workflow-closure**.
+Current runtime target: **v1.5.12-pre-ux-pdf-foundation**.
 
-v1.5.11 makes **Library** the primary web Paper collection workflow: managed-PDF scan/import, server-backed metadata search and pagination, filters, explicit enrichment preview/selective apply, Paper Detail/Reader navigation, and explicit exact-content reconnect for a missing managed PDF. `/papers/{paper_id}` and `/papers/{paper_id}/reader` remain stable canonical resource URLs; the legacy `/papers` collection entry is subordinate to Library. Reconnect is never automatic: it only updates the managed-file identity fields of one existing Paper after a fresh exact SHA-256 match under the workspace lock, preserving that Paper's metadata, notes, blocks, links, and tags.
+v1.5.12 closes the R-145 PDF foundation before the v1.6 Reader UX redesign. The existing PDF.js Reader now keeps logical zoom and viewport dimensions independent from a bounded high-DPI canvas backing scale, overlays selectable PDF.js text using the same page viewport, and exposes an internal 1-based selection contract with page-normalized geometry. Native fallback remains exclusive, and page/zoom changes still reuse the loaded PDF document.
+
+Full-text extraction now has an optional pinned `pdf-inspector` adapter that normalizes all upstream page fields to BluePrint's 1-based convention and produces BluePrint-owned document classification, per-page extraction/OCR state, Markdown/text, and positioned-text data. MarkItDown/pypdf remain compatibility fallbacks. Extraction metadata distinguishes not-extracted, success, cached, stale, failed, and OCR-needed states; OCR-needed pages are not treated as generic failures, and valid previous caches remain preserved after failed refreshes. No OCR engine, selection persistence, Research Block capture, or Reader redesign is included.
+
+v1.5.11 remains the completed **Library** workflow baseline: managed-PDF scan/import, server-backed metadata search and pagination, filters, explicit enrichment preview/selective apply, Paper Detail/Reader navigation, and exact-content reconnect for a missing managed PDF. `/papers/{paper_id}` and `/papers/{paper_id}/reader` remain stable canonical resource URLs.
 
 v1.5.10 completes the bounded tag-management workflow. The Tag Book is now a canonical registry with explicit create, metadata/category edit, alias, and deprecate commands protected by a registry revision and the shared workspace lock. Canonical identities and aliases must be unique under the established normalization rule; a deprecated tag remains visible and historical Paper tag values, including legacy/noncanonical values, are never silently rewritten or deleted.
 
@@ -18,7 +22,7 @@ Paper-scoped tag candidates are persisted review records, not Paper tags. Genera
 
 v1.5.6 closes the everyday Project workspace: one Project page now keeps explicit metadata/status/priority editing, Paper links, and a bounded existing Note Block picker together. The picker reads only the selected Paper's stored blocks and reuses the canonical typed Project-link command, including duplicate truthfulness, revision conflicts, and controlled unavailable/orphan states. Project and link writes remain independent, revision-checked, lock-protected, and atomic; there is no autosave, combined save, or storage migration.
 
-The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.10. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, v1.5.7 Paper tags, v1.5.8 metadata enrichment, v1.5.9 PDF scan/import, official pinned `pdfjs-dist`, client-only adapter, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
+The immutable released baseline remains **v1.4.0-pdfjs-reader-foundation** and its verified tag/commit evidence is not relabeled as v1.5.12. The v1.5.1 Reader commands, v1.5.2 Projects/Tags reads, v1.5.3 safe Settings reads, v1.5.4 Project/Paper-link commands, v1.5.5 Note Block commands, v1.5.6 Project workspace closure, v1.5.7 Paper tags, v1.5.8 metadata enrichment, v1.5.9 PDF scan/import, v1.5.10 tag workflows, v1.5.11 Library workflow, official pinned `pdfjs-dist`, repository-local worker, managed PDF Range behavior, and Streamlit workflows remain in place.
 
 The generated [current release status](docs/CURRENT_RELEASE_STATUS.md) is the canonical human-readable view of source control, automated validation, manual validation, publication, recurring operations, and unresolved evidence. Its source is the machine-readable `docs/tracker_sync_status.json` manifest.
 
@@ -137,7 +141,7 @@ Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
-For optional MarkItDown PDF support:
+For optional structured `pdf-inspector` extraction and MarkItDown PDF support:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-optional.txt

@@ -227,8 +227,15 @@ tbody tr:hover { background: var(--color-surface-subtle); }
 .reader-zoom-value { min-width: 3.5rem; color: var(--color-text-secondary); font-size: var(--font-size-sm); text-align: center; }
 .reader-canvas-viewport { min-height: 62vh; display: grid; overflow: auto; padding: var(--space-5); background: #3d423f; }
 .reader-canvas-viewport > * { grid-area: 1 / 1; }
-.reader-canvas { display: block; align-self: start; justify-self: center; background: white; box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%); }
-.reader-canvas--inactive { visibility: hidden; }
+.reader-page-surface { position: relative; display: block; align-self: start; justify-self: center; line-height: 1; box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 28%); }
+.reader-page-surface--inactive { visibility: hidden; }
+.reader-canvas { display: block; background: white; }
+.reader-text-layer { position: absolute; inset: 0; overflow: clip; line-height: 1; text-align: initial; transform-origin: 0 0; -webkit-text-size-adjust: none; text-size-adjust: none; forced-color-adjust: none; }
+.reader-text-layer :is(span, br) { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; }
+.reader-text-layer { --min-font-size: 1; --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size)); --min-font-size-inv: calc(1 / var(--min-font-size)); }
+.reader-text-layer > :not(.markedContent), .reader-text-layer .markedContent span:not(.markedContent) { --font-height: 0; --scale-x: 1; --rotate: 0deg; z-index: 1; font-size: calc(var(--text-scale-factor) * var(--font-height)); transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv)); }
+.reader-text-layer .markedContent { display: contents; }
+.reader-text-layer ::selection { background: rgb(42 111 219 / 28%); }
 .reader-render-state { min-height: 24rem; align-self: stretch; display: flex; align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-6); border-radius: var(--radius-sm); background: var(--color-surface-subtle); color: var(--color-text); text-align: left; }
 .reader-render-state h2, .reader-render-state p { margin: 0; }
 .reader-render-state p { margin-top: var(--space-1); color: var(--color-text-secondary); }

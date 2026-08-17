@@ -4,6 +4,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ingest.document_text import MarkItDown, PdfReader, get_text_extraction_backends
+from ingest.pdf_inspector_adapter import (
+    StructuredPdfExtraction,
+    extract_structured_pdf,
+    pdf_inspector_available,
+)
 
 
 @dataclass(frozen=True)
@@ -14,6 +19,8 @@ class FullTextExtractionResult:
     errors: list[str] = field(default_factory=list)
     status: str = "failed"
     attempted_methods: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    structured_extraction: StructuredPdfExtraction | None = None
 
 
 def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
@@ -27,6 +34,22 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
         )
 
     text = ""
+    structured = extract_structured_pdf(pdf_path)
+    if structured.status != "not_extracted":
+        attempted_methods.append("pdf-inspector")
+    if structured.status == "failed":
+        errors.extend(structured.errors)
+    elif structured.text.strip():
+        return _success(
+            structured.text,
+            "pdf-inspector",
+            errors,
+            attempted_methods,
+            warnings=structured.warnings,
+            structured_extraction=structured,
+            status=structured.status,
+        )
+
     if MarkItDown is not None:
         attempted_methods.append("markitdown")
         try:
@@ -35,7 +58,15 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
         except Exception as exc:
             errors.append(f"markitdown: {exc}")
         if text.strip():
-            return _success(text, "markitdown", errors, attempted_methods)
+            return _success(
+                text,
+                "markitdown",
+                errors,
+                attempted_methods,
+                warnings=structured.warnings,
+                structured_extraction=structured,
+                status="ocr_needed" if structured.status == "ocr_needed" else "success",
+            )
     else:
         errors.append("markitdown: unavailable")
 
@@ -48,7 +79,15 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
         except Exception as exc:
             errors.append(f"pypdf: {exc}")
         if text.strip():
-            return _success(text, "pypdf", errors, attempted_methods)
+            return _success(
+                text,
+                "pypdf",
+                errors,
+                attempted_methods,
+                warnings=structured.warnings,
+                structured_extraction=structured,
+                status="ocr_needed" if structured.status == "ocr_needed" else "success",
+            )
     else:
         errors.append("pypdf: unavailable")
 
@@ -56,9 +95,11 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
         text=text,
         source="none",
         char_count=len(text),
-        errors=errors or ["No readable text extracted."],
-        status="empty" if not text.strip() else "failed",
+        errors=(errors or ["No readable text extracted."]) if structured.status != "ocr_needed" else errors,
+        status="ocr_needed" if structured.status == "ocr_needed" else "empty" if not text.strip() else "failed",
         attempted_methods=attempted_methods,
+        warnings=structured.warnings,
+        structured_extraction=structured,
     )
 
 
@@ -69,6 +110,7 @@ def extraction_diagnostics(pdf_path: Path) -> dict[str, object]:
         "pdf_path": str(pdf_path),
         "pdf_exists": exists,
         "pdf_size_mb": round(pdf_path.stat().st_size / (1024 * 1024), 6) if exists else 0.0,
+        "pdf_inspector": pdf_inspector_available(),
         **get_text_extraction_backends(),
     }
 
@@ -78,12 +120,18 @@ def _success(
     source: str,
     errors: list[str],
     attempted_methods: list[str],
+    *,
+    warnings: list[str] | None = None,
+    structured_extraction: StructuredPdfExtraction | None = None,
+    status: str = "success",
 ) -> FullTextExtractionResult:
     return FullTextExtractionResult(
         text=text,
         source=source,
         char_count=len(text),
         errors=errors,
-        status="success",
+        status=status,
         attempted_methods=attempted_methods,
+        warnings=list(warnings or []),
+        structured_extraction=structured_extraction,
     )

@@ -1,6 +1,6 @@
 # BluePrintReboot Roadmap
 
-Stable roadmap last edited: 2026-08-16
+Stable roadmap last edited: 2026-08-17
 
 Current release evidence is not duplicated here. See the generated [Current Release Status](CURRENT_RELEASE_STATUS.md), derived from the canonical machine-readable manifest. This roadmap records stable architecture, closed decision gates, and the next approved product direction rather than mutable repository observations.
 
@@ -49,7 +49,25 @@ BluePrintReboot is a local-first, single-user research workspace with an establi
 | v1.5.4 Project write and Paper–Project links | Runtime parity closed | Five strict command routes and disposable regressions are implemented; the 2026-08-02 user-performed real-data runtime checks are VERIFIED. Hosted, merge, tag, and publication evidence remain separate. |
 | v1.5.5 Note Block write and Project links | Runtime parity closed | Five exact read/command routes, complete-state revisions, lock/reload atomicity, failure rollback, typed orphan states, exact bridge paths, explicit UI actions, and disposable regressions are implemented; the 2026-08-02 user-performed runtime checks are VERIFIED. Hosted evidence remains separate. |
 
-## Current product milestone: v1.5.11 Library / Paper Workflow Closure
+## Current product milestone: v1.5.12 R-145 Pre-UX PDF Foundation
+
+v1.5.12 closes PDF rendering, selectable-text geometry, structured extraction, and OCR-routing foundations before the v1.6 visual/Reader UX redesign. It preserves the existing Reader controls, managed PDF Range bridge, flattened profile consumers, and v1.5.11 Library workflow.
+
+### Implemented product slice
+
+- PDF.js canvas output uses a bounded device-pixel backing scale while viewport CSS dimensions and semantic Reader zoom remain unchanged.
+- A PDF.js text layer shares the canvas viewport, rotation, page, and zoom lifecycle. Canvas and text work cancel and clean up together across navigation, retry, fallback, document change, and unmount.
+- The internal selection contract uses canonical 1-based page numbers and top-left rectangles normalized to the rotated logical page viewport. It does not persist selections or create Note Blocks.
+- Optional pinned `pdf-inspector` output is isolated behind BluePrint dataclasses. The adapter explicitly converts its mixed 0-based and 1-based upstream page fields to BluePrint 1-based page numbers.
+- Structured extraction records document classification/confidence, page count, per-page text/Markdown/positioned text, OCR-needed state/reasons, warnings/errors, and provider version. MarkItDown/pypdf remain compatible fallbacks.
+- Cache metadata keeps SHA-256 stale detection and prior-valid-cache preservation while adding explicit extraction/cache states and reusable OCR-needed results.
+
+### Evidence state
+
+- Disposable automated coverage is part of the local release gate. Representative real-PDF DPR, alignment, classification, stale-cache, and restart checks remain user-performed manual validation and are not claimed by implementation alone.
+- Hosted CI, PR, merge, tag, GitHub Release, post-merge validation, and clean-PC restore evidence remain separately unverified.
+
+## Historical product milestone: v1.5.11 Library / Paper Workflow Closure
 
 v1.5.11 is the final Library/Paper workflow closure before the v1.6 UX redesign. It does not relabel the immutable v1.4.0 released baseline and does not claim hosted validation, merge, tag, or publication.
 
@@ -79,7 +97,8 @@ v1.5.11 is the final Library/Paper workflow closure before the v1.6 UX redesign.
 | v1.5.10 canonical Tag Book governance | Complete locally with explicit revision, lock, collision, and deprecation safeguards. |
 | v1.5.10 candidate review | Complete locally with persisted review state and separate final Paper apply. |
 | v1.5.11 candidate review package | Absorbed into v1.5.10; no separate functional release remains. |
-| v1.6.0 Reader Workspace UX Overhaul | Next functional release; deferred without a redesign in v1.5.10. |
+| v1.5.12 R-145 PDF foundation | Complete locally without a Reader visual redesign or Research Block persistence. |
+| v1.6.0 Reader Workspace UX Overhaul | Follows the v1.5.12 foundation under a separately approved scope. |
 | v1.8.0 Tag Intelligence | Deferred: semantic-quality optimization, embeddings, and LLM/provider work remain out of scope. |
 
 ### Historical v1.5.5 Note Block milestone
@@ -88,4 +107,4 @@ The former v1.5.5 current-milestone record remains historical context: it delive
 
 ## Continuing constraints
 
-No automatic candidate application, automatic tag cleanup, bulk retagging, destructive canonical-tag deletion, ontology editing, embedding/vector/LLM tagging, combined save endpoint, Note Block deletion/reorder/drag-and-drop, PDF selection/highlight or automatic block creation, Project deletion/unarchive, Settings write, configuration editing, automatic backup, automatic duplicate merge/deletion, automatic repair, database migration, OCR, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of automated tests. The Reader workspace visual overhaul remains v1.6.0 work.
+No automatic candidate application, automatic tag cleanup, bulk retagging, destructive canonical-tag deletion, ontology editing, embedding/vector/LLM tagging, combined save endpoint, Note Block deletion/reorder/drag-and-drop, selection/highlight persistence or automatic block creation, Project deletion/unarchive, Settings write, configuration editing, automatic backup, automatic duplicate merge/deletion, automatic repair, database migration, OCR engine, cloud sync, `paper_id` redesign, installer, background service, or destructive automated restore. Keep real user data out of automated tests. The Reader workspace visual overhaul remains v1.6.0 work.

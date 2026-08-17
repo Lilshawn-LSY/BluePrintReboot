@@ -1,1 +1,2 @@
 markitdown[pdf]
+pdf-inspector==0.2.6

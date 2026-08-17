@@ -29,12 +29,12 @@ def test_version_contract_is_consistent() -> None:
     manifest = read_manifest()
     shell = read_text("frontend/app/components/AppShell.tsx")
 
-    assert APP_VERSION == "1.5.11"
+    assert APP_VERSION == "1.5.12"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.5.11-library-paper-workflow-closure"
+    assert manifest["release_name"] == "v1.5.12-pre-ux-pdf-foundation"
     assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
     assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
@@ -134,6 +134,9 @@ def test_schema_five_manifest_is_the_current_release_authority() -> None:
     assert {
         item["status"] for item in library_paper_workflow["checks"].values()
     } == {"VERIFIED"}
+    pdf_foundation = manifest["manual_validation"]["pdf_foundation_runtime"]
+    assert pdf_foundation["status"] == "NOT VERIFIED"
+    assert {item["status"] for item in pdf_foundation["checks"].values()} == {"NOT VERIFIED"}
     tag_candidate_review = manifest["manual_validation"]["tag_candidate_review_runtime"]
     assert tag_candidate_review["status"] == "PARTIALLY VERIFIED"
     assert {
@@ -168,6 +171,7 @@ def test_schema_five_manifest_is_the_current_release_authority() -> None:
     assert "manual_validation.metadata_enrichment_runtime" not in manifest["unresolved_evidence"]["items"]
     assert "manual_validation.pdf_scan_import_runtime" not in manifest["unresolved_evidence"]["items"]
     assert "manual_validation.library_paper_workflow_runtime" not in manifest["unresolved_evidence"]["items"]
+    assert "manual_validation.pdf_foundation_runtime" in manifest["unresolved_evidence"]["items"]
     assert "manual_validation.tag_candidate_review_runtime" in manifest["unresolved_evidence"]["items"]
     assert manifest["recurring_operational_procedures"]["clean_pc_restore"]["status"] == "NOT VERIFIED"
     assert manifest["publication_state"]["github_release"]["status"] == "NOT VERIFIED"
@@ -205,6 +209,8 @@ def test_generated_current_status_is_the_only_volatile_document_surface() -> Non
     assert "| Streamlit regression | VERIFIED |" in current_status
     assert "v1.5.11 Library/Paper workflow manual validation" in current_status
     assert "| v1.5.11 Library/Paper workflow runtime | VERIFIED |" in current_status
+    assert "v1.5.12 PDF foundation manual validation" in current_status
+    assert "| v1.5.12 PDF foundation runtime | NOT VERIFIED |" in current_status
     assert "v1.5.4 Project write manual validation" in current_status
     assert "| v1.5.4 Project write runtime | VERIFIED |" in current_status
     assert "v1.5.5 Note Block write manual validation" in current_status
@@ -250,7 +256,10 @@ def test_external_tracker_mapping_is_versioned_and_controlled() -> None:
     assert external["schema_version"] == "2.0"
     assert external["status_values"] == list(read_manifest()["controlled_statuses"])
     tasks = external["tasks"]
-    assert [task["task_id"] for task in tasks] == [f"R-{number:03d}" for number in range(1, 26)]
+    assert [task["task_id"] for task in tasks] == [
+        *[f"R-{number:03d}" for number in range(1, 26)],
+        "R-145",
+    ]
     assert all(task["status"] in CONTROLLED_STATUS_SET for task in tasks)
     assert all(
         set(task) == {"task_id", "status", "evidence", "disposition", "last_verified"}
@@ -273,5 +282,6 @@ def test_release_documents_contain_no_private_absolute_user_path() -> None:
         "docs/release_notes/v1.5.9.md",
         "docs/release_notes/v1.5.10.md",
         "docs/release_notes/v1.5.11.md",
+        "docs/release_notes/v1.5.12.md",
     ):
         assert private_user_path.search(read_text(relative_path)) is None

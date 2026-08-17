@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +32,10 @@ class FullTextWorkflowResult:
     previous_cache_preserved: bool = False
     recovery_failed: bool = False
     error: str = ""
+    extraction_state: str = "not_extracted"
+    cache_state: str = "not_extracted"
+    classification: str = "unknown"
+    ocr_needed_pages: list[int] = field(default_factory=list)
 
 
 def extract_text_for_paper(
@@ -43,7 +47,7 @@ def extract_text_for_paper(
     paper_id = record["paper_id"]
     pdf_path = Path(str(record.get("filepath", "")))
     previous_status = extraction_cache_status(paper_id, cache_dir, pdf_path=pdf_path)
-    previous_cache_is_reusable = bool(previous_status["has_reusable_text_cache"])
+    previous_cache_is_reusable = bool(previous_status["has_reusable_extraction_cache"])
 
     if not force and previous_cache_is_reusable and not previous_status["is_stale"]:
         return FullTextWorkflowResult(
@@ -59,13 +63,16 @@ def extract_text_for_paper(
             previous_cache_preserved=bool(previous_status["previous_cache_preserved"]),
             recovery_failed=bool(previous_status["recovery_failed"]),
             error=str(previous_status["error"]),
+            extraction_state=str(previous_status["extraction_state"]),
+            cache_state=str(previous_status["cache_state"]),
+            classification=str(previous_status["classification"]),
+            ocr_needed_pages=list(previous_status["ocr_needed_pages"]),
         )
 
     result = extract_full_text_from_pdf(pdf_path)
     extraction_succeeded = (
-        result.status == "success"
-        and result.char_count > 0
-        and bool(result.text.strip())
+        (result.status == "success" and result.char_count > 0 and bool(result.text.strip()))
+        or result.status == "ocr_needed"
     )
 
     if not extraction_succeeded and previous_cache_is_reusable:
@@ -95,6 +102,10 @@ def extract_text_for_paper(
             previous_cache_preserved=True,
             recovery_failed=True,
             error=str(metadata["recovery_error"]),
+            extraction_state=result.status,
+            cache_state="stale" if previous_status["is_stale"] else str(previous_status["cache_state"]),
+            classification=str(previous_status["classification"]),
+            ocr_needed_pages=list(previous_status["ocr_needed_pages"]),
         )
 
     save_extracted_text(paper_id, result.text, cache_dir)
@@ -121,10 +132,30 @@ def extract_text_for_paper(
         attempted_methods=result.attempted_methods,
         metadata=metadata,
         error=_workflow_error(result),
+        extraction_state=result.status,
+        cache_state=(
+            "ocr_needed"
+            if result.status == "ocr_needed"
+            else "success"
+            if result.status == "success"
+            else "failed"
+        ),
+        classification=(
+            result.structured_extraction.classification
+            if result.structured_extraction
+            else "unknown"
+        ),
+        ocr_needed_pages=(
+            list(result.structured_extraction.ocr_needed_pages)
+            if result.structured_extraction
+            else []
+        ),
     )
 
 
 def _workflow_error(result: Any) -> str:
+    if result.status == "ocr_needed":
+        return ""
     if result.status == "success" and result.text.strip():
         return ""
     if result.errors:

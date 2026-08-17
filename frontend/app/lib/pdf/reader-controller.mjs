@@ -2,9 +2,30 @@ export const DEFAULT_ZOOM = 1;
 export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 3;
 export const ZOOM_STEP = 0.25;
+export const MAX_OUTPUT_SCALE = 2;
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+export function normalizeOutputScale(value) {
+  const numericScale = Number(value);
+  if (!Number.isFinite(numericScale)) return 1;
+  return clamp(numericScale, 1, MAX_OUTPUT_SCALE);
+}
+
+export function canvasRenderGeometry(viewport, outputScale) {
+  const scale = normalizeOutputScale(outputScale);
+  const cssWidth = Math.max(1, Number(viewport?.width) || 1);
+  const cssHeight = Math.max(1, Number(viewport?.height) || 1);
+  return {
+    cssWidth,
+    cssHeight,
+    canvasWidth: Math.max(1, Math.ceil(cssWidth * scale)),
+    canvasHeight: Math.max(1, Math.ceil(cssHeight * scale)),
+    outputScale: scale,
+    transform: scale === 1 ? undefined : [scale, 0, 0, scale, 0, 0],
+  };
 }
 
 function safeStatus(error) {
@@ -81,6 +102,8 @@ function createLoadOperation(cycle) {
     renderTask: null,
     activePage: null,
     renderCycle: 0,
+    textLayer: null,
+    textLayerPromise: null,
     disposalPromise: null,
   };
 }
@@ -96,7 +119,10 @@ async function safeCall(callback) {
 export class PdfReaderController {
   constructor({
     createLoadingTask,
+    createTextLayer = null,
     getCanvas,
+    getTextLayerContainer = () => null,
+    getOutputScale = () => globalThis.devicePixelRatio || 1,
     onState = () => {},
     onDiagnostics = () => {},
     getNetworkDiagnostics = () => ({}),
@@ -104,7 +130,10 @@ export class PdfReaderController {
     isCurrent = () => true,
   }) {
     this.createLoadingTask = createLoadingTask;
+    this.createTextLayer = createTextLayer;
     this.getCanvas = getCanvas;
+    this.getTextLayerContainer = getTextLayerContainer;
+    this.getOutputScale = getOutputScale;
     this.onState = onState;
     this.onDiagnostics = onDiagnostics;
     this.getNetworkDiagnostics = getNetworkDiagnostics;
@@ -314,7 +343,7 @@ export class PdfReaderController {
     const document = operation?.document;
     if (!document || !this._isActive(operation)) return;
     const cycle = ++operation.renderCycle;
-    await this._cancelActiveRender(operation);
+    await this._cancelActiveRender(operation, cycle);
     if (cycle !== operation.renderCycle || !this._isActive(operation)) return;
 
     const pageNumber = this.state.pageNumber;
@@ -322,6 +351,8 @@ export class PdfReaderController {
     const renderStartedAt = this.now();
     let page = null;
     let renderTask = null;
+    let textLayer = null;
+    let textLayerPromise = null;
 
     try {
       page = await document.getPage(pageNumber);
@@ -334,10 +365,19 @@ export class PdfReaderController {
       const canvasContext = canvas?.getContext?.("2d", { alpha: false });
       if (!canvas || !canvasContext) throw new Error("Canvas context unavailable");
       const viewport = page.getViewport({ scale: zoom });
-      canvas.width = Math.max(1, Math.ceil(viewport.width));
-      canvas.height = Math.max(1, Math.ceil(viewport.height));
+      const geometry = canvasRenderGeometry(viewport, this.getOutputScale());
+      canvas.width = geometry.canvasWidth;
+      canvas.height = geometry.canvasHeight;
+      if (canvas.style) {
+        canvas.style.width = `${geometry.cssWidth}px`;
+        canvas.style.height = `${geometry.cssHeight}px`;
+      }
 
-      renderTask = page.render({ canvasContext, viewport });
+      renderTask = page.render({
+        canvasContext,
+        viewport,
+        ...(geometry.transform ? { transform: geometry.transform } : {}),
+      });
       if (cycle !== operation.renderCycle || !this._isActive(operation)) {
         renderTask.cancel?.();
         await safeCall(() => renderTask.promise);
@@ -348,7 +388,22 @@ export class PdfReaderController {
       operation.renderTask = renderTask;
       operation.activePage = page;
       this._emitDiagnostics({ renderCount: this.diagnostics.renderCount + 1 });
-      await renderTask.promise;
+
+      textLayerPromise = Promise.resolve();
+      const textLayerContainer = this.getTextLayerContainer?.();
+      if (textLayerContainer && this.createTextLayer) {
+        this._prepareTextLayerContainer(textLayerContainer, viewport);
+        textLayer = await this.createTextLayer({ page, container: textLayerContainer, viewport });
+        if (cycle !== operation.renderCycle || !this._isActive(operation)) {
+          textLayer?.cancel?.();
+          return;
+        }
+        operation.textLayer = textLayer;
+        textLayerPromise = Promise.resolve(textLayer.render?.());
+        operation.textLayerPromise = textLayerPromise;
+      }
+
+      await Promise.all([renderTask.promise, textLayerPromise]);
       if (cycle !== operation.renderCycle || !this._isActive(operation)) return;
 
       const renderDuration = Math.max(0, this.now() - renderStartedAt);
@@ -365,7 +420,10 @@ export class PdfReaderController {
       this._emitState({ mode: "ready", rendering: false, errorKind: null, message: "" });
     } catch (error) {
       if (cycle !== operation.renderCycle || !this._isActive(operation) || isPdfCancellation(error)) return;
+      renderTask?.cancel?.();
+      await safeCall(() => renderTask?.promise);
       this._clearCanvas();
+      this._clearTextLayer();
       this._emitState({
         mode: "error",
         rendering: false,
@@ -378,12 +436,17 @@ export class PdfReaderController {
     }
   }
 
-  async _cancelActiveRender(operation) {
+  async _cancelActiveRender(operation, clearCycle = operation?.renderCycle) {
     if (!operation) return;
     const renderTask = operation.renderTask;
+    const textLayer = operation.textLayer;
+    const textLayerPromise = operation.textLayerPromise;
     const page = operation.activePage;
     operation.renderTask = null;
+    operation.textLayer = null;
+    operation.textLayerPromise = null;
     operation.activePage = null;
+    await safeCall(() => textLayer?.cancel?.());
     if (renderTask) {
       renderTask.cancel?.();
       this._emitDiagnostics({
@@ -391,12 +454,15 @@ export class PdfReaderController {
       });
       await safeCall(() => renderTask.promise);
     }
+    await safeCall(() => textLayerPromise);
     await safeCall(() => page?.cleanup?.());
+    if (operation.renderCycle === clearCycle) this._clearTextLayer();
   }
 
   _disposeLoadOperation(operation) {
     if (!operation) {
       this._clearCanvas();
+      this._clearTextLayer();
       return Promise.resolve();
     }
     if (operation.disposalPromise) return operation.disposalPromise;
@@ -404,7 +470,7 @@ export class PdfReaderController {
     operation.cancelled = true;
     operation.disposalPromise = (async () => {
       ++operation.renderCycle;
-      await this._cancelActiveRender(operation);
+      await this._cancelActiveRender(operation, operation.renderCycle);
       if (!operation.loadingTask && operation.creationPromise) {
         await safeCall(() => operation.creationPromise);
       }
@@ -424,6 +490,7 @@ export class PdfReaderController {
         if (!loadingTask) await safeCall(() => lateDocument.destroy?.());
       }
       this._clearCanvas();
+      this._clearTextLayer();
     })();
     return operation.disposalPromise;
   }
@@ -436,5 +503,32 @@ export class PdfReaderController {
     context?.clearRect?.(0, 0, canvas.width || 0, canvas.height || 0);
     canvas.width = 0;
     canvas.height = 0;
+    if (canvas.style) {
+      canvas.style.width = "";
+      canvas.style.height = "";
+    }
+  }
+
+  _prepareTextLayerContainer(container, viewport) {
+    if (!this.isCurrent()) return;
+    container.replaceChildren?.();
+    container.style?.setProperty?.("--total-scale-factor", String(viewport.scale));
+    container.style?.setProperty?.("--scale-round-x", "1px");
+    container.style?.setProperty?.("--scale-round-y", "1px");
+  }
+
+  _clearTextLayer() {
+    if (!this.isCurrent()) return;
+    const container = this.getTextLayerContainer?.();
+    if (!container) return;
+    container.replaceChildren?.();
+    container.removeAttribute?.("data-main-rotation");
+    if (container.style) {
+      container.style.width = "";
+      container.style.height = "";
+      container.style.removeProperty?.("--total-scale-factor");
+      container.style.removeProperty?.("--scale-round-x");
+      container.style.removeProperty?.("--scale-round-y");
+    }
   }
 }
