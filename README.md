@@ -10,9 +10,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 Current runtime target: **v1.5.12-pre-ux-pdf-foundation**.
 
-v1.5.12 closes the R-145 PDF foundation before the v1.6 Reader UX redesign. The existing PDF.js Reader now keeps logical zoom and viewport dimensions independent from a bounded high-DPI canvas backing scale, overlays selectable PDF.js text using the same page viewport, and exposes an internal 1-based selection contract with page-normalized geometry. Native fallback remains exclusive, and page/zoom changes still reuse the loaded PDF document.
+v1.5.12 closes the R-145 PDF foundation before the v1.6 Reader UX redesign. The existing PDF.js Reader now renders its backing canvas at `clamp(devicePixelRatio × 1.5, 1, 3)` while logical zoom, CSS dimensions, text-layer geometry, and page-normalized selection coordinates remain unchanged. Native fallback remains exclusive, and page/zoom changes still perform PDF.js rerenders while reusing the loaded document.
 
-Full-text extraction now has an optional pinned `pdf-inspector` adapter that normalizes all upstream page fields to BluePrint's 1-based convention and produces BluePrint-owned document classification, per-page extraction/OCR state, Markdown/text, and positioned-text data. MarkItDown/pypdf remain compatibility fallbacks. Extraction metadata distinguishes not-extracted, success, cached, stale, failed, and OCR-needed states; OCR-needed pages are not treated as generic failures, and valid previous caches remain preserved after failed refreshes. No OCR engine, selection persistence, Research Block capture, or Reader redesign is included.
+Full-text extraction now prefers the default pinned `pdf-inspector==0.2.6` adapter, then falls through to MarkItDown and pypdf. The adapter normalizes all upstream page fields to BluePrint's 1-based convention and produces BluePrint-owned document classification, per-page extraction/OCR state, Markdown/text, positioned-text data, provider information, and the cache's source-PDF revision. One deterministic page-ordered projection feeds the existing extracted-text cache and profile consumers. Extraction metadata distinguishes not-extracted, success, cached, stale, failed, and OCR-needed states; OCR-needed pages are not treated as generic failures, and valid previous caches remain preserved after failed refreshes.
+
+The Reader now includes a compact Full Text section backed only by the local FastAPI extraction service. Status reads are automatic, but extraction and re-extraction are explicit commands. Cached Markdown/plain text is displayed as escaped text, never third-party HTML. No automatic import extraction, background worker, OCR engine, search, selection persistence, Research Block capture, or Reader redesign is included.
 
 v1.5.11 remains the completed **Library** workflow baseline: managed-PDF scan/import, server-backed metadata search and pagination, filters, explicit enrichment preview/selective apply, Paper Detail/Reader navigation, and exact-content reconnect for a missing managed PDF. `/papers/{paper_id}` and `/papers/{paper_id}/reader` remain stable canonical resource URLs.
 
@@ -71,6 +73,9 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Active paper collection: [http://127.0.0.1:8000/papers](http://127.0.0.1:8000/papers)
 - Paper detail: `http://127.0.0.1:8000/papers/{paper_id}`
 - Reader Snapshot: `GET http://127.0.0.1:8000/papers/{paper_id}/reader`
+- Full-text status: `GET http://127.0.0.1:8000/papers/{paper_id}/full-text/status`
+- Canonical cached full text: `GET http://127.0.0.1:8000/papers/{paper_id}/full-text`
+- Explicit full-text extraction/re-extraction: `POST http://127.0.0.1:8000/papers/{paper_id}/full-text/extract`
 - Managed PDF stream: `http://127.0.0.1:8000/papers/{paper_id}/pdf`
 - Managed PDF scan preview: `POST http://127.0.0.1:8000/papers/scan`
 - Managed PDF selective import: `POST http://127.0.0.1:8000/papers/import`
@@ -137,11 +142,11 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:3000" -TimeoutSec 10
 
 If the printed URL is not reachable, inspect the listener with `Get-NetTCPConnection -State Listen -LocalPort 3000` and inspect resolution with `[System.Net.Dns]::GetHostAddresses("localhost")`. `localhost` may prefer IPv6 loopback `::1`; that address is still local-machine-only, but it is not the canonical browser URL. A listener on `::1` indicates that the expected explicit IPv4 bind was not honored. Do not work around the issue with `0.0.0.0`, bare `::`, a LAN address, or any external interface.
 
-Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags, and Settings use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. Library provides an explicit managed-PDF scan, preview, selection, and import workflow; only safe relative paths cross the API and import failures remain per-file. Projects provides an explicit create form. Active Project detail provides explicit edit/save/cancel/archive and a bounded picker for existing Papers; conflicts and offline failures preserve drafts or selections, duplicate links report an honest unchanged result, unlink requires confirmation, and archived Projects retain read detail without write controls. Settings remains read-only. The Reader retains its two bounded explicit saves, with the PDF.js canvas renderer as the primary path and a conditional native fallback. No local filesystem path reaches the browser.
+Dashboard, Library, Papers, Paper Detail, Reader, Projects, Project Detail, Tags, and Settings use real API contracts with explicit loading, empty, error, and unavailable states; Project Detail also has a controlled not-found state. Library provides an explicit managed-PDF scan, preview, selection, and import workflow; only safe relative paths cross the API and import failures remain per-file. Projects provides an explicit create form. Active Project detail provides explicit edit/save/cancel/archive and a bounded picker for existing Papers; conflicts and offline failures preserve drafts or selections, duplicate links report an honest unchanged result, unlink requires confirmation, and archived Projects retain read detail without write controls. Settings remains read-only. The Reader retains its bounded explicit note/metadata saves, PDF.js canvas renderer as the primary path, conditional native fallback, and explicit backend-owned Full Text extraction/cache surface. No local filesystem path or source hash reaches the browser.
 
 Node is resolved in this order: `-NodeHome`, `BLUEPRINT_NODE_HOME`, then `node.exe` and `npm.cmd` on `PATH`. Node 22.13.0 or newer is required. Run `.\scripts\frontend_setup.ps1 -NodeHome <path>` to install exactly from `frontend/package-lock.json` with `npm ci`; no script downloads Node or permanently edits `PATH`.
 
-For optional structured `pdf-inspector` extraction and MarkItDown PDF support:
+`pdf-inspector==0.2.6` is installed by the default `requirements.txt`. To add the optional MarkItDown PDF fallback:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-optional.txt

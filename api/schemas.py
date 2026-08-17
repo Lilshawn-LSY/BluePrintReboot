@@ -487,6 +487,30 @@ class ReaderSnapshotResponse(StrictResponseModel):
     unavailable_reason: str
 
 
+class FullTextStatusResponse(StrictResponseModel):
+    paper_id: str
+    state: Literal["not_extracted", "success", "cached", "stale", "failed", "ocr_needed"]
+    extraction_state: Literal["not_extracted", "success", "failed", "ocr_needed"]
+    source: str
+    provider: str
+    provider_version: str
+    content_format: Literal["markdown", "plain_text"]
+    classification: Literal["text", "scanned", "image-based", "mixed", "unknown"]
+    page_count: int = Field(ge=0)
+    char_count: int = Field(ge=0)
+    ocr_needed_pages: list[int]
+    extracted_at: str
+    has_content: bool
+    is_stale: bool
+    can_extract: bool
+    previous_cache_preserved: bool
+    message: str
+
+
+class FullTextDocumentResponse(FullTextStatusResponse):
+    content: str
+
+
 class ManagedPdfScanCandidate(StrictResponseModel):
     """One safe, managed-directory-only PDF scan result."""
 
@@ -539,6 +563,10 @@ class ManagedPdfReconnectResponse(StrictResponseModel):
 
 class StrictRequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class FullTextExtractionRequest(StrictRequestModel):
+    force: bool = False
 
 
 class ManagedPdfReconnectRequest(StrictRequestModel):

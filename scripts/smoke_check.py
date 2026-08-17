@@ -110,6 +110,8 @@ REQUIRED_FILES = (
     "frontend/app/lib/note-blocks/editor-state.d.mts",
     "frontend/app/lib/projects/editor-state.mjs",
     "frontend/app/components/PdfJsReader.tsx",
+    "frontend/app/components/FullTextWorkspace.tsx",
+    "frontend/app/lib/full-text/workflow-state.mjs",
     "frontend/app/lib/pdf/pdfjs-adapter.ts",
     "frontend/app/lib/pdf/reader-controller.mjs",
     "frontend/app/lib/pdf/selection-coordinates.mjs",
@@ -128,6 +130,7 @@ REQUIRED_DEPENDENCIES = {
     "requests": "requests",
     "urllib3": "urllib3",
     "certifi": "certifi",
+    "pdf_inspector": "pdf-inspector",
     "pypdf": "pypdf",
 }
 KEY_MODULES = (
@@ -142,6 +145,7 @@ KEY_MODULES = (
     "services.library_read_model",
     "services.paper_metadata_mutation",
     "services.reader_commands",
+    "services.full_text_workflow",
     "services.tag_governance",
     "services.tag_candidate_review",
     "services.restore_readiness",
@@ -317,6 +321,9 @@ def check_api_contract() -> SmokeCheckResult:
             "/papers/reconnect": {"post"},
             "/papers/{paper_id}": {"get"},
             "/papers/{paper_id}/reader": {"get"},
+            "/papers/{paper_id}/full-text/status": {"get"},
+            "/papers/{paper_id}/full-text": {"get"},
+            "/papers/{paper_id}/full-text/extract": {"post"},
             "/papers/{paper_id}/pdf": {"get"},
             "/papers/{paper_id}/metadata": {"patch"},
             "/papers/{paper_id}/metadata/enrichment-preview": {"post"},
@@ -409,6 +416,9 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             "archiveProject",
             "addProjectPaperLink",
             "removeProjectPaperLink",
+            "getFullTextStatus",
+            "getFullText",
+            "extractFullText",
         ):
             if method not in api_client:
                 raise ValueError(f"frontend API client is missing {method}")
@@ -419,6 +429,8 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
         if package.get("dependencies", {}).get("pdfjs-dist") != "5.7.284":
             raise ValueError("frontend PDF.js dependency is not pinned to the approved version")
         reader = (frontend_root / "app/components/PdfJsReader.tsx").read_text(encoding="utf-8")
+        reader_view = (frontend_root / "app/views/ReaderView.tsx").read_text(encoding="utf-8")
+        full_text = (frontend_root / "app/components/FullTextWorkspace.tsx").read_text(encoding="utf-8")
         adapter = (frontend_root / "app/lib/pdf/pdfjs-adapter.ts").read_text(encoding="utf-8")
         controller = (frontend_root / "app/lib/pdf/reader-controller.mjs").read_text(encoding="utf-8")
         if "<canvas" not in reader or "NativePdfFallback" not in reader:
@@ -427,6 +439,10 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
             raise ValueError("PDF.js worker or client-boundary contract is incomplete")
         if "documentLoadCount" not in controller or "renderCancellationCount" not in controller:
             raise ValueError("PDF.js lifecycle diagnostics contract is incomplete")
+        if "FullTextWorkspace" not in reader_view:
+            raise ValueError("Reader is missing the bounded Full Text workspace")
+        if "extractFullText" not in full_text or "getFullTextStatus" not in full_text:
+            raise ValueError("Full Text workspace is missing explicit extraction/status actions")
     except Exception as exc:
         return SmokeCheckResult("frontend:application-contract", "fail", str(exc))
     return SmokeCheckResult("frontend:application-contract", "pass", f"nine routes share the v{APP_VERSION} shell")

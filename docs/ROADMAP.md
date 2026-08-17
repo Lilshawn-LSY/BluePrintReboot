@@ -4,7 +4,7 @@ Stable roadmap last edited: 2026-08-17
 
 Current release evidence is not duplicated here. See the generated [Current Release Status](CURRENT_RELEASE_STATUS.md), derived from the canonical machine-readable manifest. This roadmap records stable architecture, closed decision gates, and the next approved product direction rather than mutable repository observations.
 
-BluePrintReboot is a local-first, single-user research workspace with an established Streamlit application, a bounded FastAPI layer with two Reader commands, two structured Note Block commands, seven Project/link commands, and a TypeScript frontend shell. These are implemented architecture, not future placeholders.
+BluePrintReboot is a local-first, single-user research workspace with an established Streamlit application, a bounded FastAPI layer with two Reader state commands, one explicit full-text extraction command, two structured Note Block commands, seven Project/link commands, and a TypeScript frontend shell. These are implemented architecture, not future placeholders.
 
 ## Implemented architecture
 
@@ -55,16 +55,17 @@ v1.5.12 closes PDF rendering, selectable-text geometry, structured extraction, a
 
 ### Implemented product slice
 
-- PDF.js canvas output uses a bounded device-pixel backing scale while viewport CSS dimensions and semantic Reader zoom remain unchanged.
+- PDF.js canvas output uses `clamp(devicePixelRatio × 1.5, 1, 3)` supersampling while viewport CSS dimensions, text-layer geometry, selection coordinates, and semantic Reader zoom remain unchanged.
 - A PDF.js text layer shares the canvas viewport, rotation, page, and zoom lifecycle. Canvas and text work cancel and clean up together across navigation, retry, fallback, document change, and unmount.
 - The internal selection contract uses canonical 1-based page numbers and top-left rectangles normalized to the rotated logical page viewport. It does not persist selections or create Note Blocks.
-- Optional pinned `pdf-inspector` output is isolated behind BluePrint dataclasses. The adapter explicitly converts its mixed 0-based and 1-based upstream page fields to BluePrint 1-based page numbers.
-- Structured extraction records document classification/confidence, page count, per-page text/Markdown/positioned text, OCR-needed state/reasons, warnings/errors, and provider version. MarkItDown/pypdf remain compatible fallbacks.
+- Default pinned `pdf-inspector==0.2.6` is the preferred structured provider and remains isolated behind BluePrint dataclasses. The adapter explicitly converts its mixed 0-based and 1-based upstream page fields to BluePrint 1-based page numbers.
+- Structured extraction records document classification/confidence, page count, per-page text/Markdown/positioned text, OCR-needed state/reasons, warnings/errors, provider version, and source revision. One deterministic page-ordered projection feeds existing flattened-text consumers; MarkItDown then pypdf remain compatible fallbacks.
 - Cache metadata keeps SHA-256 stale detection and prior-valid-cache preservation while adding explicit extraction/cache states and reusable OCR-needed results.
+- Three bounded FastAPI routes expose status, canonical cached content, and explicit extraction/re-extraction. The existing Reader adds a compact state/action/viewer section; it does not extract in the browser or schedule work automatically.
 
 ### Evidence state
 
-- Disposable automated coverage is part of the local release gate. Representative real-PDF DPR, alignment, classification, stale-cache, and restart checks remain user-performed manual validation and are not claimed by implementation alone.
+- Disposable automated coverage is part of the local release gate. Previously reported normal-PDF rendering, zoom, selection/drag, and lifecycle observations remain recorded separately; supersampling-specific DPR, frontend Full Text, classification, stale-cache, scanned/mixed, and restart checks remain user-performed manual validation.
 - Hosted CI, PR, merge, tag, GitHub Release, post-merge validation, and clean-PC restore evidence remain separately unverified.
 
 ## Historical product milestone: v1.5.11 Library / Paper Workflow Closure

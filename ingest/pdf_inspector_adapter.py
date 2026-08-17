@@ -59,9 +59,25 @@ class StructuredPdfExtraction:
     errors: list[str] = field(default_factory=list)
     provider: str = "pdf-inspector"
     provider_version: str = ""
+    source_pdf_sha256: str = ""
+    source_pdf_size_bytes: int = 0
+    source_pdf_modified_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def canonical_full_text_projection(extraction: StructuredPdfExtraction) -> str:
+    """Project structured pages into the one deterministic compatibility text."""
+
+    page_content = [
+        (page.markdown or page.text).strip()
+        for page in sorted(extraction.pages, key=lambda page: page.page_number)
+        if (page.markdown or page.text).strip()
+    ]
+    if page_content:
+        return "\n\n".join(page_content)
+    return (extraction.markdown or extraction.text).strip()
 
 
 def pdf_inspector_available() -> bool:
@@ -192,9 +208,9 @@ def extract_structured_pdf(
     markdown = str(getattr(processed, "markdown", "") or "").strip()
     if not markdown:
         markdown = "\n\n".join(page.markdown for page in pages if page.markdown).strip()
-    text = "\n\n".join((page.markdown or page.text) for page in pages if page.markdown or page.text).strip()
-    if not text:
-        text = markdown
+    text = canonical_full_text_projection(
+        StructuredPdfExtraction(status="success", pages=pages, markdown=markdown)
+    )
     normalized_ocr_pages = sorted(page_ocr_flags)
     status: StructuredExtractionState = "ocr_needed" if normalized_ocr_pages else "success"
     return StructuredPdfExtraction(
@@ -212,7 +228,7 @@ def extract_structured_pdf(
 
 
 def _normalize_classification(value: object) -> DocumentClassification:
-    normalized = str(value or "").strip().lower().replace("-", "_")
+    normalized = str(getattr(value, "value", value) or "").strip().lower().replace("-", "_")
     return {
         "text": "text",
         "text_based": "text",

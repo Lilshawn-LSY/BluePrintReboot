@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ingest.text_extractor import extract_full_text_from_pdf
 from storage.extracted_text_store import (
@@ -10,11 +10,12 @@ from storage.extracted_text_store import (
     build_preserved_cache_failure_metadata,
     clear_extraction_cache,
     extraction_cache_status,
+    load_cached_extracted_text,
     load_extraction_metadata,
     save_extracted_text,
     save_extraction_metadata,
 )
-from storage.index_store import update_paper_metadata
+from storage.index_store import read_index_snapshot, update_paper_metadata
 from storage.paths import EXTRACTED_TEXT_DIR, INDEX_CSV
 
 
@@ -36,6 +37,108 @@ class FullTextWorkflowResult:
     cache_state: str = "not_extracted"
     classification: str = "unknown"
     ocr_needed_pages: list[int] = field(default_factory=list)
+
+
+FullTextCacheState = Literal["not_extracted", "success", "cached", "stale", "failed", "ocr_needed"]
+FullTextExtractionState = Literal["not_extracted", "success", "failed", "ocr_needed"]
+
+
+class FullTextServiceUnavailable(Exception):
+    """The bounded full-text service could not read or update cache state safely."""
+
+
+@dataclass(frozen=True)
+class FullTextStatus:
+    paper_id: str
+    state: FullTextCacheState
+    extraction_state: FullTextExtractionState
+    source: str
+    provider: str
+    provider_version: str
+    content_format: Literal["markdown", "plain_text"]
+    classification: str
+    page_count: int
+    char_count: int
+    ocr_needed_pages: list[int]
+    extracted_at: str
+    has_content: bool
+    is_stale: bool
+    can_extract: bool
+    previous_cache_preserved: bool
+    message: str
+
+
+@dataclass(frozen=True)
+class FullTextDocument:
+    status: FullTextStatus
+    content: str
+
+
+class FullTextService:
+    """Single API-facing boundary over the existing full-text cache workflow."""
+
+    def __init__(self, *, index_csv: Path = INDEX_CSV, cache_dir: Path = EXTRACTED_TEXT_DIR) -> None:
+        self.index_csv = Path(index_csv)
+        self.cache_dir = Path(cache_dir)
+
+    def status(self, paper_id: str) -> FullTextStatus | None:
+        record = self._record(paper_id)
+        if record is None:
+            return None
+        try:
+            status = extraction_cache_status(
+                paper_id,
+                self.cache_dir,
+                pdf_path=Path(record.get("filepath", "")),
+            )
+        except Exception:
+            raise FullTextServiceUnavailable from None
+        return _public_full_text_status(record, status)
+
+    def document(self, paper_id: str) -> FullTextDocument | None:
+        status = self.status(paper_id)
+        if status is None:
+            return None
+        content = ""
+        if status.has_content:
+            try:
+                content = load_cached_extracted_text(paper_id, self.cache_dir)
+            except Exception:
+                raise FullTextServiceUnavailable from None
+        return FullTextDocument(status=status, content=content)
+
+    def extract(self, paper_id: str, *, force: bool = False) -> FullTextDocument | None:
+        record = self._record(paper_id)
+        if record is None:
+            return None
+        metadata = load_extraction_metadata(paper_id, self.cache_dir)
+        if metadata.get("metadata_corrupt"):
+            raise FullTextServiceUnavailable
+        try:
+            extract_text_for_paper(
+                record,
+                force=force,
+                cache_dir=self.cache_dir,
+                index_csv=self.index_csv,
+            )
+        except Exception:
+            raise FullTextServiceUnavailable from None
+        return self.document(paper_id)
+
+    def _record(self, paper_id: str) -> dict[str, str] | None:
+        try:
+            dataframe = read_index_snapshot(self.index_csv)
+        except Exception:
+            raise FullTextServiceUnavailable from None
+        if "paper_id" not in dataframe:
+            return None
+        matches = dataframe[dataframe["paper_id"] == paper_id]
+        if matches.empty:
+            return None
+        return {
+            str(key): str(value)
+            for key, value in matches.iloc[0].fillna("").to_dict().items()
+        }
 
 
 def extract_text_for_paper(
@@ -163,6 +266,84 @@ def _workflow_error(result: Any) -> str:
     if not result.text.strip():
         return "No readable text was extracted."
     return "Full-text extraction failed."
+
+
+def _public_full_text_status(record: dict[str, str], status: dict[str, Any]) -> FullTextStatus:
+    raw_state = str(status.get("cache_state") or "not_extracted")
+    state: FullTextCacheState = (
+        raw_state
+        if raw_state in {"not_extracted", "success", "cached", "stale", "failed", "ocr_needed"}
+        else "failed"
+    )  # type: ignore[assignment]
+    content_format = str(status.get("content_format") or "plain_text")
+    if content_format not in {"markdown", "plain_text"}:
+        content_format = "plain_text"
+    classification = str(status.get("classification") or "unknown")
+    if classification not in {"text", "scanned", "image-based", "mixed", "unknown"}:
+        classification = "unknown"
+    ocr_needed_pages = sorted({
+        page_number
+        for value in list(status.get("ocr_needed_pages") or [])
+        if (page_number := _positive_page_number(value)) is not None
+    })
+    pdf_path = Path(record.get("filepath", ""))
+    can_extract = pdf_path.is_file() and not bool(status.get("metadata_corrupt", False))
+    raw_extraction_state = str(status.get("extraction_state") or "not_extracted")
+    extraction_state: FullTextExtractionState = (
+        raw_extraction_state
+        if raw_extraction_state in {"not_extracted", "success", "failed", "ocr_needed"}
+        else "failed"
+    )  # type: ignore[assignment]
+    return FullTextStatus(
+        paper_id=str(record.get("paper_id", "")),
+        state=state,
+        extraction_state=extraction_state,
+        source=str(status.get("source") or ""),
+        provider=str(status.get("provider") or status.get("source") or ""),
+        provider_version=str(status.get("provider_version") or ""),
+        content_format=content_format,  # type: ignore[arg-type]
+        classification=classification,
+        page_count=max(0, int(status.get("page_count") or 0)),
+        char_count=max(0, int(status.get("char_count") or 0)),
+        ocr_needed_pages=ocr_needed_pages,
+        extracted_at=str(status.get("extracted_at") or ""),
+        has_content=bool(status.get("has_reusable_text_cache", False)),
+        is_stale=bool(status.get("is_stale", False)),
+        can_extract=can_extract,
+        previous_cache_preserved=bool(status.get("previous_cache_preserved", False)),
+        message=_full_text_status_message(state, status, ocr_needed_pages),
+    )
+
+
+def _positive_page_number(value: object) -> int | None:
+    try:
+        page_number = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return page_number if page_number >= 1 else None
+
+
+def _full_text_status_message(
+    state: FullTextCacheState,
+    status: dict[str, Any],
+    ocr_needed_pages: list[int],
+) -> str:
+    if bool(status.get("recovery_failed", False)):
+        return "Re-extraction failed. The previous valid cached full text remains available."
+    if state == "not_extracted":
+        return "Full text has not been extracted."
+    if state == "stale":
+        return "The managed PDF changed after this full-text cache was created."
+    if state == "failed":
+        return "Full-text extraction failed. Retry explicitly after checking the managed PDF."
+    if state == "ocr_needed":
+        if ocr_needed_pages:
+            pages = ", ".join(str(page) for page in ocr_needed_pages)
+            return f"Local text extraction completed; OCR is still needed for page(s) {pages}."
+        return "Local text extraction completed; OCR is still needed for this PDF."
+    if state == "success":
+        return "Full text was extracted successfully."
+    return "Reusable full text is available from the local cache."
 
 
 def clear_text_cache_for_paper(

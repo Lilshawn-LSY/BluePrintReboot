@@ -23,7 +23,7 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.9 bounded managed-directory web PDF scan, candidate preview, explicit selective import, and Reader/PDF follow-through without automatic enrichment or tags.
 - [x] v1.5.10 canonical Tag Book governance and persisted Paper-scoped tag candidate review, with explicit promotion and separate existing-command Paper apply.
 - [x] v1.5.11 Library/Paper workflow closure: server-backed collection search/filter/pagination, Library enrichment reuse, coherent navigation, and explicit exact-content managed-PDF reconnect without Paper duplication.
-- [x] v1.5.12 R-145 pre-UX PDF foundation: high-DPI PDF.js canvas output, aligned selectable text, normalized 1-based selection coordinates, optional structured `pdf-inspector` extraction, explicit OCR-needed/cache states, and compatibility fallback preservation.
+- [x] v1.5.12 R-145 pre-UX PDF foundation: bounded DPR × 1.5 supersampling, aligned selectable text, normalized 1-based selection coordinates, canonical `pdf-inspector`-first structured extraction/projection, explicit full-text API/Reader access, OCR-needed/cache states, and compatibility fallback preservation.
 
 ## v1.6.0 Reader Workspace UX Overhaul
 
@@ -41,7 +41,7 @@ Current release evidence and individually addressable pending checks live in the
 - [x] Record user-provided v1.5.9 manual PDF scan/import evidence, excluding the separately outstanding browser Network path-privacy check.
 - [ ] Record the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, GitHub Release, and post-merge main CI only after those events occur.
 - [ ] Record v1.5.10 manual canonical-governance/candidate-review browser verification, PR-head CI, merge, tag, GitHub Release, post-merge main CI, and clean-PC restore only after those events occur.
-- [ ] Record v1.5.12 representative real-PDF DPR/text-alignment/classification/cache validation, PR-head CI, merge, tag, GitHub Release, and post-merge main CI only after those events occur.
+- [ ] Record remaining v1.5.12 supersampling DPR, frontend Full Text, scanned/mixed classification, cache/restart/staleness, PR-head CI, merge, tag, GitHub Release, and post-merge main CI evidence only after those events occur.
 
 ## v1.5.5 Note Block write and Project links
 

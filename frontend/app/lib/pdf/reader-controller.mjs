@@ -2,7 +2,8 @@ export const DEFAULT_ZOOM = 1;
 export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 3;
 export const ZOOM_STEP = 0.25;
-export const MAX_OUTPUT_SCALE = 2;
+export const RENDER_QUALITY_MULTIPLIER = 1.5;
+export const MAX_OUTPUT_SCALE = 3;
 
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
@@ -10,12 +11,12 @@ function clamp(value, minimum, maximum) {
 
 export function normalizeOutputScale(value) {
   const numericScale = Number(value);
-  if (!Number.isFinite(numericScale)) return 1;
-  return clamp(numericScale, 1, MAX_OUTPUT_SCALE);
+  const deviceScale = Number.isFinite(numericScale) ? numericScale : 1;
+  return clamp(deviceScale * RENDER_QUALITY_MULTIPLIER, 1, MAX_OUTPUT_SCALE);
 }
 
-export function canvasRenderGeometry(viewport, outputScale) {
-  const scale = normalizeOutputScale(outputScale);
+export function canvasRenderGeometry(viewport, devicePixelRatio) {
+  const scale = normalizeOutputScale(devicePixelRatio);
   const cssWidth = Math.max(1, Number(viewport?.width) || 1);
   const cssHeight = Math.max(1, Number(viewport?.height) || 1);
   return {

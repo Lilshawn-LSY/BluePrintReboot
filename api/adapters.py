@@ -13,6 +13,8 @@ from api.schemas import (
     CandidateSummaryResponse,
     CanonicalTag,
     EditablePaperMetadata,
+    FullTextDocumentResponse,
+    FullTextStatusResponse,
     LinkedNoteBlockSummary,
     LinkedPaperSummary,
     NoteBlockCollectionResponse,
@@ -51,6 +53,7 @@ from services.project_commands import (
     ProjectCommandResult as DomainProjectCommandResult,
 )
 from services.note_block_commands import NoteBlockCommandResult as DomainNoteBlockCommandResult
+from services.full_text_workflow import FullTextDocument as DomainFullTextDocument, FullTextStatus as DomainFullTextStatus
 
 
 class PaperContractError(ValueError):
@@ -71,6 +74,10 @@ class TagContractError(ValueError):
 
 class SettingsContractError(ValueError):
     """A domain value cannot be represented by the public Settings API contract."""
+
+
+class FullTextContractError(ValueError):
+    """A domain value cannot be represented by the public full-text API contract."""
 
 
 _SETTINGS_RESOURCE_METADATA = {
@@ -1188,3 +1195,35 @@ def adapt_reader_snapshot(source: Mapping[str, Any]) -> ReaderSnapshotResponse:
         warnings=_reader_warnings(source.get("warnings")),
         unavailable_reason=unavailable_reason,
     )
+
+
+def adapt_full_text_status(source: DomainFullTextStatus) -> FullTextStatusResponse:
+    try:
+        return FullTextStatusResponse(
+            paper_id=source.paper_id,
+            state=source.state,
+            extraction_state=source.extraction_state,
+            source=source.source,
+            provider=source.provider,
+            provider_version=source.provider_version,
+            content_format=source.content_format,
+            classification=source.classification,
+            page_count=source.page_count,
+            char_count=source.char_count,
+            ocr_needed_pages=list(source.ocr_needed_pages),
+            extracted_at=source.extracted_at,
+            has_content=source.has_content,
+            is_stale=source.is_stale,
+            can_extract=source.can_extract,
+            previous_cache_preserved=source.previous_cache_preserved,
+            message=source.message,
+        )
+    except (TypeError, ValueError):
+        raise FullTextContractError from None
+
+
+def adapt_full_text_document(source: DomainFullTextDocument) -> FullTextDocumentResponse:
+    status = adapt_full_text_status(source.status)
+    if not isinstance(source.content, str):
+        raise FullTextContractError
+    return FullTextDocumentResponse(**status.model_dump(), content=source.content)

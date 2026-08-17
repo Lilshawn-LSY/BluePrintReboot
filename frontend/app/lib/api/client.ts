@@ -1,4 +1,4 @@
-import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection } from "./types";
+import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, FullTextDocument, FullTextStatus, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection } from "./types";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
 
@@ -210,6 +210,16 @@ export const apiClient = {
   ),
   getSettingsSummary: () => request<SettingsSummary>("/settings/summary"),
   getReaderSnapshot: (paperId: string) => request<ReaderSnapshot>(`/papers/${encodeURIComponent(paperId)}/reader`),
+  getFullTextStatus: (paperId: string) => request<FullTextStatus>(
+    `/papers/${encodeURIComponent(paperId)}/full-text/status`,
+  ),
+  getFullText: (paperId: string) => request<FullTextDocument>(
+    `/papers/${encodeURIComponent(paperId)}/full-text`,
+  ),
+  extractFullText: (paperId: string, force = false) => request<FullTextDocument>(
+    `/papers/${encodeURIComponent(paperId)}/full-text/extract`,
+    { method: "POST", body: { force } },
+  ),
   getNoteBlocks: (paperId: string) => request<NoteBlockCollection>(
     `/papers/${encodeURIComponent(paperId)}/note-blocks`,
   ),

@@ -4,7 +4,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from ingest.pdf_inspector_adapter import StructuredPdfExtraction, extract_structured_pdf
+from ingest.pdf_inspector_adapter import (
+    StructuredPdfExtraction,
+    StructuredPdfPage,
+    canonical_full_text_projection,
+    extract_structured_pdf,
+)
 from ingest.text_extractor import extract_full_text_from_pdf
 
 
@@ -132,6 +137,49 @@ def test_normalizes_mixed_upstream_page_indexes_to_one_based() -> None:
     assert serialized["pages"][1]["positioned_text"][0]["page_number"] == 2
 
 
+def test_canonical_projection_is_deterministic_and_page_ordered() -> None:
+    structured = StructuredPdfExtraction(
+        status="success",
+        pages=[
+            StructuredPdfPage(page_number=3, state="success", markdown=" Third "),
+            StructuredPdfPage(page_number=1, state="success", text=" First "),
+            StructuredPdfPage(page_number=2, state="success", markdown=" Second "),
+        ],
+        markdown="document-level fallback",
+    )
+
+    assert canonical_full_text_projection(structured) == "First\n\nSecond\n\nThird"
+    assert canonical_full_text_projection(structured) == canonical_full_text_projection(structured)
+
+
+def test_pdf_inspector_projection_wins_before_compatibility_providers(tmp_path, monkeypatch) -> None:
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")
+    structured = StructuredPdfExtraction(
+        status="success",
+        classification="text",
+        page_count=1,
+        pages=[StructuredPdfPage(page_number=1, state="success", markdown="# Canonical")],
+        provider_version="test-0.2.6",
+    )
+
+    class UnexpectedMarkItDown:
+        def __init__(self) -> None:
+            raise AssertionError("MarkItDown must not run after structured extraction succeeds")
+
+    monkeypatch.setattr("ingest.text_extractor.extract_structured_pdf", lambda path: structured)
+    monkeypatch.setattr("ingest.text_extractor.MarkItDown", UnexpectedMarkItDown)
+
+    result = extract_full_text_from_pdf(pdf_path)
+
+    assert result.text == "# Canonical"
+    assert result.source == "pdf-inspector"
+    assert result.provider == "pdf-inspector"
+    assert result.provider_version == "test-0.2.6"
+    assert result.content_format == "markdown"
+    assert result.attempted_methods == ["pdf-inspector"]
+
+
 class FakePage:
     def extract_text(self) -> str:
         return "compatibility text"
@@ -142,7 +190,7 @@ class FakePdfReader:
         self.pages = [FakePage()]
 
 
-def test_optional_dependency_unavailable_uses_compatibility_fallback(tmp_path, monkeypatch) -> None:
+def test_default_provider_unavailable_uses_compatibility_fallback(tmp_path, monkeypatch) -> None:
     pdf_path = tmp_path / "paper.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n")
     monkeypatch.setattr("ingest.pdf_inspector_adapter._pdf_inspector", None)

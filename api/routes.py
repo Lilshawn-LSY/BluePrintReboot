@@ -11,6 +11,9 @@ from api.adapters import (
     ProjectContractError,
     SettingsContractError,
     TagContractError,
+    FullTextContractError,
+    adapt_full_text_document,
+    adapt_full_text_status,
     adapt_candidate_summary,
     adapt_canonical_tag,
     adapt_paper_detail,
@@ -30,6 +33,7 @@ from api.dependencies import (
     get_candidate_summary,
     get_canonical_tags,
     get_health_summary,
+    get_full_text_service,
     get_library_status,
     get_metadata_enrichment_service,
     get_managed_pdf,
@@ -62,6 +66,9 @@ from api.schemas import (
     CanonicalTagGovernanceSnapshot,
     CanonicalTagUpdateRequest,
     HealthSummaryResponse,
+    FullTextDocumentResponse,
+    FullTextExtractionRequest,
+    FullTextStatusResponse,
     LibraryStatusResponse,
     ManagedPdfImportRequest,
     ManagedPdfImportResponse,
@@ -109,6 +116,7 @@ from services.library_read_model import (
     ReaderSnapshot as DomainReaderSnapshot,
     filter_paper_list_items,
 )
+from services.full_text_workflow import FullTextService, FullTextServiceUnavailable
 from services.project_read_model import ProjectDetail as DomainProjectDetail, ProjectListItem as DomainProjectListItem
 from services.note_block_read_model import NoteBlockCollection as DomainNoteBlockCollection
 from services.note_block_commands import (
@@ -178,6 +186,7 @@ TAG_GOVERNANCE_CONFLICT_DETAIL = "The canonical Tag Book changed. Reload the cur
 TAG_GOVERNANCE_UNAVAILABLE_DETAIL = "The canonical Tag Book command could not be completed."
 TAG_CANDIDATE_CONFLICT_DETAIL = "The candidate review or Paper tags changed. Reload the current candidate review before retrying."
 TAG_CANDIDATE_UNAVAILABLE_DETAIL = "The tag candidate review command could not be completed."
+FULL_TEXT_UNAVAILABLE_DETAIL = "The full-text extraction state could not be read or updated safely."
 
 
 def _candidate_collection_response(collection: CandidateCollection) -> TagCandidateCollectionResponse:
@@ -964,6 +973,70 @@ def reader_snapshot(
         return adapt_reader_snapshot(snapshot)
     except PaperContractError:
         raise ReadModelUnavailable from None
+
+
+@router.get(
+    "/papers/{paper_id}/full-text/status",
+    response_model=FullTextStatusResponse,
+    summary="Get full-text extraction status",
+    description="Return bounded cache, provider, classification, and OCR-needed state without exposing storage paths or source hashes.",
+)
+def full_text_status(
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    service: Annotated[FullTextService, Depends(get_full_text_service)],
+) -> FullTextStatusResponse:
+    try:
+        status = service.status(paper_id)
+        if status is None:
+            raise HTTPException(status_code=404, detail="Paper not found.")
+        return adapt_full_text_status(status)
+    except FullTextServiceUnavailable:
+        raise HTTPException(status_code=503, detail=FULL_TEXT_UNAVAILABLE_DETAIL) from None
+    except FullTextContractError:
+        raise ReadModelUnavailable from None
+
+
+@router.get(
+    "/papers/{paper_id}/full-text",
+    response_model=FullTextDocumentResponse,
+    summary="Get canonical cached full text",
+    description="Return the canonical cached Markdown or plain-text projection and its bounded extraction state.",
+)
+def full_text_document(
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    service: Annotated[FullTextService, Depends(get_full_text_service)],
+) -> FullTextDocumentResponse:
+    try:
+        document = service.document(paper_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Paper not found.")
+        return adapt_full_text_document(document)
+    except FullTextServiceUnavailable:
+        raise HTTPException(status_code=503, detail=FULL_TEXT_UNAVAILABLE_DETAIL) from None
+    except FullTextContractError:
+        raise ReadModelUnavailable from None
+
+
+@router.post(
+    "/papers/{paper_id}/full-text/extract",
+    response_model=FullTextDocumentResponse,
+    summary="Explicitly extract full text",
+    description="Run the canonical local extraction workflow now. This command is never scheduled automatically.",
+)
+def extract_full_text(
+    request: FullTextExtractionRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    service: Annotated[FullTextService, Depends(get_full_text_service)],
+) -> FullTextDocumentResponse:
+    try:
+        document = service.extract(paper_id, force=request.force)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Paper not found.")
+        return adapt_full_text_document(document)
+    except FullTextServiceUnavailable:
+        raise HTTPException(status_code=503, detail=FULL_TEXT_UNAVAILABLE_DETAIL) from None
+    except FullTextContractError:
+        raise HTTPException(status_code=503, detail=FULL_TEXT_UNAVAILABLE_DETAIL) from None
 
 
 @router.get(

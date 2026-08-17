@@ -32,6 +32,14 @@ def build_extraction_metadata(
     text_path = extracted_text_path(paper_id, cache_dir)
     fingerprint = pdf_fingerprint(pdf_path)
     structured = result.structured_extraction.to_dict() if result.structured_extraction else None
+    if structured is not None:
+        structured.update(
+            {
+                "source_pdf_sha256": fingerprint["pdf_sha256"],
+                "source_pdf_size_bytes": fingerprint["pdf_size_bytes"],
+                "source_pdf_modified_at": fingerprint["pdf_modified_at"],
+            }
+        )
     return {
         "schema_version": 2,
         "paper_id": paper_id,
@@ -39,6 +47,9 @@ def build_extraction_metadata(
         "text_path": str(text_path),
         **fingerprint,
         "source": result.source,
+        "provider": result.provider,
+        "provider_version": result.provider_version,
+        "content_format": result.content_format,
         "extracted_at": utc_now_iso(),
         "char_count": result.char_count,
         "status": result.status,
@@ -205,6 +216,7 @@ def extraction_cache_status(
         "metadata_path": metadata_path,
         "has_text_file": has_text_file,
         "has_metadata_file": has_metadata_file,
+        "metadata_corrupt": bool(metadata.get("metadata_corrupt", False)),
         "has_reusable_text_cache": has_reusable_text_cache,
         "has_reusable_extraction_cache": has_reusable_extraction_cache,
         "is_stale": is_stale,
@@ -216,6 +228,9 @@ def extraction_cache_status(
         "char_count": char_count,
         "error": error,
         "source": metadata.get("source", ""),
+        "provider": metadata.get("provider", metadata.get("source", "")),
+        "provider_version": metadata.get("provider_version", ""),
+        "content_format": metadata.get("content_format", "plain_text"),
         "has_text": has_text_file,
         "has_metadata": has_metadata_file,
         "extracted_at": metadata.get("extracted_at", ""),

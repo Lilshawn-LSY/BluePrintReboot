@@ -45,6 +45,15 @@ def test_version_contract_is_consistent() -> None:
     assert "Project commands" not in shell
 
 
+def test_pdf_inspector_is_pinned_once_as_a_default_dependency() -> None:
+    required = read_text("requirements.txt").splitlines()
+    optional = read_text("requirements-optional.txt").splitlines()
+
+    assert required.count("pdf-inspector==0.2.6") == 1
+    assert all(not line.startswith("pdf-inspector") for line in optional)
+    assert "markitdown[pdf]" in optional
+
+
 def test_primary_workflow_preserves_full_manual_and_automatic_gate() -> None:
     workflow = read_text(".github/workflows/tests.yml")
 
@@ -135,8 +144,16 @@ def test_schema_five_manifest_is_the_current_release_authority() -> None:
         item["status"] for item in library_paper_workflow["checks"].values()
     } == {"VERIFIED"}
     pdf_foundation = manifest["manual_validation"]["pdf_foundation_runtime"]
-    assert pdf_foundation["status"] == "NOT VERIFIED"
-    assert {item["status"] for item in pdf_foundation["checks"].values()} == {"NOT VERIFIED"}
+    assert pdf_foundation["status"] == "PARTIALLY VERIFIED"
+    assert {item["status"] for item in pdf_foundation["checks"].values()} == {
+        "VERIFIED",
+        "NOT VERIFIED",
+    }
+    assert {
+        check_id
+        for check_id, item in pdf_foundation["checks"].items()
+        if item["status"] == "VERIFIED"
+    } == {"sharp_rendering_zoom", "text_selection_alignment"}
     tag_candidate_review = manifest["manual_validation"]["tag_candidate_review_runtime"]
     assert tag_candidate_review["status"] == "PARTIALLY VERIFIED"
     assert {
@@ -210,7 +227,7 @@ def test_generated_current_status_is_the_only_volatile_document_surface() -> Non
     assert "v1.5.11 Library/Paper workflow manual validation" in current_status
     assert "| v1.5.11 Library/Paper workflow runtime | VERIFIED |" in current_status
     assert "v1.5.12 PDF foundation manual validation" in current_status
-    assert "| v1.5.12 PDF foundation runtime | NOT VERIFIED |" in current_status
+    assert "| v1.5.12 PDF foundation runtime | PARTIALLY VERIFIED |" in current_status
     assert "v1.5.4 Project write manual validation" in current_status
     assert "| v1.5.4 Project write runtime | VERIFIED |" in current_status
     assert "v1.5.5 Note Block write manual validation" in current_status

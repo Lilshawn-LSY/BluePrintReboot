@@ -198,6 +198,7 @@ test("bounds zoom and rerenders the page without recreating the loading task", a
 
 test("sizes the backing canvas for DPR while preserving logical viewport dimensions", async () => {
   for (const dpr of [1, 1.25, 1.5, 2]) {
+    const effectiveScale = Math.min(3, dpr * 1.5);
     const resolved = makeResolvedDocument();
     const { controller, canvas } = makeController({
       document: resolved.document,
@@ -206,11 +207,13 @@ test("sizes the backing canvas for DPR while preserving logical viewport dimensi
 
     await controller.load("/api/blueprint/papers/fixture/pdf");
 
-    assert.equal(canvas.width, Math.ceil(600 * dpr));
-    assert.equal(canvas.height, Math.ceil(800 * dpr));
+    assert.equal(canvas.width, Math.ceil(600 * effectiveScale));
+    assert.equal(canvas.height, Math.ceil(800 * effectiveScale));
     assert.equal(canvas.style.width, "600px");
     assert.equal(canvas.style.height, "800px");
-    assert.deepEqual(resolved.renderOptions[0].transform, dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0]);
+    assert.deepEqual(resolved.renderOptions[0].transform, [effectiveScale, 0, 0, effectiveScale, 0, 0]);
+    assert.equal(resolved.renderOptions[0].viewport.width, 600);
+    assert.equal(resolved.renderOptions[0].viewport.height, 800);
     assert.equal(controller.snapshot().zoom, DEFAULT_ZOOM);
   }
 });
@@ -231,8 +234,8 @@ test("keeps zoom semantics independent of DPR and reuses the loaded document", a
   assert.equal(controller.snapshot().zoom, 1.5);
   assert.equal(canvas.style.width, "900px");
   assert.equal(canvas.style.height, "1200px");
-  assert.equal(canvas.width, 1800);
-  assert.equal(canvas.height, 2400);
+  assert.equal(canvas.width, 2700);
+  assert.equal(canvas.height, 3600);
   assert.equal(tasks.length, 1);
   assert.equal(controller.diagnosticsSnapshot().documentLoadCount, 1);
 });
@@ -247,7 +250,16 @@ test("bounds invalid and excessive output scales", () => {
     outputScale: 1,
     transform: undefined,
   });
-  assert.equal(canvasRenderGeometry({ width: 600, height: 800 }, 4).outputScale, 2);
+  assert.deepEqual(canvasRenderGeometry({ width: 600, height: 800 }, 1), {
+    cssWidth: 600,
+    cssHeight: 800,
+    canvasWidth: 900,
+    canvasHeight: 1200,
+    outputScale: 1.5,
+    transform: [1.5, 0, 0, 1.5, 0, 0],
+  });
+  assert.equal(canvasRenderGeometry({ width: 600, height: 800 }, 4).outputScale, 3);
+  assert.equal(canvasRenderGeometry({ width: 600, height: 800 }, Number.NaN).outputScale, 1.5);
 });
 
 
@@ -276,6 +288,40 @@ test("renders selectable text with the same page and zoom viewport", async () =>
   ]);
   assert.equal(textLayerContainer.style.getPropertyValue("--total-scale-factor"), "1.5");
   assert.equal(tasks.length, 1);
+});
+
+
+test("supersampling does not change text-layer or normalized selection geometry", async () => {
+  const textViewports = [];
+  const createTextLayer = async ({ viewport }) => ({
+    render() { textViewports.push({ width: viewport.width, height: viewport.height, scale: viewport.scale }); },
+    cancel() {},
+  });
+  const resolved = makeResolvedDocument();
+  const { controller, canvas } = makeController({
+    createTextLayer,
+    document: resolved.document,
+    getOutputScale: () => 2,
+  });
+
+  await controller.load("/api/blueprint/papers/fixture/pdf");
+
+  assert.deepEqual(textViewports, [{ width: 600, height: 800, scale: 1 }]);
+  assert.equal(canvas.width, 1800);
+  assert.equal(canvas.height, 2400);
+  assert.equal(canvas.style.width, "600px");
+  assert.equal(canvas.style.height, "800px");
+  assert.deepEqual(normalizePageSelection({
+    pageNumber: 1,
+    text: "stable",
+    pageRect: { left: 0, top: 0, width: 600, height: 800 },
+    selectionRects: [{ left: 60, top: 80, right: 240, bottom: 120 }],
+  }), {
+    pageNumber: 1,
+    text: "stable",
+    coordinateSpace: "page-normalized",
+    rectangles: [{ x: 0.1, y: 0.1, width: 0.3, height: 0.05 }],
+  });
 });
 
 
@@ -503,16 +549,16 @@ test("strict-mode-like cleanup cannot clear or corrupt the replacement controlle
   assert.equal(secondController.snapshot().mode, "ready");
   assert.equal(secondController.snapshot().totalPages, 5);
   assert.deepEqual(secondDocument.getPageCalls, [1]);
-  assert.equal(sharedCanvas.width, 600);
-  assert.equal(sharedCanvas.height, 800);
+  assert.equal(sharedCanvas.width, 900);
+  assert.equal(sharedCanvas.height, 1200);
 
   firstDestroyPending.resolve();
   await Promise.all([firstCleanup, firstLoad]);
   assert.equal(firstTask.destroyCalls, 1);
   assert.equal(secondTask.destroyCalls, 0);
   assert.equal(secondController.snapshot().mode, "ready");
-  assert.equal(sharedCanvas.width, 600);
-  assert.equal(sharedCanvas.height, 800);
+  assert.equal(sharedCanvas.width, 900);
+  assert.equal(sharedCanvas.height, 1200);
   assert.equal(firstStates.some((state) => state.mode === "error"), false);
   assert.equal(secondStates.at(-1).mode, "ready");
 });

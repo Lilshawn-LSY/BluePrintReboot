@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 141,
+        "passed": 145,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-17",
         "reference": "v1.5.12 local validation",
-        "summary": "The current offline repository readiness smoke completed with 141 passed, 0 warnings, and 0 failed."
+        "summary": "The current offline repository readiness smoke completed with 145 passed, 0 warnings, and 0 failed, including the default pdf-inspector 0.2.6 dependency check."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 768,
+        "passed": 780,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
         "date": "2026-08-17",
         "reference": "v1.5.12 local validation",
-        "summary": "The v1.5.12 full Python suite completed with 768 passed, 0 failed, and 0 skipped using disposable fixtures for the PDF foundation coverage."
+        "summary": "The v1.5.12 full Python suite completed with 780 passed, 0 failed, and 0 skipped using disposable fixtures with pdf-inspector 0.2.6 installed as the default structured provider."
       }
     },
     "focused_reader_snapshot": {
@@ -179,16 +179,16 @@
     },
     "focused_pdf_foundation": {
       "status": "VERIFIED",
-      "scope": "PDF.js DPR/text-layer/selection contracts and structured extraction/cache compatibility",
-      "command": ".venv/bin/python -m pytest -q tests/test_pdf_inspector_adapter.py tests/test_text_extractor.py tests/test_extracted_text_store.py tests/test_full_text_workflow.py tests/test_pdf_profile_extraction.py tests/test_paper_text_profile_builder.py; cd frontend && node --test tests/pdf-reader-controller.test.mjs",
+      "scope": "PDF.js bounded supersampling/text-layer/selection contracts, canonical structured extraction/cache compatibility, full-text API, frontend workflow state, and bridge allowlisting",
+      "command": ".venv/bin/python -m pytest -q tests/test_pdf_inspector_adapter.py tests/test_text_extractor.py tests/test_extracted_text_store.py tests/test_full_text_workflow.py tests/test_full_text_api.py tests/test_pdf_profile_extraction.py tests/test_paper_text_profile_builder.py; node frontend/tests/pdf-reader-controller.test.mjs; node frontend/tests/full-text-workflow.test.mjs; node frontend/tests/api-bridge.test.mjs",
       "counts": {
-        "passed": 57,
+        "passed": 97,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-17",
         "reference": "v1.5.12 focused PDF foundation validation",
-        "summary": "The focused Python extraction/cache suite passed 37 tests and the PDF Reader controller file passed 20 subtests covering DPR, text-layer lifecycle, selection normalization, navigation, cancellation, and fallback exclusivity."
+        "summary": "The focused suite passed 48 Python extraction/cache/API tests, 21 PDF Reader controller cases, 4 Full Text state/view cases, and 24 bridge cases covering bounded supersampling, text-layer and selection invariance, provider priority, OCR-needed state, explicit extraction, retry, content retrieval, and allowlisting."
       }
     },
     "focused_projects_tags": {
@@ -291,16 +291,16 @@
     },
     "focused_release_version": {
       "status": "VERIFIED",
-      "scope": "release and version contracts",
+      "scope": "release, version, and default dependency contracts",
       "command": ".venv/bin/python -m pytest -q tests/test_release_contracts.py tests/test_release_state_reconciliation.py tests/test_contact.py tests/test_smoke_check.py",
       "counts": {
-        "passed": 57,
+        "passed": 58,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-17",
         "reference": "v1.5.12 release validation",
-        "summary": "The focused runtime-target, immutable-baseline, v1.5.12 release-document, reconciliation, contact, and smoke-contract suite passed."
+        "summary": "The focused runtime-target, immutable-baseline, default pdf-inspector pin, v1.5.12 release-document, reconciliation, contact, and smoke-contract suite passed."
       }
     },
     "release_reconciliation": {
@@ -358,7 +358,7 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm --prefix frontend test",
       "counts": {
-        "passed": 11,
+        "passed": 12,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
@@ -1152,11 +1152,11 @@
       }
     },
     "pdf_foundation_runtime": {
-      "status": "NOT VERIFIED",
+      "status": "PARTIALLY VERIFIED",
       "evidence": {
         "date": "2026-08-17",
-        "reference": "docs/release_notes/v1.5.12.md",
-        "summary": "No user-performed v1.5.12 representative real-PDF runtime result is recorded."
+        "reference": "user-provided v1.5.12 baseline runtime verification and remaining manual plan",
+        "summary": "Normal-PDF rendering quality through zoom and text selection/drag are user-verified; supersampling-specific DPR, coordinate, extraction/cache, scanned/mixed, Library regression, and frontend Full Text checks remain unverified."
       },
       "checks": {
         "sharp_rendering_dpr": {
@@ -1168,19 +1168,19 @@
           }
         },
         "sharp_rendering_zoom": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-08-17",
-            "reference": "v1.5.12 manual validation plan",
-            "summary": "No user-performed multi-zoom sharp-rendering result is recorded."
+            "reference": "user-provided v1.5.12 baseline runtime verification",
+            "summary": "Normal-PDF rendering, zoom behavior, and improved visual quality were user-verified before the bounded supersampling extension."
           }
         },
         "text_selection_alignment": {
-          "status": "NOT VERIFIED",
+          "status": "VERIFIED",
           "evidence": {
             "date": "2026-08-17",
-            "reference": "v1.5.12 manual validation plan",
-            "summary": "No user-performed text-selection alignment result is recorded."
+            "reference": "user-provided v1.5.12 baseline runtime verification",
+            "summary": "Normal-PDF text selection and drag behavior were user-verified before the bounded supersampling extension."
           }
         },
         "selection_coordinate_stability": {
@@ -1229,6 +1229,14 @@
             "date": "2026-08-17",
             "reference": "v1.5.12 manual validation plan",
             "summary": "No user-performed Library to Paper Detail to Reader regression result is recorded."
+          }
+        },
+        "frontend_full_text_workflow": {
+          "status": "NOT VERIFIED",
+          "evidence": {
+            "date": "2026-08-17",
+            "reference": "v1.5.12 manual validation plan",
+            "summary": "No user-performed Reader Full Text status, extraction, retry, stale, failure, OCR-needed, or content-view result is recorded."
           }
         }
       }

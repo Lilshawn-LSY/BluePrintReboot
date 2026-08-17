@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { PageHeader } from "../components/PageHeader";
 import { PdfJsReader } from "../components/PdfJsReader";
+import { FullTextWorkspace } from "../components/FullTextWorkspace";
 import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
@@ -577,6 +578,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           <ReaderPdf snapshot={snapshot} />
         </section>
         <aside className="reader-companion" aria-label="Reader editors">
+          <FullTextWorkspace key={`full-text:${snapshot.paper.paper_id}`} paperId={snapshot.paper.paper_id} />
           <section className="reader-editor" aria-labelledby="metadata-editor-title">
             <div className="reader-note__heading">
               <div>

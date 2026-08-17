@@ -32,11 +32,12 @@ export const DEFAULT_ZOOM: number;
 export const MIN_ZOOM: number;
 export const MAX_ZOOM: number;
 export const ZOOM_STEP: number;
+export const RENDER_QUALITY_MULTIPLIER: number;
 export const MAX_OUTPUT_SCALE: number;
 export function normalizeOutputScale(value: unknown): number;
 export function canvasRenderGeometry(
   viewport: { width: number; height: number },
-  outputScale: unknown,
+  devicePixelRatio: unknown,
 ): {
   cssWidth: number;
   cssHeight: number;

@@ -197,6 +197,7 @@ REQUIRED_PDF_FOUNDATION_MANUAL_CHECKS = frozenset(
         "cache_restart_reuse",
         "source_replacement_stale",
         "library_reader_workflow",
+        "frontend_full_text_workflow",
     }
 )
 PRIVATE_VALUE_PATTERNS = (

@@ -29,6 +29,9 @@ import {
   isBlueprintProjectNoteBlockLinksPath,
   isBlueprintProjectPath,
   isBlueprintReaderPath,
+  isBlueprintFullTextPath,
+  isBlueprintFullTextStatusPath,
+  isBlueprintFullTextExtractPath,
   isBlueprintReadingNotePath,
   proxyBlueprintGet,
   proxyBlueprintRequest,
@@ -36,8 +39,8 @@ import {
 
 const API_URL = "http://127.0.0.1:8000";
 
-test("allows the bounded read routes plus the exact managed PDF, Reader, and Note Block routes", () => {
-  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["tags", "governance"], ["settings", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"], ["papers", "paper-123", "note-blocks"], ["papers", "paper-123", "tag-candidates"]]) {
+test("allows the bounded read routes plus the exact managed PDF, Reader, Full Text, and Note Block routes", () => {
+  for (const parts of [["health"], ["library", "status"], ["papers"], ["papers", "paper-123"], ["projects"], ["projects", "project-123"], ["tags"], ["tags", "summary"], ["tags", "governance"], ["settings", "summary"], ["papers", "paper-123", "pdf"], ["papers", "paper-123", "reader"], ["papers", "paper-123", "full-text"], ["papers", "paper-123", "full-text", "status"], ["papers", "paper-123", "note-blocks"], ["papers", "paper-123", "tag-candidates"]]) {
     assert.equal(isAllowedBlueprintPath(parts), true, parts.join("/"));
   }
   for (const parts of [[], ["library"], ["settings"], ["tags", "unknown"], ["projects", "project-123", "edit"], ["papers", "paper-123", "notes"], ["papers", "paper-123", "pdf", "raw"], ["papers", "paper-123", "reader", "raw"], ["health", "extra"]]) {
@@ -47,6 +50,9 @@ test("allows the bounded read routes plus the exact managed PDF, Reader, and Not
   assert.equal(isBlueprintPdfPath(["papers", "paper-123"]), false);
   assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader"]), true);
   assert.equal(isBlueprintReaderPath(["papers", "paper-123", "reader", "raw"]), false);
+  assert.equal(isBlueprintFullTextPath(["papers", "paper-123", "full-text"]), true);
+  assert.equal(isBlueprintFullTextStatusPath(["papers", "paper-123", "full-text", "status"]), true);
+  assert.equal(isBlueprintFullTextExtractPath(["papers", "paper-123", "full-text", "extract"]), true);
   assert.equal(isBlueprintMetadataPath(["papers", "paper-123", "metadata"]), true);
   assert.equal(isBlueprintMetadataEnrichmentPreviewPath(["papers", "paper-123", "metadata", "enrichment-preview"]), true);
   assert.equal(isBlueprintPaperTagsPath(["papers", "paper-123", "tags"]), true);
@@ -75,6 +81,7 @@ test("allows only the exact method and path pairs for Reader commands", () => {
   assert.equal(isAllowedBlueprintRequest("DELETE", ["papers", "paper-1", "tags"]), true);
   assert.equal(isAllowedBlueprintRequest("PUT", ["papers", "paper-1", "reading-note"]), true);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "note-blocks"]), true);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper-1", "full-text", "extract"]), true);
   assert.equal(isAllowedBlueprintRequest("PATCH", ["papers", "paper-1", "note-blocks", "block-1"]), true);
   for (const [method, parts] of [
     ["POST", ["tags"]],
@@ -98,6 +105,8 @@ test("allows only the exact method and path pairs for Reader commands", () => {
     ["PUT", ["papers", "paper-1", "tags"]],
     ["DELETE", ["papers", "paper-1", "reading-note"]],
     ["PATCH", ["papers", "paper-1", "reader"]],
+    ["GET", ["papers", "paper-1", "full-text", "extract"]],
+    ["POST", ["papers", "paper-1", "full-text", "status"]],
     ["GET", ["papers", "paper-1", "metadata"]],
     ["GET", ["papers", "scan"]],
     ["GET", ["papers", "import"]],
@@ -264,6 +273,34 @@ test("forwards the exact metadata enrichment preview request without granting me
   assert.equal(response.status, 200);
   assert.equal(requestedUrl, `${API_URL}/papers/paper%201/metadata/enrichment-preview`);
   assert.equal(isAllowedBlueprintRequest("POST", ["papers", "paper 1", "metadata"]), false);
+});
+
+
+test("forwards only the explicit Full Text extraction command body", async () => {
+  const payload = JSON.stringify({ force: true });
+  let requestedUrl;
+  const response = await proxyBlueprintRequest(
+    new Request("http://localhost/api/blueprint/papers/paper%201/full-text/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Range: "bytes=0-10" },
+      body: payload,
+    }),
+    ["papers", "paper 1", "full-text", "extract"],
+    {
+      apiUrl: API_URL,
+      fetchImpl: async (url, options) => {
+        requestedUrl = url;
+        assert.equal(options.method, "POST");
+        assert.equal(options.headers.get("Content-Type"), "application/json");
+        assert.equal(options.headers.get("Range"), null);
+        assert.equal(options.body, payload);
+        return Response.json({ state: "cached", content: "text" });
+      },
+    },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(requestedUrl, `${API_URL}/papers/paper%201/full-text/extract`);
 });
 
 test("forwards the exact Paper tag commands with a JSON revision baseline", async () => {

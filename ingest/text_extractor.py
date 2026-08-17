@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from ingest.document_text import MarkItDown, PdfReader, get_text_extraction_backends
 from ingest.pdf_inspector_adapter import (
     StructuredPdfExtraction,
+    canonical_full_text_projection,
     extract_structured_pdf,
     pdf_inspector_available,
 )
@@ -21,6 +23,9 @@ class FullTextExtractionResult:
     attempted_methods: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     structured_extraction: StructuredPdfExtraction | None = None
+    provider: str = "none"
+    provider_version: str = ""
+    content_format: Literal["markdown", "plain_text"] = "plain_text"
 
 
 def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
@@ -39,15 +44,19 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
         attempted_methods.append("pdf-inspector")
     if structured.status == "failed":
         errors.extend(structured.errors)
-    elif structured.text.strip():
+    structured_projection = canonical_full_text_projection(structured)
+    if structured.status != "failed" and structured_projection:
         return _success(
-            structured.text,
+            structured_projection,
             "pdf-inspector",
             errors,
             attempted_methods,
             warnings=structured.warnings,
             structured_extraction=structured,
             status=structured.status,
+            provider=structured.provider,
+            provider_version=structured.provider_version,
+            content_format="markdown" if structured.markdown or any(page.markdown for page in structured.pages) else "plain_text",
         )
 
     if MarkItDown is not None:
@@ -66,6 +75,8 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
                 warnings=structured.warnings,
                 structured_extraction=structured,
                 status="ocr_needed" if structured.status == "ocr_needed" else "success",
+                provider="markitdown",
+                content_format="markdown",
             )
     else:
         errors.append("markitdown: unavailable")
@@ -87,6 +98,7 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
                 warnings=structured.warnings,
                 structured_extraction=structured,
                 status="ocr_needed" if structured.status == "ocr_needed" else "success",
+                provider="pypdf",
             )
     else:
         errors.append("pypdf: unavailable")
@@ -100,6 +112,8 @@ def extract_full_text_from_pdf(pdf_path: Path) -> FullTextExtractionResult:
         attempted_methods=attempted_methods,
         warnings=structured.warnings,
         structured_extraction=structured,
+        provider=structured.provider if structured.status != "not_extracted" else "none",
+        provider_version=structured.provider_version,
     )
 
 
@@ -124,6 +138,9 @@ def _success(
     warnings: list[str] | None = None,
     structured_extraction: StructuredPdfExtraction | None = None,
     status: str = "success",
+    provider: str | None = None,
+    provider_version: str = "",
+    content_format: Literal["markdown", "plain_text"] = "plain_text",
 ) -> FullTextExtractionResult:
     return FullTextExtractionResult(
         text=text,
@@ -134,4 +151,7 @@ def _success(
         attempted_methods=attempted_methods,
         warnings=list(warnings or []),
         structured_extraction=structured_extraction,
+        provider=provider or source,
+        provider_version=provider_version,
+        content_format=content_format,
     )

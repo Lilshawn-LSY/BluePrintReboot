@@ -6,15 +6,17 @@ Current evidence is represented only in the generated [Current Release Status](.
 
 ## v1.5.12 R-145 PDF Foundation
 
-- [x] Validate DPR 1, 1.25, 1.5, and 2 backing-canvas sizing while logical CSS page size and Reader zoom remain invariant.
+- [x] Validate DPR 1, 1.25, 1.5, and 2 use `clamp(DPR × 1.5, 1, 3)` backing-canvas sizing while logical CSS page size, Reader zoom, text-layer geometry, and selection coordinates remain invariant.
 - [x] Validate page/zoom rerenders reuse one PDF document, rapid renders cancel safely, and canvas/text layers clean up together.
 - [x] Validate selectable text follows page and zoom changes and native fallback remains mutually exclusive with the PDF.js layers.
 - [x] Validate selection rectangles normalize to top-left page-relative coordinates with canonical 1-based page numbers independent of DPR/zoom.
 - [x] Validate text, scanned, image-based, and mixed classifications, per-page state, positioned text, 1-based normalization, and OCR-needed versus failure.
-- [x] Validate optional dependency absence and extractor failure retain MarkItDown/pypdf fallback.
+- [x] Validate default-pinned `pdf-inspector` runs first, produces canonical BluePrint structured output and deterministic flattened projection, and defensive provider absence/failure retains MarkItDown then pypdf fallback.
 - [x] Validate reusable/stale/restart cache states and valid old-cache preservation using disposable fixtures only.
-- [ ] Manually verify ordinary biology and multi-column AI/ML PDFs at DPR 1, 1.25, 1.5, and 2 through several zoom levels.
-- [ ] Manually verify text selection alignment and normalized coordinate stability across zoom/DPR.
+- [x] Validate strict status/content/extract API routes, exact bridge/client allowlisting, explicit retry/re-extract, provider/state presentation, and escaped canonical full-text viewing.
+- [x] Preserve user-reported normal-PDF rendering, zoom, text selection/drag, lifecycle behavior, and improved visual quality evidence.
+- [ ] Manually verify the new 1.5x supersampling at DPR 1, 1.25, 1.5, and 2 through several zoom levels and reconfirm text-layer alignment.
+- [ ] Manually verify Reader Full Text not-extracted/cached/stale/failed/OCR-needed states and content viewing.
 - [ ] Manually verify scanned and mixed PDFs report OCR-needed pages, restart reuses valid cache, changed PDF bytes become stale, and Library to Paper Detail to Reader remains intact.
 
 ## Historical v1.5.11 Library / Paper Workflow Closure

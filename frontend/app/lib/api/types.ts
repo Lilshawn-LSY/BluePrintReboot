@@ -101,6 +101,33 @@ export interface ReaderSnapshot {
   unavailable_reason: string;
 }
 
+export type FullTextCacheState = "not_extracted" | "success" | "cached" | "stale" | "failed" | "ocr_needed";
+export type FullTextExtractionState = "not_extracted" | "success" | "failed" | "ocr_needed";
+
+export interface FullTextStatus {
+  paper_id: string;
+  state: FullTextCacheState;
+  extraction_state: FullTextExtractionState;
+  source: string;
+  provider: string;
+  provider_version: string;
+  content_format: "markdown" | "plain_text";
+  classification: "text" | "scanned" | "image-based" | "mixed" | "unknown";
+  page_count: number;
+  char_count: number;
+  ocr_needed_pages: number[];
+  extracted_at: string;
+  has_content: boolean;
+  is_stale: boolean;
+  can_extract: boolean;
+  previous_cache_preserved: boolean;
+  message: string;
+}
+
+export interface FullTextDocument extends FullTextStatus {
+  content: string;
+}
+
 export type NoteBlockType = "summary" | "claim" | "method" | "evidence" | "question" | "idea" | "limitation";
 
 export interface EditableNoteBlockContent {

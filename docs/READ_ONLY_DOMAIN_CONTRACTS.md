@@ -75,3 +75,9 @@ Dashboard, Library, Papers, and Paper Detail render explicit loading, empty, err
 The exact persisted `saved_note_content` string is returned without trimming, Markdown parsing, hashing, or another file read in the API layer. An unknown paper is a generic 404; missing PDF, missing note, and a recoverable unreadable-note warning remain HTTP 200 snapshot states. The route accepts no filesystem path and exposes no Streamlit state, pandas object, exception detail, environment value, or arbitrary storage dictionary.
 
 The same-origin bridge allowlists only the exact `papers/{paper_id}/reader` shape as JSON. It does not forward `Range` for this route and leaves the existing managed-PDF streaming and Range contract unchanged. The web Reader uses one snapshot request and presents the saved note as selectable plain text; editing and every write action remain in Streamlit.
+
+## Full-text extraction HTTP slice in v1.5.12
+
+The full-text service remains the sole owner of extraction/cache behavior. `GET /papers/{paper_id}/full-text/status` returns bounded cache, provider, classification, character/page-count, stale, and OCR-needed state. `GET /papers/{paper_id}/full-text` returns that same status plus the canonical cached Markdown/plain-text projection. Neither read exposes cache paths, source PDF paths, SHA-256 values, third-party objects, or raw provider errors.
+
+`POST /papers/{paper_id}/full-text/extract` is an explicit command with a strict `force` boolean. It delegates to the existing `pdf-inspector`-first, MarkItDown, then pypdf workflow and never schedules background work or extracts on import. Failed refresh preserves a prior valid cache; corrupt cache metadata is not overwritten through this route. The same-origin bridge allowlists only these exact method/path pairs.

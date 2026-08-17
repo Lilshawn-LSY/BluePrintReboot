@@ -49,6 +49,8 @@ def test_successful_extraction_updates_cache_and_index(monkeypatch) -> None:
     metadata = load_extraction_metadata("paper-1", cache_dir)
     assert metadata["pdf_size_bytes"] > 0
     assert metadata["pdf_sha256"]
+    assert metadata["provider"] == "none"
+    assert metadata["content_format"] == "plain_text"
     row = load_index(index_csv).iloc[0]
     assert row["text_status"] == "success"
     assert row["text_source"] == "pypdf"
@@ -173,6 +175,8 @@ def test_ocr_needed_cache_is_reused_deterministically_after_reload(monkeypatch) 
     assert status["classification"] == "scanned"
     assert status["ocr_needed_pages"] == [1]
     assert status["structured_extraction"]["pages"][0]["page_number"] == 1
+    assert status["structured_extraction"]["source_pdf_sha256"] == status["cached_pdf_sha256"]
+    assert status["structured_extraction"]["source_pdf_size_bytes"] == pdf_path.stat().st_size
 
 
 def test_force_false_reextracts_stale_cache(monkeypatch) -> None:
