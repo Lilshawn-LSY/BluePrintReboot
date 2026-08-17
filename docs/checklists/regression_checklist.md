@@ -1,10 +1,26 @@
 # Mandatory Regression Validation Checklist
 
-Required before and after Codex-assisted release work, including `v1.5.5-note-block-write-project-links`. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
+Required before and after Codex-assisted release work. Use disposable fixtures for automated checks and approved local data only for user-performed runtime checks.
 
 Current evidence is represented only in the generated [Current Release Status](../CURRENT_RELEASE_STATUS.md). The checkmarks below preserve implementation and historical regression scope; they do not override canonical current fields.
 
-## v1.5.11 Library / Paper Workflow Closure
+## v1.5.12 R-145 PDF Foundation
+
+- [x] Validate DPR 1, 1.25, 1.5, and 2 use `clamp(DPR × 1.5, 1, 3)` backing-canvas sizing while logical CSS page size, Reader zoom, text-layer geometry, and selection coordinates remain invariant.
+- [x] Validate page/zoom rerenders reuse one PDF document, rapid renders cancel safely, and canvas/text layers clean up together.
+- [x] Validate selectable text follows page and zoom changes and native fallback remains mutually exclusive with the PDF.js layers.
+- [x] Validate selection rectangles normalize to top-left page-relative coordinates with canonical 1-based page numbers independent of DPR/zoom.
+- [x] Validate text, scanned, image-based, and mixed classifications, per-page state, positioned text, 1-based normalization, and OCR-needed versus failure.
+- [x] Validate default-pinned `pdf-inspector` runs first, produces canonical BluePrint structured output and deterministic flattened projection, and defensive provider absence/failure retains MarkItDown then pypdf fallback.
+- [x] Validate reusable/stale/restart cache states and valid old-cache preservation using disposable fixtures only.
+- [x] Validate strict status/content/extract API routes, exact bridge/client allowlisting, explicit retry/re-extract, provider/state presentation, and escaped canonical full-text viewing.
+- [x] Validate metadata preview reuses one SHA-current canonical cache or one non-persisting fallback extraction for DOI/arXiv/profile/title evidence, rejects stale cache evidence, preserves provider-specific provenance, and does not change cache or Paper state.
+- [x] Preserve user-reported normal-PDF rendering, zoom, text selection/drag, lifecycle behavior, and improved visual quality evidence.
+- [ ] Manually verify the new 1.5x supersampling at DPR 1, 1.25, 1.5, and 2 through several zoom levels and reconfirm text-layer alignment.
+- [ ] Manually verify Reader Full Text not-extracted/cached/stale/failed/OCR-needed states and content viewing.
+- [ ] Manually verify scanned and mixed PDFs report OCR-needed pages, restart reuses valid cache, changed PDF bytes become stale, and Library to Paper Detail to Reader remains intact.
+
+## Historical v1.5.11 Library / Paper Workflow Closure
 
 - [x] Validate server-side case-insensitive metadata search for zero, one, special-character, and multi-page results; confirm lifecycle, exact tag, year, and reading-status filters apply before pagination.
 - [x] Validate Library scan/import remains preview-first and explicit; distinguish new, same-path registered, exact duplicate-content, missing-PDF, unique reconnect, and ambiguous reconnect states without client-only collection filtering.

@@ -1,4 +1,10 @@
-import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
+import type {
+  PDFDocumentLoadingTask,
+  PDFDocumentProxy,
+  PDFPageProxy,
+  PageViewport,
+  TextLayer,
+} from "pdfjs-dist/legacy/build/pdf.mjs";
 
 
 const RANGE_CHUNK_SIZE = 64 * 1024;
@@ -30,6 +36,27 @@ export async function createPdfLoadingTask(url: string): Promise<PDFDocumentLoad
     disableRange: false,
     disableStream: false,
     disableAutoFetch: false,
+  });
+}
+
+
+export async function createPdfTextLayer({
+  page,
+  container,
+  viewport,
+}: {
+  page: PDFPageProxy;
+  container: HTMLElement;
+  viewport: PageViewport;
+}): Promise<TextLayer> {
+  const pdfjs = await loadPdfJsModule();
+  return new pdfjs.TextLayer({
+    textContentSource: page.streamTextContent({
+      includeMarkedContent: true,
+      disableNormalization: true,
+    }),
+    container,
+    viewport,
   });
 }
 

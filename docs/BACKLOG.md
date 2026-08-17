@@ -1,6 +1,6 @@
 # BluePrintReboot Backlog
 
-Stable backlog last edited: 2026-08-16
+Stable backlog last edited: 2026-08-17
 
 Current release evidence and individually addressable pending checks live in the generated [Current Release Status](CURRENT_RELEASE_STATUS.md). This backlog does not duplicate mutable counts or verification state.
 
@@ -23,11 +23,12 @@ Current release evidence and individually addressable pending checks live in the
 - [x] v1.5.9 bounded managed-directory web PDF scan, candidate preview, explicit selective import, and Reader/PDF follow-through without automatic enrichment or tags.
 - [x] v1.5.10 canonical Tag Book governance and persisted Paper-scoped tag candidate review, with explicit promotion and separate existing-command Paper apply.
 - [x] v1.5.11 Library/Paper workflow closure: server-backed collection search/filter/pagination, Library enrichment reuse, coherent navigation, and explicit exact-content managed-PDF reconnect without Paper duplication.
+- [x] v1.5.12 R-145 pre-UX PDF foundation: bounded DPR × 1.5 supersampling, aligned selectable text, normalized 1-based selection coordinates, canonical `pdf-inspector`-first structured extraction/projection, explicit full-text API/Reader access, read-only metadata-preview evidence reuse, OCR-needed/cache states, and compatibility fallback preservation.
 
 ## v1.6.0 Reader Workspace UX Overhaul
 
 - [ ] Address the deferred Reader/shared layout and workspace clarity work without changing the v1.5.10 candidate-review/apply boundary or introducing a broad data-model rewrite.
-- [ ] Keep drag/drop, watcher/background import, OCR/full-text extraction, automatic/background or bulk enrichment, automatic overwrite/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, citation export, backup/recovery redesign, and folder management separately scoped.
+- [ ] Keep drag/drop, watcher/background import, OCR execution, search UI, automatic/background or bulk extraction/enrichment, automatic overwrite/tags, semantic/content-hash deduplication redesign, moved-file repair, cleanup, citation export, backup/recovery redesign, and folder management separately scoped.
 - [ ] Preserve the closed v1.5.11 Library/Paper command and privacy boundaries while redesigning UX only under a separately approved v1.6 scope.
 
 ## v1.8.0 Tag Intelligence
@@ -40,6 +41,7 @@ Current release evidence and individually addressable pending checks live in the
 - [x] Record user-provided v1.5.9 manual PDF scan/import evidence, excluding the separately outstanding browser Network path-privacy check.
 - [ ] Record the remaining v1.5.9 browser Network path-privacy check, PR-head CI, merge, tag, GitHub Release, and post-merge main CI only after those events occur.
 - [ ] Record v1.5.10 manual canonical-governance/candidate-review browser verification, PR-head CI, merge, tag, GitHub Release, post-merge main CI, and clean-PC restore only after those events occur.
+- [ ] Record remaining v1.5.12 supersampling DPR, frontend Full Text, scanned/mixed classification, cache/restart/staleness, PR-head CI, merge, tag, GitHub Release, and post-merge main CI evidence only after those events occur.
 
 ## v1.5.5 Note Block write and Project links
 

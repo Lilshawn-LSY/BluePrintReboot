@@ -1,5 +1,6 @@
 ﻿import pandas as pd
 
+from ingest.pdf_inspector_adapter import StructuredPdfExtraction, StructuredPdfPage
 from ingest.text_extractor import FullTextExtractionResult
 from services.full_text_workflow import clear_text_cache_for_paper, extract_text_for_paper
 from storage.extracted_text_store import (
@@ -48,6 +49,8 @@ def test_successful_extraction_updates_cache_and_index(monkeypatch) -> None:
     metadata = load_extraction_metadata("paper-1", cache_dir)
     assert metadata["pdf_size_bytes"] > 0
     assert metadata["pdf_sha256"]
+    assert metadata["provider"] == "none"
+    assert metadata["content_format"] == "plain_text"
     row = load_index(index_csv).iloc[0]
     assert row["text_status"] == "success"
     assert row["text_source"] == "pypdf"
@@ -80,8 +83,11 @@ def test_failed_extraction_saves_metadata_but_is_not_reusable(monkeypatch) -> No
     status = extraction_cache_status("paper-1", cache_dir)
 
     assert result.status == "failed"
+    assert result.extraction_state == "failed"
+    assert result.cache_state == "failed"
     assert extraction_metadata_path("paper-1", cache_dir).exists()
     assert status["has_reusable_text_cache"] is False
+    assert status["cache_state"] == "failed"
     assert load_index(index_csv).iloc[0]["text_status"] == "failed"
 
 
@@ -116,6 +122,61 @@ def test_force_false_reuses_successful_cache(monkeypatch) -> None:
     assert first.skipped is False
     assert second.skipped is True
     assert calls["count"] == 1
+
+
+def test_ocr_needed_cache_is_reused_deterministically_after_reload(monkeypatch) -> None:
+    workspace = make_workspace("full-text-service-ocr-needed-reuse")
+    cache_dir = workspace / "cache"
+    pdf_path = workspace / "paper.pdf"
+    pdf_path.write_bytes(b"scanned PDF")
+    record = {
+        "paper_id": "paper-1",
+        "filename": "paper.pdf",
+        "filepath": str(pdf_path),
+        "title": "Paper",
+    }
+    index_csv = make_index(workspace, record)
+    calls = {"count": 0}
+    structured = StructuredPdfExtraction(
+        status="ocr_needed",
+        classification="scanned",
+        classification_confidence=0.95,
+        page_count=1,
+        pages=[StructuredPdfPage(page_number=1, state="ocr_needed", ocr_needed=True)],
+        ocr_needed_pages=[1],
+        provider_version="test-0.2.6",
+    )
+
+    def fake_extract(path):
+        calls["count"] += 1
+        return FullTextExtractionResult(
+            text="",
+            source="none",
+            char_count=0,
+            status="ocr_needed",
+            attempted_methods=["pdf-inspector"],
+            structured_extraction=structured,
+        )
+
+    monkeypatch.setattr("services.full_text_workflow.extract_full_text_from_pdf", fake_extract)
+
+    first = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    second = extract_text_for_paper(record, cache_dir=cache_dir, index_csv=index_csv)
+    status = extraction_cache_status("paper-1", cache_dir, pdf_path=pdf_path)
+
+    assert first.status == "ocr_needed"
+    assert first.error == ""
+    assert second.skipped is True
+    assert second.cache_state == "ocr_needed"
+    assert calls["count"] == 1
+    assert status["has_reusable_text_cache"] is False
+    assert status["has_reusable_extraction_cache"] is True
+    assert status["cache_state"] == "ocr_needed"
+    assert status["classification"] == "scanned"
+    assert status["ocr_needed_pages"] == [1]
+    assert status["structured_extraction"]["pages"][0]["page_number"] == 1
+    assert status["structured_extraction"]["source_pdf_sha256"] == status["cached_pdf_sha256"]
+    assert status["structured_extraction"]["source_pdf_size_bytes"] == pdf_path.stat().st_size
 
 
 def test_force_false_reextracts_stale_cache(monkeypatch) -> None:

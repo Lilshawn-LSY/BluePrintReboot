@@ -3,7 +3,7 @@
 import { AlertCircle, ChevronLeft, ChevronRight, ExternalLink, LoaderCircle, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { paperPdfUrl } from "../lib/api/client";
-import { createPdfLoadingTask, readPdfNetworkDiagnostics } from "../lib/pdf/pdfjs-adapter";
+import { createPdfLoadingTask, createPdfTextLayer, readPdfNetworkDiagnostics } from "../lib/pdf/pdfjs-adapter";
 import {
   DEFAULT_ZOOM,
   MAX_ZOOM,
@@ -12,6 +12,7 @@ import {
   type PdfReaderDiagnostics,
   type PdfReaderState,
 } from "../lib/pdf/reader-controller.mjs";
+import { readPageSelection, type PdfPageSelection } from "../lib/pdf/selection-coordinates.mjs";
 
 
 const INITIAL_STATE: PdfReaderState = {
@@ -97,9 +98,17 @@ function ReaderDiagnostics({ diagnostics }: { diagnostics: PdfReaderDiagnostics 
 }
 
 
-export function PdfJsReader({ paperId }: { paperId: string }) {
+export function PdfJsReader({
+  paperId,
+  onSelectionChange,
+}: {
+  paperId: string;
+  onSelectionChange?: (selection: PdfPageSelection | null) => void;
+}) {
   const pdfUrl = useMemo(() => paperPdfUrl(paperId), [paperId]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pageSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const textLayerRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<PdfReaderController | null>(null);
   const lifecycleGenerationRef = useRef(0);
   const [state, setState] = useState<PdfReaderState>(INITIAL_STATE);
@@ -113,6 +122,7 @@ export function PdfJsReader({ paperId }: { paperId: string }) {
     const baseline = readPdfNetworkDiagnostics(pdfUrl);
     const controller = new PdfReaderController({
       createLoadingTask: createPdfLoadingTask,
+      createTextLayer: createPdfTextLayer,
       isCurrent: () => (
         lifecycleGenerationRef.current === lifecycleGeneration
         && controllerRef.current === controller
@@ -123,6 +133,13 @@ export function PdfJsReader({ paperId }: { paperId: string }) {
           ? canvasRef.current
           : null
       ),
+      getTextLayerContainer: () => (
+        lifecycleGenerationRef.current === lifecycleGeneration
+        && controllerRef.current === controller
+          ? textLayerRef.current
+          : null
+      ),
+      getOutputScale: () => window.devicePixelRatio || 1,
       onState: (nextState) => {
         setState(nextState);
         setPageInput(String(nextState.pageNumber));
@@ -156,6 +173,14 @@ export function PdfJsReader({ paperId }: { paperId: string }) {
       return;
     }
     void controllerRef.current?.setPage(requestedPage);
+  };
+
+  const publishSelection = () => {
+    if (!onSelectionChange || !pageSurfaceRef.current) return;
+    onSelectionChange(readPageSelection({
+      pageNumber: state.pageNumber,
+      pageElement: pageSurfaceRef.current,
+    }));
   };
 
   if (state.mode === "fallback") {
@@ -196,9 +221,22 @@ export function PdfJsReader({ paperId }: { paperId: string }) {
       </div>
 
       <div className="reader-canvas-viewport">
-        <canvas ref={canvasRef} className={canvasActive ? "reader-canvas" : "reader-canvas reader-canvas--inactive"} role="img" aria-label={`PDF page ${state.pageNumber}${state.totalPages ? ` of ${state.totalPages}` : ""}`}>
-          A PDF page is displayed in this canvas when PDF.js rendering succeeds.
-        </canvas>
+        <div
+          ref={pageSurfaceRef}
+          className={canvasActive ? "reader-page-surface" : "reader-page-surface reader-page-surface--inactive"}
+          onMouseUp={publishSelection}
+          onKeyUp={publishSelection}
+        >
+          <canvas ref={canvasRef} className="reader-canvas" role="img" aria-label={`PDF page ${state.pageNumber}${state.totalPages ? ` of ${state.totalPages}` : ""}`}>
+            A PDF page is displayed in this canvas when PDF.js rendering succeeds.
+          </canvas>
+          <div
+            ref={textLayerRef}
+            className="textLayer reader-text-layer"
+            data-page-number={state.pageNumber}
+            aria-label={`Selectable text for PDF page ${state.pageNumber}`}
+          />
+        </div>
 
         {state.mode === "loading" ? (
           <div className="reader-render-state" role="status">

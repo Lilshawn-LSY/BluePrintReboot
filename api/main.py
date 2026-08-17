@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
             or request.url.path.endswith("/metadata/enrichment-preview")
             or request.url.path.endswith("/tags")
             or request.url.path.endswith("/reading-note")
+            or request.url.path.endswith("/full-text/extract")
             or (
                 request.method in {"POST", "PATCH"}
                 and "/note-blocks" in request.url.path

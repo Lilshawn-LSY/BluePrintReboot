@@ -27,11 +27,15 @@ def read_tracker() -> dict:
 def test_tracker_mapping_has_controlled_complete_drive_task_set() -> None:
     rows = validated_rows(read_tracker())
 
-    assert [row["task_id"] for row in rows] == [f"R-{number:03d}" for number in range(1, 26)]
+    assert [row["task_id"] for row in rows] == [
+        *[f"R-{number:03d}" for number in range(1, 26)],
+        "R-145",
+    ]
     assert {row["status"] for row in rows} <= ALLOWED_TASK_STATUSES
     assert next(row for row in rows if row["task_id"] == "R-006")["status"] == "PARTIALLY VERIFIED"
     assert next(row for row in rows if row["task_id"] == "R-017")["status"] == "NOT VERIFIED"
     assert next(row for row in rows if row["task_id"] == "R-025")["status"] == "PARTIALLY VERIFIED"
+    assert next(row for row in rows if row["task_id"] == "R-145")["status"] == "PARTIALLY VERIFIED"
 
 
 def test_tracker_export_is_deterministic_utf8_csv(tmp_path: Path) -> None:
@@ -46,7 +50,7 @@ def test_tracker_export_is_deterministic_utf8_csv(tmp_path: Path) -> None:
     assert text.splitlines()[0] == ",".join(CSV_COLUMNS)
     with first.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    assert len(rows) == 25
+    assert len(rows) == 26
     assert [row["task_id"] for row in rows] == sorted(row["task_id"] for row in rows)
     assert first.read_bytes() == tracker_csv_bytes(read_tracker())
 

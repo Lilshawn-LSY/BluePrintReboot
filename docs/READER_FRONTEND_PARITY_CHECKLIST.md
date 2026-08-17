@@ -10,7 +10,7 @@ This is the acceptance contract for a future frontend adapter. v1.0.26 freezes b
 - [ ] Canonical title/author/year/DOI/tag changes converge with the Reading Note header. Clean notes refresh atomically; dirty drafts keep their body, remain dirty, and receive a pending non-destructive header refresh. Explicit Save writes the latest canonical header and body, then applies saved widget/baseline state only during the next pre-widget initialization.
 - [x] Switching papers discards the previous paper's unsaved draft without writing it; returning loads its last explicitly saved note. Browser refresh and process restart do the same. No persistent per-paper draft store or navigation confirmation is required.
 - [ ] Archived papers remain explicitly viewable in Reader without moving or deleting PDFs.
-- [ ] Missing/large/external PDF guidance, active-paper isolation, project links, structured blocks, imports, extraction/profile state, and confirmation feedback remain equivalent.
+- [ ] Missing/large/external PDF guidance, active-paper isolation, project links, structured blocks, imports, extraction/profile state, and confirmation feedback remain equivalent. v1.5.12 exposes backend-owned full-text status/content plus explicit extract/re-extract without browser extraction, automatic scheduling, or editing cached text.
 - [ ] Streamlit may rerun and rerender the PDF after widget interaction. Avoidable application-triggered reruns stay removed; deeper renderer isolation is deferred to PDF.js.
 
 ## Lifecycle invariants

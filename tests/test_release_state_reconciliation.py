@@ -295,6 +295,29 @@ def test_library_paper_workflow_manual_checks_are_complete_and_derived() -> None
         validate_manifest(fabricated)
 
 
+def test_pdf_foundation_manual_checks_preserve_partial_evidence_and_are_derived() -> None:
+    manifest = read_manifest()
+    runtime = manifest["manual_validation"]["pdf_foundation_runtime"]
+
+    assert runtime["status"] == "PARTIALLY VERIFIED"
+    assert len(runtime["checks"]) == 10
+    assert {item["status"] for item in runtime["checks"].values()} == {
+        "VERIFIED",
+        "NOT VERIFIED",
+    }
+    assert {
+        check_id
+        for check_id, item in runtime["checks"].items()
+        if item["status"] == "VERIFIED"
+    } == {"sharp_rendering_zoom", "text_selection_alignment"}
+    validate_manifest(manifest)
+
+    fabricated = copy.deepcopy(manifest)
+    fabricated["manual_validation"]["pdf_foundation_runtime"]["status"] = "VERIFIED"
+    with pytest.raises(ReleaseStateError, match="aggregate status must derive"):
+        validate_manifest(fabricated)
+
+
 @pytest.mark.parametrize(
     "summary",
     [

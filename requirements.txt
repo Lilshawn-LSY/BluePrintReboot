@@ -27,6 +27,7 @@ narwhals==2.22.1
 numpy==2.4.6
 packaging==26.2
 pandas==2.3.3
+pdf-inspector==0.2.6
 pillow==12.2.0
 pluggy==1.6.0
 protobuf==7.35.1

@@ -2,7 +2,23 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
-## v1.5.11-library-paper-workflow-closure
+## v1.5.12-pre-ux-pdf-foundation
+
+- [x] PDF.js uses `clamp(devicePixelRatio × 1.5, 1, 3)` backing-canvas supersampling while logical viewport/CSS size, semantic zoom, text-layer geometry, and selection coordinates remain unchanged.
+- [x] Selectable PDF.js text uses the same page viewport and lifecycle as canvas rendering; stale layers cancel and clear across page/zoom/document/retry/fallback/unmount transitions.
+- [x] The internal selection contract reports canonical 1-based page numbers and top-left page-normalized rectangles independent of DPR and zoom.
+- [x] Default `pdf-inspector==0.2.6` is the preferred provider, isolated behind BluePrint-owned structured extraction models and explicit mixed upstream index normalization; MarkItDown remains optional.
+- [x] One deterministic structured-to-Markdown/text projection feeds existing cache/profile consumers; MarkItDown then pypdf remain fallbacks.
+- [x] Strict local API and bridge contracts expose status, explicit extraction/re-extraction, and cached content to a compact Reader Full Text surface without browser extraction or automatic scheduling.
+- [x] Metadata enrichment preview reuses one current canonical cache or one bounded non-persisting `pdf-inspector` -> MarkItDown -> pypdf result for DOI/arXiv detection, PDF-profile parsing, and title fallback without changing Full Text or Paper state.
+- [x] Extraction/cache state distinguishes not-extracted, success, cached, stale, failed, and OCR-needed outcomes while preserving partial mixed-document text.
+- [x] MarkItDown/pypdf fallback, SHA-256 stale checks, restart reuse, and valid old-cache preservation remain covered by disposable tests.
+- [x] OCR execution, selection persistence, Research Blocks, highlight UX, and Reader/Library visual redesign remain absent.
+- [x] User-reported baseline normal-PDF rendering, zoom, text selection/drag, lifecycle behavior, and improved visual quality are preserved as manual evidence.
+- [ ] New supersampling-specific DPR, frontend Full Text, scanned/mixed, classification, stale-cache, and restart checks remain unverified until user-performed.
+- [ ] v1.5.12 PR-head CI, merge to `main`, tag, GitHub Release, post-merge `main` CI, and clean-PC restore remain unverified until observed.
+
+## Historical v1.5.11-library-paper-workflow-closure
 
 - [x] Library is the primary web Paper collection: scan/import, server-backed search/filter/pagination, explicit enrichment reuse, and Paper Detail/Reader navigation are one bounded workflow.
 - [x] Search/filter occurs in the Paper read model before pagination and returns only allowlisted Paper summary fields.

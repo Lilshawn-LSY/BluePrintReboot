@@ -9,6 +9,7 @@ from services import (
     tag_read_model,
 )
 from services.library_read_model import HealthSummary, LibraryStatus, PaperDetail, PaperListItem, ReaderSnapshot
+from services.full_text_workflow import FullTextService
 from services.note_block_commands import NoteBlockCommandService
 from services.note_block_read_model import NoteBlockCollection
 from services.project_read_model import ProjectDetail, ProjectListItem
@@ -36,6 +37,7 @@ _tag_candidate_review_service = TagCandidateReviewService(
     governance=_tag_governance_service,
     reader_commands=_reader_command_service,
 )
+_full_text_service = FullTextService()
 
 
 def get_health_summary() -> HealthSummary:
@@ -124,6 +126,10 @@ def get_settings_summary() -> SettingsSummary:
 
 def get_reader_command_service() -> ReaderCommandService:
     return _reader_command_service
+
+
+def get_full_text_service() -> FullTextService:
+    return _full_text_service
 
 
 def get_metadata_enrichment_service() -> MetadataEnrichmentService:

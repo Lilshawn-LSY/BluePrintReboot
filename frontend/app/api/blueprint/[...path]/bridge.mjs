@@ -17,6 +17,18 @@ export function isBlueprintReaderPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "reader";
 }
 
+export function isBlueprintFullTextPath(parts) {
+  return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "full-text";
+}
+
+export function isBlueprintFullTextStatusPath(parts) {
+  return Array.isArray(parts) && parts.length === 4 && parts[0] === "papers" && parts[2] === "full-text" && parts[3] === "status";
+}
+
+export function isBlueprintFullTextExtractPath(parts) {
+  return Array.isArray(parts) && parts.length === 4 && parts[0] === "papers" && parts[2] === "full-text" && parts[3] === "extract";
+}
+
 export function isBlueprintMetadataPath(parts) {
   return Array.isArray(parts) && parts.length === 3 && parts[0] === "papers" && parts[2] === "metadata";
 }
@@ -136,6 +148,8 @@ export function isAllowedBlueprintPath(parts) {
     || (parts.length === 2 && parts[0] === "projects")
     || isBlueprintPdfPath(parts)
     || isBlueprintReaderPath(parts)
+    || isBlueprintFullTextPath(parts)
+    || isBlueprintFullTextStatusPath(parts)
     || isBlueprintTagCandidatesPath(parts)
     || isBlueprintNoteBlocksPath(parts);
 }
@@ -159,7 +173,8 @@ export function isAllowedBlueprintRequest(method, parts) {
       || isBlueprintCanonicalTagAliasesPath(parts)
       || isBlueprintCanonicalTagDeprecatePath(parts)
       || isBlueprintTagCandidateGeneratePath(parts)
-      || isBlueprintTagCandidateActionPath(parts);
+      || isBlueprintTagCandidateActionPath(parts)
+      || isBlueprintFullTextExtractPath(parts);
   }
   if (normalizedMethod === "PATCH") {
     return isBlueprintMetadataPath(parts)
