@@ -22,6 +22,7 @@ def full_text_client(monkeypatch, result: FullTextExtractionResult | None = None
     pdf_path = workspace / "papers" / "paper.pdf"
     pdf_path.parent.mkdir(parents=True)
     pdf_path.write_bytes(b"%PDF-1.4\nfixture")
+    pdf_path = pdf_path.resolve()
     index_csv = workspace / "data" / "paper_index.csv"
     save_index(
         pd.DataFrame([

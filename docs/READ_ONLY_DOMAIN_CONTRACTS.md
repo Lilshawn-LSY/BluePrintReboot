@@ -83,3 +83,15 @@ The full-text service remains the sole owner of extraction/cache behavior. `GET 
 `POST /papers/{paper_id}/full-text/extract` is an explicit command with a strict `force` boolean. It delegates to the existing `pdf-inspector`-first, MarkItDown, then pypdf workflow and never schedules background work or extracts on import. Failed refresh preserves a prior valid cache; corrupt cache metadata is not overwritten through this route. The same-origin bridge allowlists only these exact method/path pairs.
 
 Metadata enrichment preview may read a current SHA-256-validated canonical extraction cache as local evidence. When no current cache exists, it resolves one bounded non-persisting `pdf-inspector`-first fallback result and shares it across DOI/arXiv detection, PDF-profile parsing, and title fallback. This preview path never calls the explicit Full Text extraction command, writes cache metadata/content, changes Paper extraction state, or exposes paths, fingerprints, third-party objects, or raw provider errors.
+
+## Integrity and coherent-read hardening in v1.5.13
+
+Library Health treats parseable data as healthy only when it satisfies the store contract. Registry-owned JSON validates its top-level shape and required item fields; malformed entries are corruption and are never filtered into an apparently empty valid state. Note Block files validate object identity, owning `paper_id`, block type, and duplicate IDs. `paper_index.csv` validation requires its identity/path columns, a non-empty unique safe `paper_id` per row, and at least one usable filename or filepath. Diagnostics are read-only and never repair, normalize, or overwrite user state.
+
+`data/tag_candidate_reviews.json` is included in the shared persistent-state registry, Health diagnostics, Settings resource counts/integrity warnings, and backup coverage. A missing store remains a valid empty state; a corrupt or malformed store is distinct from empty and blocks dependent writes.
+
+Reader snapshots now use exactly one index snapshot for paper detail, editable metadata, and revision baselines. They do not combine rows from multiple CSV reads or depend on a later `.iloc[0]`. Managed PDF availability uses the same `papers/`-bounded resolver as PDF serving and Full Text, including the filename-only legacy fallback.
+
+Related API reads share a short-lived Health result keyed by diagnostic arguments. Completion of a same-process workspace write invalidates it immediately through the workspace mutation generation; changes from another local process are stale for at most one second. This preserves the separate `/health`, `/library/status`, and `/papers` contracts without repeating a full disk scan during one dashboard load.
+
+Collection APIs remain paginated. The frontend Projects list exposes previous/next pages, while Paper/Project/Tag selectors collect successive pages until `has_more` is false. Project link detail collects every link page only while project and link revisions remain unchanged; revision drift fails the read instead of mixing revisions. Entities after the first 100 are therefore not silently inaccessible.

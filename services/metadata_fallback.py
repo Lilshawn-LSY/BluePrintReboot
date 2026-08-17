@@ -16,6 +16,7 @@ from ingest.doi import normalize_doi
 from services.pdf_profile_extraction import extract_pdf_profile_from_text
 from storage.extracted_text_store import load_cached_extracted_text
 from storage.index_store import load_index, save_index
+from storage.workspace_lock import workspace_root_for_path, workspace_write_lock
 from storage.paths import EXTRACTED_TEXT_DIR, INDEX_CSV
 
 
@@ -423,30 +424,21 @@ def apply_metadata_candidate_to_index(
     overwrite: bool = False,
     index_csv: Path = INDEX_CSV,
 ) -> dict[str, Any]:
-    df = load_index(index_csv)
-    row_mask = df["paper_id"] == paper_id
-    if not row_mask.any():
-        return {
-            "updated_fields": [],
-            "skipped_existing_fields": {},
-            "paper_found": False,
-        }
-
-    row = df[row_mask].iloc[0].to_dict()
-    plan = build_metadata_candidate_update(row, candidate, overwrite=overwrite)
-    updates = plan["updates"]
-    if updates:
-        for field, value in updates.items():
-            if field in df.columns:
-                df.loc[row_mask, field] = value
-        df.loc[row_mask, "updated_at"] = utc_now_iso()
-        save_index(df, index_csv)
-
-    return {
-        "updated_fields": [field for field in updates if field in df.columns],
-        "skipped_existing_fields": plan["skipped_existing_fields"],
-        "paper_found": True,
-    }
+    with workspace_write_lock(workspace_root_for_path(Path(index_csv))):
+        df = load_index(index_csv)
+        row_mask = df["paper_id"] == paper_id
+        if not row_mask.any():
+            return {"updated_fields": [], "skipped_existing_fields": {}, "paper_found": False}
+        row = df[row_mask].iloc[0].to_dict()
+        plan = build_metadata_candidate_update(row, candidate, overwrite=overwrite)
+        updates = plan["updates"]
+        if updates:
+            for field, value in updates.items():
+                if field in df.columns:
+                    df.loc[row_mask, field] = value
+            df.loc[row_mask, "updated_at"] = utc_now_iso()
+            save_index(df, index_csv)
+        return {"updated_fields": [field for field in updates if field in df.columns], "skipped_existing_fields": plan["skipped_existing_fields"], "paper_found": True}
 
 
 def _candidate_text_for_record(record: dict[str, str], *, cache_dir: Path) -> tuple[str, list[str]]:

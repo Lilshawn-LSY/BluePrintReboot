@@ -2,7 +2,7 @@
 
 import { ArrowLeft, RotateCcw, Save } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { PageHeader } from "../components/PageHeader";
 import { PdfJsReader } from "../components/PdfJsReader";
@@ -21,6 +21,7 @@ import {
   refreshDirtyDraftHeader,
   shouldWarnBeforeReplacement,
 } from "../lib/reader/editor-state.mjs";
+import { createExclusiveMutationGate } from "../lib/reader/mutation-coordinator.mjs";
 
 
 type EditorStatus = "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
@@ -134,6 +135,8 @@ function candidateReviewFailure(error: unknown): Pick<CandidateReviewState, "sta
 
 
 function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
+  const mutationGate = useRef(createExclusiveMutationGate());
+  const [mutationBusy, setMutationBusy] = useState(false);
   const [editor, setEditor] = useState(() => createReaderEditorState(snapshot));
   const [enrichment, setEnrichment] = useState<EnrichmentState>({
     status: "idle",
@@ -148,7 +151,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   });
   const tagBook = useApiResource(
     "reader-canonical-tag-book",
-    () => apiClient.getTags({ limit: 100 }),
+    () => apiClient.getAllTags(),
   );
   useEffect(() => {
     let current = true;
@@ -183,6 +186,16 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     editor.note.baseline,
   ) || Boolean(editor.tags.draft.trim());
 
+  const beginMutation = () => {
+    const token = mutationGate.current.tryAcquire();
+    if (token !== null) setMutationBusy(true);
+    return token;
+  };
+
+  const finishMutation = (token: number) => {
+    if (mutationGate.current.release(token)) setMutationBusy(false);
+  };
+
   useEffect(() => {
     const warnBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!hasDirtyDraft) return;
@@ -210,7 +223,9 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   }, [hasDirtyDraft]);
 
   const saveMetadata = async () => {
-    if (!metadataChanged.length || editor.metadata.status === "saving" || editor.note.status === "saving" || enrichment.status === "saving") return;
+    if (!metadataChanged.length || mutationBusy) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
     const changes = Object.fromEntries(
       metadataChanged.map((field) => [field, editor.metadata.draft[field]]),
     ) as Partial<EditablePaperMetadata>;
@@ -231,6 +246,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         ...current,
         metadata: { ...current.metadata, ...failure },
       }));
+    } finally {
+      finishMutation(mutationToken);
     }
   };
 
@@ -278,13 +295,15 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   };
 
   const applySelectedCandidates = async () => {
-    if (!enrichment.preview || !enrichment.selectedFields.length || enrichment.status === "saving") return;
+    if (!enrichment.preview || !enrichment.selectedFields.length || mutationBusy) return;
     const fieldsByName = new Map(enrichment.preview.fields.map((field) => [field.field, field]));
     const selectedFields = enrichment.selectedFields.filter((field) => {
       const candidate = fieldsByName.get(field);
       return Boolean(candidate?.candidate_value && candidate.state !== "unchanged");
     });
     if (!selectedFields.length) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
     const changes = Object.fromEntries(selectedFields.map((field) => [
       field,
       fieldsByName.get(field)?.candidate_value ?? "",
@@ -315,11 +334,15 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     } catch (error) {
       const failure = enrichmentStateForError(error, "apply");
       setEnrichment((current) => ({ ...current, ...failure }));
+    } finally {
+      finishMutation(mutationToken);
     }
   };
 
   const saveNote = async () => {
-    if (editor.note.draft === editor.note.baseline || editor.note.status === "saving" || editor.metadata.status === "saving" || enrichment.status === "saving") return;
+    if (editor.note.draft === editor.note.baseline || mutationBusy) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
     setEditor((current) => ({
       ...current,
       note: { ...current.note, status: "saving", message: "Saving Reading Note…" },
@@ -348,12 +371,16 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         ...current,
         note: { ...current.note, ...failure },
       }));
+    } finally {
+      finishMutation(mutationToken);
     }
   };
 
   const changePaperTag = async (operation: "add" | "remove", tag: string) => {
     const selectedTag = tag.trim();
-    if (!selectedTag || editor.tags.status === "saving") return;
+    if (!selectedTag || mutationBusy) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
     setEditor((current) => ({
       ...current,
       tags: {
@@ -382,6 +409,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         ...current,
         tags: { ...current.tags, ...failure },
       }));
+    } finally {
+      finishMutation(mutationToken);
     }
   };
 
@@ -490,7 +519,9 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   };
 
   const generateTagCandidates = async (resetRejections = false) => {
-    if (candidateReview.status === "loading") return;
+    if (candidateReview.status === "loading" || mutationBusy) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
     setCandidateReview((current) => ({ ...current, status: "loading", message: "Generating candidates for review…" }));
     try {
       const collection = await apiClient.generateTagCandidates(snapshot.paper.paper_id, resetRejections);
@@ -503,12 +534,16 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       });
     } catch (error) {
       setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
+    } finally {
+      finishMutation(mutationToken);
     }
   };
 
   const reviewCandidate = async (candidate: TagCandidateItem, action: "approve" | "reject" | "promote") => {
     const collection = candidateReview.collection;
-    if (!collection || candidateReview.status === "loading") return;
+    if (!collection || candidateReview.status === "loading" || mutationBusy) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
     setCandidateReview((current) => ({ ...current, status: "loading", message: `${statusLabel(action)}ing candidate…` }));
     try {
       const next = action === "approve"
@@ -523,12 +558,16 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       });
     } catch (error) {
       setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
+    } finally {
+      finishMutation(mutationToken);
     }
   };
 
   const applyCandidate = async (candidate: TagCandidateItem) => {
     const collection = candidateReview.collection;
-    if (!collection || candidateReview.status === "loading" || editor.tags.status === "saving") return;
+    if (!collection || candidateReview.status === "loading" || mutationBusy) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
     setCandidateReview((current) => ({ ...current, status: "loading", message: "Applying approved canonical tag through the Paper tag command…" }));
     try {
       const response = await apiClient.applyTagCandidate(
@@ -555,6 +594,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       });
     } catch (error) {
       setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
+    } finally {
+      finishMutation(mutationToken);
     }
   };
 
@@ -600,7 +641,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                       <textarea
                         rows={5}
                         value={editor.metadata.draft[field]}
-                        disabled={editor.metadata.status === "saving"}
+                        disabled={mutationBusy}
                         onChange={(event) => setEditor((current) => {
                           const draft = { ...current.metadata.draft, [field]: event.target.value };
                           return {
@@ -619,7 +660,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                         type="text"
                         inputMode={field === "year" ? "numeric" : "text"}
                         value={editor.metadata.draft[field]}
-                        disabled={editor.metadata.status === "saving"}
+                        disabled={mutationBusy}
                         onChange={(event) => setEditor((current) => {
                           const draft = { ...current.metadata.draft, [field]: event.target.value };
                           return {
@@ -642,7 +683,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               {editor.metadata.message || `${metadataChanged.length} changed field${metadataChanged.length === 1 ? "" : "s"}.`}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={!metadataChanged.length || editor.metadata.status === "saving" || editor.note.status === "saving" || enrichment.status === "saving"} onClick={saveMetadata}>
+              <button className="reader-control" type="button" disabled={!metadataChanged.length || mutationBusy} onClick={saveMetadata}>
                 <Save size={15} />{editor.metadata.status === "saving" ? "Saving…" : "Save Metadata"}
               </button>
               {editor.metadata.status === "conflict" ? (
@@ -689,7 +730,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                           <input
                             type="checkbox"
                             checked={selected}
-                            disabled={!selectable || enrichment.status === "saving"}
+                            disabled={!selectable || mutationBusy}
                             onChange={() => toggleCandidateField(field.field)}
                             aria-label={`Select ${FIELD_LABELS[field.field]} candidate`}
                           />
@@ -710,10 +751,10 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               </>
             ) : null}
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={enrichment.status === "loading" || enrichment.status === "saving"} onClick={() => fetchMetadataCandidates(enrichment.status === "conflict")}>
+              <button className="reader-control" type="button" disabled={enrichment.status === "loading" || mutationBusy} onClick={() => fetchMetadataCandidates(enrichment.status === "conflict")}>
                 <RotateCcw size={15} />{enrichment.status === "loading" ? "Fetching…" : enrichment.preview ? "Fetch fresh candidates" : "Fetch candidates"}
               </button>
-              <button className="reader-control" type="button" disabled={!enrichment.selectedFields.length || enrichment.status === "loading" || enrichment.status === "saving" || editor.metadata.status === "saving"} onClick={applySelectedCandidates}>
+              <button className="reader-control" type="button" disabled={!enrichment.selectedFields.length || enrichment.status === "loading" || mutationBusy} onClick={applySelectedCandidates}>
                 <Save size={15} />{enrichment.status === "saving" ? "Applying…" : "Apply selected fields"}
               </button>
               {enrichment.status === "conflict" ? (
@@ -740,7 +781,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                   className="reader-control reader-control--secondary"
                   type="button"
                   key={tag}
-                  disabled={editor.tags.status === "saving"}
+                  disabled={mutationBusy}
                   onClick={() => changePaperTag("remove", tag)}
                   aria-label={`Remove ${tag}`}
                 >
@@ -754,7 +795,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 type="text"
                 list="reader-canonical-tag-options"
                 value={editor.tags.draft}
-                disabled={editor.tags.status === "saving"}
+                disabled={mutationBusy}
                 onChange={(event) => setEditor((current) => ({
                   ...current,
                   tags: {
@@ -766,7 +807,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 }))}
               />
               <datalist id="reader-canonical-tag-options">
-                {tagBook.status === "success" ? tagBook.data.items.map((tag) => (
+                {tagBook.status === "success" ? tagBook.data.map((tag) => (
                   <option key={tag.canonical_key} value={tag.canonical_key}>{tag.label}</option>
                 )) : null}
               </datalist>
@@ -775,7 +816,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               {editor.tags.message || (tagBook.status === "success" ? "Choose a canonical Tag Book value or enter one explicit compatible tag." : "Enter one explicit tag. Canonical Tag Book choices load when available.")}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={!editor.tags.draft.trim() || editor.tags.status === "saving"} onClick={() => changePaperTag("add", editor.tags.draft)}>
+              <button className="reader-control" type="button" disabled={!editor.tags.draft.trim() || mutationBusy} onClick={() => changePaperTag("add", editor.tags.draft)}>
                 <Save size={15} />{editor.tags.status === "saving" ? "Saving…" : "Add Tag"}
               </button>
               {editor.tags.status === "conflict" ? (
@@ -796,8 +837,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
             </div>
             <p className="reader-editor__status">{candidateReview.message}</p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={candidateReview.status === "loading"} onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />{candidateReview.status === "loading" ? "Generating…" : candidateReview.collection ? "Refresh candidates" : "Generate candidates"}</button>
-              {candidateReview.collection?.items.some((item) => item.state === "rejected") ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading"} onClick={() => generateTagCandidates(true)}>Reset rejected on regeneration</button> : null}
+              <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />{candidateReview.status === "loading" ? "Generating…" : candidateReview.collection ? "Refresh candidates" : "Generate candidates"}</button>
+              {candidateReview.collection?.items.some((item) => item.state === "rejected") ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => generateTagCandidates(true)}>Reset rejected on regeneration</button> : null}
             </div>
             {candidateReview.collection?.items.length ? <div className="candidate-review-list" aria-label="Tag candidate review items">
               {candidateReview.collection.items.map((candidate) => {
@@ -810,10 +851,10 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                   {candidate.resolved_canonical ? <p className="muted-text">Resolves to <span className="mono-id">{candidate.resolved_canonical}</span>{candidate.canonical_status === "deprecated" ? " (deprecated; cannot apply)" : ""}.</p> : null}
                   {candidate.evidence[0]?.snippet ? <p className="candidate-review-card__evidence">{candidate.evidence[0].snippet}</p> : null}
                   <div className="reader-editor__actions">
-                    {canReview && activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading"} onClick={() => reviewCandidate(candidate, "approve")}>Approve</button> : null}
-                    {canReview && !activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading"} onClick={() => reviewCandidate(candidate, "promote")}>Promote to canonical</button> : null}
-                    {canReview ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading"} onClick={() => reviewCandidate(candidate, "reject")}>Reject</button> : null}
-                    {canApply ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || editor.tags.status === "saving"} onClick={() => applyCandidate(candidate)}>Apply to Paper</button> : null}
+                    {canReview && activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => reviewCandidate(candidate, "approve")}>Approve</button> : null}
+                    {canReview && !activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => reviewCandidate(candidate, "promote")}>Promote to canonical</button> : null}
+                    {canReview ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => reviewCandidate(candidate, "reject")}>Reject</button> : null}
+                    {canApply ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => applyCandidate(candidate)}>Apply to Paper</button> : null}
                   </div>
                 </article>;
               })}
@@ -841,7 +882,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 className="reader-note__textarea"
                 rows={24}
                 value={editor.note.draft}
-                disabled={editor.note.status === "saving" || noteUnavailable}
+                disabled={mutationBusy || noteUnavailable}
                 onChange={(event) => setEditor((current) => ({
                   ...current,
                   note: {
@@ -857,7 +898,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               {editor.note.message || (editor.note.exists ? "Editing the persisted Reading Note." : "No persisted note exists; Save will create it.")}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={editor.note.draft === editor.note.baseline || editor.note.status === "saving" || editor.metadata.status === "saving" || enrichment.status === "saving" || noteUnavailable} onClick={saveNote}>
+              <button className="reader-control" type="button" disabled={editor.note.draft === editor.note.baseline || mutationBusy || noteUnavailable} onClick={saveNote}>
                 <Save size={15} />{editor.note.status === "saving" ? "Saving…" : "Save Reading Note"}
               </button>
               {editor.note.status === "conflict" ? (

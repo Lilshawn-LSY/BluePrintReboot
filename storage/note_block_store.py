@@ -7,7 +7,9 @@ from typing import Any
 from uuid import uuid4
 
 from storage.atomic_json import atomic_write_json, read_json_file, require_json_list
+from storage.identities import require_safe_paper_id
 from storage.paths import NOTE_BLOCKS_DIR
+from storage.workspace_lock import workspace_root_for_path, workspace_write_lock
 
 
 ALLOWED_BLOCK_TYPES = (
@@ -22,7 +24,7 @@ ALLOWED_BLOCK_TYPES = (
 
 
 def note_blocks_path(paper_id: str, base_dir: Path = NOTE_BLOCKS_DIR) -> Path:
-    return Path(base_dir) / f"{paper_id}.json"
+    return Path(base_dir) / f"{require_safe_paper_id(paper_id)}.json"
 
 
 def list_note_blocks(paper_id: str, base_dir: Path = NOTE_BLOCKS_DIR) -> list[dict[str, Any]]:
@@ -42,13 +44,13 @@ def save_note_blocks(
     blocks: Sequence[Mapping[str, Any]],
     base_dir: Path = NOTE_BLOCKS_DIR,
 ) -> Path:
-    normalized_blocks = [_normalize_block(paper_id, block) for block in blocks]
-    block_ids = [block["id"] for block in normalized_blocks]
-    if len(block_ids) != len(set(block_ids)):
-        raise ValueError("Note block IDs must be unique within a paper.")
-
-    path = note_blocks_path(paper_id, base_dir)
-    return atomic_write_json(path, normalized_blocks, indent=2, ensure_ascii=False)
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        normalized_blocks = [_normalize_block(paper_id, block) for block in blocks]
+        block_ids = [block["id"] for block in normalized_blocks]
+        if len(block_ids) != len(set(block_ids)):
+            raise ValueError("Note block IDs must be unique within a paper.")
+        path = note_blocks_path(paper_id, base_dir)
+        return atomic_write_json(path, normalized_blocks, indent=2, ensure_ascii=False)
 
 
 def create_note_block(
@@ -62,8 +64,9 @@ def create_note_block(
     tags: object | None = None,
     base_dir: Path = NOTE_BLOCKS_DIR,
 ) -> dict[str, Any]:
-    timestamp = _utc_now_iso()
-    block = _normalize_block(
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        timestamp = _utc_now_iso()
+        block = _normalize_block(
         paper_id,
         {
             "id": str(uuid4()),
@@ -79,10 +82,10 @@ def create_note_block(
             "updated_at": timestamp,
         },
     )
-    blocks = list_note_blocks(paper_id, base_dir)
-    blocks.append(block)
-    save_note_blocks(paper_id, blocks, base_dir)
-    return block
+        blocks = list_note_blocks(paper_id, base_dir)
+        blocks.append(block)
+        save_note_blocks(paper_id, blocks, base_dir)
+        return block
 
 
 def get_note_block(
@@ -102,20 +105,21 @@ def update_note_block(
     updates: Mapping[str, Any],
     base_dir: Path = NOTE_BLOCKS_DIR,
 ) -> dict[str, Any]:
-    blocks = list_note_blocks(paper_id, base_dir)
-    for index, block in enumerate(blocks):
-        if block["id"] != block_id:
-            continue
-        updated = {**block, **dict(updates)}
-        updated["id"] = block["id"]
-        updated["paper_id"] = block["paper_id"]
-        updated["created_at"] = block["created_at"]
-        updated["updated_at"] = _utc_now_iso()
-        normalized = _normalize_block(paper_id, updated)
-        blocks[index] = normalized
-        save_note_blocks(paper_id, blocks, base_dir)
-        return normalized
-    raise KeyError(f"Note block not found: {block_id}")
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        blocks = list_note_blocks(paper_id, base_dir)
+        for index, block in enumerate(blocks):
+            if block["id"] != block_id:
+                continue
+            updated = {**block, **dict(updates)}
+            updated["id"] = block["id"]
+            updated["paper_id"] = block["paper_id"]
+            updated["created_at"] = block["created_at"]
+            updated["updated_at"] = _utc_now_iso()
+            normalized = _normalize_block(paper_id, updated)
+            blocks[index] = normalized
+            save_note_blocks(paper_id, blocks, base_dir)
+            return normalized
+        raise KeyError(f"Note block not found: {block_id}")
 
 
 def delete_note_block(
@@ -123,12 +127,13 @@ def delete_note_block(
     block_id: str,
     base_dir: Path = NOTE_BLOCKS_DIR,
 ) -> bool:
-    blocks = list_note_blocks(paper_id, base_dir)
-    remaining = [block for block in blocks if block["id"] != block_id]
-    if len(remaining) == len(blocks):
-        return False
-    save_note_blocks(paper_id, remaining, base_dir)
-    return True
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        blocks = list_note_blocks(paper_id, base_dir)
+        remaining = [block for block in blocks if block["id"] != block_id]
+        if len(remaining) == len(blocks):
+            return False
+        save_note_blocks(paper_id, remaining, base_dir)
+        return True
 
 
 def normalize_note_block_tags(tags: object | None) -> list[str]:

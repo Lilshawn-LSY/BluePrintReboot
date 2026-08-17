@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from storage.atomic_json import atomic_write_json, read_json_file, require_json_list
 from storage.paths import PROJECTS_DIR
+from storage.workspace_lock import workspace_root_for_path, workspace_write_lock
 
 
 ALLOWED_TARGET_TYPES = ("paper", "note_block")
@@ -41,16 +42,16 @@ def save_project_links(
     links: Sequence[Mapping[str, Any]],
     base_dir: Path = PROJECTS_DIR,
 ) -> Path:
-    normalized_links = [_normalize_project_link(link) for link in links]
-    link_ids = [link["id"] for link in normalized_links]
-    if len(link_ids) != len(set(link_ids)):
-        raise ValueError("Project link IDs must be unique.")
-    link_keys = [_duplicate_key(link) for link in normalized_links]
-    if len(link_keys) != len(set(link_keys)):
-        raise ValueError("Duplicate project links are not allowed.")
-
-    path = project_links_path(base_dir)
-    return atomic_write_json(path, normalized_links, indent=2, ensure_ascii=False)
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        normalized_links = [_normalize_project_link(link) for link in links]
+        link_ids = [link["id"] for link in normalized_links]
+        if len(link_ids) != len(set(link_ids)):
+            raise ValueError("Project link IDs must be unique.")
+        link_keys = [_duplicate_key(link) for link in normalized_links]
+        if len(link_keys) != len(set(link_keys)):
+            raise ValueError("Duplicate project links are not allowed.")
+        path = project_links_path(base_dir)
+        return atomic_write_json(path, normalized_links, indent=2, ensure_ascii=False)
 
 
 def create_project_link(
@@ -62,8 +63,9 @@ def create_project_link(
     note: str = "",
     base_dir: Path = PROJECTS_DIR,
 ) -> dict[str, Any]:
-    effective_paper_id = target_id if target_type == "paper" and not paper_id else paper_id
-    candidate = _normalize_project_link(
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        effective_paper_id = target_id if target_type == "paper" and not paper_id else paper_id
+        candidate = _normalize_project_link(
         {
             "id": str(uuid4()),
             "project_id": project_id,
@@ -75,14 +77,14 @@ def create_project_link(
             "created_at": _utc_now_iso(),
         }
     )
-    links = list_project_links(base_dir)
-    candidate_key = _duplicate_key(candidate)
-    for link in links:
-        if _duplicate_key(link) == candidate_key:
-            return link
-    links.append(candidate)
-    save_project_links(links, base_dir)
-    return candidate
+        links = list_project_links(base_dir)
+        candidate_key = _duplicate_key(candidate)
+        for link in links:
+            if _duplicate_key(link) == candidate_key:
+                return link
+        links.append(candidate)
+        save_project_links(links, base_dir)
+        return candidate
 
 
 def update_project_link(
@@ -90,34 +92,29 @@ def update_project_link(
     updates: Mapping[str, Any],
     base_dir: Path = PROJECTS_DIR,
 ) -> dict[str, Any]:
-    links = list_project_links(base_dir)
-    for index, link in enumerate(links):
-        if link["id"] != link_id:
-            continue
-        updated = {**link, **dict(updates)}
-        for protected_field in (
-            "id",
-            "project_id",
-            "target_type",
-            "target_id",
-            "paper_id",
-            "created_at",
-        ):
-            updated[protected_field] = link[protected_field]
-        normalized = _normalize_project_link(updated)
-        links[index] = normalized
-        save_project_links(links, base_dir)
-        return normalized
-    raise KeyError(f"Project link not found: {link_id}")
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        links = list_project_links(base_dir)
+        for index, link in enumerate(links):
+            if link["id"] != link_id:
+                continue
+            updated = {**link, **dict(updates)}
+            for protected_field in ("id", "project_id", "target_type", "target_id", "paper_id", "created_at"):
+                updated[protected_field] = link[protected_field]
+            normalized = _normalize_project_link(updated)
+            links[index] = normalized
+            save_project_links(links, base_dir)
+            return normalized
+        raise KeyError(f"Project link not found: {link_id}")
 
 
 def delete_project_link(link_id: str, base_dir: Path = PROJECTS_DIR) -> bool:
-    links = list_project_links(base_dir)
-    remaining = [link for link in links if link["id"] != link_id]
-    if len(remaining) == len(links):
-        return False
-    save_project_links(remaining, base_dir)
-    return True
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        links = list_project_links(base_dir)
+        remaining = [link for link in links if link["id"] != link_id]
+        if len(remaining) == len(links):
+            return False
+        save_project_links(remaining, base_dir)
+        return True
 
 
 def list_links_for_project(project_id: str, base_dir: Path = PROJECTS_DIR) -> list[dict[str, Any]]:
@@ -142,12 +139,13 @@ def list_links_for_paper(paper_id: str, base_dir: Path = PROJECTS_DIR) -> list[d
 
 
 def delete_links_for_project(project_id: str, base_dir: Path = PROJECTS_DIR) -> int:
-    links = list_project_links(base_dir)
-    remaining = [link for link in links if link["project_id"] != project_id]
-    deleted_count = len(links) - len(remaining)
-    if deleted_count:
-        save_project_links(remaining, base_dir)
-    return deleted_count
+    with workspace_write_lock(workspace_root_for_path(Path(base_dir))):
+        links = list_project_links(base_dir)
+        remaining = [link for link in links if link["project_id"] != project_id]
+        deleted_count = len(links) - len(remaining)
+        if deleted_count:
+            save_project_links(remaining, base_dir)
+        return deleted_count
 
 
 def _normalize_project_link(link: Mapping[str, Any]) -> dict[str, Any]:

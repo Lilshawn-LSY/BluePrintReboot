@@ -5,12 +5,14 @@ from typing import Mapping
 
 from services.reading_note_template import refresh_reading_note_header, render_reading_note_template
 from storage.atomic_text import ReplaceFile, atomic_write_text
+from storage.identities import require_safe_paper_id
 from storage.paths import NOTES_DIR
 from storage.workspace_lock import workspace_write_lock
 
 
 def note_path_for(record: Mapping[str, str], notes_dir: Path = NOTES_DIR) -> Path:
-    return Path(notes_dir) / f"{record['paper_id']}.md"
+    paper_id = require_safe_paper_id(record.get("paper_id", ""))
+    return Path(notes_dir) / f"{paper_id}.md"
 
 
 def default_note_text(record: Mapping[str, str]) -> str:

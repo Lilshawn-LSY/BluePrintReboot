@@ -84,11 +84,8 @@ def pdf_sha256_with_metadata(
             "pdf_sha256": "",
             **signature,
         }
-    if pdf_hash_metadata_matches_file(pdf_path, metadata):
-        return {
-            "pdf_sha256": str((metadata or {}).get("pdf_sha256", "") or "").strip(),
-            **signature,
-        }
+    # A size/mtime match is useful diagnostic metadata, but it is not proof of
+    # content identity. Exact-duplicate decisions must hash the current bytes.
     compute_hash = compute_hash_func or compute_pdf_sha256
     return {
         "pdf_sha256": compute_hash(Path(pdf_path)),

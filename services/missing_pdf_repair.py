@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -9,12 +10,24 @@ import pandas as pd
 from ingest.scanner import pdf_sha256_with_metadata
 from storage.index_store import load_index, save_index
 from storage.paths import INDEX_CSV, PAPERS_DIR
+from storage.workspace_lock import WorkspaceLockUnavailable, workspace_write_lock
 
 
 class MissingPDFRepairError(RuntimeError):
     def __init__(self, message: str, plan: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.plan = plan
+
+
+@contextmanager
+def _write_lock(index_csv: Path):
+    path = Path(index_csv).resolve(strict=False)
+    root = path.parent.parent if path.parent.name.casefold() == "data" else path.parent
+    try:
+        with workspace_write_lock(root):
+            yield
+    except WorkspaceLockUnavailable:
+        raise MissingPDFRepairError("The workspace write lock is unavailable; no repair was applied.") from None
 
 
 def _text(value: object) -> str:
@@ -237,29 +250,25 @@ def reconnect_missing_pdf(
     papers_dir: Path = PAPERS_DIR,
     confirm_hash_mismatch: bool = False,
 ) -> dict[str, Any]:
-    plan = build_reconnect_plan(paper_id, target_pdf, index_csv=index_csv, papers_dir=papers_dir)
-    if not plan["can_reconnect"]:
-        raise MissingPDFRepairError(f"Reconnect is blocked with status {plan['status']}.", plan)
-    if plan["requires_hash_mismatch_confirmation"] and not confirm_hash_mismatch:
-        raise MissingPDFRepairError("Hash mismatch requires explicit confirmation.", plan)
-
-    dataframe = load_index(index_csv, papers_dir=papers_dir)
-    row_mask = dataframe["paper_id"] == str(paper_id)
-    if row_mask.sum() != 1:
-        raise MissingPDFRepairError(f"Expected one index record for paper_id {paper_id!r}.", plan)
-    dataframe.loc[row_mask, "filename"] = str(plan["target_filename"])
-    dataframe.loc[row_mask, "filepath"] = str(plan["target_path"])
-    dataframe.loc[row_mask, "pdf_sha256"] = str(plan["target_pdf_sha256"])
-    dataframe.loc[row_mask, "pdf_size_bytes"] = str(plan.get("target_pdf_size_bytes", "0"))
-    dataframe.loc[row_mask, "pdf_modified_at"] = str(plan.get("target_pdf_modified_at", ""))
-    save_index(dataframe, index_csv)
-
-    result = dict(plan)
-    result.update(
-        status="reconnected",
-        message="Missing PDF record reconnected without changing paper_id.",
-    )
-    return result
+    with _write_lock(index_csv):
+        plan = build_reconnect_plan(paper_id, target_pdf, index_csv=index_csv, papers_dir=papers_dir)
+        if not plan["can_reconnect"]:
+            raise MissingPDFRepairError(f"Reconnect is blocked with status {plan['status']}.", plan)
+        if plan["requires_hash_mismatch_confirmation"] and not confirm_hash_mismatch:
+            raise MissingPDFRepairError("Hash mismatch requires explicit confirmation.", plan)
+        dataframe = load_index(index_csv, papers_dir=papers_dir)
+        row_mask = dataframe["paper_id"] == str(paper_id)
+        if row_mask.sum() != 1:
+            raise MissingPDFRepairError(f"Expected one index record for paper_id {paper_id!r}.", plan)
+        dataframe.loc[row_mask, "filename"] = str(plan["target_filename"])
+        dataframe.loc[row_mask, "filepath"] = str(plan["target_path"])
+        dataframe.loc[row_mask, "pdf_sha256"] = str(plan["target_pdf_sha256"])
+        dataframe.loc[row_mask, "pdf_size_bytes"] = str(plan.get("target_pdf_size_bytes", "0"))
+        dataframe.loc[row_mask, "pdf_modified_at"] = str(plan.get("target_pdf_modified_at", ""))
+        save_index(dataframe, index_csv)
+        result = dict(plan)
+        result.update(status="reconnected", message="Missing PDF record reconnected without changing paper_id.")
+        return result
 
 
 def remove_missing_pdf_from_index(
@@ -269,32 +278,18 @@ def remove_missing_pdf_from_index(
     papers_dir: Path = PAPERS_DIR,
     confirm: bool = False,
 ) -> dict[str, Any]:
-    dataframe = load_index(index_csv, papers_dir=papers_dir)
-    record = _single_record(dataframe, paper_id)
-    current_path = _absolute(_record_path(record, _absolute(papers_dir)))
-    plan = {
-        "paper_id": str(paper_id),
-        "filename": _text(record.get("filename", "")),
-        "filepath": str(current_path),
-        "status": "ready",
-        "message": "Ready to remove only the index row.",
-        "can_remove": True,
-    }
-    if current_path.exists() and current_path.is_file():
-        plan.update(
-            status="current_pdf_present",
-            message="The indexed PDF still exists; this missing-PDF remove action is blocked.",
-            can_remove=False,
-        )
-        raise MissingPDFRepairError("Remove from index is blocked because the PDF exists.", plan)
-    if not confirm:
-        raise MissingPDFRepairError("Remove from index requires explicit confirmation.", plan)
-
-    updated = dataframe[dataframe["paper_id"] != str(paper_id)].copy()
-    save_index(updated, index_csv)
-    result = dict(plan)
-    result.update(
-        status="removed_from_index",
-        message="Index row removed. Notes, note blocks, project links, PDFs, and caches were left untouched.",
-    )
-    return result
+    with _write_lock(index_csv):
+        dataframe = load_index(index_csv, papers_dir=papers_dir)
+        record = _single_record(dataframe, paper_id)
+        current_path = _absolute(_record_path(record, _absolute(papers_dir)))
+        plan = {"paper_id": str(paper_id), "filename": _text(record.get("filename", "")), "filepath": str(current_path), "status": "ready", "message": "Ready to remove only the index row.", "can_remove": True}
+        if current_path.exists() and current_path.is_file():
+            plan.update(status="current_pdf_present", message="The indexed PDF still exists; this missing-PDF remove action is blocked.", can_remove=False)
+            raise MissingPDFRepairError("Remove from index is blocked because the PDF exists.", plan)
+        if not confirm:
+            raise MissingPDFRepairError("Remove from index requires explicit confirmation.", plan)
+        updated = dataframe[dataframe["paper_id"] != str(paper_id)].copy()
+        save_index(updated, index_csv)
+        result = dict(plan)
+        result.update(status="removed_from_index", message="Index row removed. Notes, note blocks, project links, PDFs, and caches were left untouched.")
+        return result

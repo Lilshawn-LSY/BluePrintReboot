@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path
 from typing import Literal
 
 from services.paper_metadata_mutation import (
@@ -24,6 +23,7 @@ from services.reading_note_template import (
     render_reading_note_template,
 )
 from storage.atomic_text import atomic_write_text
+from storage.identities import is_safe_paper_id
 from storage.index_store import read_index_snapshot
 from storage.note_store import note_path_for, save_note_text
 from storage.paths import INDEX_CSV, NOTES_DIR
@@ -125,22 +125,7 @@ def _persistent_command_lock(index_csv: Path):
 
 
 def _is_valid_paper_identity(paper_id: str) -> bool:
-    """Return whether an identity is one filename component on POSIX and Windows."""
-
-    if not paper_id or paper_id in {".", ".."}:
-        return False
-    if "/" in paper_id or "\\" in paper_id:
-        return False
-    if any(unicodedata.category(character) == "Cc" for character in paper_id):
-        return False
-
-    posix_path = PurePosixPath(paper_id)
-    windows_path = PureWindowsPath(paper_id)
-    if posix_path.is_absolute() or windows_path.is_absolute():
-        return False
-    if windows_path.drive or windows_path.root:
-        return False
-    return posix_path.parts == (paper_id,) and windows_path.parts == (paper_id,)
+    return is_safe_paper_id(paper_id)
 
 
 def _safe_note_path(record: dict[str, str], notes_dir: Path) -> Path:

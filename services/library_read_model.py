@@ -5,7 +5,8 @@ import math
 from pathlib import Path
 from typing import Any, Mapping, TypedDict
 
-from services.library_health import run_library_health_check
+from services.library_health import cached_library_health_check
+from services.managed_pdf import ManagedPdfState, resolve_indexed_pdf
 from services.paper_metadata_mutation import (
     normalized_web_metadata,
     paper_metadata_revision,
@@ -131,13 +132,13 @@ def _keywords(value: object) -> list[str]:
 
 
 def _safe_pdf(record: Mapping[str, Any], root: Path, papers_dir: Path) -> tuple[Path | None, str]:
-    raw = str(record.get("filepath", "") or "").strip()
-    candidate = Path(raw) if raw else papers_dir / str(record.get("filename", "") or "")
-    if not candidate.is_absolute():
-        candidate = root / candidate if candidate.parts and candidate.parts[0].lower() == "papers" else papers_dir / candidate
-    resolved = candidate.resolve(strict=False)
+    del root
+    result = resolve_indexed_pdf(record, papers_dir=Path(papers_dir))
+    if result.state is ManagedPdfState.invalid or result.path is None:
+        return None, ""
+    resolved = result.path
     try:
-        relative = resolved.relative_to(root.resolve(strict=False)).as_posix()
+        relative = resolved.relative_to(Path(papers_dir).resolve(strict=False).parent).as_posix()
     except ValueError:
         return None, ""
     return resolved, relative
@@ -148,9 +149,12 @@ def _corrupt_records(report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
 
 
 def build_health_summary(report: Mapping[str, Any] | None = None, **health_kwargs: Any) -> HealthSummary:
-    source = dict(report) if report is not None else run_library_health_check(**health_kwargs)
+    source = dict(report) if report is not None else cached_library_health_check(**health_kwargs)
     corrupt = _corrupt_records(source)
-    critical = sum(item.get("storage_class") == "critical user state" for item in corrupt)
+    corrupt_index = [
+        item for item in source.get("corrupt_index", []) if isinstance(item, Mapping)
+    ]
+    critical = sum(item.get("storage_class") == "critical user state" for item in corrupt) + len(corrupt_index)
     missing = len(source.get("missing_pdfs", []))
     duplicates = len(source.get("duplicate_pdf_hashes", []))
     quarantine = len(source.get("quarantined_caches", []))
@@ -179,7 +183,7 @@ def build_library_status(
 ) -> LibraryStatus:
     dataframe = read_index_snapshot(index_csv)
     records = dataframe.to_dict("records")
-    report = dict(health_report) if health_report is not None else run_library_health_check(index_csv=index_csv, **health_kwargs)
+    report = dict(health_report) if health_report is not None else cached_library_health_check(index_csv=index_csv, **health_kwargs)
     health = build_health_summary(report)
     archived_count = sum(_archived(record) for record in records)
     workspace_warnings: list[str] = []
@@ -194,7 +198,8 @@ def build_library_status(
         "archived_count": archived_count,
         "missing_count": health["missing_pdf_count"],
         "duplicate_count": health["duplicate_review_count"],
-        "corrupt_count": len(_corrupt_records(report)),
+        "corrupt_count": len(_corrupt_records(report))
+        + sum(isinstance(item, Mapping) for item in report.get("corrupt_index", [])),
         "quarantine_count": health["quarantine_count"],
         "degraded": health["overall_state"] != "healthy",
         "workspace_warnings": workspace_warnings,
@@ -222,7 +227,7 @@ def build_paper_list_items(
     health_report: Mapping[str, Any] | None = None,
     **health_kwargs: Any,
 ) -> list[PaperListItem]:
-    report = dict(health_report) if health_report is not None else run_library_health_check(index_csv=index_csv, **health_kwargs)
+    report = dict(health_report) if health_report is not None else cached_library_health_check(index_csv=index_csv, **health_kwargs)
     items: list[PaperListItem] = []
     for record in read_index_snapshot(index_csv).to_dict("records"):
         paper_id = str(record.get("paper_id", ""))
@@ -309,12 +314,36 @@ def build_paper_detail(
     if matches.empty:
         return None
     record = matches.iloc[0].to_dict()
-    report = dict(health_report) if health_report is not None else run_library_health_check(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir, projects_dir=projects_dir, extracted_text_dir=extracted_text_dir, **health_kwargs)
+    report = dict(health_report) if health_report is not None else cached_library_health_check(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir, projects_dir=projects_dir, extracted_text_dir=extracted_text_dir, **health_kwargs)
+    return _build_paper_detail_from_record(
+        record,
+        report=report,
+        workspace_root=Path(workspace_root),
+        papers_dir=Path(papers_dir),
+        notes_dir=Path(notes_dir),
+        extracted_text_dir=Path(extracted_text_dir),
+        profile_dir=Path(profile_dir),
+        projects_dir=Path(projects_dir),
+    )
+
+
+def _build_paper_detail_from_record(
+    record: Mapping[str, Any],
+    *,
+    report: Mapping[str, Any],
+    workspace_root: Path,
+    papers_dir: Path,
+    notes_dir: Path,
+    extracted_text_dir: Path,
+    profile_dir: Path,
+    projects_dir: Path,
+) -> PaperDetail:
+    paper_id = str(record.get("paper_id", ""))
     missing, health = _paper_health(paper_id, report)
-    pdf_path, relative_pdf_path = _safe_pdf(record, Path(workspace_root), Path(papers_dir))
-    note_path = Path(notes_dir) / f"{paper_id}.md"
+    pdf_path, relative_pdf_path = _safe_pdf(record, workspace_root, papers_dir)
+    note_path = notes_dir / f"{paper_id}.md"
     try:
-        links = list_project_links(Path(projects_dir))
+        links = list_project_links(projects_dir)
     except Exception:
         links = []
         health = [*health, "project_links_unavailable"]
@@ -347,8 +376,8 @@ def build_paper_detail(
         "doi": str(record.get("doi", "") or ""),
         "project_links": public_links,
         "note_available": note_path.is_file(),
-        "extracted_text_available": extracted_text_path(paper_id, Path(extracted_text_dir)).is_file(),
-        "profile_available": paper_profile_path(paper_id, Path(profile_dir)).is_file(),
+        "extracted_text_available": extracted_text_path(paper_id, extracted_text_dir).is_file(),
+        "profile_available": paper_profile_path(paper_id, profile_dir).is_file(),
         "lifecycle_state": "archived" if _archived(record) else "active",
         "recoverable_warnings": list(health),
     }
@@ -361,11 +390,39 @@ def build_reader_snapshot(
     notes_dir: Path = NOTES_DIR,
     **detail_kwargs: Any,
 ) -> ReaderSnapshot | None:
-    detail = build_paper_detail(paper_id, index_csv=index_csv, notes_dir=notes_dir, **detail_kwargs)
-    if detail is None:
-        return None
     dataframe = read_index_snapshot(index_csv)
-    record = dataframe[dataframe["paper_id"] == paper_id].iloc[0].to_dict()
+    matches = dataframe[dataframe["paper_id"] == paper_id]
+    if matches.empty:
+        return None
+    record = matches.iloc[0].to_dict()
+    workspace_root = Path(detail_kwargs.pop("workspace_root", PROJECT_ROOT))
+    papers_dir = Path(detail_kwargs.pop("papers_dir", PAPERS_DIR))
+    extracted_text_dir = Path(detail_kwargs.pop("extracted_text_dir", EXTRACTED_TEXT_DIR))
+    profile_dir = Path(detail_kwargs.pop("profile_dir", PAPER_PROFILES_DIR))
+    projects_dir = Path(detail_kwargs.pop("projects_dir", PROJECTS_DIR))
+    health_report = detail_kwargs.pop("health_report", None)
+    report = (
+        dict(health_report)
+        if health_report is not None
+        else cached_library_health_check(
+            index_csv=index_csv,
+            papers_dir=papers_dir,
+            notes_dir=notes_dir,
+            projects_dir=projects_dir,
+            extracted_text_dir=extracted_text_dir,
+            **detail_kwargs,
+        )
+    )
+    detail = _build_paper_detail_from_record(
+        record,
+        report=report,
+        workspace_root=workspace_root,
+        papers_dir=papers_dir,
+        notes_dir=Path(notes_dir),
+        extracted_text_dir=extracted_text_dir,
+        profile_dir=profile_dir,
+        projects_dir=projects_dir,
+    )
     note_path = Path(notes_dir) / f"{paper_id}.md"
     note_read_warning = ""
     note_exists = note_path.is_file()

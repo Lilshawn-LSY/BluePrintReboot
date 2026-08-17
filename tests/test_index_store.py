@@ -10,6 +10,7 @@ from storage.index_store import (
     accept_crossref_metadata,
     enrich_paper_doi_from_pdf,
     load_index,
+    migrate_index_storage,
     save_index,
     update_index_from_scan,
     update_paper_metadata,
@@ -56,8 +57,8 @@ def test_update_index_from_scan_appends_without_duplicates() -> None:
     assert load_index(index_csv).iloc[0]["pdf_modified_at"]
 
 
-def test_update_index_from_scan_reuses_cached_hash_when_signature_unchanged(monkeypatch) -> None:
-    workspace = make_workspace("index-hash-cache-reuse")
+def test_update_index_from_scan_rechecks_hash_when_signature_unchanged(monkeypatch) -> None:
+    workspace = make_workspace("index-hash-cache-recheck")
     data_dir = workspace / "data"
     papers_dir = workspace / "papers"
     notes_dir = workspace / "notes"
@@ -69,14 +70,42 @@ def test_update_index_from_scan_reuses_cached_hash_when_signature_unchanged(monk
     pdf_path.write_bytes(contents)
     update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
 
-    def fail_hash(path: Path) -> str:
-        raise AssertionError("unchanged PDF should reuse cached hash metadata")
+    calls: list[Path] = []
 
-    monkeypatch.setattr("ingest.scanner.compute_pdf_sha256", fail_hash)
+    def tracking_hash(path: Path) -> str:
+        calls.append(Path(path))
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+    monkeypatch.setattr("ingest.scanner.compute_pdf_sha256", tracking_hash)
     rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
 
     assert len(rescanned) == 1
     assert rescanned.iloc[0]["pdf_sha256"] == _sha256(contents)
+    assert [path.resolve() for path in calls] == [pdf_path.resolve()]
+
+
+def test_update_index_from_scan_detects_same_size_same_mtime_replacement() -> None:
+    workspace = make_workspace("index-hash-preserved-signature")
+    papers_dir = workspace / "papers"
+    notes_dir = workspace / "notes"
+    index_csv = workspace / "data" / "paper_index.csv"
+    papers_dir.mkdir(parents=True)
+    notes_dir.mkdir()
+    original = b"%PDF-1.4\ncontent-A"
+    replacement = b"%PDF-1.4\ncontent-B"
+    assert len(original) == len(replacement)
+    pdf_path = papers_dir / "Replaced.pdf"
+    pdf_path.write_bytes(original)
+    first = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+    original_stat = pdf_path.stat()
+
+    pdf_path.write_bytes(replacement)
+    os.utime(pdf_path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+    rescanned = update_index_from_scan(index_csv=index_csv, papers_dir=papers_dir, notes_dir=notes_dir)
+
+    assert first.iloc[0]["pdf_sha256"] == _sha256(original)
+    assert rescanned.iloc[0]["pdf_sha256"] == _sha256(replacement)
+    assert rescanned.iloc[0]["paper_id"] == first.iloc[0]["paper_id"]
 
 
 def test_update_index_from_scan_recomputes_hash_when_signature_changes(monkeypatch) -> None:
@@ -281,7 +310,7 @@ def test_v1_index_is_migrated_to_v3_columns() -> None:
     assert row["custom_extra"] == "keep me"
 
 
-def test_legacy_index_backfills_pdf_sha256_when_pdf_exists() -> None:
+def test_legacy_index_hash_backfill_requires_explicit_migration() -> None:
     workspace = make_workspace("migration-pdf-sha256")
     papers_dir = workspace / "papers"
     index_csv = workspace / "data" / "paper_index.csv"
@@ -301,7 +330,13 @@ def test_legacy_index_backfills_pdf_sha256_when_pdf_exists() -> None:
         ]
     ).to_csv(index_csv, index=False)
 
-    migrated = load_index(index_csv)
+    original_bytes = index_csv.read_bytes()
+    read_only = load_index(index_csv)
+
+    assert read_only.iloc[0]["pdf_sha256"] == ""
+    assert index_csv.read_bytes() == original_bytes
+
+    migrated = migrate_index_storage(index_csv, papers_dir=papers_dir)
 
     assert migrated.iloc[0]["pdf_sha256"] == _sha256(contents)
     saved = pd.read_csv(index_csv, dtype=str).fillna("")

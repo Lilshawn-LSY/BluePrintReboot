@@ -1,10 +1,14 @@
 ﻿import json
+import hashlib
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from zipfile import ZipFile
 
 from config.contact import APP_VERSION
 from services.backup_snapshot import create_backup_snapshot, verify_backup_snapshot
+from storage.workspace_lock import workspace_write_lock
 from tests.helpers import make_workspace
 
 
@@ -23,6 +27,10 @@ def _seed_workspace(name: str) -> Path:
     )
     (workspace / "data" / "note_imports.json").write_text("[]", encoding="utf-8")
     (workspace / "data" / "lifecycle_decisions.json").write_text("[]", encoding="utf-8")
+    (workspace / "data" / "tag_candidate_reviews.json").write_text(
+        json.dumps({"version": "1", "papers": {"paper-1": {"candidates": []}}}),
+        encoding="utf-8",
+    )
     (workspace / "data" / "projects" / "projects.json").write_text(
         json.dumps([{"id": "project-1"}]), encoding="utf-8"
     )
@@ -67,6 +75,7 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
     assert "data/paper_index.csv" in names
     assert "data/note_imports.json" in names
     assert "data/lifecycle_decisions.json" in names
+    assert "data/tag_candidate_reviews.json" in names
     assert "data/projects/projects.json" in names
     assert "data/projects/project_links.json" in names
     assert "data/note_blocks/paper-1.json" in names
@@ -92,6 +101,77 @@ def test_light_snapshot_and_manifest_are_created_without_pdfs() -> None:
     assert manifest["counts"]["notes"] == 1
     assert manifest["counts"]["pdfs"] == 0
     assert all({"path", "size_bytes", "sha256"} <= set(item) for item in manifest["included_files"])
+    assert result["verification"]["valid"] is True
+
+
+def test_manifest_describes_archived_bytes_when_live_source_changes_after_copy(monkeypatch) -> None:
+    workspace = _seed_workspace("backup-source-mutation")
+    note_path = workspace / "notes" / "paper-1.md"
+    module = __import__("services.backup_snapshot", fromlist=["_build_manifest_from_archive"])
+    original_builder = module._build_manifest_from_archive
+
+    def mutate_then_build(*args, **kwargs):
+        note_path.write_text("# Changed after archive copy", encoding="utf-8")
+        return original_builder(*args, **kwargs)
+
+    monkeypatch.setattr("services.backup_snapshot._build_manifest_from_archive", mutate_then_build)
+    result = create_backup_snapshot(project_root=workspace, exports_dir=workspace / "exports")
+
+    assert result["verification"]["valid"] is True
+    with ZipFile(result["snapshot_path"]) as archive:
+        assert archive.read("notes/paper-1.md") == b"# Note"
+        manifest = json.loads(archive.read("manifest.json"))
+    entry = next(item for item in manifest["included_files"] if item["path"] == "notes/paper-1.md")
+    assert entry["sha256"] == hashlib.sha256(b"# Note").hexdigest()
+
+
+def test_snapshot_waits_for_workspace_writer_and_captures_released_state() -> None:
+    workspace = _seed_workspace("backup-concurrent-writer")
+    note_path = workspace / "notes" / "paper-1.md"
+    writer_ready = threading.Event()
+    release_writer = threading.Event()
+
+    def writer() -> None:
+        with workspace_write_lock(workspace):
+            note_path.write_text("# Coherent writer state", encoding="utf-8")
+            writer_ready.set()
+            release_writer.wait(timeout=5)
+
+    writer_thread = threading.Thread(target=writer)
+    writer_thread.start()
+    assert writer_ready.wait(timeout=2)
+    result_holder: dict[str, object] = {}
+    backup_thread = threading.Thread(
+        target=lambda: result_holder.update(
+            create_backup_snapshot(project_root=workspace, exports_dir=workspace / "exports")
+        )
+    )
+    backup_thread.start()
+    time.sleep(0.05)
+    assert backup_thread.is_alive()
+    release_writer.set()
+    writer_thread.join(timeout=2)
+    backup_thread.join(timeout=5)
+
+    assert not backup_thread.is_alive()
+    with ZipFile(str(result_holder["snapshot_path"])) as archive:
+        assert archive.read("notes/paper-1.md") == b"# Coherent writer state"
+
+
+def test_failed_prepublication_verification_leaves_no_published_snapshot(monkeypatch) -> None:
+    workspace = _seed_workspace("backup-prepublish-failure")
+    exports_dir = workspace / "exports"
+    monkeypatch.setattr(
+        "services.backup_snapshot.verify_backup_snapshot",
+        lambda path: {"valid": False, "errors": ["forced mismatch"], "checked_files": 0},
+    )
+
+    import pytest
+    with pytest.raises(RuntimeError, match="verification failed"):
+        create_backup_snapshot(project_root=workspace, exports_dir=exports_dir)
+
+    assert list(exports_dir.glob("blueprint_snapshot_*.zip")) == []
+    assert list(exports_dir.glob("*.tmp")) == []
 
 
 def test_full_snapshot_includes_pdfs() -> None:

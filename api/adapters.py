@@ -87,6 +87,7 @@ _SETTINGS_RESOURCE_METADATA = {
     "tags": ("Tags", "canonical Tags"),
     "note_blocks": ("Note blocks", "note blocks"),
     "project_links": ("Project links", "Project links"),
+    "tag_candidate_reviews": ("Tag candidate reviews", "tag candidate review items"),
 }
 _SETTINGS_ISSUE_GUIDANCE = {
     "missing_pdfs": {
@@ -118,6 +119,11 @@ _SETTINGS_ISSUE_GUIDANCE = {
         "severity": "error",
         "explanation": "App-owned JSON stores that are invalid or have an unsupported top-level shape.",
         "next_action": "Do not overwrite affected state; use the Streamlit recovery workflow and a backup copy.",
+    },
+    "corrupt_index": {
+        "severity": "error",
+        "explanation": "The paper index violates required schema or paper-identity invariants.",
+        "next_action": "Preserve paper_index.csv and repair or restore it explicitly before using write commands.",
     },
 }
 

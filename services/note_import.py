@@ -27,6 +27,7 @@ from storage.atomic_json import atomic_write_json, read_json_file, require_json_
 from storage.note_block_store import create_note_block
 from storage.note_store import load_note_text, save_note_text
 from storage.paths import NOTE_BLOCKS_DIR, NOTE_IMPORTS_JSON, NOTES_DIR
+from storage.workspace_lock import workspace_root_for_path, workspace_write_lock
 
 
 TEMPLATE_PATH = READING_NOTE_TEMPLATE_PATH
@@ -306,6 +307,32 @@ def apply_external_note_import(
     notes_dir: Path = NOTES_DIR,
     note_blocks_dir: Path = NOTE_BLOCKS_DIR,
     log_path: Path = NOTE_IMPORTS_JSON,
+) -> dict[str, Any]:
+    with workspace_write_lock(workspace_root_for_path(Path(log_path))):
+        return _apply_external_note_import_locked(
+            target_record,
+            parsed_note,
+            import_mode=import_mode,
+            append_raw_notes=append_raw_notes,
+            create_structured_blocks=create_structured_blocks,
+            force_reimport=force_reimport,
+            notes_dir=notes_dir,
+            note_blocks_dir=note_blocks_dir,
+            log_path=log_path,
+        )
+
+
+def _apply_external_note_import_locked(
+    target_record: Mapping[str, str],
+    parsed_note: Mapping[str, Any],
+    *,
+    import_mode: str,
+    append_raw_notes: bool,
+    create_structured_blocks: bool,
+    force_reimport: bool,
+    notes_dir: Path,
+    note_blocks_dir: Path,
+    log_path: Path,
 ) -> dict[str, Any]:
     paper_id = str(target_record["paper_id"])
     source_sha256 = str(parsed_note.get("source_sha256", ""))

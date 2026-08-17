@@ -36,11 +36,12 @@ test("Project metadata commands require explicit edit, save, cancel, archive, an
   assert.doesNotMatch(detail, /onBlur=.*saveProject|setInterval/i);
 });
 
-test("Paper linking uses the real bounded Paper index and exact link revision", async () => {
+test("Paper linking uses every page of the real Paper index and exact link revision", async () => {
   const [, detail, client] = await sources;
-  assert.match(detail, /apiClient\.getPapers\(\{ limit: 100, archiveStatus: "all" \}\)/);
+  assert.match(detail, /apiClient\.getAllPapers\(\{ archiveStatus: "all" \}\)/);
   assert.match(detail, /Retry Paper picker/);
-  assert.match(detail, /first 100 existing Papers/);
+  assert.doesNotMatch(detail, /first 100 existing Papers/);
+  assert.match(client, /collectAllPaginatedItems/);
   assert.match(detail, /apiClient\.addProjectPaperLink/);
   assert.match(detail, /project\.links_revision/);
   assert.match(detail, /exact Paper link already exists; nothing was written/);

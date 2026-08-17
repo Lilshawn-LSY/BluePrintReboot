@@ -308,6 +308,7 @@ class SettingsWorkspaceResource(StrictResponseModel):
         "tags",
         "note_blocks",
         "project_links",
+        "tag_candidate_reviews",
     ]
     label: str
     state: Literal["healthy", "warning", "unavailable", "empty"]
@@ -347,6 +348,7 @@ class SettingsIntegrityIssue(StrictResponseModel):
         "orphan_note_blocks",
         "orphan_project_links",
         "corrupt_json",
+        "corrupt_index",
     ]
     state: Literal["healthy", "warning", "unavailable"]
     count: int | None = Field(default=None, ge=0)

@@ -9,6 +9,27 @@ from typing import Callable
 ReplaceFile = Callable[[str | Path, str | Path], None]
 
 
+def fsync_parent_directory(path: str | Path) -> None:
+    """Best-effort directory fsync after atomic publication.
+
+    POSIX filesystems need the directory entry flushed separately from the file.
+    Windows and some virtual filesystems do not support opening directories this
+    way, so unsupported operations are deliberately ignored.
+    """
+
+    parent = Path(path).resolve(strict=False).parent
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(parent, flags)
+        os.fsync(descriptor)
+    except OSError:
+        pass
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
 def atomic_write_text(
     path: str | Path,
     text: str,
@@ -33,6 +54,7 @@ def atomic_write_text(
             temporary.flush()
             os.fsync(temporary.fileno())
         replace(temporary_path, target)
+        fsync_parent_directory(target)
     finally:
         if temporary_path and temporary_path.exists():
             temporary_path.unlink()

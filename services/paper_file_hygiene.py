@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Mapping
 
@@ -10,6 +11,7 @@ import pandas as pd
 
 from storage.index_store import load_index, save_index
 from storage.paths import INDEX_CSV, PAPERS_DIR
+from storage.workspace_lock import WorkspaceLockUnavailable, workspace_write_lock
 
 
 MAX_FILENAME_LENGTH = 180
@@ -230,7 +232,38 @@ def _restore_index_bytes(index_csv: Path, contents: bytes) -> None:
             temporary_path.unlink()
 
 
+@contextmanager
+def _write_lock(index_csv: Path):
+    path = Path(index_csv).resolve(strict=False)
+    root = path.parent.parent if path.parent.name.casefold() == "data" else path.parent
+    try:
+        with workspace_write_lock(root):
+            yield
+    except WorkspaceLockUnavailable:
+        raise PaperFileHygieneError("The workspace write lock is unavailable; no rename was applied.") from None
+
+
 def apply_paper_file_rename(
+    paper_id: str,
+    index_csv: Path = INDEX_CSV,
+    papers_dir: Path = PAPERS_DIR,
+    *,
+    index_loader: Callable[[Path], pd.DataFrame] | None = None,
+    index_writer: Callable[[pd.DataFrame, Path], None] | None = None,
+    rename_file: Callable[[Path, Path], None] | None = None,
+) -> dict[str, object]:
+    with _write_lock(index_csv):
+        return _apply_paper_file_rename_locked(
+            paper_id,
+            index_csv=index_csv,
+            papers_dir=papers_dir,
+            index_loader=index_loader,
+            index_writer=index_writer,
+            rename_file=rename_file,
+        )
+
+
+def _apply_paper_file_rename_locked(
     paper_id: str,
     index_csv: Path = INDEX_CSV,
     papers_dir: Path = PAPERS_DIR,

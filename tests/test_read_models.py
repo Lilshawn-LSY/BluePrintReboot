@@ -86,6 +86,16 @@ def test_health_and_library_status_contracts_are_stable_and_json_serializable() 
     json.dumps({"health": health, "status": status})
 
 
+def test_library_status_counts_index_corruption() -> None:
+    _root, paths, report = _fixture("read-corrupt-index-status")
+    report = {**report, "corrupt_index": [{"classification": "invalid paper index"}]}
+
+    status = build_library_status(index_csv=paths["index_csv"], health_report=report)
+
+    assert status["corrupt_count"] == 1
+    assert status["degraded"] is True
+
+
 def test_paper_list_contract_covers_complete_doi_less_archived_and_missing() -> None:
     _root, paths, report = _fixture("read-list")
     items = build_paper_list_items(index_csv=paths["index_csv"], health_report=report)
@@ -124,6 +134,33 @@ def test_paper_detail_and_reader_snapshot_use_safe_relative_paths_and_defaults()
     assert absent_reader and absent_reader["saved_note_available"] is False and absent_reader["unavailable_reason"]
     encoded = json.dumps({"detail": detail, "reader": reader, "missing": missing, "absent_reader": absent_reader})
     assert str(root.resolve()) not in encoded
+
+
+def test_reader_snapshot_uses_one_coherent_index_read(monkeypatch) -> None:
+    _root, paths, report = _fixture("reader-single-index-read")
+    import services.library_read_model as read_model
+    original = read_model.read_index_snapshot
+    calls = 0
+
+    def counted(path):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AssertionError("Reader snapshot reread paper_index.csv")
+        return original(path)
+
+    monkeypatch.setattr(read_model, "read_index_snapshot", counted)
+    snapshot = build_reader_snapshot(
+        "complete",
+        index_csv=paths["index_csv"],
+        notes_dir=paths["notes_dir"],
+        health_report=report,
+        **{key: paths[key] for key in ("workspace_root", "papers_dir", "extracted_text_dir", "profile_dir", "projects_dir")},
+    )
+
+    assert snapshot is not None
+    assert snapshot["paper"]["paper_id"] == "complete"
+    assert calls == 1
 
 
 def test_rich_metadata_normalizers_handle_lists_empty_none_and_nan() -> None:

@@ -101,15 +101,15 @@ def _seed_populated_workspace(root: Path) -> None:
     )
     _write_json(
         paths["note_blocks_dir"] / "paper-1.json",
-        [{"id": "block-1", "paper_id": "paper-1", "text": "private block content"}],
+        [{"id": "block-1", "paper_id": "paper-1", "block_type": "summary", "text": "private block content"}],
     )
     _write_json(
         paths["note_blocks_dir"] / "orphan-private-block.json",
-        [{"id": "block-orphan", "paper_id": "missing", "text": "private orphan block"}],
+        [{"id": "block-orphan", "paper_id": "orphan-private-block", "block_type": "summary", "text": "private orphan block"}],
     )
     _write_json(
         paths["projects_dir"] / "projects.json",
-        [{"id": "project-1", "name": "/home/private-user/private-project"}],
+        [{"id": "project-1", "name": "/home/private-user/private-project", "status": "active", "priority": "normal"}],
     )
     _write_json(
         paths["projects_dir"] / "project_links.json",
@@ -120,6 +120,7 @@ def _seed_populated_workspace(root: Path) -> None:
                 "target_type": "note_block",
                 "target_id": "block-1",
                 "paper_id": "paper-1",
+                "link_type": "related",
                 "note": "private link note",
             },
             {
@@ -128,9 +129,29 @@ def _seed_populated_workspace(root: Path) -> None:
                 "target_type": "paper",
                 "target_id": "missing-paper",
                 "paper_id": "missing-paper",
+                "link_type": "related",
                 "note": "hostname-private-machine",
             },
         ],
+    )
+    _write_json(
+        paths["index_csv"].parent / "tag_candidate_reviews.json",
+        {
+            "version": "1",
+            "papers": {
+                "paper-1": {
+                    "candidates": [
+                        {
+                            "candidate_id": "candidate-1",
+                            "tag_text": "method",
+                            "normalized_tag": "method",
+                            "state": "unresolved",
+                            "evidence": [],
+                        }
+                    ]
+                }
+            },
+        },
     )
     _write_json(
         paths["tag_book_dir"] / "tag_book.json",
@@ -188,6 +209,7 @@ def test_populated_settings_summary_is_strict_safe_and_uses_real_aggregates(
     assert _resource(body, "tags")["count"] == 2
     assert _resource(body, "note_blocks")["count"] == 2
     assert _resource(body, "project_links")["count"] == 2
+    assert _resource(body, "tag_candidate_reviews")["count"] == 1
     assert _issue(body, "missing_pdfs")["count"] == 1
     assert _issue(body, "unindexed_pdfs")["count"] == 1
     assert _issue(body, "orphan_notes")["count"] == 1

@@ -1,4 +1,6 @@
 const GENERIC_UNAVAILABLE_DETAIL = "Local BluePrintReboot API is unavailable.";
+export const MAX_COMMAND_BODY_BYTES = 8 * 1024 * 1024;
+export const UPSTREAM_TIMEOUT_MS = 120_000;
 const SAFE_PDF_RESPONSE_HEADERS = [
   "Content-Type",
   "Content-Length",
@@ -198,7 +200,36 @@ export function buildBlueprintTarget(requestUrl, parts, apiUrl) {
   return `${baseUrl}/${parts.map(encodeURIComponent).join("/")}${incoming.search}`;
 }
 
-export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl = fetch }) {
+async function readBoundedCommandBody(request) {
+  const declaredLength = Number(request.headers.get("Content-Length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_COMMAND_BODY_BYTES) return null;
+  if (!request.body || typeof request.body.getReader !== "function") {
+    const body = await request.text();
+    return new TextEncoder().encode(body).byteLength <= MAX_COMMAND_BODY_BYTES ? body : null;
+  }
+  const reader = request.body.getReader();
+  const chunks = [];
+  let byteLength = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    byteLength += value.byteLength;
+    if (byteLength > MAX_COMMAND_BODY_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(body);
+}
+
+export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl = fetch, timeoutMs = UPSTREAM_TIMEOUT_MS }) {
   if (!isAllowedBlueprintRequest(request.method, parts)) {
     return Response.json({ detail: "Not found." }, { status: 404 });
   }
@@ -217,17 +248,23 @@ export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl 
     }
     requestHeaders.set("Content-Type", contentType);
     try {
-      body = await request.text();
+      body = await readBoundedCommandBody(request);
+      if (body === null) {
+        return Response.json({ detail: "Request body is too large." }, { status: 413 });
+      }
     } catch {
       return Response.json({ detail: GENERIC_UNAVAILABLE_DETAIL }, { status: 503 });
     }
   }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const upstream = await fetchImpl(target, {
       method: request.method,
       headers: requestHeaders,
       body,
       cache: "no-store",
+      signal: controller.signal,
     });
     if (upstream.status >= 500) {
       return Response.json(
@@ -258,6 +295,8 @@ export async function proxyBlueprintRequest(request, parts, { apiUrl, fetchImpl 
       { detail: GENERIC_UNAVAILABLE_DETAIL },
       { status: 503, headers: { "X-Blueprint-Error-State": "api-unavailable" } },
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

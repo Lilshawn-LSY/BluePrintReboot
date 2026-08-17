@@ -10,7 +10,7 @@ import type {
   NoteBlockCollection,
   NoteBlockProjectLink,
   NoteBlockType,
-  PaginatedProjectList,
+  ProjectListItem,
   ProjectLinkType,
 } from "../lib/api/types";
 import {
@@ -52,7 +52,7 @@ type CollectionState =
 type ProjectPickerState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; data: PaginatedProjectList };
+  | { status: "ready"; data: ProjectListItem[] };
 
 type LinkStatus = "idle" | "saving" | "conflict" | "error";
 
@@ -157,11 +157,11 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
             : "Structured Note Blocks could not be loaded.",
         });
       });
-    apiClient.getProjects({ limit: 100 })
+    apiClient.getAllProjects()
       .then((data) => {
         if (!active) return;
         setProjects({ status: "ready", data });
-        const firstWritable = data.items.find((project) => project.status !== "archived");
+        const firstWritable = data.find((project) => project.status !== "archived");
         setSelectedProjectId((current) => current || firstWritable?.project_id || "");
       })
       .catch((error: unknown) => {
@@ -268,7 +268,7 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
     setLinkStatus("saving");
     setLinkMessage("Linking Note Block to Project…");
     try {
-      const project = await apiClient.getProject(selectedProjectId, { linksLimit: 100 });
+      const project = await apiClient.getCompleteProject(selectedProjectId);
       if (project.status === "archived") {
         throw new ApiClientError("Archived Projects do not allow new links.", "conflict", 409);
       }
@@ -354,7 +354,7 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
   }
 
   const writableProjects = projects.status === "ready"
-    ? projects.data.items.filter((project) => project.status !== "archived")
+    ? projects.data.filter((project) => project.status !== "archived")
     : [];
 
   return (
