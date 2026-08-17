@@ -26,9 +26,8 @@ export function SettingsView() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Application status"
         title="Settings"
-        description="Review a safe, read-only summary of the application, workspace, lightweight integrity checks, and backup evidence."
+        description="Review application and workspace diagnostics."
       />
       {resource.status === "loading" ? <LoadingState label="Loading Settings summary" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}

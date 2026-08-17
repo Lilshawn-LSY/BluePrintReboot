@@ -11,10 +11,12 @@ async function listFiles(directory) {
   }))).flat();
 }
 
+const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
+const workerPromise = import(workerUrl.href);
+
 async function render(pathname = "/") {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${pathname}`);
-  const { default: worker } = await import(workerUrl.href);
+  const { default: worker } = await workerPromise;
   return worker.fetch(
     new Request(`http://localhost${pathname}`, { headers: { accept: "text/html" } }),
     { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
@@ -43,7 +45,7 @@ test("all required routes render inside the shared shell", async () => {
     const response = await render(path);
     assert.equal(response.status, 200, path);
     const html = await response.text();
-    assert.match(html, /class="app-shell"/, path);
+    assert.match(html, /class="app-shell(?:\s|")/, path);
     assert.match(html, /aria-label="Primary navigation"/, path);
   }
 });
@@ -77,7 +79,7 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(readerView, /Save Reading Note/);
   assert.match(readerView, /Reload current metadata/);
   assert.match(readerView, /Reload current Reading Note/);
-  assert.match(readerView, /Back to Paper Detail/);
+  assert.match(readerView, /<Breadcrumbs items=/);
   assert.match(readerView, /Loading Reader snapshot/);
   assert.match(readerView, /Managed PDF missing/);
   assert.match(readerView, /<PdfJsReader paperId=\{snapshot\.paper\.paper_id\}/);
@@ -125,10 +127,10 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.equal(JSON.parse(packageLock).packages[""].dependencies["pdfjs-dist"], "5.7.284");
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
-  assert.match(shell, /return "Reader"/);
+  assert.match(shell, /isReaderRoute/);
   assert.equal(JSON.parse(packageJson).version, "1.5.12");
-  assert.match(shell, /packageMetadata\.version/);
-  assert.match(shell, /Local workspace/);
+  assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
+  assert.doesNotMatch(shell, /packageMetadata|Local workspace|version-label/);
   assert.doesNotMatch(shell, /v1\.5\.4|Project commands/);
 });
 
@@ -168,7 +170,7 @@ test("keeps tokens, API access, and page views separated", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  for (const token of ["--color-canvas", "--space-4", "--font-size-base", "--radius-md", "--border", "--shadow-subtle", "--sidebar-width", "--header-height", "--content-padding", "--z-sidebar"]) {
+  for (const token of ["--color-canvas", "--space-4", "--space-12", "--font-size-base", "--radius-md", "--border", "--shadow-subtle", "--sidebar-width", "--sidebar-collapsed-width", "--control-height", "--content-padding", "--z-sidebar"]) {
     assert.match(css, new RegExp(token));
   }
   assert.match(client, /const API_BASE_URL/);

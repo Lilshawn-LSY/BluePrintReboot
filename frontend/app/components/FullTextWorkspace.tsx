@@ -86,7 +86,6 @@ export function FullTextWorkspace({ paperId }: { paperId: string }) {
     <section className="reader-editor full-text-workspace" aria-labelledby="full-text-title">
       <div className="reader-note__heading">
         <div>
-          <p className="eyebrow">Local extraction cache</p>
           <h2 id="full-text-title">Full Text</h2>
         </div>
         <StatusBadge tone={data ? statusTone(data.state) : ui.phase === "error" ? "danger" : "neutral"}>
@@ -100,7 +99,6 @@ export function FullTextWorkspace({ paperId }: { paperId: string }) {
 
       {data && data.state !== "not_extracted" ? (
         <dl className="full-text-metadata">
-          <div><dt>Provider</dt><dd>{data.provider || data.source || "Unavailable"}{data.provider_version ? ` ${data.provider_version}` : ""}</dd></div>
           <div><dt>Pages</dt><dd>{data.page_count || "Unavailable"}</dd></div>
           <div><dt>Characters</dt><dd>{data.char_count.toLocaleString()}</dd></div>
           <div><dt>Classification</dt><dd>{data.classification}</dd></div>

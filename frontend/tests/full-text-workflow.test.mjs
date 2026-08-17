@@ -104,7 +104,8 @@ test("Reader Full Text source uses the typed client and escaped text rendering",
   assert.match(component, /Open Full Text/);
   assert.match(component, /Retry Extraction/);
   assert.match(component, /OCR needed: pages/);
-  assert.match(component, /data\.provider/);
+  assert.match(component, /data\.page_count/);
+  assert.doesNotMatch(component, /data\.provider_version/);
   assert.match(component, /<pre>\{ui\.content\}<\/pre>/);
   assert.doesNotMatch(component, /dangerouslySetInnerHTML/);
   assert.match(reader, /<FullTextWorkspace/);

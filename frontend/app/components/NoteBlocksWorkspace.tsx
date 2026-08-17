@@ -361,7 +361,6 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
     <section className="reader-editor" aria-labelledby="note-block-editor-title">
       <div className="reader-note__heading">
         <div>
-          <p className="eyebrow">Independent structured command</p>
           <h2 id="note-block-editor-title">Structured Note Blocks</h2>
         </div>
         <StatusBadge tone={editor?.status === "conflict" || editor?.status === "error" ? "danger" : "neutral"}>

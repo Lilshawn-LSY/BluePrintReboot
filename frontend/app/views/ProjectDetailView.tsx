@@ -1,17 +1,19 @@
 "use client";
 
-import { Archive, ArrowLeft, Edit3, Link2, RotateCcw, Save, Unlink, X } from "lucide-react";
+import { Archive, Edit3, Link2, RotateCcw, Save, Unlink, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { DataTableShell } from "../components/DataTableShell";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { DetailPanel } from "../components/DetailPanel";
 import { PageHeader } from "../components/PageHeader";
 import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
+import { formatUiDate } from "../lib/presentation";
 import {
   applyProjectCommandResult,
   changedProjectFields,
@@ -312,14 +314,14 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
 
   return (
     <>
+      <Breadcrumbs items={[{ label: "Projects", href: "/projects" }, { label: project.name || "Project" }]} />
       <PageHeader
-        eyebrow="Project detail"
         title={project.name}
-        description={project.description || "No description is stored for this Project."}
+        description={project.description || "No description yet."}
         actions={<div className="badge-row"><StatusBadge tone={archived ? "neutral" : "accent"}>{project.status}</StatusBadge><StatusBadge>{project.priority}</StatusBadge><StatusBadge>{project.linked_paper_count} Papers</StatusBadge><StatusBadge>{project.linked_note_block_count} Note Blocks</StatusBadge></div>}
       />
       {!archived ? (
-        <Section title="Project commands" description="Changes are explicit, revision-checked, and never autosaved.">
+        <Section title="Project details" description="Changes are saved only when you choose Save.">
           {editing ? (
             <form className="project-command-panel" onSubmit={saveProject}>
               <div className="project-form-grid">
@@ -419,11 +421,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
         <div className="project-archived-note">This Project is archived. Metadata and link write controls are unavailable; stored Paper and Note Block links remain readable.</div>
       )}
       <div className="detail-grid">
-        <Section title="Project metadata" description="Allowlisted values from the stored Project record.">
+        <Section title="Project metadata">
           <dl className="metadata-list">
-            <div><dt>Project ID</dt><dd className="mono-id">{project.project_id}</dd></div>
-            <div><dt>Created</dt><dd>{project.created_at}</dd></div>
-            <div><dt>Updated</dt><dd>{project.updated_at}</dd></div>
+            <div><dt>Created</dt><dd>{formatUiDate(project.created_at)}</dd></div>
+            <div><dt>Updated</dt><dd>{formatUiDate(project.updated_at)}</dd></div>
             <div><dt>Total links</dt><dd>{project.link_count}</dd></div>
           </dl>
           <div className="tag-list project-tag-row">
@@ -499,7 +500,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
         <div className="project-archived-note">Save or cancel the metadata draft before changing Project links.</div>
       ) : null}
       {!archived && !dirty ? (
-        <Section title="Add an existing Note Block" description="Choose a source Paper, then one of its stored Note Blocks and an allowlisted link type. Nothing creates or edits a Note Block.">
+        <Section title="Add an existing Note Block" description="Choose a paper, then a note block to link to this project.">
           <form className="project-link-form" onSubmit={addNoteBlockLink}>
             {paperPicker.status === "loading" ? <span className="muted-text">Loading existing Papers…</span> : null}
             {paperPicker.status === "error" || paperPicker.status === "unavailable" ? (
@@ -687,7 +688,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   );
   return (
     <div className="page-stack">
-      <Link className="back-link" href="/projects"><ArrowLeft size={15} />Back to Projects</Link>
       {resource.status === "loading" ? <LoadingState label="Loading Project detail" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "error" ? <ErrorState title="Project read model unavailable" description={resource.message} onRetry={resource.retry} /> : null}

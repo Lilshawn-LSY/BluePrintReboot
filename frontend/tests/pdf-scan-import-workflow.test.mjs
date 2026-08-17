@@ -49,8 +49,9 @@ test("managed PDF scan and import bridge requests are exact POST JSON commands",
 });
 
 test("Library scan/import workflow renders explicit preview, selection, duplicate, and partial-failure states", async () => {
-  const [library, client, types] = await Promise.all([
+  const [library, inspector, client, types] = await Promise.all([
     readFile(new URL("../app/views/LibraryView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/LibraryPaperInspector.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/lib/api/client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/lib/api/types.ts", import.meta.url), "utf8"),
   ]);
@@ -63,7 +64,7 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
   assert.match(client, /"\/papers\/reconnect"/);
   assert.match(types, /ManagedPdfScanCandidate/);
   assert.match(types, /ManagedPdfImportResult/);
-  assert.match(library, /Scan PDFs/);
+  assert.match(library, /Scan \/ import/);
   assert.match(library, /apiClient\.scanManagedPdfs\(\)/);
   assert.match(library, /type="checkbox"/);
   assert.match(library, /toggleSelection/);
@@ -75,7 +76,7 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
   assert.match(library, /Reconnect existing Paper/);
   assert.match(library, /PDF command unavailable/);
   assert.match(library, /importResult\.results/);
-  assert.match(library, />Reader</);
+  assert.match(inspector, /Open Reader/);
   assert.match(library, /Metadata enrichment/);
   assert.match(library, /previewMetadataEnrichment/);
   assert.match(library, /Apply selected fields/);
