@@ -52,7 +52,7 @@ export function TagsView() {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="Knowledge organization" title="Tags" description="Manage the canonical Tag Book without rewriting legacy Paper tags. Candidate generation is reviewed separately and never applies a tag automatically." />
+      <PageHeader title="Tags" description="Manage your tag book and review tag candidates." />
       {resource.status === "loading" ? <LoadingState label="Loading canonical Tags" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "error" ? <ErrorState title="Tag Book unavailable" description={resource.message} onRetry={resource.retry} /> : null}
@@ -61,7 +61,7 @@ export function TagsView() {
         <>
           <Section title="Candidate quality summary" description="Measured counts from existing local evidence. They are not Paper tags and no values are fabricated when the source is unavailable.">
             {resource.data.summary.availability === "unavailable" ? (
-              <EmptyState title="Candidate summary unavailable" description="No readable persisted paper-index source is available for deterministic candidate evidence." />
+              <EmptyState title="Candidate summary unavailable" description="No paper index is available to review candidates." />
             ) : resource.data.summary.state === "empty" ? (
               <EmptyState title="No candidate evidence" description={`The real source was evaluated across ${resource.data.summary.evaluated_paper_count} paper records and produced no candidates.`} />
             ) : (

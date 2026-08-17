@@ -1,9 +1,9 @@
 "use client";
 
-import { ArrowLeft, RotateCcw, Save } from "lucide-react";
-import Link from "next/link";
+import { RotateCcw, Save } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { PageHeader } from "../components/PageHeader";
 import { PdfJsReader } from "../components/PdfJsReader";
 import { FullTextWorkspace } from "../components/FullTextWorkspace";
@@ -603,9 +603,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const detailHref = `/papers/${encodeURIComponent(snapshot.paper.paper_id)}`;
   return (
     <>
-      <div className="reader-editor__actions"><Link className="back-link" href={detailHref}><ArrowLeft size={15} />Back to Paper Detail</Link><Link className="back-link" href="/library"><ArrowLeft size={15} />Library</Link></div>
+      <Breadcrumbs items={[{ label: "Library", href: "/library" }, { label: editor.metadata.draft.title || snapshot.paper.title, href: detailHref }, { label: "Reader" }]} />
       <PageHeader
-        eyebrow="Reader"
         title={editor.metadata.draft.title || snapshot.paper.title}
         description={[
           editor.metadata.draft.authors || "Authors unknown",
@@ -623,7 +622,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           <section className="reader-editor" aria-labelledby="metadata-editor-title">
             <div className="reader-note__heading">
               <div>
-                <p className="eyebrow">Bibliographic command</p>
                 <h2 id="metadata-editor-title">Paper metadata</h2>
               </div>
               <StatusBadge tone={editor.metadata.status === "conflict" || editor.metadata.status === "error" ? "danger" : editor.metadata.status === "saved" ? "accent" : "neutral"}>
@@ -768,7 +766,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           <section className="reader-editor" aria-labelledby="paper-tags-editor-title">
             <div className="reader-note__heading">
               <div>
-                <p className="eyebrow">Independent tag command</p>
                 <h2 id="paper-tags-editor-title">Paper tags</h2>
               </div>
               <StatusBadge tone={editor.tags.status === "conflict" || editor.tags.status === "error" ? "danger" : editor.tags.status === "saved" ? "accent" : "neutral"}>
@@ -830,7 +827,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           <section className="reader-editor" aria-labelledby="tag-candidate-review-title">
             <div className="reader-note__heading">
               <div>
-                <p className="eyebrow">Explicit review workflow</p>
+                <p className="eyebrow">Review</p>
                 <h2 id="tag-candidate-review-title">Tag candidates</h2>
               </div>
               <StatusBadge tone={candidateReview.status === "conflict" || candidateReview.status === "error" ? "danger" : candidateReview.status === "ready" ? "accent" : "neutral"}>{statusLabel(candidateReview.status)}</StatusBadge>
@@ -864,7 +861,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           <section className="reader-editor reader-note" aria-labelledby="reading-note-editor-title">
             <div className="reader-note__heading">
               <div>
-                <p className="eyebrow">Independent note command</p>
                 <h2 id="reading-note-editor-title">Reading Note</h2>
               </div>
               <StatusBadge tone={editor.note.status === "conflict" || editor.note.status === "error" || noteUnavailable ? "danger" : editor.note.status === "saved" ? "accent" : "neutral"}>
@@ -923,7 +919,7 @@ export function ReaderView({ paperId }: { paperId: string }) {
     () => apiClient.getReaderSnapshot(paperId),
   );
   return (
-    <div className="page-stack">
+    <div className="page-stack reader-page-stack">
       {resource.status === "loading" ? <LoadingState label="Loading Reader snapshot" /> : null}
       {resource.status === "unavailable" ? (
         <div className="reader-metadata-state">

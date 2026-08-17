@@ -1,50 +1,51 @@
 "use client";
 
-import { ArrowLeft, BookOpen } from "lucide-react";
+import { BookOpen } from "lucide-react";
 import Link from "next/link";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
+import { Breadcrumbs } from "../components/Breadcrumbs";
 import { DetailPanel } from "../components/DetailPanel";
 import { PageHeader } from "../components/PageHeader";
 import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
+import { formatAuthorSummary } from "../lib/presentation";
+
+function projectContext(count: number): string {
+  if (count === 0) return "No linked projects";
+  return `Linked to ${count} project${count === 1 ? "" : "s"}`;
+}
 
 export function PaperDetailView({ paperId }: { paperId: string }) {
   const resource = useApiResource(`paper:${paperId}`, () => apiClient.getPaper(paperId));
   return (
-    <div className="page-stack">
-      <Link className="back-link" href="/library"><ArrowLeft size={15} />Back to Library</Link>
-      {resource.status === "loading" ? <LoadingState label="Loading paper detail" /> : null}
+    <div className="page-stack paper-detail-overview">
+      {resource.status === "loading" ? <LoadingState label="Loading paper" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} /> : null}
-      {resource.status === "not-found" ? <EmptyState title="Paper not found" description="The requested paper identity is not present in the local read model." /> : null}
+      {resource.status === "not-found" ? <EmptyState title="Paper not found" description="Return to the Library to choose a paper." /> : null}
       {resource.status === "error" ? <ErrorState description={resource.message} /> : null}
       {resource.status === "success" ? (
         <>
-          <PageHeader eyebrow="Paper detail" title={resource.data.title} description={[resource.data.authors.join(", ") || "Authors unknown", resource.data.journal, resource.data.year].filter(Boolean).join(" · ") || "Citation metadata is incomplete."} actions={<div className="paper-detail-actions"><div className="badge-row"><StatusBadge tone={resource.data.archived ? "neutral" : "accent"}>{resource.data.lifecycle_state}</StatusBadge><StatusBadge>{resource.data.status}</StatusBadge>{resource.data.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}</div>{!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Open Reader</Link> : <span className="reader-action reader-action--disabled" aria-disabled="true">Reader unavailable</span>}</div>} />
+          <Breadcrumbs items={[{ label: "Library", href: "/library" }, { label: resource.data.title || "Paper" }]} />
+          <PageHeader title={resource.data.title || "Untitled paper"} description={[formatAuthorSummary(resource.data.authors, resource.data.first_author), resource.data.journal, resource.data.year].filter(Boolean).join(" · ")} actions={<div className="paper-detail-actions"><div className="badge-row"><StatusBadge>{resource.data.status}</StatusBadge>{resource.data.priority ? <StatusBadge tone="accent">{resource.data.priority}</StatusBadge> : null}{resource.data.archived ? <StatusBadge>Archived</StatusBadge> : null}{resource.data.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}</div>{!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Open Reader</Link> : <span className="reader-action reader-action--disabled" aria-disabled="true">Reader unavailable</span>}</div>} />
+          <Section title="Abstract"><p className="abstract-text paper-detail-abstract">{resource.data.abstract || "No abstract yet."}</p></Section>
           <div className="detail-grid">
-            <Section title="Citation metadata" description="Stored metadata from the stable read-only paper contract.">
-              <dl className="metadata-list">
-                <div><dt>Authors</dt><dd>{resource.data.authors.join("; ") || "—"}</dd></div>
-                <div><dt>Journal</dt><dd>{resource.data.journal || "—"}</dd></div>
-                <div><dt>Year</dt><dd>{resource.data.year || "—"}</dd></div>
-                <div><dt>DOI</dt><dd className="mono-id">{resource.data.doi || "—"}</dd></div>
-                <div><dt>arXiv</dt><dd className="mono-id">{resource.data.arxiv_id || "—"}</dd></div>
-                <div><dt>Priority</dt><dd>{resource.data.priority}</dd></div>
+            <Section title="Citation">
+              <dl className="metadata-list paper-citation">
+                <div><dt>Authors</dt><dd>{resource.data.authors.join("; ") || "Authors unknown"}</dd></div>
+                <div><dt>Journal</dt><dd>{resource.data.journal || "Not recorded"}</dd></div>
+                <div><dt>Year</dt><dd>{resource.data.year || "Not recorded"}</dd></div>
+                <div><dt>DOI</dt><dd className="paper-identifier">{resource.data.doi || "Not recorded"}</dd></div>
+                <div><dt>arXiv</dt><dd className="paper-identifier">{resource.data.arxiv_id || "Not recorded"}</dd></div>
               </dl>
             </Section>
-            <DetailPanel title="Reading context">
-              <dl className="metadata-list metadata-list--compact">
-                <div><dt>Note</dt><dd>{resource.data.note_available ? "Available" : "Not created"}</dd></div>
-                <div><dt>Extracted text</dt><dd>{resource.data.extracted_text_available ? "Available" : "Unavailable"}</dd></div>
-                <div><dt>Profile</dt><dd>{resource.data.profile_available ? "Available" : "Unavailable"}</dd></div>
-                <div><dt>Projects</dt><dd>{resource.data.project_links.length}</dd></div>
-              </dl>
-              <p className="deferred-note">Open Reader for Reading Notes and the full metadata editor. Library also supports explicit metadata candidate preview and selective application.</p>
-            </DetailPanel>
+            <div className="paper-detail-context">
+              <DetailPanel title="Organization"><p>{projectContext(resource.data.project_links.length)}</p>{resource.data.tags.length ? <div className="tag-list project-tag-row">{resource.data.tags.map((tag) => <StatusBadge key={tag}>{tag}</StatusBadge>)}</div> : <p className="deferred-note">No tags yet</p>}</DetailPanel>
+              <DetailPanel title="Reading context"><p>{resource.data.note_available ? "A reading note is ready in Reader." : "Open Reader to begin a reading note."}</p></DetailPanel>
+            </div>
           </div>
-          <Section title="Abstract"><div className="abstract-text">{resource.data.abstract || <span className="muted-text">No abstract is stored for this paper.</span>}</div></Section>
-          <Section title="Tags and keywords"><div className="tag-list">{[...resource.data.tags, ...resource.data.keywords].length ? [...resource.data.tags, ...resource.data.keywords].map((item, index) => <StatusBadge key={`${item}-${index}`}>{item}</StatusBadge>) : <span className="muted-text">No tags or keywords are stored.</span>}</div></Section>
+          {resource.data.keywords.length ? <Section title="Keywords"><div className="tag-list">{resource.data.keywords.map((keyword) => <StatusBadge key={keyword}>{keyword}</StatusBadge>)}</div></Section> : null}
         </>
       ) : null}
     </div>

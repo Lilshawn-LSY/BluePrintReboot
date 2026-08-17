@@ -12,6 +12,7 @@ import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
+import { formatUiDate } from "../lib/presentation";
 import type { EditableProjectMetadata, EditableProjectStatus, ProjectPriority } from "../lib/api/types";
 
 const EMPTY_PROJECT: EditableProjectMetadata = {
@@ -106,9 +107,8 @@ export function ProjectsView() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Research organization"
         title="Projects"
-        description="Browse stored research Projects or create a new Project with explicit metadata."
+        description="Organize related papers and note blocks."
         actions={(
           <button className="reader-control" type="button" onClick={() => setShowCreate(true)} disabled={showCreate}>
             <Plus size={15} />Create Project
@@ -187,7 +187,7 @@ export function ProjectsView() {
       {resource.status === "error" ? <ErrorState title="Project read model unavailable" description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <ErrorState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "success" ? (
-        <Section title="Stored Projects" description={`${resource.data.total} Project${resource.data.total === 1 ? "" : "s"} in deterministic name order.`}>
+        <Section title="Projects" description={`${resource.data.total} Project${resource.data.total === 1 ? "" : "s"}.`}>
           {resource.data.items.length === 0 ? (
             <EmptyState title="No Projects" description="The local Project store is empty. This view never substitutes sample Projects." />
           ) : (
@@ -199,10 +199,7 @@ export function ProjectsView() {
                   {resource.data.items.map((project) => (
                     <tr key={project.project_id}>
                       <td>
-                        <Link className="paper-link" href={`/projects/${encodeURIComponent(project.project_id)}`}>
-                          {project.name}
-                          <small className="mono-id">{project.project_id}</small>
-                        </Link>
+                        <Link className="paper-link" href={`/projects/${encodeURIComponent(project.project_id)}`}>{project.name}</Link>
                       </td>
                       <td><StatusBadge tone={project.status === "active" ? "accent" : "neutral"}>{project.status}</StatusBadge></td>
                       <td>{project.priority}</td>
@@ -215,7 +212,7 @@ export function ProjectsView() {
                       </td>
                       <td>{project.linked_paper_count}</td>
                       <td>{project.linked_note_block_count}</td>
-                      <td>{project.updated_at}</td>
+                      <td>{formatUiDate(project.updated_at)}</td>
                     </tr>
                   ))}
                 </tbody>
