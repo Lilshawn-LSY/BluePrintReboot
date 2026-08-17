@@ -10,6 +10,7 @@ Current evidence is generated from the canonical manifest. Inspect [Current Rele
 - [x] Default `pdf-inspector==0.2.6` is the preferred provider, isolated behind BluePrint-owned structured extraction models and explicit mixed upstream index normalization; MarkItDown remains optional.
 - [x] One deterministic structured-to-Markdown/text projection feeds existing cache/profile consumers; MarkItDown then pypdf remain fallbacks.
 - [x] Strict local API and bridge contracts expose status, explicit extraction/re-extraction, and cached content to a compact Reader Full Text surface without browser extraction or automatic scheduling.
+- [x] Metadata enrichment preview reuses one current canonical cache or one bounded non-persisting `pdf-inspector` -> MarkItDown -> pypdf result for DOI/arXiv detection, PDF-profile parsing, and title fallback without changing Full Text or Paper state.
 - [x] Extraction/cache state distinguishes not-extracted, success, cached, stale, failed, and OCR-needed outcomes while preserving partial mixed-document text.
 - [x] MarkItDown/pypdf fallback, SHA-256 stale checks, restart reuse, and valid old-cache preservation remain covered by disposable tests.
 - [x] OCR execution, selection persistence, Research Blocks, highlight UX, and Reader/Library visual redesign remain absent.

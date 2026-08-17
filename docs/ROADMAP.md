@@ -62,6 +62,7 @@ v1.5.12 closes PDF rendering, selectable-text geometry, structured extraction, a
 - Structured extraction records document classification/confidence, page count, per-page text/Markdown/positioned text, OCR-needed state/reasons, warnings/errors, provider version, and source revision. One deterministic page-ordered projection feeds existing flattened-text consumers; MarkItDown then pypdf remain compatible fallbacks.
 - Cache metadata keeps SHA-256 stale detection and prior-valid-cache preservation while adding explicit extraction/cache states and reusable OCR-needed results.
 - Three bounded FastAPI routes expose status, canonical cached content, and explicit extraction/re-extraction. The existing Reader adds a compact state/action/viewer section; it does not extract in the browser or schedule work automatically.
+- Metadata enrichment preview resolves local PDF evidence once per request: a current canonical cache first, then a bounded non-persisting `pdf-inspector` -> MarkItDown -> pypdf pass. DOI/arXiv detection, PDF-profile parsing, and title fallback share that evidence without changing extraction cache or Paper state.
 
 ### Evidence state
 

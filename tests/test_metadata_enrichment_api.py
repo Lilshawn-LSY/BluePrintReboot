@@ -8,9 +8,8 @@ from fastapi.testclient import TestClient
 from api import dependencies
 from api.main import create_app
 from ingest.crossref import CrossrefLookupError
-from ingest.scanner import DoiExtractionResult
 from services.library_read_model import build_reader_snapshot
-from services.metadata_enrichment import MetadataEnrichmentService
+from services.metadata_enrichment import LocalPdfEvidence, MetadataEnrichmentService
 from services.reader_commands import ReaderCommandService
 from services.reading_note_template import render_reading_note_template
 from storage.index_store import INDEX_COLUMNS, read_index_snapshot, save_index
@@ -132,7 +131,11 @@ def test_pdf_detected_doi_can_drive_crossref_preview_without_saving_the_doi(tmp_
         index_csv=index_csv,
         papers_dir=papers_dir,
         extracted_text_dir=index_csv.parent / "extracted_text",
-        doi_extractor=lambda _path: DoiExtractionResult("10.2000/from-pdf", "pypdf"),
+        local_evidence_resolver=lambda _paper_id, _path: LocalPdfEvidence(
+            text="DOI: 10.2000/from-pdf",
+            provider="pypdf",
+            origin="preview",
+        ),
         crossref_lookup=lambda doi: calls.append(doi) or {"title": "Crossref from PDF DOI", "doi": doi},
         fallback_builder=lambda _record: {"source": "none", "diagnostics": []},
     )
@@ -160,7 +163,11 @@ def test_pdf_detected_doi_remains_an_explicit_candidate_when_crossref_is_offline
         index_csv=index_csv,
         papers_dir=papers_dir,
         extracted_text_dir=index_csv.parent / "extracted_text",
-        doi_extractor=lambda _path: DoiExtractionResult("10.2000/from-pdf", "pypdf"),
+        local_evidence_resolver=lambda _paper_id, _path: LocalPdfEvidence(
+            text="DOI: 10.2000/from-pdf",
+            provider="pypdf",
+            origin="preview",
+        ),
         crossref_lookup=lambda _doi: (_ for _ in ()).throw(CrossrefLookupError("offline", error_type="network")),
         fallback_builder=lambda _record: {"source": "none", "diagnostics": []},
     )
@@ -168,7 +175,7 @@ def test_pdf_detected_doi_remains_an_explicit_candidate_when_crossref_is_offline
     fields = {field.field: field for field in service.preview("paper-1").fields}
 
     assert fields["doi"].candidate_value == "10.2000/from-pdf"
-    assert fields["doi"].source == "PDF-derived DOI"
+    assert fields["doi"].source == "PDF-derived DOI · pypdf fallback"
     assert fields["doi"].state == "available"
 
 

@@ -191,6 +191,7 @@ def build_doi_less_metadata_candidate(
     record: dict[str, str],
     *,
     pdf_text: str | None = None,
+    pdf_evidence_provider: str = "",
     lookup_arxiv: bool = True,
     cache_dir: Path = EXTRACTED_TEXT_DIR,
     request_get: Callable[..., Any] | None = None,
@@ -225,7 +226,10 @@ def build_doi_less_metadata_candidate(
             candidate["title"] = _filename_title_guess(filename)
         return candidate
 
-    pdf_profile_candidate = pdf_profile_metadata_candidate_from_text(text or "")
+    pdf_profile_candidate = pdf_profile_metadata_candidate_from_text(
+        text or "",
+        evidence_provider=pdf_evidence_provider,
+    )
     if any(str(pdf_profile_candidate.get(field, "") or "").strip() for field in ("title", "authors", "abstract", "keywords", "doi")):
         pdf_profile_candidate["diagnostics"] = diagnostics + list(pdf_profile_candidate.get("diagnostics", []))
         return pdf_profile_candidate
@@ -234,7 +238,7 @@ def build_doi_less_metadata_candidate(
     if title_guess:
         return {
             **empty_metadata_candidate(
-                source="pdf_text_guess",
+                source=pdf_evidence_field_source("pdf_text_guess", pdf_evidence_provider),
                 confidence="low",
                 diagnostics=diagnostics + ["Title-like text was guessed from PDF text."],
             ),
@@ -255,11 +259,16 @@ def build_doi_less_metadata_candidate(
     return empty_metadata_candidate(diagnostics=diagnostics + ["No DOI-less metadata candidate was found."])
 
 
-def pdf_profile_metadata_candidate_from_text(text: str) -> dict[str, Any]:
+def pdf_profile_metadata_candidate_from_text(
+    text: str,
+    *,
+    evidence_provider: str = "",
+) -> dict[str, Any]:
     profile = extract_pdf_profile_from_text(text)
     field_sources: dict[str, str] = {}
+    source = pdf_evidence_field_source("pdf_profile", evidence_provider)
     candidate = empty_metadata_candidate(
-        source="pdf_profile",
+        source=source,
         confidence="medium" if profile.abstract or profile.keywords else "low",
         diagnostics=["PDF profile front matter parsed.", *profile.warnings],
     )
@@ -272,11 +281,25 @@ def pdf_profile_metadata_candidate_from_text(text: str) -> dict[str, Any]:
     ):
         if value:
             candidate[field] = value
-            field_sources[field] = "pdf_profile"
+            field_sources[field] = source
     candidate["article_type"] = profile.article_type
     candidate["section_headings"] = profile.section_headings
     candidate["field_sources"] = field_sources
     return candidate
+
+
+def pdf_evidence_field_source(source: str, provider: str) -> str:
+    """Return one bounded provenance key for local PDF-derived candidates."""
+
+    normalized_source = str(source or "").strip()
+    if normalized_source not in {"pdf_doi", "pdf_profile", "pdf_text_guess"}:
+        return normalized_source
+    provider_key = {
+        "pdf-inspector": "pdf_inspector",
+        "markitdown": "markitdown",
+        "pypdf": "pypdf",
+    }.get(str(provider or "").strip().casefold(), "")
+    return f"{normalized_source}_{provider_key}" if provider_key else normalized_source
 
 
 def fill_metadata_gaps_from_pdf_profile(

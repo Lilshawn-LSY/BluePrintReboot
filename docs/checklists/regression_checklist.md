@@ -14,6 +14,7 @@ Current evidence is represented only in the generated [Current Release Status](.
 - [x] Validate default-pinned `pdf-inspector` runs first, produces canonical BluePrint structured output and deterministic flattened projection, and defensive provider absence/failure retains MarkItDown then pypdf fallback.
 - [x] Validate reusable/stale/restart cache states and valid old-cache preservation using disposable fixtures only.
 - [x] Validate strict status/content/extract API routes, exact bridge/client allowlisting, explicit retry/re-extract, provider/state presentation, and escaped canonical full-text viewing.
+- [x] Validate metadata preview reuses one SHA-current canonical cache or one non-persisting fallback extraction for DOI/arXiv/profile/title evidence, rejects stale cache evidence, preserves provider-specific provenance, and does not change cache or Paper state.
 - [x] Preserve user-reported normal-PDF rendering, zoom, text selection/drag, lifecycle behavior, and improved visual quality evidence.
 - [ ] Manually verify the new 1.5x supersampling at DPR 1, 1.25, 1.5, and 2 through several zoom levels and reconfirm text-layer alignment.
 - [ ] Manually verify Reader Full Text not-extracted/cached/stale/failed/OCR-needed states and content viewing.
