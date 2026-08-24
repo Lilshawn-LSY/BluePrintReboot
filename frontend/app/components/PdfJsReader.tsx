@@ -1,21 +1,35 @@
 "use client";
 
 import { AlertCircle, ChevronLeft, ChevronRight, ExternalLink, LoaderCircle, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { paperPdfUrl } from "../lib/api/client";
-import { createPdfLoadingTask, createPdfTextLayer, readPdfNetworkDiagnostics } from "../lib/pdf/pdfjs-adapter";
-import {
-  DEFAULT_ZOOM,
-  MAX_ZOOM,
-  MIN_ZOOM,
-  PdfReaderController,
-  type PdfReaderDiagnostics,
-  type PdfReaderState,
-} from "../lib/pdf/reader-controller.mjs";
+import { createPdfLoadingTask, createPdfTextLayer, readPdfNetworkDiagnostics, type PDFDocumentProxy } from "../lib/pdf/pdfjs-adapter";
+import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, ZOOM_STEP, canvasRenderGeometry, classifyPdfError } from "../lib/pdf/reader-controller.mjs";
 import { readPageSelection, type PdfPageSelection } from "../lib/pdf/selection-coordinates.mjs";
 
+type PdfReaderUiState = {
+  mode: "loading" | "ready" | "error";
+  pageNumber: number;
+  totalPages: number;
+  zoom: number;
+  rendering: boolean;
+  errorKind: "not-found" | "unavailable" | "load" | "render" | null;
+  message: string;
+};
 
-const INITIAL_STATE: PdfReaderState = {
+type PdfReaderDiagnostics = {
+  documentLoadCount: number;
+  renderCount: number;
+  renderCancellationCount: number;
+  documentLoadDurationMs: number | null;
+  firstPageRenderDurationMs: number | null;
+  requestCount: number | null;
+  rangeRequestCount: number | null;
+  fullRequestCount: number | null;
+  requestMode: string;
+};
+
+const INITIAL_STATE: PdfReaderUiState = {
   mode: "loading",
   pageNumber: 1,
   totalPages: 0,
@@ -37,26 +51,7 @@ const INITIAL_DIAGNOSTICS: PdfReaderDiagnostics = {
   requestMode: "pdfjs-auto",
 };
 
-function safeLifecycleErrorName(error: unknown): string {
-  return error && typeof error === "object" && "name" in error && typeof error.name === "string"
-    ? error.name
-    : "Error";
-}
-
-function observeLifecyclePromise(promise: Promise<void>, phase: "load" | "cleanup"): void {
-  promise.catch((error: unknown) => {
-    if (
-      process.env.NODE_ENV !== "production"
-      && process.env.NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1"
-    ) {
-      console.warn("PDF.js Reader lifecycle promise rejected.", {
-        phase,
-        errorName: safeLifecycleErrorName(error),
-      });
-    }
-  });
-}
-
+type RenderTaskLike = { promise: Promise<void>; cancel?: () => void };
 
 function NativePdfFallback({ pdfUrl, onRetry }: { pdfUrl: string; onRetry: () => void }) {
   return (
@@ -72,13 +67,10 @@ function NativePdfFallback({ pdfUrl, onRetry }: { pdfUrl: string; onRetry: () =>
           <a className="text-link" href={pdfUrl} target="_blank" rel="noreferrer"><ExternalLink size={15} />Open the managed PDF in a browser tab</a>
         </div>
       </object>
-      <div className="reader-fallback-actions">
-        <button className="reader-control" type="button" onClick={onRetry}>Retry PDF.js Reader</button>
-      </div>
+      <div className="reader-fallback-actions"><button className="reader-control" type="button" onClick={onRetry}>Retry PDF.js Reader</button></div>
     </div>
   );
 }
-
 
 function ReaderDiagnostics({ diagnostics }: { diagnostics: PdfReaderDiagnostics }) {
   return (
@@ -97,171 +89,196 @@ function ReaderDiagnostics({ diagnostics }: { diagnostics: PdfReaderDiagnostics 
   );
 }
 
-
-export function PdfJsReader({
-  paperId,
+function ContinuousPdfPage({
+  document,
+  pageNumber,
+  zoom,
+  viewportRoot,
+  active,
+  onVisible,
+  onRendered,
+  onRenderError,
   onSelectionChange,
 }: {
-  paperId: string;
+  document: PDFDocumentProxy;
+  pageNumber: number;
+  zoom: number;
+  viewportRoot: HTMLElement | null;
+  active: boolean;
+  onVisible: (page: number) => void;
+  onRendered: (page: number, durationMs: number) => void;
+  onRenderError: (error: unknown) => void;
   onSelectionChange?: (selection: PdfPageSelection | null) => void;
 }) {
-  const pdfUrl = useMemo(() => paperPdfUrl(paperId), [paperId]);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pageSurfaceRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textLayerRef = useRef<HTMLDivElement | null>(null);
-  const controllerRef = useRef<PdfReaderController | null>(null);
-  const lifecycleGenerationRef = useRef(0);
-  const [state, setState] = useState<PdfReaderState>(INITIAL_STATE);
-  const [diagnostics, setDiagnostics] = useState<PdfReaderDiagnostics>(INITIAL_DIAGNOSTICS);
-  const [pageInput, setPageInput] = useState("1");
-  const diagnosticsEnabled = process.env.NODE_ENV !== "production"
-    && process.env.NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1";
+  const [revealed, setRevealed] = useState(false);
+  const shouldRender = pageNumber === 1 || active || revealed;
 
   useEffect(() => {
-    const lifecycleGeneration = ++lifecycleGenerationRef.current;
-    const baseline = readPdfNetworkDiagnostics(pdfUrl);
-    const controller = new PdfReaderController({
-      createLoadingTask: createPdfLoadingTask,
-      createTextLayer: createPdfTextLayer,
-      isCurrent: () => (
-        lifecycleGenerationRef.current === lifecycleGeneration
-        && controllerRef.current === controller
-      ),
-      getCanvas: () => (
-        lifecycleGenerationRef.current === lifecycleGeneration
-        && controllerRef.current === controller
-          ? canvasRef.current
-          : null
-      ),
-      getTextLayerContainer: () => (
-        lifecycleGenerationRef.current === lifecycleGeneration
-        && controllerRef.current === controller
-          ? textLayerRef.current
-          : null
-      ),
-      getOutputScale: () => window.devicePixelRatio || 1,
-      onState: (nextState) => {
-        setState(nextState);
-        setPageInput(String(nextState.pageNumber));
-      },
-      onDiagnostics: setDiagnostics,
-      getNetworkDiagnostics: (url) => {
-        const current = readPdfNetworkDiagnostics(url);
-        return {
-          ...current,
-          requestCount: Math.max(0, current.requestCount - baseline.requestCount),
-          rangeRequestCount: Math.max(0, current.rangeRequestCount - baseline.rangeRequestCount),
-          fullRequestCount: Math.max(0, current.fullRequestCount - baseline.fullRequestCount),
-        };
-      },
-    });
-    controllerRef.current = controller;
-    observeLifecyclePromise(controller.load(pdfUrl), "load");
-    return () => {
-      if (lifecycleGenerationRef.current === lifecycleGeneration) {
-        lifecycleGenerationRef.current += 1;
-      }
-      if (controllerRef.current === controller) controllerRef.current = null;
-      observeLifecyclePromise(controller.destroy(), "cleanup");
-    };
-  }, [pdfUrl]);
+    const element = pageSurfaceRef.current;
+    if (!element || !viewportRoot || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      const entry = entries[0];
+      if (!entry?.isIntersecting) return;
+      setRevealed(true);
+      if (entry.intersectionRatio >= 0.55) onVisible(pageNumber);
+    }, { root: viewportRoot, rootMargin: "240px 0px", threshold: [0.55] });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [onVisible, pageNumber, viewportRoot]);
 
-  const commitPageInput = () => {
-    const requestedPage = Number.parseInt(pageInput, 10);
-    if (!Number.isFinite(requestedPage)) {
-      setPageInput(String(state.pageNumber));
-      return;
-    }
-    void controllerRef.current?.setPage(requestedPage);
-  };
+  useEffect(() => {
+    if (!shouldRender) return;
+    let cancelled = false;
+    let page: Awaited<ReturnType<PDFDocumentProxy["getPage"]>> | null = null;
+    let renderTask: RenderTaskLike | null = null;
+    let textLayer: Awaited<ReturnType<typeof createPdfTextLayer>> | null = null;
+    const startedAt = performance.now();
+    const render = async () => {
+      try {
+        page = await document.getPage(pageNumber);
+        if (cancelled) return;
+        const canvas = canvasRef.current;
+        const textLayerContainer = textLayerRef.current;
+        const canvasContext = canvas?.getContext("2d", { alpha: false });
+        if (!canvas || !canvasContext || !textLayerContainer) throw new Error("Canvas context unavailable");
+        const pageViewport = page.getViewport({ scale: zoom });
+        const geometry = canvasRenderGeometry(pageViewport, window.devicePixelRatio || 1);
+        canvas.width = geometry.canvasWidth;
+        canvas.height = geometry.canvasHeight;
+        canvas.style.width = `${geometry.cssWidth}px`;
+        canvas.style.height = `${geometry.cssHeight}px`;
+        textLayerContainer.replaceChildren();
+        textLayerContainer.style.setProperty("--total-scale-factor", String(pageViewport.scale));
+        textLayerContainer.style.setProperty("--scale-round-x", "1px");
+        textLayerContainer.style.setProperty("--scale-round-y", "1px");
+        renderTask = page.render({ canvasContext, viewport: pageViewport, ...(geometry.transform ? { transform: geometry.transform } : {}) }) as RenderTaskLike;
+        textLayer = await createPdfTextLayer({ page, container: textLayerContainer, viewport: pageViewport });
+        await Promise.all([renderTask.promise, textLayer.render()]);
+        if (!cancelled) onRendered(pageNumber, Math.max(0, performance.now() - startedAt));
+      } catch (error) {
+        if (!cancelled && (error as { name?: string } | null)?.name !== "RenderingCancelledException") onRenderError(error);
+      } finally {
+        page?.cleanup();
+      }
+    };
+    void render();
+    return () => {
+      cancelled = true;
+      textLayer?.cancel();
+      renderTask?.cancel?.();
+    };
+  }, [document, onRenderError, onRendered, pageNumber, shouldRender, zoom]);
 
   const publishSelection = () => {
     if (!onSelectionChange || !pageSurfaceRef.current) return;
-    onSelectionChange(readPageSelection({
-      pageNumber: state.pageNumber,
-      pageElement: pageSurfaceRef.current,
-    }));
+    onSelectionChange(readPageSelection({ pageNumber, pageElement: pageSurfaceRef.current }));
   };
 
-  if (state.mode === "fallback") {
-    return <NativePdfFallback pdfUrl={pdfUrl} onRetry={() => void controllerRef.current?.retry()} />;
-  }
+  return (
+    <div id={`pdf-page-${pageNumber}`} ref={pageSurfaceRef} className="reader-page-surface reader-page-surface--continuous" data-page-number={pageNumber} onMouseUp={publishSelection} onKeyUp={publishSelection}>
+      <canvas ref={canvasRef} className="reader-canvas" role="img" aria-label={`PDF page ${pageNumber}`}>A PDF page is displayed in this canvas when PDF.js rendering succeeds.</canvas>
+      <div ref={textLayerRef} className="textLayer reader-text-layer" data-page-number={pageNumber} aria-label={`Selectable text for PDF page ${pageNumber}`} />
+    </div>
+  );
+}
+
+export function PdfJsReader({ paperId, onSelectionChange }: { paperId: string; onSelectionChange?: (selection: PdfPageSelection | null) => void }) {
+  const pdfUrl = useMemo(() => paperPdfUrl(paperId), [paperId]);
+  const [state, setState] = useState<PdfReaderUiState>(INITIAL_STATE);
+  const [diagnostics, setDiagnostics] = useState<PdfReaderDiagnostics>(INITIAL_DIAGNOSTICS);
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [pageInput, setPageInput] = useState("1");
+  const [viewportRoot, setViewportRoot] = useState<HTMLDivElement | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [fallbackActive, setFallbackActive] = useState(false);
+  const diagnosticsEnabled = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1";
+
+  useEffect(() => {
+    if (fallbackActive) return;
+    let current = true;
+    let loadingTask: Awaited<ReturnType<typeof createPdfLoadingTask>> | null = null;
+    let document: PDFDocumentProxy | null = null;
+    const startedAt = performance.now();
+    setPdfDocument(null);
+    setState({ ...INITIAL_STATE, mode: "loading" });
+    setDiagnostics((value) => ({ ...INITIAL_DIAGNOSTICS, documentLoadCount: value.documentLoadCount + 1 }));
+    const load = async () => {
+      try {
+        loadingTask = await createPdfLoadingTask(pdfUrl);
+        document = await loadingTask.promise;
+        if (!current) return;
+        const network = readPdfNetworkDiagnostics(pdfUrl);
+        setPdfDocument(document);
+        setState({ mode: "ready", pageNumber: 1, totalPages: Math.max(1, Number(document.numPages) || 1), zoom: DEFAULT_ZOOM, rendering: true, errorKind: null, message: "" });
+        setDiagnostics((value) => ({ ...value, documentLoadDurationMs: Math.max(0, performance.now() - startedAt), requestCount: network.requestCount, rangeRequestCount: network.rangeRequestCount, fullRequestCount: network.fullRequestCount, requestMode: network.requestMode }));
+      } catch (error) {
+        if (!current) return;
+        setState((value) => ({ ...value, mode: "error", rendering: false, ...classifyPdfError(error, "load") }));
+      }
+    };
+    void load();
+    return () => {
+      current = false;
+      void loadingTask?.destroy();
+      void document?.destroy();
+    };
+  }, [fallbackActive, loadAttempt, pdfUrl]);
+
+  useEffect(() => setPageInput(String(state.pageNumber)), [state.pageNumber]);
+
+  const setPage = (requestedPage: number) => {
+    if (state.mode !== "ready") return;
+    const pageNumber = Math.min(state.totalPages, Math.max(1, Math.trunc(requestedPage)));
+    setState((current) => ({ ...current, pageNumber, rendering: true }));
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(`pdf-page-${pageNumber}`);
+      if (!target || !viewportRoot) return;
+      viewportRoot.scrollTo({ top: target.offsetTop - viewportRoot.offsetTop, behavior: "smooth" });
+    });
+  };
+  const commitPageInput = () => {
+    const requestedPage = Number.parseInt(pageInput, 10);
+    if (!Number.isFinite(requestedPage)) return setPageInput(String(state.pageNumber));
+    setPage(requestedPage);
+  };
+  const setZoom = (requestedZoom: number) => {
+    const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, requestedZoom));
+    setState((current) => ({ ...current, zoom, rendering: true }));
+  };
+  const onVisible = useCallback((pageNumber: number) => setState((current) => current.mode === "ready" && current.pageNumber !== pageNumber ? { ...current, pageNumber } : current), []);
+  const onRendered = useCallback((pageNumber: number, durationMs: number) => {
+    setState((current) => current.pageNumber === pageNumber ? { ...current, rendering: false } : current);
+    setDiagnostics((current) => ({ ...current, renderCount: current.renderCount + 1, firstPageRenderDurationMs: current.firstPageRenderDurationMs ?? durationMs }));
+  }, []);
+  const onRenderError = useCallback((error: unknown) => setState((current) => ({ ...current, mode: "error", rendering: false, ...classifyPdfError(error, "render") })), []);
+
+  if (fallbackActive) return <NativePdfFallback pdfUrl={pdfUrl} onRetry={() => { setFallbackActive(false); setLoadAttempt((value) => value + 1); }} />;
 
   const controlsReady = state.mode === "ready";
-  const canvasActive = state.mode === "ready" && !state.errorKind;
   return (
     <div className="pdfjs-reader">
       <div className="reader-toolbar" role="toolbar" aria-label="PDF page and zoom controls">
         <div className="reader-toolbar__group" aria-label="Page navigation">
-          <button className="reader-control" type="button" aria-label="Previous PDF page" disabled={!controlsReady || state.pageNumber <= 1} onClick={() => void controllerRef.current?.previousPage()}><ChevronLeft size={16} />Previous</button>
-          <label className="reader-page-field">
-            <span>Page</span>
-            <input
-              aria-label="PDF page number"
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={Math.max(1, state.totalPages)}
-              value={pageInput}
-              disabled={!controlsReady}
-              onChange={(event) => setPageInput(event.target.value)}
-              onBlur={commitPageInput}
-              onKeyDown={(event) => { if (event.key === "Enter") commitPageInput(); }}
-            />
-            <span aria-live="polite">of {state.totalPages || "?"}</span>
-          </label>
-          <button className="reader-control" type="button" aria-label="Next PDF page" disabled={!controlsReady || state.pageNumber >= state.totalPages} onClick={() => void controllerRef.current?.nextPage()}>Next<ChevronRight size={16} /></button>
+          <button className="reader-control" type="button" aria-label="Previous PDF page" disabled={!controlsReady || state.pageNumber <= 1} onClick={() => setPage(state.pageNumber - 1)}><ChevronLeft size={16} />Previous</button>
+          <label className="reader-page-field"><span>Page</span><input aria-label="PDF page number" type="number" inputMode="numeric" min={1} max={Math.max(1, state.totalPages)} value={pageInput} disabled={!controlsReady} onChange={(event) => setPageInput(event.target.value)} onBlur={commitPageInput} onKeyDown={(event) => { if (event.key === "Enter") commitPageInput(); }} /><span aria-live="polite">of {state.totalPages || "?"}</span></label>
+          <button className="reader-control" type="button" aria-label="Next PDF page" disabled={!controlsReady || state.pageNumber >= state.totalPages} onClick={() => setPage(state.pageNumber + 1)}>Next<ChevronRight size={16} /></button>
         </div>
         <div className="reader-toolbar__group" aria-label="PDF zoom controls">
-          <button className="reader-control" type="button" aria-label="Zoom out" disabled={!controlsReady || state.zoom <= MIN_ZOOM} onClick={() => void controllerRef.current?.zoomOut()}><ZoomOut size={16} />Zoom out</button>
+          <button className="reader-control" type="button" aria-label="Zoom out" disabled={!controlsReady || state.zoom <= MIN_ZOOM} onClick={() => setZoom(state.zoom - ZOOM_STEP)}><ZoomOut size={16} />Zoom out</button>
           <output className="reader-zoom-value" aria-live="polite">{Math.round(state.zoom * 100)}%</output>
-          <button className="reader-control" type="button" aria-label="Zoom in" disabled={!controlsReady || state.zoom >= MAX_ZOOM} onClick={() => void controllerRef.current?.zoomIn()}><ZoomIn size={16} />Zoom in</button>
-          <button className="reader-control" type="button" aria-label="Reset PDF zoom" disabled={!controlsReady || state.zoom === DEFAULT_ZOOM} onClick={() => void controllerRef.current?.resetZoom()}><RotateCcw size={16} />Reset</button>
+          <button className="reader-control" type="button" aria-label="Zoom in" disabled={!controlsReady || state.zoom >= MAX_ZOOM} onClick={() => setZoom(state.zoom + ZOOM_STEP)}><ZoomIn size={16} />Zoom in</button>
+          <button className="reader-control" type="button" aria-label="Reset PDF zoom" disabled={!controlsReady || state.zoom === DEFAULT_ZOOM} onClick={() => setZoom(DEFAULT_ZOOM)}><RotateCcw size={16} />Reset</button>
         </div>
       </div>
-
-      <div className="reader-canvas-viewport">
-        <div
-          ref={pageSurfaceRef}
-          className={canvasActive ? "reader-page-surface" : "reader-page-surface reader-page-surface--inactive"}
-          onMouseUp={publishSelection}
-          onKeyUp={publishSelection}
-        >
-          <canvas ref={canvasRef} className="reader-canvas" role="img" aria-label={`PDF page ${state.pageNumber}${state.totalPages ? ` of ${state.totalPages}` : ""}`}>
-            A PDF page is displayed in this canvas when PDF.js rendering succeeds.
-          </canvas>
-          <div
-            ref={textLayerRef}
-            className="textLayer reader-text-layer"
-            data-page-number={state.pageNumber}
-            aria-label={`Selectable text for PDF page ${state.pageNumber}`}
-          />
-        </div>
-
-        {state.mode === "loading" ? (
-          <div className="reader-render-state" role="status">
-            <LoaderCircle className="loading-icon" size={22} aria-hidden="true" />
-            <div><h2>Loading PDF.js Reader</h2><p>Loading the managed PDF through the local same-origin endpoint.</p></div>
-          </div>
-        ) : null}
-
+      <div ref={setViewportRoot} className="reader-canvas-viewport">
+        {pdfDocument ? <div className="reader-pdf-page-stack">{Array.from({ length: state.totalPages }, (_, index) => index + 1).map((pageNumber) => <ContinuousPdfPage key={`${pageNumber}:${state.zoom}`} document={pdfDocument} pageNumber={pageNumber} zoom={state.zoom} viewportRoot={viewportRoot} active={state.pageNumber === pageNumber} onVisible={onVisible} onRendered={onRendered} onRenderError={onRenderError} onSelectionChange={onSelectionChange} />)}</div> : null}
+        {state.mode === "loading" ? <div className="reader-render-state" role="status"><LoaderCircle className="loading-icon" size={22} aria-hidden="true" /><div><h2>Loading PDF.js Reader</h2><p>Loading the managed PDF through the local same-origin endpoint.</p></div></div> : null}
         {state.mode === "ready" && state.rendering ? <div className="reader-render-progress" role="status">Rendering page {state.pageNumber}…</div> : null}
-
-        {state.mode === "empty" || state.mode === "error" ? (
-          <div className="reader-render-state" role="alert">
-            <AlertCircle size={22} aria-hidden="true" />
-            <div>
-              <h2>{state.errorKind === "unavailable" ? "Local PDF service unavailable" : state.errorKind === "not-found" ? "Managed PDF missing" : "PDF.js Reader unavailable"}</h2>
-              <p>{state.message || "The managed PDF could not be displayed."}</p>
-              <div className="reader-error-actions">
-                <button className="reader-control" type="button" onClick={() => void controllerRef.current?.retry()}>Retry PDF.js</button>
-                <button className="reader-control reader-control--secondary" type="button" onClick={() => void controllerRef.current?.activateFallback()}>Use native viewer fallback</button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        {state.mode === "error" ? <div className="reader-render-state" role="alert"><AlertCircle size={22} aria-hidden="true" /><div><h2>{state.errorKind === "unavailable" ? "Local PDF service unavailable" : state.errorKind === "not-found" ? "Managed PDF missing" : "PDF.js Reader unavailable"}</h2><p>{state.message || "The managed PDF could not be displayed."}</p><div className="reader-error-actions"><button className="reader-control" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>Retry PDF.js</button><button className="reader-control reader-control--secondary" type="button" onClick={() => setFallbackActive(true)}>Use native viewer fallback</button></div></div></div> : null}
       </div>
-
       {diagnosticsEnabled ? <ReaderDiagnostics diagnostics={diagnostics} /> : null}
     </div>
   );

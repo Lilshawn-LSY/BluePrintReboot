@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.5.12",
-  "release_name": "v1.5.12-pre-ux-pdf-foundation",
-  "as_of": "2026-08-17",
+  "product_version": "1.6.0",
+  "release_name": "v1.6.0-reader-workspace-ux-overhaul",
+  "as_of": "2026-08-24",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -115,8 +115,8 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-17",
-        "reference": "v1.5.12 local validation",
+        "date": "2026-08-24",
+        "reference": "v1.6.0 local validation",
         "summary": "The current offline repository readiness smoke completed with 145 passed, 0 warnings, and 0 failed, including the default pdf-inspector 0.2.6 dependency check."
       }
     },
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 788,
+        "passed": 820,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-08-17",
-        "reference": "v1.5.12 local validation",
-        "summary": "The v1.5.12 full Python suite completed with 788 passed, 0 failed, and 0 skipped using disposable fixtures, including canonical local PDF evidence reuse and non-persistence coverage with pdf-inspector 0.2.6 installed as the default structured provider."
+        "date": "2026-08-24",
+        "reference": "v1.6.0 local validation",
+        "summary": "The v1.6.0 full Python suite completed with 820 passed, 0 failed, and 0 skipped using disposable fixtures, including Reader-layout, Paper Note formatting, and tag-candidate response-boundary regressions."
       }
     },
     "focused_reader_snapshot": {
@@ -337,8 +337,8 @@
       "command": "npm --prefix frontend run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-08-17",
-        "reference": "v1.5.12 local validation",
+        "date": "2026-08-24",
+        "reference": "v1.6.0 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -348,8 +348,8 @@
       "command": "npm --prefix frontend run build",
       "counts": null,
       "evidence": {
-        "date": "2026-08-17",
-        "reference": "v1.5.12 local validation",
+        "date": "2026-08-24",
+        "reference": "v1.6.0 local validation",
         "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
       }
     },
@@ -358,14 +358,14 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm --prefix frontend test",
       "counts": {
-        "passed": 12,
+        "passed": 16,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-08-17",
-        "reference": "v1.5.12 local validation",
+        "date": "2026-08-24",
+        "reference": "v1.6.0 local validation",
         "summary": "The complete frontend build and Node test suite passed."
       }
     },
@@ -454,12 +454,12 @@
       "scope": "tracked repository entries only",
       "command": ".venv/bin/python scripts/check_repo_hygiene.py",
       "counts": {
-        "entries_inspected": 295,
+        "entries_inspected": 323,
         "violations": 0
       },
       "evidence": {
-        "date": "2026-08-17",
-        "reference": "v1.5.12 local hygiene validation",
+        "date": "2026-08-24",
+        "reference": "v1.6.0 local hygiene validation",
         "summary": "Tracked-entry hygiene passed without reading user-data contents."
       }
     }
@@ -1361,11 +1361,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.5.12 representative real-PDF validation, hosted/source-control/publication evidence, and clean-PC restore remain open; v1.6.0 Reader Workspace UX Overhaul follows under a separate scope",
+    "name": "v1.6.0 manual Reader workspace and tag-candidate verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
     "evidence": {
-      "date": "2026-08-17",
-      "reference": "docs/release_notes/v1.5.12.md",
-      "summary": "Keep v1.5.12 real-PDF runtime, hosted/source-control/publication, and clean-PC restore evidence separate from local implementation and automated validation."
+      "date": "2026-08-24",
+      "reference": "docs/UI_DESIGN_SYSTEM.md",
+      "summary": "Keep v1.6.0 manual Reader workspace and tag-candidate verification separate from local implementation and automated validation."
     }
   },
   "historical_evidence": {
@@ -1406,7 +1406,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-08-17",
+    "last_reconciled": "2026-08-24",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",

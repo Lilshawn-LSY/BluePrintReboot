@@ -99,9 +99,10 @@ test("read parity contains no fabricated records and preserves existing views", 
   assert.match(library, /apiClient\.getPapers/);
   assert.match(papers, /Library is the primary Paper collection surface/);
   assert.match(reader, /apiClient\.getReaderSnapshot/);
-  for (const operation of ["generateTagCandidates", "approveTagCandidate", "rejectTagCandidate", "promoteTagCandidate", "applyTagCandidate"]) {
+  for (const operation of ["generateTagCandidates", "applyTagCandidate"]) {
     assert.match(reader, new RegExp(`apiClient\\.${operation}`));
   }
   assert.match(reader, /Nothing has been applied to this Paper/);
-  assert.match(reader, /Apply remains a separate Paper mutation/);
+  assert.match(reader, /Apply selected/);
+  assert.doesNotMatch(reader, /Promote to canonical|candidate\.confidence|candidate\.score/);
 });

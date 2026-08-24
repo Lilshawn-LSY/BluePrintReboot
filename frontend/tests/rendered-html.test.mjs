@@ -50,7 +50,7 @@ test("all required routes render inside the shared shell", async () => {
   }
 });
 
-test("uses a bounded PDF.js Reader with independent metadata and Reading Note commands", async () => {
+test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation commands", async () => {
   const [detail, readerView, reader, adapter, controller, client, shell, sidebar, packageJson, packageLock, workerSource, workerDeclaration] = await Promise.all([
     readFile(new URL("../app/views/PaperDetailView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
@@ -69,17 +69,26 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(detail, /Open Reader/);
   assert.match(detail, /encodeURIComponent\(resource\.data\.paper_id\)/);
   assert.match(detail, /Reader unavailable/);
-  assert.match(readerView, /title=\{editor\.metadata\.draft\.title \|\| snapshot\.paper\.title\}/);
+  assert.match(readerView, /className="reader-workspace"/);
+  assert.match(readerView, /reader-layout--with-utility/);
+  assert.match(readerView, /reader-research-panel/);
+  assert.match(readerView, /reader-paper-context/);
+  assert.match(readerView, /reader-utility-drawer/);
   assert.match(readerView, /Paper metadata/);
-  assert.match(readerView, /Metadata enrichment/);
-  assert.match(readerView, /Fetch candidates/);
-  assert.match(readerView, /Apply selected fields/);
+  assert.match(readerView, /Metadata updates/);
+  assert.match(readerView, /metadata-review-dialog/);
+  assert.match(readerView, /Apply selected/);
   assert.match(readerView, /previewMetadataEnrichment/);
-  assert.match(readerView, /Complete Reading Note/);
+  assert.match(readerView, /Paper Note/);
+  assert.match(readerView, /Paper Note formatting/);
+  assert.match(readerView, /Markdown-compatible plain text/);
+  assert.match(readerView, /function paperNoteBody/);
+  assert.match(readerView, /function replacePaperNoteBody/);
+  assert.match(readerView, /Note Blocks/);
   assert.match(readerView, /Save Metadata/);
-  assert.match(readerView, /Save Reading Note/);
+  assert.match(readerView, /Save Paper Note/);
   assert.match(readerView, /Reload current metadata/);
-  assert.match(readerView, /Reload current Reading Note/);
+  assert.match(readerView, /Reload current Paper Note/);
   assert.match(readerView, /<Breadcrumbs items=/);
   assert.match(readerView, /Loading Reader snapshot/);
   assert.match(readerView, /Managed PDF missing/);
@@ -98,17 +107,22 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(reader, /Loading PDF\.js Reader/);
   assert.match(reader, /Retry PDF\.js/);
   assert.match(reader, /Use native viewer fallback/);
-  assert.match(reader, /if \(state\.mode === "fallback"\)/);
+  assert.match(reader, /if \(fallbackActive\)/);
   assert.match(reader, /role="img" aria-label=\{`PDF page/);
   assert.match(reader, /Browser PDF viewer unavailable/);
   assert.match(reader, /<object[^>]+data=\{pdfUrl\}[^>]+type="application\/pdf"/s);
   assert.match(reader, /NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1"/);
-  assert.match(reader, /lifecycleGenerationRef/);
-  assert.match(reader, /observeLifecyclePromise\(controller\.destroy\(\), "cleanup"\)/);
+  assert.match(reader, /reader-pdf-page-stack/);
+  assert.match(reader, /ContinuousPdfPage/);
+  assert.match(reader, /IntersectionObserver/);
+  assert.match(reader, /canvasRenderGeometry/);
+  assert.match(reader, /createPdfTextLayer/);
+  assert.match(reader, /viewportRoot\.scrollTo/);
   assert.match(readerView, /apiClient\.saveReaderMetadata/);
   assert.match(readerView, /applyMetadataEnrichmentCommandResult/);
   assert.match(readerView, /apiClient\.saveReadingNote/);
   assert.doesNotMatch(readerView, /contentEditable|dangerouslySetInnerHTML|autosave|annotation|highlight/i);
+  assert.doesNotMatch(readerView, /candidate\.confidence|candidate\.score|Promote to canonical/);
   assert.match(client, /getReaderSnapshot/);
   assert.match(client, /\/papers\/\$\{encodeURIComponent\(paperId\)\}\/reader/);
   assert.match(client, /\/papers\/\$\{encodeURIComponent\(paperId\)\}\/pdf/);
@@ -129,7 +143,7 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /isReaderRoute/);
-  assert.equal(JSON.parse(packageJson).version, "1.5.12");
+  assert.equal(JSON.parse(packageJson).version, "1.6.0");
   assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
   assert.match(shell, /packageMetadata\.version/);
   assert.match(shell, /applicationVersion=\{packageMetadata\.version\}/);
@@ -141,6 +155,41 @@ test("uses a bounded PDF.js Reader with independent metadata and Reading Note co
 test("production build contains the repository-local PDF.js worker asset", async () => {
   const files = await listFiles(fileURLToPath(new URL("../dist", import.meta.url)));
   assert.ok(files.some((path) => /pdf\.worker\.min-[^/]+\.mjs$/i.test(path)), files.join("\n"));
+});
+
+test("Reader workspace keeps browser, research, PDF, and utility scrolling intentionally separated", async () => {
+  const [reader, css, shell] = await Promise.all([
+    readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/AppShell.tsx", import.meta.url), "utf8"),
+  ]);
+
+  for (const selector of [
+    ".app-shell--reader { display: block; height: 100dvh; overflow: hidden; }",
+    ".reader-workspace",
+    ".reader-research-panel__content",
+    ".reader-canvas-viewport",
+    ".reader-utility-drawer__content",
+    "overscroll-behavior: contain",
+    ".reader-layout--with-utility",
+  ]) {
+    assert.ok(css.includes(selector), selector);
+  }
+  assert.match(reader, /activeUtility === "tags"/);
+  assert.match(reader, /activeUtility === "full-text"/);
+  assert.match(reader, /setActiveUtility\(null\)/);
+  assert.match(reader, /PaperNoteMarkdownPreview/);
+  assert.match(reader, /Rendered Paper Note preview/);
+  assert.match(reader, /notePreviewOpen/);
+  assert.match(reader, /preserveNoteSelection/);
+  assert.match(reader, /onMouseDown=\{preserveNoteSelection\}/);
+  assert.match(shell, /reader-navigation-zone/);
+  assert.match(css, /\.app-shell--reader\[data-reader-sidebar-open="true"\] \.sidebar/);
+  assert.match(css, /grid-template-areas: "utility stage research"/);
+  assert.match(css, /grid-template-columns: var\(--reader-utility-width\) minmax\(0, 1fr\) var\(--reader-research-width\)/);
+  assert.match(css, /\.reader-research-panel \{ grid-area: research;[\s\S]*border-left/);
+  assert.match(css, /\.reader-utility-drawer \{ grid-area: utility;[\s\S]*border-right/);
+  assert.match(css, /\.reader-layout--with-utility \.reader-utility-drawer \{ position: absolute; inset: 0 auto 0 0;/);
 });
 
 test("Reader snapshot states remain independent and stale paper state is hidden", async () => {

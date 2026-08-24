@@ -8,9 +8,11 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.5.12-pre-ux-pdf-foundation**.
+Current runtime target: **v1.6.0-reader-workspace-ux-overhaul**.
 
-v1.5.12 closes the R-145 PDF foundation before the v1.6 Reader UX redesign. The existing PDF.js Reader now renders its backing canvas at `clamp(devicePixelRatio × 1.5, 1, 3)` while logical zoom, CSS dimensions, text-layer geometry, and page-normalized selection coordinates remain unchanged. Native fallback remains exclusive, and page/zoom changes still perform PDF.js rerenders while reusing the loaded document.
+v1.6.0 focuses on the desktop Reader workspace: the PDF remains central, Paper and Note composition lives together in the right panel, and compact Tags/Full Text utilities open from the left without affecting the global Reader-navigation overlay. Paper Notes continue to save Markdown-compatible plain text explicitly, with Markdown-aware formatting and an optional rendered preview.
+
+v1.5.12 closes the R-145 PDF foundation that v1.6.0 retains. The PDF.js Reader renders its backing canvas at `clamp(devicePixelRatio × 1.5, 1, 3)` while logical zoom, CSS dimensions, text-layer geometry, and page-normalized selection coordinates remain unchanged. Native fallback remains exclusive, and page/zoom changes still perform PDF.js rerenders while reusing the loaded document.
 
 Full-text extraction now prefers the default pinned `pdf-inspector==0.2.6` adapter, then falls through to MarkItDown and pypdf. The adapter normalizes all upstream page fields to BluePrint's 1-based convention and produces BluePrint-owned document classification, per-page extraction/OCR state, Markdown/text, positioned-text data, provider information, and the cache's source-PDF revision. One deterministic page-ordered projection feeds the existing extracted-text cache and profile consumers. Extraction metadata distinguishes not-extracted, success, cached, stale, failed, and OCR-needed states; OCR-needed pages are not treated as generic failures, and valid previous caches remain preserved after failed refreshes.
 

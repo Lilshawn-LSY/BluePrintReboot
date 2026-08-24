@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,6 +38,8 @@ from storage.workspace_lock import WorkspaceLockUnavailable, workspace_write_loc
 
 CandidateState = Literal["unresolved", "resolved", "approved", "rejected", "applied"]
 _TERMINAL_STATES = {"approved", "rejected", "applied"}
+MAX_TAG_CANDIDATE_EVIDENCE_SNIPPET_LENGTH = 240
+_SNIPPET_ELLIPSIS = "…"
 
 
 class TagCandidateReviewError(Exception):
@@ -89,6 +92,63 @@ def candidate_review_revision(candidates: list[dict[str, Any]]) -> str:
         sort_keys=True,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def normalize_tag_candidate_evidence_snippet(value: object) -> str:
+    """Return a deterministic public evidence snippet within the API bound.
+
+    Candidate evidence is sourced from multiple local suggestion inputs and older
+    persisted review records predate the public snippet bound.  This boundary is
+    deliberately read-safe: it does not change review state or revisions when a
+    historical record is merely displayed.
+    """
+
+    text = str(value or "")
+    if len(text) <= MAX_TAG_CANDIDATE_EVIDENCE_SNIPPET_LENGTH:
+        return text
+
+    limit = MAX_TAG_CANDIDATE_EVIDENCE_SNIPPET_LENGTH - len(_SNIPPET_ELLIPSIS)
+    prefix = text[:limit]
+    # Avoid ending on a combining mark, variation selector, or joiner.  Python
+    # string slicing is code-point-safe; this small adjustment avoids the most
+    # visible partial Unicode graphemes without changing ordinary snippets.
+    while prefix and (
+        unicodedata.combining(prefix[-1])
+        or prefix[-1] == "\u200d"
+        or "VARIATION SELECTOR" in unicodedata.name(prefix[-1], "")
+    ):
+        prefix = prefix[:-1]
+    if not prefix:
+        prefix = text[:limit]
+
+    # Prefer a nearby word boundary when it retains useful context.  Scripts
+    # without word spaces retain the bounded code-point prefix unchanged.
+    boundary = max(prefix.rfind(" "), prefix.rfind("\t"), prefix.rfind("\n"))
+    if boundary >= max(0, len(prefix) - 32):
+        prefix = prefix[:boundary].rstrip()
+    if not prefix:
+        prefix = text[:limit]
+    return f"{prefix[:limit]}{_SNIPPET_ELLIPSIS}"
+
+
+def normalize_tag_candidate_evidence(evidence: object) -> list[dict[str, str]]:
+    """Allowlist and bound public candidate evidence without mutating storage."""
+
+    if not isinstance(evidence, list):
+        return []
+    normalized: list[dict[str, str]] = []
+    for item in evidence:
+        if not isinstance(item, dict):
+            continue
+        normalized.append(
+            {
+                "source": str(item.get("source") or ""),
+                "source_label": str(item.get("source_label") or item.get("source") or ""),
+                "matched_text": str(item.get("matched_text") or ""),
+                "snippet": normalize_tag_candidate_evidence_snippet(item.get("snippet")),
+            }
+        )
+    return normalized
 
 
 class TagCandidateReviewService:
@@ -386,16 +446,7 @@ class TagCandidateReviewService:
             "source": str(suggestion.get("source") or ""),
             "source_label": str(suggestion.get("source_label") or suggestion.get("source") or ""),
             "matched_text": str(suggestion.get("matched_text") or ""),
-            "evidence": [
-                {
-                    "source": str(item.get("source") or ""),
-                    "source_label": str(item.get("source_label") or item.get("source") or ""),
-                    "matched_text": str(item.get("matched_text") or ""),
-                    "snippet": str(item.get("snippet") or ""),
-                }
-                for item in suggestion.get("evidence", [])
-                if isinstance(item, dict)
-            ],
+            "evidence": normalize_tag_candidate_evidence(suggestion.get("evidence", [])),
             "score": int(suggestion.get("score", 0) or 0),
             "confidence": float(suggestion.get("confidence", 0.0) or 0.0),
             "quality": quality,
@@ -456,7 +507,12 @@ class TagCandidateReviewService:
             "state",
             "generated_kind",
         )
-        return {key: candidate.get(key) for key in allowed}
+        public = {key: candidate.get(key) for key in allowed}
+        # Historical persisted records can have evidence created before the
+        # response-schema limit.  Normalize only the public projection so a
+        # read never rewrites user-controlled review data or its revision.
+        public["evidence"] = normalize_tag_candidate_evidence(candidate.get("evidence", []))
+        return public
 
     def _record(self, paper_id: str) -> dict[str, str] | None:
         try:

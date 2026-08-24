@@ -11,7 +11,7 @@ const sources = Promise.all([
 
 test("Reader exposes explicit structured Note Block create, edit, cancel, reload, and save", async () => {
   const [workspace, reader, , client] = await sources;
-  for (const label of ["New Note Block", "Edit", "Save Note Block", "Cancel", "Reload collection"]) {
+  for (const label of ["Add", "Edit", "Save Note Block", "Cancel", "Reload collection", "Details"]) {
     assert.match(workspace, new RegExp(label));
   }
   assert.match(reader, /NoteBlocksWorkspace/);

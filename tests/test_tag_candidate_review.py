@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from api import dependencies
 from api.main import create_app
+from api.schemas import TagCandidateCollectionResponse
 from services.reader_commands import ReaderCommandConflict, ReaderCommandService
 from services.tag_candidate_review import (
     TagCandidateReviewConflict,
@@ -403,3 +404,68 @@ def test_candidate_and_governance_api_commands_are_explicit_and_bounded(tmp_path
     assert created.status_code == 200
     assert created.json()["tag"]["canonical_key"] == "spatial-proteomics"
     assert index_csv.read_bytes() == before
+
+
+def test_candidate_evidence_snippets_are_bounded_for_generation_and_historical_reviews(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _index_csv, _notes_dir, _tag_book_dir, _governance, candidates = _workspace(tmp_path)
+    long_snippet = "Evidence context " + ("αβγδ " * 80)
+    short_snippet = "Short evidence remains exact."
+
+    monkeypatch.setattr(
+        tag_book,
+        "explain_tag_book_suggestions",
+        lambda *_args, **_kwargs: [
+            {
+                "display": "Long evidence tag",
+                "canonical": "long-evidence-tag",
+                "kind": "new_candidate",
+                "category": "method",
+                "source": "abstract",
+                "source_label": "Abstract",
+                "matched_text": "evidence",
+                "quality": "high",
+                "score": 3,
+                "confidence": 0.8,
+                "reason": "Fixture evidence.",
+                "evidence": [
+                    {"source": "abstract", "source_label": "Abstract", "matched_text": "first", "snippet": long_snippet},
+                    {"source": "notes", "source_label": "Paper Note", "matched_text": "second", "snippet": short_snippet},
+                    {"source": "profile", "source_label": "Profile", "matched_text": "third", "snippet": long_snippet + "tail"},
+                ],
+            }
+        ],
+    )
+
+    app = create_app()
+    app.dependency_overrides[dependencies.get_tag_candidate_review_service] = lambda: candidates
+    client = TestClient(app)
+
+    generated = client.post("/papers/paper-1/tag-candidates/generate", json={})
+    assert generated.status_code == 200
+    generated_body = generated.json()
+    TagCandidateCollectionResponse.model_validate(generated_body)
+    generated_evidence = generated_body["items"][0]["evidence"]
+    assert [item["snippet"] for item in generated_evidence][1] == short_snippet
+    assert len(generated_evidence) == 3
+    assert all(len(item["snippet"]) <= 240 for item in generated_evidence)
+    assert generated_evidence[0]["snippet"].endswith("…")
+    assert generated_evidence[2]["snippet"].endswith("…")
+
+    # A pre-bound historical persisted record must be safe to read without a
+    # storage rewrite or a response-model validation failure.
+    review_path = candidates.review_store_path
+    persisted = json.loads(review_path.read_text(encoding="utf-8"))
+    persisted["papers"]["paper-1"]["candidates"][0]["evidence"][0]["snippet"] = long_snippet + " historical"
+    review_path.write_text(json.dumps(persisted), encoding="utf-8")
+    before_read = review_path.read_bytes()
+
+    historical = client.get("/papers/paper-1/tag-candidates")
+    assert historical.status_code == 200
+    historical_body = historical.json()
+    TagCandidateCollectionResponse.model_validate(historical_body)
+    assert all(len(item["snippet"]) <= 240 for item in historical_body["items"][0]["evidence"])
+    assert historical_body["items"][0]["evidence"][1]["snippet"] == short_snippet
+    assert review_path.read_bytes() == before_read

@@ -97,6 +97,7 @@ function replaceBlock(
 export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
   const [collection, setCollection] = useState<CollectionState>({ status: "loading" });
   const [editor, setEditor] = useState<NoteBlockEditorState | null>(null);
+  const [expandedBlockId, setExpandedBlockId] = useState("");
   const [tagDraft, setTagDraft] = useState("");
   const [projects, setProjects] = useState<ProjectPickerState>({ status: "loading" });
   const [linkingBlockId, setLinkingBlockId] = useState("");
@@ -206,12 +207,14 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
     if (dirty && !window.confirm("Discard the current Note Block draft?")) return;
     const next = createNoteBlockEditorState();
     setEditor(next);
+    setExpandedBlockId("");
     setTagDraft("");
   }
 
   function beginEdit(block: NoteBlock) {
     if (dirty && !window.confirm("Discard the current Note Block draft?")) return;
     setEditor(createNoteBlockEditorState(block));
+    setExpandedBlockId(block.id);
     setTagDraft(block.tags.join(", "));
   }
 
@@ -358,17 +361,17 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
     : [];
 
   return (
-    <section className="reader-editor" aria-labelledby="note-block-editor-title">
+    <section className="reader-editor reader-note-blocks" aria-labelledby="note-block-editor-title">
       <div className="reader-note__heading">
         <div>
-          <h2 id="note-block-editor-title">Structured Note Blocks</h2>
+          <h2 id="note-block-editor-title">Note Blocks</h2>
         </div>
         <StatusBadge tone={editor?.status === "conflict" || editor?.status === "error" ? "danger" : "neutral"}>
           {collection.data.total} blocks
         </StatusBadge>
       </div>
       <div className="reader-editor__actions">
-        <button className="reader-control" type="button" onClick={beginCreate}><Plus size={15} />New Note Block</button>
+        <button className="reader-control" type="button" onClick={beginCreate}><Plus size={15} />Add</button>
         <button
           className="reader-control reader-control--secondary"
           type="button"
@@ -390,14 +393,14 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
           {collection.data.items.map((block) => {
             const links = collection.data.project_links.filter((link) => link.note_block_id === block.id);
             return (
-              <article className="note-block-card" id={`note-block-${block.id}`} key={block.id}>
+              <article className={expandedBlockId === block.id ? "note-block-card is-expanded" : "note-block-card"} id={`note-block-${block.id}`} key={block.id}>
                 <div className="reader-note__heading">
-                  <div><strong>{block.title || block.block_type}</strong><small className="mono-id">{block.id}</small></div>
+                  <div><strong>{block.title || block.block_type}</strong></div>
                   <StatusBadge>{block.block_type}</StatusBadge>
                 </div>
                 {block.text ? <p>{block.text}</p> : <p className="muted-text">No block text.</p>}
                 <p className="muted-text">{[block.page && `Page ${block.page}`, block.figure && `Figure ${block.figure}`, block.tags.join(", ")].filter(Boolean).join(" · ")}</p>
-                {links.length ? (
+                {expandedBlockId === block.id && links.length ? (
                   <div className="tag-list">
                     {links.map((link) => (
                       <span className="note-block-project-link" key={link.link_id}>
@@ -408,10 +411,11 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
                       </span>
                     ))}
                   </div>
-                ) : <p className="muted-text">Not linked to a Project.</p>}
+                ) : expandedBlockId === block.id ? <p className="muted-text">Not linked to a Project.</p> : null}
                 <div className="reader-editor__actions">
                   <button className="reader-control reader-control--secondary" type="button" onClick={() => beginEdit(block)}><Edit3 size={15} />Edit</button>
-                  <button className="reader-control reader-control--secondary" type="button" onClick={() => setLinkingBlockId((current) => current === block.id ? "" : block.id)}><Link2 size={15} />Link to Project</button>
+                  <button className="reader-control reader-control--secondary" type="button" onClick={() => { setExpandedBlockId((current) => current === block.id ? "" : block.id); setLinkingBlockId((current) => current === block.id ? "" : current); }}>{expandedBlockId === block.id ? "Collapse" : "Details"}</button>
+                  {expandedBlockId === block.id ? <button className="reader-control reader-control--secondary" type="button" onClick={() => setLinkingBlockId((current) => current === block.id ? "" : block.id)}><Link2 size={15} />Link to Project</button> : null}
                 </div>
                 {linkingBlockId === block.id ? (
                   <form className="project-link-form" onSubmit={addProjectLink}>
