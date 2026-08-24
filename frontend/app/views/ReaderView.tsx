@@ -1,17 +1,16 @@
 "use client";
 
-import { RotateCcw, Save } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, FileText, RotateCcw, Save, Tags, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { Breadcrumbs } from "../components/Breadcrumbs";
-import { PageHeader } from "../components/PageHeader";
 import { PdfJsReader } from "../components/PdfJsReader";
 import { FullTextWorkspace } from "../components/FullTextWorkspace";
 import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
-import type { EditablePaperMetadata, MetadataEnrichmentPreview, ReaderSnapshot, TagCandidateCollection, TagCandidateItem } from "../lib/api/types";
+import type { EditablePaperMetadata, MetadataEnrichmentPreview, PaperTagCommandResponse, ReaderSnapshot, TagCandidateCollection } from "../lib/api/types";
 import {
   applyMetadataEnrichmentCommandResult,
   applyMetadataCommandResult,
@@ -22,6 +21,7 @@ import {
   shouldWarnBeforeReplacement,
 } from "../lib/reader/editor-state.mjs";
 import { createExclusiveMutationGate } from "../lib/reader/mutation-coordinator.mjs";
+import { formatPaperNoteMarkdown, type PaperNoteFormatAction } from "../lib/reader/note-formatting.mjs";
 
 
 type EditorStatus = "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
@@ -42,6 +42,8 @@ type CandidateReviewState = {
   message: string;
 };
 
+type ReaderUtility = "tags" | "full-text" | null;
+
 const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   title: "Title",
   authors: "Authors",
@@ -51,14 +53,6 @@ const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   abstract: "Abstract",
   keywords: "Keywords",
 };
-
-const CANDIDATE_STATE_LABELS = {
-  unchanged: "Unchanged",
-  conflict: "Conflicts with current",
-  available: "Candidate available",
-  unavailable: "Unavailable",
-} as const;
-
 
 function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
   if (snapshot.pdf_state === "missing" || snapshot.paper.missing_pdf || !snapshot.paper.relative_pdf_path) {
@@ -75,6 +69,65 @@ function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
 
 function statusLabel(status: string): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function paperNoteBody(content: string): string {
+  const text = String(content);
+  const bodyStart = text.search(/^##\s+/m);
+  if (!text.startsWith("# BluePrint Reading Note") || bodyStart < 0) return text;
+  return text.slice(bodyStart).replace(/^##\s+Raw Notes\s*\n*/i, "");
+}
+
+function replacePaperNoteBody(content: string, body: string): string {
+  const text = String(content);
+  const bodyStart = text.search(/^##\s+/m);
+  if (!text.startsWith("# BluePrint Reading Note") || bodyStart < 0) return body;
+  const section = text.slice(bodyStart);
+  const rawNotesHeading = section.match(/^##\s+Raw Notes\s*\n*/i)?.[0] ?? "";
+  return `${text.slice(0, bodyStart)}${rawNotesHeading}${body}`;
+}
+
+function safeMarkdownPreviewUrl(value: string): string | null {
+  try {
+    const parsed = new URL(value, "https://blueprint.local");
+    return ["http:", "https:", "mailto:"].includes(parsed.protocol) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderPaperNoteInline(value: string): ReactNode[] {
+  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^\s)]+\))/g;
+  return value.split(pattern).filter((part) => part !== "").map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("*") && part.endsWith("*")) return <em key={index}>{part.slice(1, -1)}</em>;
+    const link = part.match(/^\[([^\]]+)\]\(([^\s)]+)\)$/);
+    if (link) {
+      const href = safeMarkdownPreviewUrl(link[2]);
+      return href ? <a key={index} href={href} target="_blank" rel="noreferrer">{link[1]}</a> : link[1];
+    }
+    return part;
+  });
+}
+
+function PaperNoteMarkdownPreview({ content }: { content: string }) {
+  return (
+    <div className="reader-note__preview" aria-label="Rendered Paper Note preview">
+      {content.split("\n").map((line, index) => {
+        const heading = line.match(/^#{1,6}\s+(.*)$/);
+        const task = line.match(/^\s*[-+*]\s+\[([ xX])\]\s+(.*)$/);
+        const bullet = line.match(/^\s*[-+*]\s+(.*)$/);
+        const numbered = line.match(/^\s*(\d+[.)])\s+(.*)$/);
+        const quote = line.match(/^\s*>\s?(.*)$/);
+        if (heading) return <h3 key={index}>{renderPaperNoteInline(heading[1])}</h3>;
+        if (task) return <div className="reader-note__preview-task" key={index}><input type="checkbox" checked={task[1].toLowerCase() === "x"} disabled readOnly />{renderPaperNoteInline(task[2])}</div>;
+        if (bullet) return <div className="reader-note__preview-list" key={index}>• {renderPaperNoteInline(bullet[1])}</div>;
+        if (numbered) return <div className="reader-note__preview-list" key={index}>{numbered[1]} {renderPaperNoteInline(numbered[2])}</div>;
+        if (quote) return <blockquote key={index}>{renderPaperNoteInline(quote[1])}</blockquote>;
+        return line ? <p key={index}>{renderPaperNoteInline(line)}</p> : <div className="reader-note__preview-spacer" key={index} />;
+      })}
+    </div>
+  );
 }
 
 
@@ -128,15 +181,23 @@ function refreshedCandidatePreview(
 
 function candidateReviewFailure(error: unknown): Pick<CandidateReviewState, "status" | "message"> {
   if (error instanceof ApiClientError && error.kind === "conflict") {
-    return { status: "conflict", message: "The candidate review or Paper tags changed. Reload or regenerate candidates before retrying; Reader drafts remain untouched." };
+    return { status: "conflict", message: "Paper tags or suggestions changed. Refresh suggestions before retrying; your Reader drafts remain untouched." };
   }
-  return { status: "error", message: "Candidate review could not be completed. No Paper tags were changed." };
+  return { status: "error", message: "Suggestions could not be completed. No Paper tags were changed." };
 }
 
 
 function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const mutationGate = useRef(createExclusiveMutationGate());
+  const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const metadataReviewRef = useRef<HTMLDivElement | null>(null);
   const [mutationBusy, setMutationBusy] = useState(false);
+  const [researchPanelCollapsed, setResearchPanelCollapsed] = useState(false);
+  const [activeUtility, setActiveUtility] = useState<ReaderUtility>(null);
+  const [notePreviewOpen, setNotePreviewOpen] = useState(false);
+  const [metadataEditorOpen, setMetadataEditorOpen] = useState(false);
+  const [metadataReviewOpen, setMetadataReviewOpen] = useState(false);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [editor, setEditor] = useState(() => createReaderEditorState(snapshot));
   const [enrichment, setEnrichment] = useState<EnrichmentState>({
     status: "idle",
@@ -147,7 +208,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const [candidateReview, setCandidateReview] = useState<CandidateReviewState>({
     status: "idle",
     collection: null,
-    message: "Generate candidates to begin an explicit review. Generation never applies Paper tags.",
+    message: "Generate suggestions to begin an explicit review. Generation never applies Paper tags.",
   });
   const tagBook = useApiResource(
     "reader-canonical-tag-book",
@@ -162,8 +223,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           status: "ready",
           collection,
           message: collection.items.length
-            ? "Saved candidates are ready for review. Nothing has been applied to this Paper."
-            : "A saved candidate review contains no candidates. Nothing has been applied to this Paper.",
+            ? "Saved suggestions are ready to review. Nothing has been applied to this Paper."
+            : "No saved suggestions are available for this Paper.",
         } : state);
       })
       .catch((error) => {
@@ -175,6 +236,15 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       });
     return () => { current = false; };
   }, [snapshot.paper.paper_id]);
+  useEffect(() => {
+    if (!metadataReviewOpen) return;
+    metadataReviewRef.current?.focus();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && enrichment.status !== "saving") setMetadataReviewOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [metadataReviewOpen, enrichment.status]);
   const metadataChanged = useMemo(
     () => changedMetadataFields(editor.metadata.draft, editor.metadata.baseline),
     [editor.metadata.draft, editor.metadata.baseline],
@@ -274,8 +344,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           preview,
           selectedFields,
           message: preview.candidate_sources.length
-            ? "Candidates are ready for review. Nothing has been saved."
-            : "No candidate values were available. Nothing has been saved.",
+            ? "Metadata updates are ready for review. Nothing has been saved."
+            : "No metadata updates are available. Nothing has been saved.",
         };
       });
     } catch (error) {
@@ -522,15 +592,16 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     if (candidateReview.status === "loading" || mutationBusy) return;
     const mutationToken = beginMutation();
     if (mutationToken === null) return;
-    setCandidateReview((current) => ({ ...current, status: "loading", message: "Generating candidates for review…" }));
+    setCandidateReview((current) => ({ ...current, status: "loading", message: "Finding suggested tags…" }));
     try {
       const collection = await apiClient.generateTagCandidates(snapshot.paper.paper_id, resetRejections);
+      setSelectedSuggestions([]);
       setCandidateReview({
         status: "ready",
         collection,
         message: collection.items.length
-          ? "Candidates are ready for review. Nothing has been applied to this Paper."
-          : "No candidates were generated. Nothing has been applied to this Paper.",
+          ? "Suggestions are ready to review. Nothing has been applied to this Paper."
+          : "No suggested tags are available for this Paper.",
       });
     } catch (error) {
       setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
@@ -539,22 +610,47 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     }
   };
 
-  const reviewCandidate = async (candidate: TagCandidateItem, action: "approve" | "reject" | "promote") => {
+  const applySelectedSuggestions = async () => {
     const collection = candidateReview.collection;
     if (!collection || candidateReview.status === "loading" || mutationBusy) return;
+    const selected = collection.items.filter((candidate) => (
+      selectedSuggestions.includes(candidate.candidate_id)
+      && candidate.resolved_canonical
+      && candidate.canonical_status === "active"
+      && (candidate.state === "resolved" || candidate.state === "approved")
+    ));
+    if (!selected.length) return;
     const mutationToken = beginMutation();
     if (mutationToken === null) return;
-    setCandidateReview((current) => ({ ...current, status: "loading", message: `${statusLabel(action)}ing candidate…` }));
+    setCandidateReview((current) => ({ ...current, status: "loading", message: "Applying selected suggested tags…" }));
     try {
-      const next = action === "approve"
-        ? await apiClient.approveTagCandidate(snapshot.paper.paper_id, candidate.candidate_id, collection.review_revision)
-        : action === "reject"
-          ? await apiClient.rejectTagCandidate(snapshot.paper.paper_id, candidate.candidate_id, collection.review_revision)
-          : await apiClient.promoteTagCandidate(snapshot.paper.paper_id, candidate.candidate_id, collection.review_revision, candidate.category);
+      let nextCollection = collection;
+      let tagsRevision = editor.tags.revision;
+      let latestPaperTag: PaperTagCommandResponse | null = null;
+      for (const candidate of selected) {
+        const response = await apiClient.applyTagCandidate(
+          snapshot.paper.paper_id,
+          candidate.candidate_id,
+          nextCollection.review_revision,
+          tagsRevision,
+        );
+        tagsRevision = response.paper_tag.tags_revision;
+        latestPaperTag = response.paper_tag;
+        nextCollection = {
+          ...nextCollection,
+          review_revision: response.review_revision,
+          tags_revision: response.paper_tag.tags_revision,
+          items: nextCollection.items.map((item) => (
+            item.candidate_id === response.candidate.candidate_id ? response.candidate : item
+          )),
+        };
+      }
+      if (latestPaperTag) setEditor((current) => applyPaperTagCommandResult(current, latestPaperTag));
+      setSelectedSuggestions([]);
       setCandidateReview({
         status: "ready",
-        collection: next,
-        message: action === "approve" ? "Candidate approved. Apply remains a separate Paper mutation." : action === "reject" ? "Candidate rejected. It will remain rejected unless deliberately reset during regeneration." : "Candidate promoted or resolved as a canonical tag. Apply remains a separate Paper mutation.",
+        collection: nextCollection,
+        message: selected.length === 1 ? "Suggested tag applied." : `${selected.length} suggested tags applied.`,
       });
     } catch (error) {
       setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
@@ -563,63 +659,113 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     }
   };
 
-  const applyCandidate = async (candidate: TagCandidateItem) => {
-    const collection = candidateReview.collection;
-    if (!collection || candidateReview.status === "loading" || mutationBusy) return;
-    const mutationToken = beginMutation();
-    if (mutationToken === null) return;
-    setCandidateReview((current) => ({ ...current, status: "loading", message: "Applying approved canonical tag through the Paper tag command…" }));
-    try {
-      const response = await apiClient.applyTagCandidate(
-        snapshot.paper.paper_id,
-        candidate.candidate_id,
-        collection.review_revision,
-        editor.tags.revision,
-      );
-      setEditor((current) => applyPaperTagCommandResult(current, response.paper_tag));
-      setCandidateReview((current) => {
-        if (!current.collection) return current;
-        return {
-          status: "ready",
-          collection: {
-            ...current.collection,
-            review_revision: response.review_revision,
-            tags_revision: response.paper_tag.tags_revision,
-            items: current.collection.items.map((item) => item.candidate_id === response.candidate.candidate_id ? response.candidate : item),
-          },
-          message: response.paper_tag.status === "no_op"
-            ? "The canonical tag was already applied; the candidate is recorded as applied."
-            : "Canonical tag applied through the existing Paper tag command.",
-        };
-      });
-    } catch (error) {
-      setCandidateReview((current) => ({ ...current, ...candidateReviewFailure(error) }));
-    } finally {
-      finishMutation(mutationToken);
-    }
+  const updateMetadataField = (field: keyof EditablePaperMetadata, value: string) => {
+    setEditor((current) => {
+      const draft = { ...current.metadata.draft, [field]: value };
+      return {
+        ...current,
+        metadata: {
+          ...current.metadata,
+          draft,
+          status: changedMetadataFields(draft, current.metadata.baseline).length ? "dirty" : "clean",
+          message: "",
+        },
+      };
+    });
   };
 
+  const formatPaperNote = (action: PaperNoteFormatAction) => {
+    const textarea = noteTextareaRef.current;
+    const currentValue = paperNoteBody(editor.note.draft);
+    const selectionStart = textarea?.selectionStart ?? currentValue.length;
+    const selectionEnd = textarea?.selectionEnd ?? currentValue.length;
+    const linkUrl = action === "link" ? window.prompt("Link URL", "https://") : undefined;
+    if (action === "link" && linkUrl === null) return;
+    const formatted = formatPaperNoteMarkdown(currentValue, selectionStart, selectionEnd, action, { url: linkUrl ?? undefined });
+    const nextDraft = replacePaperNoteBody(editor.note.draft, formatted.value);
+    setEditor((current) => ({
+      ...current,
+      note: {
+        ...current.note,
+        draft: replacePaperNoteBody(current.note.draft, formatted.value),
+        status: nextDraft === current.note.baseline ? "clean" : "dirty",
+        message: "",
+      },
+    }));
+    window.requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
+    });
+  };
+
+  const preserveNoteSelection = (event: ReactMouseEvent<HTMLButtonElement>) => {
+    // Keep the textarea selection in place while a toolbar command runs. This
+    // prevents a toolbar click from moving formatting to an unrelated caret.
+    event.preventDefault();
+  };
+
+  const availableSuggestions = candidateReview.collection?.items.filter((candidate) => (
+    candidate.resolved_canonical
+    && candidate.canonical_status === "active"
+    && (candidate.state === "resolved" || candidate.state === "approved")
+  )) ?? [];
+  const tagLabel = (tag: string) => (
+    tagBook.status === "success"
+      ? tagBook.data.find((item) => item.canonical_key === tag)?.label || tag
+      : tag
+  );
+  const enrichmentChanges = enrichment.preview?.fields.filter((field) => (
+    Boolean(field.candidate_value) && field.state !== "unchanged"
+  )) ?? [];
   const noteUnavailable = snapshot.warnings.includes("saved_note_unavailable");
   const detailHref = `/papers/${encodeURIComponent(snapshot.paper.paper_id)}`;
   return (
-    <>
-      <Breadcrumbs items={[{ label: "Library", href: "/library" }, { label: editor.metadata.draft.title || snapshot.paper.title, href: detailHref }, { label: "Reader" }]} />
-      <PageHeader
-        title={editor.metadata.draft.title || snapshot.paper.title}
-        description={[
-          editor.metadata.draft.authors || "Authors unknown",
-          editor.metadata.draft.journal,
-          editor.metadata.draft.year,
-        ].filter(Boolean).join(" · ") || "Citation metadata is incomplete."}
-        actions={<StatusBadge tone={snapshot.paper.archived ? "neutral" : "accent"}>{snapshot.paper.lifecycle_state}</StatusBadge>}
-      />
-      <div className="reader-layout">
-        <section className="reader-stage" aria-label="Managed PDF viewing region">
-          <ReaderPdf snapshot={snapshot} />
-        </section>
-        <aside className="reader-companion" aria-label="Reader editors">
-          <FullTextWorkspace key={`full-text:${snapshot.paper.paper_id}`} paperId={snapshot.paper.paper_id} />
-          <section className="reader-editor" aria-labelledby="metadata-editor-title">
+    <div className="reader-workspace">
+      <header className="reader-workspace__chrome">
+        <Breadcrumbs items={[{ label: "Library", href: "/library" }, { label: editor.metadata.draft.title || snapshot.paper.title, href: detailHref }, { label: "Reader" }]} />
+        <div className="reader-workspace__identity">
+          <h1 title={editor.metadata.draft.title || snapshot.paper.title}>{editor.metadata.draft.title || snapshot.paper.title}</h1>
+          <div className="reader-workspace__utilities" aria-label="Reader utilities">
+            <button
+              className={activeUtility === "tags" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
+              type="button"
+              aria-pressed={activeUtility === "tags"}
+              onClick={() => setActiveUtility((current) => current === "tags" ? null : "tags")}
+            ><Tags size={15} />Tags</button>
+            <button
+              className={activeUtility === "full-text" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
+              type="button"
+              aria-pressed={activeUtility === "full-text"}
+              onClick={() => setActiveUtility((current) => current === "full-text" ? null : "full-text")}
+            ><FileText size={15} />Full Text</button>
+            <StatusBadge tone={snapshot.paper.archived ? "neutral" : "accent"}>{snapshot.paper.lifecycle_state}</StatusBadge>
+          </div>
+        </div>
+      </header>
+      <div className={activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"} data-research-collapsed={researchPanelCollapsed}>
+        <aside className="reader-research-panel" aria-label="Paper Note and Note Blocks" data-collapsed={researchPanelCollapsed}>
+          {researchPanelCollapsed ? (
+            <button className="reader-research-panel__collapse" type="button" aria-label="Expand research panel" onClick={() => setResearchPanelCollapsed(false)}><ChevronRight size={16} /></button>
+          ) : (
+            <>
+              <section className="reader-paper-context" aria-label="Paper and Note context">
+                <div className="reader-paper-context__heading">
+                  <div>
+                    <strong>{editor.metadata.draft.authors || "Authors unknown"}</strong>
+                    <span>{[editor.metadata.draft.journal, editor.metadata.draft.year].filter(Boolean).join(" · ") || "Citation metadata is incomplete."}</span>
+                    {editor.metadata.draft.doi ? <span className="reader-paper-context__identifier">DOI {editor.metadata.draft.doi}</span> : snapshot.paper.arxiv_id ? <span className="reader-paper-context__identifier">arXiv {snapshot.paper.arxiv_id}</span> : null}
+                  </div>
+                  <button className="reader-research-panel__collapse" type="button" aria-label="Collapse research panel" onClick={() => setResearchPanelCollapsed(true)}><ChevronLeft size={16} /></button>
+                </div>
+                <div className="reader-paper-context__actions">
+                  <StatusBadge tone={editor.note.status === "conflict" || editor.note.status === "error" || noteUnavailable ? "danger" : editor.note.status === "saved" ? "accent" : "neutral"}>{noteUnavailable ? "Note unavailable" : statusLabel(editor.note.status)}</StatusBadge>
+                  <button className="reader-control reader-control--secondary" type="button" onClick={() => setMetadataEditorOpen((current) => !current)}>{metadataEditorOpen ? "Hide details" : "Edit details"}</button>
+                  <button className="reader-control" type="button" disabled={enrichment.status === "loading" || enrichment.status === "saving" || mutationBusy} onClick={() => { setMetadataReviewOpen(true); void fetchMetadataCandidates(enrichment.status === "conflict"); }}><RotateCcw size={15} />{enrichment.status === "loading" ? "Checking…" : "Enrich"}</button>
+                </div>
+              </section>
+              <div className="reader-research-panel__content">
+          {metadataEditorOpen ? (
+          <section className="reader-editor reader-metadata-editor" aria-labelledby="metadata-editor-title">
             <div className="reader-note__heading">
               <div>
                 <h2 id="metadata-editor-title">Paper metadata</h2>
@@ -640,18 +786,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                         rows={5}
                         value={editor.metadata.draft[field]}
                         disabled={mutationBusy}
-                        onChange={(event) => setEditor((current) => {
-                          const draft = { ...current.metadata.draft, [field]: event.target.value };
-                          return {
-                            ...current,
-                            metadata: {
-                              ...current.metadata,
-                              draft,
-                              status: changedMetadataFields(draft, current.metadata.baseline).length ? "dirty" : "clean",
-                              message: "",
-                            },
-                          };
-                        })}
+                        onChange={(event) => updateMetadataField(field, event.target.value)}
                       />
                     ) : (
                       <input
@@ -659,18 +794,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                         inputMode={field === "year" ? "numeric" : "text"}
                         value={editor.metadata.draft[field]}
                         disabled={mutationBusy}
-                        onChange={(event) => setEditor((current) => {
-                          const draft = { ...current.metadata.draft, [field]: event.target.value };
-                          return {
-                            ...current,
-                            metadata: {
-                              ...current.metadata,
-                              draft,
-                              status: changedMetadataFields(draft, current.metadata.baseline).length ? "dirty" : "clean",
-                              message: "",
-                            },
-                          };
-                        })}
+                        onChange={(event) => updateMetadataField(field, event.target.value)}
                       />
                     )}
                   </label>
@@ -691,177 +815,12 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               ) : null}
             </div>
           </section>
-
-          <section className="reader-editor metadata-enrichment" aria-labelledby="metadata-enrichment-title">
-            <div className="reader-note__heading">
-              <div>
-                <p className="eyebrow">Preview before save</p>
-                <h2 id="metadata-enrichment-title">Metadata enrichment</h2>
-              </div>
-              <StatusBadge tone={enrichment.status === "conflict" || enrichment.status === "error" ? "danger" : enrichment.status === "saved" ? "accent" : "neutral"}>
-                {enrichment.status === "ready" ? "Preview ready" : statusLabel(enrichment.status)}
-              </StatusBadge>
-            </div>
-            <p className="reader-editor__status" role="status" aria-live="polite">
-              {enrichment.message || "Fetch candidates from available DOI/Crossref, arXiv, and PDF-derived sources. This never saves metadata."}
-            </p>
-            {metadataChanged.length ? (
-              <p className="metadata-enrichment__notice">
-                The manual metadata editor has unsaved changes. Enrichment compares saved values and preserves every unselected manual draft field.
-              </p>
-            ) : null}
-            {enrichment.preview ? (
-              <>
-                <p className="metadata-enrichment__sources">
-                  Sources: {enrichment.preview.candidate_sources.length ? enrichment.preview.candidate_sources.join(", ") : "No candidate source supplied a supported field."}
-                </p>
-                <div className="metadata-enrichment__table" role="region" aria-label="Metadata candidate comparison">
-                  <div className="metadata-enrichment__row metadata-enrichment__row--heading" aria-hidden="true">
-                    <span>Apply</span><span>Field</span><span>Current saved value</span><span>Candidate value</span><span>Source / comparison</span>
-                  </div>
-                  {enrichment.preview.fields.map((field) => {
-                    const selectable = Boolean(field.candidate_value) && field.state !== "unchanged";
-                    const selected = enrichment.selectedFields.includes(field.field);
-                    return (
-                      <div className={`metadata-enrichment__row metadata-enrichment__row--${field.state}`} key={field.field}>
-                        <label className="metadata-enrichment__select">
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            disabled={!selectable || mutationBusy}
-                            onChange={() => toggleCandidateField(field.field)}
-                            aria-label={`Select ${FIELD_LABELS[field.field]} candidate`}
-                          />
-                        </label>
-                        <strong>{FIELD_LABELS[field.field]}</strong>
-                        <span className="metadata-enrichment__value">{field.current_value || "—"}</span>
-                        <span className="metadata-enrichment__value">{field.candidate_value || "Unavailable"}</span>
-                        <span className="metadata-enrichment__comparison">{field.source || "No source"}<br />{CANDIDATE_STATE_LABELS[field.state]}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {enrichment.preview.diagnostics.length ? (
-                  <ul className="metadata-enrichment__diagnostics">
-                    {enrichment.preview.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}
-                  </ul>
-                ) : null}
-              </>
-            ) : null}
-            <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={enrichment.status === "loading" || mutationBusy} onClick={() => fetchMetadataCandidates(enrichment.status === "conflict")}>
-                <RotateCcw size={15} />{enrichment.status === "loading" ? "Fetching…" : enrichment.preview ? "Fetch fresh candidates" : "Fetch candidates"}
-              </button>
-              <button className="reader-control" type="button" disabled={!enrichment.selectedFields.length || enrichment.status === "loading" || mutationBusy} onClick={applySelectedCandidates}>
-                <Save size={15} />{enrichment.status === "saving" ? "Applying…" : "Apply selected fields"}
-              </button>
-              {enrichment.status === "conflict" ? (
-                <button className="reader-control reader-control--secondary" type="button" onClick={() => fetchMetadataCandidates(true)}>
-                  <RotateCcw size={15} />Reload candidates and retry
-                </button>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="reader-editor" aria-labelledby="paper-tags-editor-title">
-            <div className="reader-note__heading">
-              <div>
-                <h2 id="paper-tags-editor-title">Paper tags</h2>
-              </div>
-              <StatusBadge tone={editor.tags.status === "conflict" || editor.tags.status === "error" ? "danger" : editor.tags.status === "saved" ? "accent" : "neutral"}>
-                {statusLabel(editor.tags.status)}
-              </StatusBadge>
-            </div>
-            <div className="tag-list" aria-label="Current Paper tags">
-              {editor.tags.values.length ? editor.tags.values.map((tag) => (
-                <button
-                  className="reader-control reader-control--secondary"
-                  type="button"
-                  key={tag}
-                  disabled={mutationBusy}
-                  onClick={() => changePaperTag("remove", tag)}
-                  aria-label={`Remove ${tag}`}
-                >
-                  Remove {tag}
-                </button>
-              )) : <span className="muted-text">No Paper tags are stored.</span>}
-            </div>
-            <label className="reader-field">
-              <span>Add one tag</span>
-              <input
-                type="text"
-                list="reader-canonical-tag-options"
-                value={editor.tags.draft}
-                disabled={mutationBusy}
-                onChange={(event) => setEditor((current) => ({
-                  ...current,
-                  tags: {
-                    ...current.tags,
-                    draft: event.target.value,
-                    status: event.target.value.trim() ? "dirty" : "clean",
-                    message: "",
-                  },
-                }))}
-              />
-              <datalist id="reader-canonical-tag-options">
-                {tagBook.status === "success" ? tagBook.data.map((tag) => (
-                  <option key={tag.canonical_key} value={tag.canonical_key}>{tag.label}</option>
-                )) : null}
-              </datalist>
-            </label>
-            <p className="reader-editor__status" role="status" aria-live="polite">
-              {editor.tags.message || (tagBook.status === "success" ? "Choose a canonical Tag Book value or enter one explicit compatible tag." : "Enter one explicit tag. Canonical Tag Book choices load when available.")}
-            </p>
-            <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={!editor.tags.draft.trim() || mutationBusy} onClick={() => changePaperTag("add", editor.tags.draft)}>
-                <Save size={15} />{editor.tags.status === "saving" ? "Saving…" : "Add Tag"}
-              </button>
-              {editor.tags.status === "conflict" ? (
-                <button className="reader-control reader-control--secondary" type="button" onClick={reloadPaperTags}>
-                  <RotateCcw size={15} />Reload current tags
-                </button>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="reader-editor" aria-labelledby="tag-candidate-review-title">
-            <div className="reader-note__heading">
-              <div>
-                <p className="eyebrow">Review</p>
-                <h2 id="tag-candidate-review-title">Tag candidates</h2>
-              </div>
-              <StatusBadge tone={candidateReview.status === "conflict" || candidateReview.status === "error" ? "danger" : candidateReview.status === "ready" ? "accent" : "neutral"}>{statusLabel(candidateReview.status)}</StatusBadge>
-            </div>
-            <p className="reader-editor__status">{candidateReview.message}</p>
-            <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />{candidateReview.status === "loading" ? "Generating…" : candidateReview.collection ? "Refresh candidates" : "Generate candidates"}</button>
-              {candidateReview.collection?.items.some((item) => item.state === "rejected") ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => generateTagCandidates(true)}>Reset rejected on regeneration</button> : null}
-            </div>
-            {candidateReview.collection?.items.length ? <div className="candidate-review-list" aria-label="Tag candidate review items">
-              {candidateReview.collection.items.map((candidate) => {
-                const activeResolution = Boolean(candidate.resolved_canonical) && candidate.canonical_status === "active";
-                const canReview = candidate.state !== "rejected" && candidate.state !== "applied" && candidate.quality !== "rejected";
-                const canApply = activeResolution && (candidate.state === "resolved" || candidate.state === "approved");
-                return <article className="candidate-review-card" key={candidate.candidate_id}>
-                  <div className="reader-note__heading"><div><strong>{candidate.tag_text}</strong><p className="muted-text">{candidate.category} · {candidate.source_label || "local evidence"}{candidate.score ? ` · score ${candidate.score}` : ""}</p></div><StatusBadge tone={candidate.state === "rejected" ? "danger" : candidate.state === "approved" || candidate.state === "applied" ? "healthy" : candidate.state === "resolved" ? "accent" : "warning"}>{candidate.state}</StatusBadge></div>
-                  <p className="candidate-review-card__reason">{candidate.reason || "Local candidate evidence; review before any action."}</p>
-                  {candidate.resolved_canonical ? <p className="muted-text">Resolves to <span className="mono-id">{candidate.resolved_canonical}</span>{candidate.canonical_status === "deprecated" ? " (deprecated; cannot apply)" : ""}.</p> : null}
-                  {candidate.evidence[0]?.snippet ? <p className="candidate-review-card__evidence">{candidate.evidence[0].snippet}</p> : null}
-                  <div className="reader-editor__actions">
-                    {canReview && activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => reviewCandidate(candidate, "approve")}>Approve</button> : null}
-                    {canReview && !activeResolution ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => reviewCandidate(candidate, "promote")}>Promote to canonical</button> : null}
-                    {canReview ? <button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => reviewCandidate(candidate, "reject")}>Reject</button> : null}
-                    {canApply ? <button className="reader-control" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => applyCandidate(candidate)}>Apply to Paper</button> : null}
-                  </div>
-                </article>;
-              })}
-            </div> : candidateReview.collection?.state === "generated" ? <p className="muted-text">No tag candidates are currently available for this Paper.</p> : null}
-          </section>
+          ) : null}
 
           <section className="reader-editor reader-note" aria-labelledby="reading-note-editor-title">
             <div className="reader-note__heading">
               <div>
-                <h2 id="reading-note-editor-title">Reading Note</h2>
+                <h2 id="reading-note-editor-title">Paper Note</h2>
               </div>
               <StatusBadge tone={editor.note.status === "conflict" || editor.note.status === "error" || noteUnavailable ? "danger" : editor.note.status === "saved" ? "accent" : "neutral"}>
                 {noteUnavailable ? "Unavailable" : statusLabel(editor.note.status)}
@@ -872,42 +831,142 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 The persisted note could not be read. Saving is disabled until the current version can be loaded.
               </div>
             ) : null}
-            <label className="reader-field">
-              <span>Complete Reading Note</span>
-              <textarea
-                className="reader-note__textarea"
-                rows={24}
-                value={editor.note.draft}
-                disabled={mutationBusy || noteUnavailable}
-                onChange={(event) => setEditor((current) => ({
-                  ...current,
-                  note: {
-                    ...current.note,
-                    draft: event.target.value,
-                    status: event.target.value === current.note.baseline ? "clean" : "dirty",
-                    message: "",
-                  },
-                }))}
-              />
-            </label>
+            <div className="reader-note__formatting" role="toolbar" aria-label="Paper Note formatting">
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("heading")}>Heading</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bold")}>Bold</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("italic")}>Italic</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bullets")}>Bullets</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("numbered")}>Numbered</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("task")}>Task</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("quote")}>Quote</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("link")}>Link</button>
+              <button className={notePreviewOpen ? "reader-control reader-control--active" : "reader-control reader-control--secondary"} type="button" disabled={noteUnavailable} aria-pressed={notePreviewOpen} onClick={() => setNotePreviewOpen((current) => !current)}>{notePreviewOpen ? "Edit note" : "Preview"}</button>
+            </div>
+            {notePreviewOpen ? <PaperNoteMarkdownPreview content={paperNoteBody(editor.note.draft)} /> : (
+              <label className="reader-field">
+                <span className="sr-only">Paper Note</span>
+                <textarea
+                  ref={noteTextareaRef}
+                  className="reader-note__textarea"
+                  rows={18}
+                  value={paperNoteBody(editor.note.draft)}
+                  disabled={mutationBusy || noteUnavailable}
+                  onChange={(event) => setEditor((current) => ({
+                    ...current,
+                    note: {
+                      ...current.note,
+                      draft: replacePaperNoteBody(current.note.draft, event.target.value),
+                      status: replacePaperNoteBody(current.note.draft, event.target.value) === current.note.baseline ? "clean" : "dirty",
+                      message: "",
+                    },
+                  }))}
+                />
+              </label>
+            )}
             <p className="reader-editor__status" role="status" aria-live="polite">
-              {editor.note.message || (editor.note.exists ? "Editing the persisted Reading Note." : "No persisted note exists; Save will create it.")}
+              {editor.note.message || (editor.note.exists ? "Markdown-compatible plain text. Save remains explicit." : "No persisted note exists; Save will create it.")}
             </p>
             <div className="reader-editor__actions">
               <button className="reader-control" type="button" disabled={editor.note.draft === editor.note.baseline || mutationBusy || noteUnavailable} onClick={saveNote}>
-                <Save size={15} />{editor.note.status === "saving" ? "Saving…" : "Save Reading Note"}
+                <Save size={15} />{editor.note.status === "saving" ? "Saving…" : "Save Paper Note"}
               </button>
               {editor.note.status === "conflict" ? (
                 <button className="reader-control reader-control--secondary" type="button" onClick={reloadNote}>
-                  <RotateCcw size={15} />Reload current Reading Note
+                  <RotateCcw size={15} />Reload current Paper Note
                 </button>
               ) : null}
             </div>
           </section>
           <NoteBlocksWorkspace key={snapshot.paper.paper_id} paperId={snapshot.paper.paper_id} />
+              </div>
+            </>
+          )}
         </aside>
+        <section className="reader-stage" aria-label="Managed PDF viewing region">
+          <ReaderPdf snapshot={snapshot} />
+        </section>
+        {activeUtility ? (
+          <aside className="reader-utility-drawer" aria-label="Reader utilities">
+            <div className="reader-utility-drawer__header">
+              <div className="reader-utility-drawer__tabs" role="tablist" aria-label="Reader utilities">
+                <button className={activeUtility === "tags" ? "reader-utility-drawer__tab is-active" : "reader-utility-drawer__tab"} type="button" role="tab" aria-controls="reader-utility-panel" aria-selected={activeUtility === "tags"} onClick={() => setActiveUtility("tags")}>Tags</button>
+                <button className={activeUtility === "full-text" ? "reader-utility-drawer__tab is-active" : "reader-utility-drawer__tab"} type="button" role="tab" aria-controls="reader-utility-panel" aria-selected={activeUtility === "full-text"} onClick={() => setActiveUtility("full-text")}>Full Text</button>
+              </div>
+              <button className="reader-research-panel__collapse" type="button" aria-label="Close utility drawer" onClick={() => setActiveUtility(null)}><X size={16} /></button>
+            </div>
+            <div id="reader-utility-panel" className="reader-utility-drawer__content" role="tabpanel">
+              {activeUtility === "full-text" ? <FullTextWorkspace key={`full-text:${snapshot.paper.paper_id}`} paperId={snapshot.paper.paper_id} /> : null}
+              {activeUtility === "tags" ? (
+                <section className="reader-utility-section" aria-labelledby="paper-tags-editor-title">
+                  <div className="reader-note__heading">
+                    <h2 id="paper-tags-editor-title">Tags</h2>
+                    <StatusBadge tone={editor.tags.status === "conflict" || editor.tags.status === "error" ? "danger" : editor.tags.status === "saved" ? "accent" : "neutral"}>{statusLabel(editor.tags.status)}</StatusBadge>
+                  </div>
+                  <div>
+                    <h3>Current</h3>
+                    <div className="tag-list" aria-label="Current Paper tags">
+                      {editor.tags.values.length ? editor.tags.values.map((tag) => (
+                        <button className="reader-tag-chip" type="button" key={tag} disabled={mutationBusy} onClick={() => changePaperTag("remove", tag)} aria-label={`Remove ${tagLabel(tag)}`}>
+                          {tagLabel(tag)} <span aria-hidden="true">×</span>
+                        </button>
+                      )) : <span className="muted-text">No tags yet.</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <h3>Add tag</h3>
+                    <div className="reader-utility-section__add-tag">
+                      <input type="text" list="reader-canonical-tag-options" aria-label="Add a tag" value={editor.tags.draft} disabled={mutationBusy} onChange={(event) => setEditor((current) => ({
+                        ...current,
+                        tags: { ...current.tags, draft: event.target.value, status: event.target.value.trim() ? "dirty" : "clean", message: "" },
+                      }))} />
+                      <datalist id="reader-canonical-tag-options">
+                        {tagBook.status === "success" ? tagBook.data.map((tag) => <option key={tag.canonical_key} value={tag.label} />) : null}
+                      </datalist>
+                      <button className="reader-control" type="button" disabled={!editor.tags.draft.trim() || mutationBusy} onClick={() => changePaperTag("add", editor.tags.draft)}><Save size={15} />{editor.tags.status === "saving" ? "Adding…" : "Add"}</button>
+                    </div>
+                    {editor.tags.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={reloadPaperTags}><RotateCcw size={15} />Reload tags</button> : null}
+                  </div>
+                  <div>
+                    <div className="reader-note__heading"><h3>Suggestions</h3><button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />{candidateReview.status === "loading" ? "Finding…" : "Suggest tags"}</button></div>
+                    <p className="reader-editor__status" role="status" aria-live="polite">{candidateReview.message}</p>
+                    {availableSuggestions.length ? (
+                      <div className="reader-suggestion-list" aria-label="Suggested tags to review">
+                        {availableSuggestions.map((candidate) => <label className="reader-suggestion" key={candidate.candidate_id}><input type="checkbox" checked={selectedSuggestions.includes(candidate.candidate_id)} disabled={candidateReview.status === "loading" || mutationBusy} onChange={() => setSelectedSuggestions((current) => current.includes(candidate.candidate_id) ? current.filter((id) => id !== candidate.candidate_id) : [...current, candidate.candidate_id])} />{candidate.tag_text}</label>)}
+                      </div>
+                    ) : candidateReview.collection?.state === "generated" ? <p className="muted-text">No suggested tags are ready to apply.</p> : null}
+                    <button className="reader-control" type="button" disabled={!selectedSuggestions.length || candidateReview.status === "loading" || mutationBusy} onClick={applySelectedSuggestions}><Save size={15} />Apply selected</button>
+                    {candidateReview.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />Refresh suggestions</button> : null}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+          </aside>
+        ) : null}
       </div>
-    </>
+      {metadataReviewOpen ? (
+        <div className="metadata-review-backdrop" role="presentation">
+          <div className="metadata-review-dialog" role="dialog" aria-modal="true" aria-labelledby="metadata-enrichment-title" tabIndex={-1} ref={metadataReviewRef}>
+            <div className="reader-note__heading">
+              <div><p className="eyebrow">Review before save</p><h2 id="metadata-enrichment-title">Metadata updates</h2></div>
+              <button className="reader-research-panel__collapse" type="button" aria-label="Close metadata updates" disabled={enrichment.status === "saving"} onClick={() => setMetadataReviewOpen(false)}><X size={16} /></button>
+            </div>
+            <p className="reader-editor__status" role="status" aria-live="polite">{enrichment.message || "Looking for metadata updates. Nothing is applied automatically."}</p>
+            {metadataChanged.length ? <p className="metadata-enrichment__notice">Your unsaved metadata edits stay separate; only checked updates are applied.</p> : null}
+            {enrichmentChanges.length ? <div className="metadata-review-list" aria-label="Metadata candidate comparison">
+              {enrichmentChanges.map((field) => <label className="metadata-review-field" key={field.field}>
+                <input type="checkbox" checked={enrichment.selectedFields.includes(field.field)} disabled={mutationBusy || enrichment.status === "saving"} onChange={() => toggleCandidateField(field.field)} aria-label={`Select ${FIELD_LABELS[field.field]} update`} />
+                <span><strong>{FIELD_LABELS[field.field]}</strong><small>Current: {field.current_value || "—"}</small><small>Suggested: {field.candidate_value}</small></span>
+              </label>)}
+            </div> : enrichment.status === "ready" ? <p className="muted-text">No metadata updates need review.</p> : null}
+            <div className="reader-editor__actions">
+              <button className="reader-control reader-control--secondary" type="button" disabled={enrichment.status === "loading" || enrichment.status === "saving" || mutationBusy} onClick={() => fetchMetadataCandidates(enrichment.status === "conflict")}><RotateCcw size={15} />{enrichment.status === "loading" ? "Checking…" : "Check again"}</button>
+              <button className="reader-control" type="button" disabled={!enrichment.selectedFields.length || enrichment.status === "loading" || enrichment.status === "saving" || mutationBusy} onClick={applySelectedCandidates}><Save size={15} />{enrichment.status === "saving" ? "Applying…" : "Apply selected"}</button>
+              {enrichment.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => fetchMetadataCandidates(true)}><RotateCcw size={15} />Refresh updates</button> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

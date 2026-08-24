@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, FileText, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import type { FullTextCacheState } from "../lib/api/types";
@@ -82,8 +82,9 @@ export function FullTextWorkspace({ paperId }: { paperId: string }) {
 
   const data = ui.data;
   const busy = ui.phase === "loading" || ui.phase === "working";
+  const extractedPages = data?.page_count ? `${data.page_count} page${data.page_count === 1 ? "" : "s"} extracted` : "Extracted text is available.";
   return (
-    <section className="reader-editor full-text-workspace" aria-labelledby="full-text-title">
+    <section className="reader-utility-section full-text-workspace" aria-labelledby="full-text-title">
       <div className="reader-note__heading">
         <div>
           <h2 id="full-text-title">Full Text</h2>
@@ -94,30 +95,18 @@ export function FullTextWorkspace({ paperId }: { paperId: string }) {
       </div>
 
       <p className="reader-editor__status" role="status" aria-live="polite">
-        {ui.message || data?.message || "Reading local extraction state…"}
+        {ui.message || (data?.state === "not_extracted" ? "No extracted text yet." : data?.state === "failed" || data?.state === "ocr_needed" ? "Text extraction failed. This PDF may require OCR." : extractedPages)}
       </p>
-
-      {data && data.state !== "not_extracted" ? (
-        <dl className="full-text-metadata">
-          <div><dt>Pages</dt><dd>{data.page_count || "Unavailable"}</dd></div>
-          <div><dt>Characters</dt><dd>{data.char_count.toLocaleString()}</dd></div>
-          <div><dt>Classification</dt><dd>{data.classification}</dd></div>
-        </dl>
-      ) : null}
-
-      {data?.ocr_needed_pages.length ? (
-        <p className="full-text-ocr-pages">OCR needed: pages {data.ocr_needed_pages.join(", ")}</p>
-      ) : null}
 
       <div className="reader-editor__actions">
         {data?.has_content ? (
           <button className="reader-control" type="button" disabled={busy} onClick={openFullText}>
-            <FileText size={15} />Open Full Text
+            <FileText size={15} />View text
           </button>
         ) : null}
         {data?.can_extract ? (
           <button className={data.has_content ? "reader-control reader-control--secondary" : "reader-control"} type="button" disabled={busy} onClick={extract}>
-            <RefreshCw size={15} />{ui.phase === "working" ? "Extracting…" : data.state === "not_extracted" ? "Extract Full Text" : data.state === "failed" ? "Retry Extraction" : "Re-extract"}
+            <RefreshCw size={15} />{ui.phase === "working" ? "Extracting…" : data.state === "not_extracted" ? "Extract text" : "Re-extract"}
           </button>
         ) : null}
         {ui.phase === "error" ? (
@@ -130,10 +119,8 @@ export function FullTextWorkspace({ paperId }: { paperId: string }) {
       {ui.viewerOpen ? (
         <div className="full-text-viewer" role="region" aria-label="Canonical extracted full text">
           <div className="full-text-viewer__heading">
-            <span>{data?.content_format === "markdown" ? "Markdown" : "Plain text"}</span>
-            <button className="icon-button" type="button" title="Close full text" aria-label="Close full text" onClick={() => setUi((state) => transitionFullTextUiState(state, { type: "viewer-closed" }))}>
-              <X size={16} />
-            </button>
+            <strong>Extracted text</strong>
+            <button className="reader-control reader-control--secondary" type="button" onClick={() => setUi((state) => transitionFullTextUiState(state, { type: "viewer-closed" }))}><ArrowLeft size={15} />Back</button>
           </div>
           <pre>{ui.content}</pre>
         </div>
