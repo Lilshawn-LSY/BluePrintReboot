@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import packageMetadata from "../../package.json";
 import { DataTableShell } from "../components/DataTableShell";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { PageHeader } from "../components/PageHeader";
@@ -22,12 +24,36 @@ function displayedCount(state: SettingsState, count: number | null) {
 }
 
 export function SettingsView() {
+  return (
+    <div className="page-stack">
+      <PageHeader title="Settings" description="Workspace information and maintenance tools for this local application." />
+      <Section title="Workspace">
+        <div className="settings-landing">
+          <div>
+            <p className="eyebrow">BluePrintReboot</p>
+            <h2>Local research workspace</h2>
+            <p>This web workspace does not currently offer editable settings. Your papers, notes, projects, and tags stay in their existing local stores.</p>
+          </div>
+          <dl className="metadata-list metadata-list--compact">
+            <div><dt>Application version</dt><dd>{packageMetadata.version}</dd></div>
+            <div><dt>Maintenance information</dt><dd>Library health, store checks, and backup readiness are available in Diagnostics.</dd></div>
+          </dl>
+          <Link className="reader-action" href="/settings/diagnostics">Open Diagnostics</Link>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+export function DiagnosticsView() {
   const resource = useApiResource("settings-summary", apiClient.getSettingsSummary);
   return (
     <div className="page-stack">
       <PageHeader
-        title="Settings"
-        description="Review application and workspace diagnostics."
+        eyebrow="Settings"
+        title="Diagnostics"
+        description="Review application, workspace, integrity, and backup information."
+        actions={<Link className="reader-control reader-control--secondary" href="/settings">Back to Settings</Link>}
       />
       {resource.status === "loading" ? <LoadingState label="Loading Settings summary" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}

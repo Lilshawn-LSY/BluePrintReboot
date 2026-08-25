@@ -41,7 +41,8 @@ test("Project metadata commands require explicit edit, save, cancel, archive, an
 test("Paper linking uses every page of the real Paper index and exact link revision", async () => {
   const [, detail, client] = await sources;
   assert.match(detail, /apiClient\.getAllPapers\(\{ archiveStatus: "all" \}\)/);
-  assert.match(detail, /Retry Paper picker/);
+  assert.match(detail, /Manage links/);
+  assert.match(detail, /Retry Papers/);
   assert.doesNotMatch(detail, /first 100 existing Papers/);
   assert.match(client, /collectAllPaginatedItems/);
   assert.match(detail, /apiClient\.addProjectPaperLink/);
@@ -53,13 +54,13 @@ test("Paper linking uses every page of the real Paper index and exact link revis
 
 test("Project Detail can add an existing Note Block through the canonical read and link commands", async () => {
   const [, detail, client] = await sources;
-  assert.match(detail, /Add an existing Note Block/);
+  assert.match(detail, /Add Note Block/);
   assert.match(detail, /Source Paper/);
-  assert.match(detail, /Existing Note Block/);
+  assert.match(detail, /<span>Note Block<\/span>/);
   assert.match(detail, /apiClient\.getNoteBlocks\(paperId\)/);
   assert.match(detail, /apiClient\.addProjectNoteBlockLink/);
-  assert.match(detail, /Retry Note Block picker/);
-  assert.match(detail, /This Paper has no stored Note Blocks to link/);
+  assert.match(detail, /Retry Note Blocks/);
+  assert.match(detail, /This Paper has no saved Note Blocks/);
   assert.match(detail, /exact Note Block link already exists; nothing was written/);
   assert.match(detail, /selected Paper, Note Block, and link type are preserved/);
   assert.match(client, /note_block_id: noteBlockId/);
@@ -80,8 +81,8 @@ test("archived Projects retain read detail while write controls are absent", asy
   const [, detail] = await sources;
   assert.match(detail, /const archived = project\.status === "archived"/);
   assert.match(detail, /\{!archived \?/);
-  assert.match(detail, /stored Paper and Note Block links remain readable/);
-  assert.match(detail, /Save or cancel the metadata draft before changing Project links/);
-  assert.match(detail, /!archived && !dirty/);
+  assert.match(detail, /linked Papers and Note Blocks remain available to review/);
+  assert.match(detail, /Save or cancel the Project draft before changing links/);
+  assert.match(detail, /archived \? .* : dirty \?/);
   assert.doesNotMatch(detail, /discardDraft:\s*true/);
 });

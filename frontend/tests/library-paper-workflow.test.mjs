@@ -12,11 +12,18 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.match(library, /<PageHeader title="Library"/);
   assert.match(library, /<Section title="Papers">/);
   assert.ok(library.indexOf('<Section title="Papers">') < library.indexOf('title="Scan and import PDFs"'));
-  assert.match(library, /placeholder="Search papers…"/);
+  assert.match(library, /placeholder="Title, author, journal, DOI…"/);
+  assert.match(library, />Library state</);
+  assert.match(library, /Reset filters/);
   assert.match(library, /apiClient\.getPapers\(\{ limit: PAGE_SIZE, offset, archiveStatus, q, tag, year, status: readingStatus \}\)/);
   assert.match(library, /library-paper-row__select/);
   assert.match(library, /aria-pressed=\{selectedPaperId === paper\.paper_id\}/);
   assert.match(library, /onClick=\{\(\) => selectPaper\(paper\.paper_id\)\}/);
+  assert.match(library, /useSearchParams/);
+  assert.match(library, /reviewingTagCandidates/);
+  assert.match(library, /Review tag candidates/);
+  assert.match(library, /selectionControls\.current\.get\(dismissedPaperId\)\?\.focus\(\)/);
+  assert.match(library, />Open details<\/Link>/);
   assert.match(library, /<LibraryPaperInspector/);
   assert.doesNotMatch(library, /<th>Actions<\/th>/);
   assert.doesNotMatch(library, />Detail<\/Link>/);
@@ -31,6 +38,8 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.match(inspector, /Linked to \$\{count\} project/);
   assert.match(css, /\.library-collection-layout--with-inspector/);
   assert.match(css, /\.library-paper-row\[data-selected="true"\]/);
+  assert.match(css, /\.library-review-guidance/);
+  assert.match(css, /\.library-paper-row__detail-link/);
   assert.match(css, /\.library-paper-inspector__abstract/);
 });
 
@@ -52,6 +61,7 @@ test("Paper Detail presents a readable overview and keeps identifiers and organi
   assert.match(detail, /<PageHeader title=\{resource\.data\.title \|\| "Untitled paper"\}/);
   assert.match(detail, /Open Reader/);
   assert.match(detail, /<Section title="Abstract">/);
+  assert.match(detail, /abstractDisplayParagraphs\(resource\.data\.abstract\)/);
   assert.match(detail, /<Section title="Citation">/);
   assert.ok(detail.indexOf('<Section title="Abstract">') < detail.indexOf('<Section title="Citation">'));
   assert.match(detail, /resource\.data\.authors\.join\("; "\)/);

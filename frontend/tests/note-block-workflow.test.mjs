@@ -76,7 +76,7 @@ test("Project Detail renders typed Note Block data, orphan state, and stable Rea
   assert.match(detail, /Linked Note Blocks/);
   assert.match(detail, /link\.note_block/);
   assert.match(detail, /text_preview/);
-  assert.match(detail, /target_state\.startsWith\("orphaned"\)/);
+  assert.match(detail, /targetStateTone\(link\.target_state\)/);
   assert.match(detail, /\/reader\?noteBlock=/);
   assert.match(detail, /link\.target_id/);
   assert.match(detail, /removeProjectNoteBlockLink/);
