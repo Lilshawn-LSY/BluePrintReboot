@@ -366,7 +366,7 @@
       "evidence": {
         "date": "2026-08-25",
         "reference": "v1.6.2 local validation",
-        "summary": "The complete frontend build and Node test suite passed, including workspace information architecture, revision-aware local draft recovery, conflict, in-flight-edit, and duplicate-save coverage."
+        "summary": "The complete frontend build and Node test suite passed, including the v1.6.2 workspace hierarchy, abstract display normalization, disclosure/inspector focus return, candidate-review handoff, revision-aware local draft recovery, conflict, in-flight-edit, and duplicate-save coverage."
       }
     },
     "frontend_projects_tags": {

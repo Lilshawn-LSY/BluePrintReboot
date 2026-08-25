@@ -18,6 +18,9 @@ Current evidence is generated from the canonical manifest. Inspect [Current Rele
 - [x] Library retains search, pagination, archive filtering, and paper routes
   while making selection, inspector actions, active filters, and diagnostics
   routing clearer.
+- [x] Create disclosures and the Library inspector return keyboard focus to
+  their initiating controls when closed; the Tags candidate summary hands off
+  to the supported Library-to-Reader review flow without adding a backend scan.
 - [ ] User-performed browser verification is still required for the new desktop
   and narrower-width layouts, keyboard selection, project/tag disclosures, and
   Diagnostics navigation.

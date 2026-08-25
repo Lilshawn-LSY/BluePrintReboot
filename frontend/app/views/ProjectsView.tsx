@@ -12,6 +12,7 @@ import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { SaveStatus } from "../components/SaveStatus";
 import { useApiResource } from "../hooks/useApiResource";
+import { useDisclosureFocus } from "../hooks/useDisclosureFocus";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import { formatUiDate } from "../lib/presentation";
 import type { EditableProjectMetadata, EditableProjectStatus, ProjectPriority } from "../lib/api/types";
@@ -46,6 +47,7 @@ function parsedTags(value: string): string[] {
 
 export function ProjectsView() {
   const router = useRouter();
+  const { triggerRef: createTriggerRef, restoreTriggerFocus } = useDisclosureFocus<HTMLButtonElement>();
   const [offset, setOffset] = useState(0);
   const pageSize = 50;
   const resource = useApiResource(
@@ -173,6 +175,7 @@ export function ProjectsView() {
 
   function closeCreate() {
     setShowCreate(false);
+    restoreTriggerFocus();
   }
 
   return (
@@ -181,7 +184,7 @@ export function ProjectsView() {
         title="Projects"
         description="Organize related papers and note blocks."
         actions={(
-          <button className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-project-panel">
+          <button ref={createTriggerRef} className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-project-panel">
             <Plus size={15} />Create Project
           </button>
         )}

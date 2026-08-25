@@ -20,6 +20,9 @@ function projectContext(count: number): string {
 
 export function PaperDetailView({ paperId }: { paperId: string }) {
   const resource = useApiResource(`paper:${paperId}`, () => apiClient.getPaper(paperId));
+  const abstractParagraphs = resource.status === "success"
+    ? abstractDisplayParagraphs(resource.data.abstract)
+    : [];
   return (
     <div className="page-stack paper-detail-overview">
       {resource.status === "loading" ? <LoadingState label="Loading paper" /> : null}
@@ -33,7 +36,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
           <div className="paper-detail-content-grid">
             <div className="paper-detail-main">
               <Section title="Abstract">
-                {resource.data.abstract ? <div className="abstract-text paper-detail-abstract">{abstractDisplayParagraphs(resource.data.abstract).map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div> : <p className="abstract-text paper-detail-abstract">No abstract yet.</p>}
+                {abstractParagraphs.length ? <div className="abstract-text paper-detail-abstract">{abstractParagraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div> : <p className="abstract-text paper-detail-abstract">No abstract yet.</p>}
               </Section>
               <Section title="Citation">
                 <dl className="metadata-list paper-citation">

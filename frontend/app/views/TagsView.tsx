@@ -11,6 +11,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { SaveStatus } from "../components/SaveStatus";
 import { Toolbar } from "../components/Toolbar";
 import { useApiResource } from "../hooks/useApiResource";
+import { useDisclosureFocus } from "../hooks/useDisclosureFocus";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import {
   applyLatestRevisionDraft,
@@ -51,6 +52,7 @@ function browserStorage(): Storage | null {
 }
 
 export function TagsView() {
+  const { triggerRef: createTriggerRef, restoreTriggerFocus } = useDisclosureFocus<HTMLButtonElement>();
   const resource = useApiResource("tags", async () => {
     const [tags, summary, governance] = await Promise.all([
       apiClient.getAllTags(),
@@ -72,6 +74,7 @@ export function TagsView() {
   const [busy, setBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [registrySearch, setRegistrySearch] = useState("");
+  const candidateReviewHref = "/library?review=tag-candidates#paper-collection";
 
   const selected = resource.status === "success"
     ? resource.data.governance.items.find((tag) => tag.canonical_key === selectedKey)
@@ -336,23 +339,28 @@ export function TagsView() {
     }
   };
 
+  function closeCreate() {
+    setShowCreate(false);
+    restoreTriggerFocus();
+  }
+
   return (
     <div className="page-stack">
-      <PageHeader title="Tags" description="Review candidates, browse the tag book, and manage one tag at a time." actions={<button className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-canonical-tag"><Plus size={15} />Create tag</button>} />
+      <PageHeader title="Tags" description="Review candidates, browse the tag book, and manage one tag at a time." actions={<button ref={createTriggerRef} className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-canonical-tag"><Plus size={15} />Create tag</button>} />
       {resource.status === "loading" ? <LoadingState label="Loading canonical Tags" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "error" ? <ErrorState title="Tag Book unavailable" description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <ErrorState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "success" ? (
         <>
-          <Section title="Review candidates" description="Candidates need a deliberate review before they become Paper tags; counts use local evidence and no values are fabricated." actions={<Link className="text-link" href="/library">Open Library to review</Link>}>
+          <Section title="Review candidates" description="Candidates need a deliberate review before they become Paper tags; counts use local evidence and no values are fabricated." actions={<Link className="text-link" href={candidateReviewHref}>Review in Library</Link>}>
             {resource.data.summary.availability === "unavailable" ? (
               <EmptyState title="Candidate summary unavailable" description="No paper index is available to review candidates." />
             ) : resource.data.summary.state === "empty" ? (
               <EmptyState title="No candidate evidence" description={`The real source was evaluated across ${resource.data.summary.evaluated_paper_count} paper records and produced no candidates.`} />
             ) : (
               <div className="summary-strip summary-strip--six">
-                <div><span>Candidates</span><Link className="summary-value-link" href="/library" aria-label="Open Library to review tag candidates"><strong>{resource.data.summary.candidate_count}</strong></Link></div>
+                <div><span>Candidates</span><Link className="summary-value-link" href={candidateReviewHref} aria-label="Open Library to review tag candidates"><strong>{resource.data.summary.candidate_count}</strong></Link></div>
                 <div><span>Known matches</span><strong>{resource.data.summary.known_canonical_match_count}</strong></div>
                 <div><span>High</span><strong>{resource.data.summary.quality_counts.high}</strong></div>
                 <div><span>Medium</span><strong>{resource.data.summary.quality_counts.medium}</strong></div>
@@ -390,7 +398,7 @@ export function TagsView() {
                 <label className="reader-field"><span>Category</span><select value={createDraft.draft.category} onChange={(event) => updateCreateDraft((current) => editRevisionDraft(current, { ...current.draft, category: event.target.value }))}>{CATEGORIES.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}</select></label>
                 <label className="reader-field project-form-wide"><span>Description (optional)</span><textarea value={createDraft.draft.description} onChange={(event) => updateCreateDraft((current) => editRevisionDraft(current, { ...current.draft, description: event.target.value }))} maxLength={2000} rows={2} /></label>
               </div>
-              <div className="reader-editor__actions"><SaveStatus state={createDraft.saveState} /><button className="reader-action" type="submit" disabled={busy || Boolean(createDraft.activeSave) || !createDraft.draft.label.trim()}>Create tag</button><button className="reader-control reader-control--secondary" type="button" disabled={Boolean(createDraft.activeSave)} onClick={() => setShowCreate(false)}>Close</button></div>
+              <div className="reader-editor__actions"><SaveStatus state={createDraft.saveState} /><button className="reader-action" type="submit" disabled={busy || Boolean(createDraft.activeSave) || !createDraft.draft.label.trim()}>Create tag</button><button className="reader-control reader-control--secondary" type="button" disabled={Boolean(createDraft.activeSave)} onClick={closeCreate}>Close</button></div>
               {createDraft.lastError ? <p className="reader-editor__status" role="status">{createDraft.lastError} Your draft remains preserved locally.</p> : null}
               {createDraft.saveState === "changed_elsewhere" ? <div className="reader-editor__actions"><button className="reader-control reader-control--secondary" type="button" onClick={() => void refreshCreateDraftAfterConflict()}>Refresh Tag Book and keep my draft</button></div> : null}
             </form>

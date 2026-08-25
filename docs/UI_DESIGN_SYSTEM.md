@@ -142,6 +142,12 @@ be recovered. Object details lead with the object and its related research
 material. Forms that create or manage links are secondary to linked Paper and
 Note Block cards.
 
+When a temporary collection disclosure closes, focus returns to the action
+that opened it. A selected-item inspector returns focus to the selected row's
+control when dismissed. This keeps the browse → inspect → continue loop fully
+keyboard operable without inventing modal behavior where a stacked layout is
+already sufficient.
+
 Diagnostic information does not share the default task surface. Settings may
 describe real workspace/application information and link to Diagnostics;
 verbose health, integrity, count, API, and backup details belong in that

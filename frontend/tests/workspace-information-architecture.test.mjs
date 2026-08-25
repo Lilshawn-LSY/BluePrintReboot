@@ -8,12 +8,14 @@ test("Paper Detail normalizes display-only abstract line breaks while preserving
     abstractDisplayParagraphs("First extracted\nline wraps here.\n\nSecond paragraph\nkeeps its boundary."),
     ["First extracted line wraps here.", "Second paragraph keeps its boundary."],
   );
+  assert.deepEqual(abstractDisplayParagraphs(" \n\t\n "), []);
 
   const [detail, css] = await Promise.all([
     readFile(new URL("../app/views/PaperDetailView.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
   assert.match(detail, /abstractDisplayParagraphs\(resource\.data\.abstract\)/);
+  assert.match(detail, /abstractParagraphs\.length/);
   assert.match(detail, /paper-detail-content-grid/);
   assert.match(css, /\.abstract-text \{ max-width: 72ch;/);
   assert.doesNotMatch(css.match(/\.abstract-text \{[^}]+\}/)?.[0] ?? "", /white-space: pre-wrap/);
@@ -26,6 +28,8 @@ test("Projects keeps the collection first and subordinates creation and link man
   ]);
   assert.match(projects, /aria-controls="create-project-panel"/);
   assert.match(projects, /aria-expanded=\{showCreate\}/);
+  assert.match(projects, /useDisclosureFocus<HTMLButtonElement>/);
+  assert.match(projects, /restoreTriggerFocus\(\)/);
   assert.ok(projects.indexOf('title="Projects"') < projects.indexOf('title="Create Project"'));
   assert.match(detail, /<Section title="Overview">/);
   assert.match(detail, /<Section title="Linked Papers"/);
@@ -54,9 +58,11 @@ test("Settings links to a dedicated Diagnostics route without losing diagnostic 
 test("Tags prioritizes candidate review and keeps registry internals and creation progressive", async () => {
   const tags = await readFile(new URL("../app/views/TagsView.tsx", import.meta.url), "utf8");
   assert.match(tags, /title="Review candidates"/);
-  assert.match(tags, /Open Library to review/);
+  assert.match(tags, /Review in Library/);
   assert.match(tags, /Open Library to review tag candidates/);
+  assert.match(tags, /library\?review=tag-candidates#paper-collection/);
   assert.match(tags, /aria-controls="create-canonical-tag"/);
+  assert.match(tags, /useDisclosureFocus<HTMLButtonElement>/);
   assert.match(tags, /\{showCreate \? <Section title="Create canonical tag"/);
   assert.match(tags, /categoryLabel\(tag\.category\)/);
   assert.match(tags, /className="alias-chip"/);
@@ -77,6 +83,8 @@ test("Library labels its filters, exposes active filters, and keeps keyboard sel
   assert.match(library, /Reset filters/);
   assert.match(library, /aria-pressed=\{selectedPaperId === paper\.paper_id\}/);
   assert.match(library, /aria-label=\{`Select \$\{paper\.title/);
+  assert.match(library, /selectionControls\.current\.get\(dismissedPaperId\)\?\.focus\(\)/);
+  assert.match(library, /reviewingTagCandidates/);
   assert.match(inspector, /Open Reader/);
   assert.match(inspector, /View Paper Detail/);
   assert.match(library, /href="\/settings\/diagnostics"/);

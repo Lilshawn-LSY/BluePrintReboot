@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useRef, useState } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { DataTableShell } from "../components/DataTableShell";
 import { LibraryPaperInspector } from "../components/LibraryPaperInspector";
@@ -43,6 +44,8 @@ function libraryAttentionMessage(data: { status: { missing_count: number; duplic
 }
 
 export function LibraryView() {
+  const searchParams = useSearchParams();
+  const selectionControls = useRef(new Map<string, HTMLButtonElement>());
   const resource = useApiResource("library", async () => {
     const [health, status] = await Promise.all([apiClient.getHealth(), apiClient.getLibraryStatus()]);
     return { health, status };
@@ -73,12 +76,17 @@ export function LibraryView() {
   const [enrichmentError, setEnrichmentError] = useState("");
   const [enrichmentBusy, setEnrichmentBusy] = useState(false);
   const [selectedFields, setSelectedFields] = useState<Array<keyof EditablePaperMetadata>>([]);
+  const reviewingTagCandidates = searchParams.get("review") === "tag-candidates";
 
   const resetCollection = () => { setOffset(0); setSelectedPaperId(""); setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); };
   const clearFilters = () => { setQ(""); setTag(""); setYear(""); setReadingStatus(""); setArchiveStatus("active"); resetCollection(); };
   const selectPaper = (paperId: string) => { setSelectedPaperId(paperId); setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); };
   const changePage = (nextOffset: number) => { setOffset(nextOffset); setSelectedPaperId(""); setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); };
-  const closeInspector = () => { setSelectedPaperId(""); setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); };
+  const closeInspector = () => {
+    const dismissedPaperId = selectedPaperId;
+    setSelectedPaperId(""); setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]);
+    requestAnimationFrame(() => selectionControls.current.get(dismissedPaperId)?.focus());
+  };
   const scanPdfs = async () => {
     setScanBusy(true); setScanError(""); setImportError(""); setImportResult(null); setReconnectMessage("");
     try { setScan(await apiClient.scanManagedPdfs()); setSelectedPaths([]); }
@@ -128,6 +136,7 @@ export function LibraryView() {
     <div className="page-stack">
       <PageHeader title="Library" actions={<button className="reader-control" type="button" onClick={openImport} disabled={scanBusy || importBusy || Boolean(reconnectBusy)}>{scanBusy ? "Scanning PDFs…" : "Scan / import"}</button>} />
       {attention ? <div className="library-attention" role="alert"><div><strong>Library needs attention</strong><p>{libraryAttentionMessage(resource.data)}</p></div><Link className="text-link" href="/settings/diagnostics">Review Diagnostics</Link></div> : null}
+      {reviewingTagCandidates ? <div className="library-review-guidance" role="status"><strong>Review tag candidates</strong><p>Select a paper, then choose Open Reader to review that paper’s tag suggestions.</p></div> : null}
 
       <Section title="Papers">
         <Toolbar label="Library collection filters">
@@ -141,13 +150,13 @@ export function LibraryView() {
           <span>Showing: <strong>{archiveStatus === "active" ? "Active papers" : archiveStatus === "archived" ? "Archived papers" : "All papers"}</strong>{q ? ` · Search “${q}”` : ""}{tag ? ` · Tag “${tag}”` : ""}{year ? ` · Year ${year}` : ""}{readingStatus ? ` · ${readingStatus}` : ""}</span>
           <button className="reader-control reader-control--secondary" type="button" onClick={clearFilters} disabled={!q && !tag && !year && !readingStatus && archiveStatus === "active"}>Reset filters</button>
         </div>
-        <div className={selectedPaperId ? "library-collection-layout library-collection-layout--with-inspector" : "library-collection-layout"}>
+        <div id="paper-collection" className={selectedPaperId ? "library-collection-layout library-collection-layout--with-inspector" : "library-collection-layout"}>
           <div className="library-collection-layout__table">
             {collection.status === "loading" ? <LoadingState label="Searching papers" /> : null}
             {collection.status === "unavailable" ? <UnavailableState description={collection.message} onRetry={collection.retry} /> : null}
             {collection.status === "error" || collection.status === "not-found" ? <ErrorState description={collection.message} onRetry={collection.retry} /> : null}
             {collection.status === "success" ? <>
-              {collection.data.items.length === 0 ? <EmptyState title="No matching papers" description="Change the search or filters, or scan a PDF to add a paper." /> : <DataTableShell label="Paper collection"><table><thead><tr><th>Title</th><th>Author</th><th>Year</th><th>Reading</th><th>Tags</th></tr></thead><tbody>{collection.data.items.map((paper) => <tr className="library-paper-row" data-selected={selectedPaperId === paper.paper_id || undefined} key={paper.paper_id}><td><button className="library-paper-row__select" type="button" aria-pressed={selectedPaperId === paper.paper_id} aria-label={`Select ${paper.title || "untitled paper"} and open its inspector`} onClick={() => selectPaper(paper.paper_id)}>{paper.title || "Untitled paper"}</button></td><td>{paper.first_author || "—"}</td><td>{paper.year || "—"}</td><td><div className="badge-row"><StatusBadge>{paper.status}</StatusBadge>{paper.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}</div></td><td>{paper.tags.length ? <div className="tag-list library-paper-row__tags" title={paper.tags.join(", ")}>{paper.tags.slice(0, 2).map((item) => <StatusBadge key={item}>{item}</StatusBadge>)}{paper.tags.length > 2 ? <StatusBadge>{<>+{paper.tags.length - 2}<span className="sr-only">: {paper.tags.slice(2).join(", ")}</span></>}</StatusBadge> : null}</div> : <span className="muted-text">—</span>}</td></tr>)}</tbody></table></DataTableShell>}
+              {collection.data.items.length === 0 ? <EmptyState title="No matching papers" description="Change the search or filters, or scan a PDF to add a paper." /> : <DataTableShell label="Paper collection"><table><thead><tr><th>Title</th><th>Author</th><th>Year</th><th>Reading</th><th>Tags</th></tr></thead><tbody>{collection.data.items.map((paper) => <tr className="library-paper-row" data-selected={selectedPaperId === paper.paper_id || undefined} key={paper.paper_id}><td><div className="library-paper-row__title"><button ref={(node) => { if (node) selectionControls.current.set(paper.paper_id, node); else selectionControls.current.delete(paper.paper_id); }} className="library-paper-row__select" type="button" aria-pressed={selectedPaperId === paper.paper_id} aria-label={`Select ${paper.title || "untitled paper"} and open its inspector`} onClick={() => selectPaper(paper.paper_id)}>{paper.title || "Untitled paper"}</button><Link className="text-link library-paper-row__detail-link" href={`/papers/${encodeURIComponent(paper.paper_id)}`}>Open details</Link></div></td><td>{paper.first_author || "—"}</td><td>{paper.year || "—"}</td><td><div className="badge-row"><StatusBadge>{paper.status}</StatusBadge>{paper.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}</div></td><td>{paper.tags.length ? <div className="tag-list library-paper-row__tags" title={paper.tags.join(", ")}>{paper.tags.slice(0, 2).map((item) => <StatusBadge key={item}>{item}</StatusBadge>)}{paper.tags.length > 2 ? <StatusBadge>{<>+{paper.tags.length - 2}<span className="sr-only">: {paper.tags.slice(2).join(", ")}</span></>}</StatusBadge> : null}</div> : <span className="muted-text">—</span>}</td></tr>)}</tbody></table></DataTableShell>}
               <div className="library-pagination"><span className="toolbar-note">{collection.data.total} matching paper{collection.data.total === 1 ? "" : "s"}</span><div className="reader-editor__actions"><button className="reader-control reader-control--secondary" type="button" disabled={offset === 0} onClick={() => changePage(Math.max(0, offset - PAGE_SIZE))}>Previous</button><button className="reader-control reader-control--secondary" type="button" disabled={!collection.data.has_more} onClick={() => changePage(offset + PAGE_SIZE)}>Next</button></div></div>
             </> : null}
           </div>
