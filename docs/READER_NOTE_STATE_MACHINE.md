@@ -1,6 +1,49 @@
 # Reader Note State Machine
 
-Reading Note state is scoped to the active `paper_id` and stored in plain session-state values. It survives Streamlit reruns while that paper remains active. Switching papers deliberately discards the previous paper's volatile draft state; returning reloads its last explicitly saved note. Browser refresh and process restart likewise discard unsaved drafts. No transition autosaves or persistently stores a draft.
+## v1.6.1 Web Reader draft-preservation contract
+
+The desktop web Reader scopes each Paper Note draft to its stable `paper_id`
+and stores unsaved browser-local state in `localStorage`. It retains the local
+draft, the server baseline/revision used by the next command, the latest known
+remote value/revision, a draft generation, and any active save snapshot. The
+same compact model is reused by Reader metadata, per-Note-Block editors,
+Projects, and canonical-tag create/edit/alias forms.
+
+Explicit Save remains the only server write. Local draft persistence is not
+server autosave, an offline write queue, or background sync.
+
+## Visible web states
+
+- **Saved** — current draft equals the confirmed server value.
+- **Unsaved changes** — local draft differs from its confirmed baseline.
+- **Saving...** — one immutable draft snapshot is in flight.
+- **Save failed** — the command failed and the exact local draft remains.
+- **Changed elsewhere** — a revision conflict retained the local draft and a
+  separately loaded latest server value.
+- **Offline** — the local API could not be reached; the browser-local draft
+  remains available for a later explicit retry.
+
+## Web Reader transitions
+
+| Event | Result |
+|---|---|
+| Initial load without a local draft | Set draft, baseline, and remote value to the Reader Snapshot's saved note and SHA-256. |
+| Initial load with an unsaved local draft | Restore the draft and its saved baseline; preserve it even if the fetched server revision differs. A differing revision becomes Changed elsewhere. |
+| User edit | Synchronously persist the local draft, increment its generation, and show Unsaved changes. |
+| Route navigation, unmount/remount, or browser refresh | Retain and restore the browser-local draft for the same stable Paper identity. |
+| Explicit Save | Snapshot the current draft and revision; do not clear local storage while the request is pending. A duplicate Save is ignored while that snapshot is active. |
+| Edit while Save is pending | Persist the newer generation immediately. A response for the earlier snapshot advances only the baseline/revision and leaves the newer draft Unsaved changes. |
+| Confirmed Save with no newer edit | Apply the authoritative response value/revision and clear that local draft record. |
+| API failure, 5xx, unavailable API, or restart | Preserve the exact draft and baseline. Show Save failed or Offline; retry remains explicit. |
+| Revision conflict | Preserve the exact local draft, fetch and retain the latest remote value separately when available, and show Changed elsewhere. |
+| Keep my draft | Rebase the local draft on the latest revision and return to Unsaved changes for an explicit retry. |
+| Use latest server value | Explicitly replace the local draft with the separately retained remote value and clear the matching local draft record. |
+
+The established Streamlit Reader state machine below remains the historical
+Streamlit behavior; its volatile session-state policy is not a web Reader
+implementation detail.
+
+## Historical Streamlit Reader Note state
 
 ## Visible States
 

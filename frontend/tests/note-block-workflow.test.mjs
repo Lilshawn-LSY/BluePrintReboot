@@ -7,6 +7,7 @@ const sources = Promise.all([
   readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/views/ProjectDetailView.tsx", import.meta.url), "utf8"),
   readFile(new URL("../app/lib/api/client.ts", import.meta.url), "utf8"),
+  readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
 ]);
 
 test("Reader exposes explicit structured Note Block create, edit, cancel, reload, and save", async () => {
@@ -34,10 +35,12 @@ test("Reader distinguishes Note Block loading, empty, unavailable, error, and su
 
 test("Note Block conflict and API failure preserve drafts and reload independently", async () => {
   const [workspace, reader] = await sources;
-  assert.match(workspace, /preserveNoteBlockDraftAfterFailure/);
-  assert.match(workspace, /Reload current collection and keep draft/);
+  assert.match(workspace, /failRevisionSave/);
+  assert.match(workspace, /persistRevisionDraft/);
+  assert.match(workspace, /keepMyRevisionDraft/);
+  assert.match(workspace, /Reload current collection/);
   assert.match(workspace, /Your Project and link-type selection is preserved/);
-  assert.match(workspace, /Discard the unsaved Note Block draft/);
+  assert.match(workspace, /draft and the latest saved block are both preserved/);
   assert.match(reader, /<NoteBlocksWorkspace key=\{snapshot\.paper\.paper_id\}/);
   assert.match(reader, /createReaderEditorState/);
   assert.match(reader, /editor\.metadata/);
@@ -54,6 +57,17 @@ test("Reader Project linking loads every page, stays duplicate-truthful, confirm
   assert.match(workspace, /Note Block and Paper will remain/);
   assert.match(client, /addProjectNoteBlockLink/);
   assert.match(client, /removeProjectNoteBlockLink/);
+});
+
+test("Reader Note Block Project linking has a shrinkable, panel-responsive form layout", async () => {
+  const [workspace, , , , styles] = await sources;
+  assert.match(workspace, /project-link-form project-link-form--note-block/);
+  assert.match(styles, /\.project-link-form \{ min-width: 0; display: grid; grid-template-columns: minmax\(0, 1fr\) minmax\(0, 0\.45fr\) auto;/);
+  assert.match(styles, /\.project-link-form > \*, \.project-link-form \.reader-field \{ min-width: 0; max-width: 100%; \}/);
+  assert.match(styles, /\.project-link-form \.reader-field :is\(input, select, textarea\) \{ width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; \}/);
+  assert.match(styles, /\.project-link-form--note-block \{ grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 11rem\), 1fr\)\); \}/);
+  assert.match(styles, /\.note-block-list \{ min-width: 0; display: grid;/);
+  assert.match(styles, /\.note-block-card \{ min-width: 0; display: grid;/);
 });
 
 test("Project Detail renders typed Note Block data, orphan state, and stable Reader navigation", async () => {

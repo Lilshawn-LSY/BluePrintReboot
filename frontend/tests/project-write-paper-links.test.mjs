@@ -30,7 +30,9 @@ test("Project metadata commands require explicit edit, save, cancel, archive, an
   assert.match(detail, /apiClient\.updateProject/);
   assert.match(detail, /project\.project_revision/);
   assert.match(client, /expected_revision: expectedRevision/);
-  assert.match(editor, /preserveProjectDraftAfterFailure/);
+  assert.match(editor, /createRevisionDraftState/);
+  assert.match(detail, /failRevisionSave/);
+  assert.match(detail, /persistRevisionDraft/);
   assert.match(editor, /draft is preserved/);
   assert.match(detail, /document\.addEventListener\("click"/);
   assert.doesNotMatch(detail, /onBlur=.*saveProject|setInterval/i);

@@ -1,5 +1,7 @@
 export const PROJECT_FIELDS = ["name", "description", "status", "priority", "tags"];
 
+import { createRevisionDraftState } from "../drafts/revision-draft.mjs";
+
 export function editableProjectMetadata(project) {
   return {
     name: project.name,
@@ -20,12 +22,16 @@ export function changedProjectFields(draft, baseline) {
   return PROJECT_FIELDS.filter((field) => !equalField(draft[field], baseline[field]));
 }
 
-export function createProjectEditorState(project) {
+export function createProjectEditorState(project, record = null) {
   const metadata = editableProjectMetadata(project);
-  return {
+  const draftState = createRevisionDraftState({
     draft: metadata,
-    baseline: { ...metadata, tags: [...metadata.tags] },
+    baseline: metadata,
     revision: project.project_revision,
+    record,
+  });
+  return {
+    ...draftState,
     status: "clean",
     message: "",
   };

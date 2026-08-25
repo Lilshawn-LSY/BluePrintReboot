@@ -2,6 +2,18 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.6.1-draft-preservation-and-unified-save-state
+
+- [x] Explicit server Save remains the only write path; browser-local draft preservation does not introduce autosave, a server queue, background sync, or a backend write-contract redesign.
+- [x] Paper Note stores a Paper-scoped local draft, confirmed baseline/revision, latest remote value, generation, and one active save snapshot.
+- [x] Local Paper Note input survives route navigation, remount, browser refresh, API failure/unavailability/restart, and revision conflict until the exact snapshot receives confirmed server success.
+- [x] A newer edit during an in-flight Save remains locally preserved and Unsaved changes after the earlier response succeeds; duplicate Save actions cannot overlap.
+- [x] Changed elsewhere retains local and latest server values separately with keep-my-draft, use-latest-server-value, and review paths.
+- [x] Reader metadata, per-Note-Block drafts, Projects, and canonical Tag create/edit/alias forms use the compact browser-local draft pattern where users author intermediate content.
+- [x] Save feedback is limited to Saved, Unsaved changes, Saving..., Save failed, Changed elsewhere, and Offline; revisions and HTTP statuses are secondary.
+- [ ] User-performed browser checks remain required for Paper Note recovery through route navigation, refresh, FastAPI stop/restart, 5xx/offline response, conflict resolution, and an edit made while Save is pending.
+- [ ] Hosted CI, merge, tag, GitHub Release, post-merge validation, and clean-PC restore remain separate evidence and are not implied by local validation.
+
 ## v1.5.12-pre-ux-pdf-foundation
 
 - [x] PDF.js uses `clamp(devicePixelRatio × 1.5, 1, 3)` backing-canvas supersampling while logical viewport/CSS size, semantic zoom, text-layer geometry, and selection coordinates remain unchanged.

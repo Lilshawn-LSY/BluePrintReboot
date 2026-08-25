@@ -14,14 +14,27 @@ import type {
   ProjectLinkType,
 } from "../lib/api/types";
 import {
-  applyNoteBlockCommandResult,
   changedNoteBlockFields,
   createNoteBlockEditorState,
-  preserveNoteBlockDraftAfterFailure,
+  editableNoteBlock,
 } from "../lib/note-blocks/editor-state.mjs";
 import type { NoteBlockEditorState } from "../lib/note-blocks/editor-state.mjs";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "./AsyncStates";
 import { StatusBadge } from "./StatusBadge";
+import { SaveStatus } from "./SaveStatus";
+import {
+  applyLatestRevisionDraft,
+  beginRevisionSave,
+  clearPersistentRevisionDraft,
+  completeRevisionSave,
+  draftStorageKey,
+  editRevisionDraft,
+  failRevisionSave,
+  keepMyRevisionDraft,
+  persistRevisionDraft,
+  readPersistentRevisionDraft,
+  receiveRemoteRevision,
+} from "../lib/drafts/revision-draft.mjs";
 
 
 const BLOCK_TYPES: NoteBlockType[] = [
@@ -57,10 +70,6 @@ type ProjectPickerState =
 type LinkStatus = "idle" | "saving" | "conflict" | "error";
 
 
-function statusLabel(status: NoteBlockEditorState["status"]): string {
-  return status === "no_op" ? "No-op" : status.charAt(0).toUpperCase() + status.slice(1);
-}
-
 function linkFailure(error: unknown): { status: LinkStatus; message: string } {
   if (error instanceof ApiClientError && error.kind === "conflict") {
     return {
@@ -93,6 +102,10 @@ function replaceBlock(
   };
 }
 
+function browserStorage(): Storage | null {
+  return typeof window === "undefined" ? null : window.localStorage;
+}
+
 
 export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
   const [collection, setCollection] = useState<CollectionState>({ status: "loading" });
@@ -105,27 +118,51 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
   const [selectedLinkType, setSelectedLinkType] = useState<ProjectLinkType>("related");
   const [linkStatus, setLinkStatus] = useState<LinkStatus>("idle");
   const [linkMessage, setLinkMessage] = useState("");
+  const editorDraftKey = draftStorageKey("note-block", `${paperId}:${editor?.blockId || "new"}`);
   const changedFields = useMemo(
     () => editor ? changedNoteBlockFields(editor.draft, editor.baseline) : [],
     [editor],
   );
   const dirty = changedFields.length > 0;
 
+  useEffect(() => {
+    if (editor) persistRevisionDraft(browserStorage(), editorDraftKey, editor);
+  }, [editor, editorDraftKey]);
+
+  function updateEditor(update: (state: NoteBlockEditorState) => NoteBlockEditorState) {
+    setEditor((current) => {
+      if (!current) return current;
+      const next = update(current);
+      persistRevisionDraft(browserStorage(), editorDraftKey, next);
+      return next;
+    });
+  }
+
   async function loadCollection(options: { preserveDraft?: boolean } = {}) {
     try {
       const current = await apiClient.getNoteBlocks(paperId);
       setCollection({ status: "ready", data: current });
-      if (options.preserveDraft && editor?.mode === "edit") {
-        const persisted = current.items.find((block) => block.id === editor.blockId);
-        if (persisted) {
-          const fresh = createNoteBlockEditorState(persisted);
-          setEditor((state) => state ? {
-            ...state,
-            baseline: fresh.baseline,
-            status: changedNoteBlockFields(state.draft, fresh.baseline).length ? "dirty" : "clean",
-            message: "Current collection loaded; your draft was preserved.",
-          } : state);
-        }
+      if (options.preserveDraft) {
+        setEditor((state) => {
+          if (!state || state.mode !== "edit") return state;
+          const persisted = current.items.find((block) => block.id === state.blockId);
+          if (!persisted) return state;
+          const received = receiveRemoteRevision(state, {
+            value: editableNoteBlock(persisted),
+            revision: current.note_blocks_revision,
+            changedElsewhere: current.note_blocks_revision !== state.revision
+              && changedNoteBlockFields(state.draft, state.baseline).length > 0,
+          });
+          const next = {
+            ...received,
+            status: received.saveState === "saved" ? "clean" as const : "conflict" as const,
+            message: received.saveState === "saved"
+              ? "Current collection loaded."
+              : "The latest saved Note Block was loaded separately. Choose which version to keep.",
+          };
+          persistRevisionDraft(browserStorage(), editorDraftKey, next);
+          return next;
+        });
       }
       return current;
     } catch (error) {
@@ -191,7 +228,7 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
     const beforeNavigation = (event: MouseEvent) => {
       if (!dirty || event.defaultPrevented || event.button !== 0) return;
       const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
-      if (!anchor || window.confirm("Discard the unsaved Note Block draft and leave this Paper?")) return;
+      if (!anchor || window.confirm("Leave this Paper? Your locally preserved Note Block draft will remain available.")) return;
       event.preventDefault();
       event.stopPropagation();
     };
@@ -204,27 +241,35 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
   }, [dirty]);
 
   function beginCreate() {
-    if (dirty && !window.confirm("Discard the current Note Block draft?")) return;
-    const next = createNoteBlockEditorState();
+    if (dirty && !window.confirm("Switch editors? Your current locally preserved Note Block draft will remain available.")) return;
+    const next = createNoteBlockEditorState(
+      null,
+      readPersistentRevisionDraft(browserStorage(), draftStorageKey("note-block", `${paperId}:new`)),
+      collection.status === "ready" ? collection.data.note_blocks_revision : "",
+    );
     setEditor(next);
     setExpandedBlockId("");
-    setTagDraft("");
+    setTagDraft(next.draft.tags.join(", "));
   }
 
   function beginEdit(block: NoteBlock) {
-    if (dirty && !window.confirm("Discard the current Note Block draft?")) return;
-    setEditor(createNoteBlockEditorState(block));
+    if (dirty && !window.confirm("Switch editors? Your current locally preserved Note Block draft will remain available.")) return;
+    const next = createNoteBlockEditorState(
+      block,
+      readPersistentRevisionDraft(browserStorage(), draftStorageKey("note-block", `${paperId}:${block.id}`)),
+      collection.status === "ready" ? collection.data.note_blocks_revision : "",
+    );
+    setEditor(next);
     setExpandedBlockId(block.id);
-    setTagDraft(block.tags.join(", "));
+    setTagDraft(next.draft.tags.join(", "));
   }
 
   function updateDraft(field: keyof EditableNoteBlockContent, value: string | string[]) {
-    setEditor((current) => {
-      if (!current) return current;
+    updateEditor((current) => {
       const draft = { ...current.draft, [field]: value } as EditableNoteBlockContent;
+      const updated = editRevisionDraft(current, draft);
       return {
-        ...current,
-        draft,
+        ...updated,
         status: changedNoteBlockFields(draft, current.baseline).length ? "dirty" : "clean",
         message: "",
       };
@@ -233,35 +278,79 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
 
   async function saveBlock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editor || collection.status !== "ready" || editor.status === "saving") return;
+    if (!editor || collection.status !== "ready") return;
     const activeEditor = editor;
-    setEditor((current) => current ? { ...current, status: "saving", message: "Saving Note Block…" } : current);
+    const started = beginRevisionSave(activeEditor);
+    if (!started.request) return;
+    const request = started.request;
+    updateEditor(() => ({ ...started.state, status: "saving", message: "Saving Note Block…" }));
     try {
       const response = activeEditor.mode === "create"
         ? await apiClient.createNoteBlock(
             paperId,
-            activeEditor.draft,
-            collection.data.note_blocks_revision,
+            request.draft,
+            request.revision,
           )
         : await apiClient.updateNoteBlock(
             paperId,
             activeEditor.blockId,
-            (changedFields.length
+            (changedNoteBlockFields(request.draft, activeEditor.baseline).length
               ? Object.fromEntries(
-                  changedFields.map((field) => [field, activeEditor.draft[field]]),
+                  changedNoteBlockFields(request.draft, activeEditor.baseline).map((field) => [field, request.draft[field]]),
                 )
-              : { text: activeEditor.draft.text }
+              : { text: request.draft.text }
             ) as Partial<EditableNoteBlockContent>,
-            collection.data.note_blocks_revision,
+            request.revision,
           );
       setCollection((current) => current.status === "ready"
         ? { status: "ready", data: replaceBlock(current.data, response.block, response.note_blocks_revision, response.total) }
         : current);
-      setEditor((current) => current ? applyNoteBlockCommandResult(current, response) : current);
-      setTagDraft(response.block.tags.join(", "));
+      updateEditor((current) => {
+        const saved = completeRevisionSave(current, request.token, {
+          value: editableNoteBlock(response.block),
+          revision: response.note_blocks_revision,
+        });
+        const next = {
+          ...saved,
+          mode: "edit" as const,
+          blockId: response.block.id,
+          status: saved.saveState === "saved" ? response.status === "no_op" ? "no_op" as const : "saved" as const : "dirty" as const,
+          message: saved.saveState === "saved"
+            ? response.status === "no_op" ? "The Note Block already matched the saved version." : "Note Block saved."
+            : "The saved Note Block is current. Newer local edits are still unsaved.",
+        };
+        if (saved.saveState === "saved") setTagDraft(response.block.tags.join(", "));
+        return next;
+      });
+      if (activeEditor.mode === "create") {
+        clearPersistentRevisionDraft(browserStorage(), draftStorageKey("note-block", `${paperId}:new`));
+      }
     } catch (error) {
-      const kind = error instanceof ApiClientError ? error.kind : "error";
-      setEditor((current) => current ? preserveNoteBlockDraftAfterFailure(current, kind) : current);
+      let remote: { block: NoteBlock; revision: string } | null = null;
+      if (error instanceof ApiClientError && error.kind === "conflict") {
+        try {
+          const latest = await apiClient.getNoteBlocks(paperId);
+          const block = latest.items.find((item) => item.id === activeEditor.blockId);
+          remote = block ? { block, revision: latest.note_blocks_revision } : null;
+        } catch { /* retain the local draft until the collection is reachable */ }
+      }
+      updateEditor((current) => {
+        let failed = failRevisionSave(current, request.token, error instanceof ApiClientError ? error.kind : "error");
+        if (remote) failed = receiveRemoteRevision(failed, {
+          value: editableNoteBlock(remote.block),
+          revision: remote.revision,
+          changedElsewhere: true,
+        });
+        return {
+          ...failed,
+          status: failed.saveState === "changed_elsewhere" ? "conflict" : "error",
+          message: failed.saveState === "changed_elsewhere"
+            ? "This Note Block changed elsewhere. Your draft and the latest saved block are both preserved."
+            : failed.saveState === "offline"
+              ? "The local API is unavailable. Your Note Block draft is preserved locally."
+              : "Save failed. Your Note Block draft remains preserved locally.",
+        };
+      });
     }
   }
 
@@ -371,16 +460,11 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
         </StatusBadge>
       </div>
       <div className="reader-editor__actions">
-        <button className="reader-control" type="button" onClick={beginCreate}><Plus size={15} />Add</button>
+        <button className="reader-control" type="button" onClick={beginCreate} disabled={Boolean(editor?.activeSave)}><Plus size={15} />Add</button>
         <button
           className="reader-control reader-control--secondary"
           type="button"
-          onClick={() => {
-            if (dirty && !window.confirm("Reload and discard the current Note Block draft?")) return;
-            setEditor(null);
-            setCollection({ status: "loading" });
-            void loadCollection();
-          }}
+          onClick={() => { setCollection({ status: "loading" }); void loadCollection({ preserveDraft: true }); }}
         ><RotateCcw size={15} />Reload collection</button>
       </div>
       {collection.data.project_links_state === "unavailable" ? (
@@ -413,12 +497,12 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
                   </div>
                 ) : expandedBlockId === block.id ? <p className="muted-text">Not linked to a Project.</p> : null}
                 <div className="reader-editor__actions">
-                  <button className="reader-control reader-control--secondary" type="button" onClick={() => beginEdit(block)}><Edit3 size={15} />Edit</button>
+                  <button className="reader-control reader-control--secondary" type="button" onClick={() => beginEdit(block)} disabled={Boolean(editor?.activeSave)}><Edit3 size={15} />Edit</button>
                   <button className="reader-control reader-control--secondary" type="button" onClick={() => { setExpandedBlockId((current) => current === block.id ? "" : block.id); setLinkingBlockId((current) => current === block.id ? "" : current); }}>{expandedBlockId === block.id ? "Collapse" : "Details"}</button>
                   {expandedBlockId === block.id ? <button className="reader-control reader-control--secondary" type="button" onClick={() => setLinkingBlockId((current) => current === block.id ? "" : block.id)}><Link2 size={15} />Link to Project</button> : null}
                 </div>
                 {linkingBlockId === block.id ? (
-                  <form className="project-link-form" onSubmit={addProjectLink}>
+                  <form className="project-link-form project-link-form--note-block" onSubmit={addProjectLink}>
                     {projects.status === "loading" ? <span className="muted-text">Loading Projects…</span> : null}
                     {projects.status === "error" ? <span className="reader-editor__status">{projects.message}</span> : null}
                     {projects.status === "ready" && writableProjects.length === 0 ? <span className="muted-text">No writable Projects are available.</span> : null}
@@ -444,11 +528,11 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
         <form className="note-block-form" onSubmit={saveBlock}>
           <div className="reader-note__heading">
             <h3>{editor.mode === "create" ? "Create Note Block" : "Edit Note Block"}</h3>
-            <StatusBadge tone={editor.status === "conflict" || editor.status === "error" ? "danger" : editor.status === "saved" ? "accent" : "neutral"}>{statusLabel(editor.status)}</StatusBadge>
+            <SaveStatus state={editor.saveState} />
           </div>
-          <label className={`reader-field ${changedFields.includes("block_type") ? "reader-field--changed" : ""}`}><span>Block type{changedFields.includes("block_type") ? " (changed)" : ""}</span><select value={editor.draft.block_type} disabled={editor.status === "saving"} onChange={(event) => updateDraft("block_type", event.target.value as NoteBlockType)}>{BLOCK_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
-          <label className={`reader-field ${changedFields.includes("title") ? "reader-field--changed" : ""}`}><span>Title{changedFields.includes("title") ? " (changed)" : ""}</span><input maxLength={1000} value={editor.draft.title} disabled={editor.status === "saving"} onChange={(event) => updateDraft("title", event.target.value)} /></label>
-          <label className={`reader-field ${changedFields.includes("text") ? "reader-field--changed" : ""}`}><span>Text{changedFields.includes("text") ? " (changed)" : ""}</span><textarea rows={8} maxLength={100000} value={editor.draft.text} disabled={editor.status === "saving"} onChange={(event) => updateDraft("text", event.target.value)} /></label>
+          <label className={`reader-field ${changedFields.includes("block_type") ? "reader-field--changed" : ""}`}><span>Block type{changedFields.includes("block_type") ? " (changed)" : ""}</span><select value={editor.draft.block_type} onChange={(event) => updateDraft("block_type", event.target.value as NoteBlockType)}>{BLOCK_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+          <label className={`reader-field ${changedFields.includes("title") ? "reader-field--changed" : ""}`}><span>Title{changedFields.includes("title") ? " (changed)" : ""}</span><input maxLength={1000} value={editor.draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
+          <label className={`reader-field ${changedFields.includes("text") ? "reader-field--changed" : ""}`}><span>Text{changedFields.includes("text") ? " (changed)" : ""}</span><textarea rows={8} maxLength={100000} value={editor.draft.text} onChange={(event) => updateDraft("text", event.target.value)} /></label>
           <div className="project-form-grid">
             <label className={`reader-field ${changedFields.includes("page") ? "reader-field--changed" : ""}`}><span>Page</span><input maxLength={100} value={editor.draft.page} onChange={(event) => updateDraft("page", event.target.value)} /></label>
             <label className={`reader-field ${changedFields.includes("figure") ? "reader-field--changed" : ""}`}><span>Figure</span><input maxLength={500} value={editor.draft.figure} onChange={(event) => updateDraft("figure", event.target.value)} /></label>
@@ -457,9 +541,17 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
           <label className={`reader-field ${changedFields.includes("tags") ? "reader-field--changed" : ""}`}><span>Tags (comma separated)</span><input value={tagDraft} onChange={(event) => { const value = event.target.value; setTagDraft(value); updateDraft("tags", value.split(",").map((tag) => tag.trim()).filter(Boolean)); }} /></label>
           <p className="reader-editor__status" role="status">{editor.message || `${changedFields.length} changed field${changedFields.length === 1 ? "" : "s"}.`}</p>
           <div className="reader-editor__actions">
-            <button className="reader-control" type="submit" disabled={editor.status === "saving"}><Save size={15} />{editor.status === "saving" ? "Saving…" : "Save Note Block"}</button>
-            <button className="reader-control reader-control--secondary" type="button" disabled={editor.status === "saving"} onClick={() => { setEditor(null); setTagDraft(""); }}><X size={15} />Cancel</button>
-            {editor.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => void loadCollection({ preserveDraft: true })}><RotateCcw size={15} />Reload current collection and keep draft</button> : null}
+            <button className="reader-control" type="submit" disabled={!dirty || Boolean(editor.activeSave) || editor.saveState === "changed_elsewhere"}><Save size={15} />{editor.saveState === "saving" ? "Saving…" : "Save Note Block"}</button>
+            <button className="reader-control reader-control--secondary" type="button" disabled={Boolean(editor.activeSave)} onClick={() => { setEditor(null); setTagDraft(""); }}><X size={15} />Cancel (keep draft)</button>
+            {editor.saveState === "changed_elsewhere" ? <>
+              <button className="reader-control reader-control--secondary" type="button" disabled={editor.remoteRevision === editor.revision} onClick={() => updateEditor((current) => ({ ...keepMyRevisionDraft(current), status: "dirty", message: "Your local draft will be saved against the latest collection." }))}>Keep my draft</button>
+              <button className="reader-control reader-control--secondary" type="button" onClick={() => {
+                if (!window.confirm("Use the latest saved Note Block and discard the local draft?")) return;
+                updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "Latest saved Note Block in use." }));
+              }}>Use latest server value</button>
+              <button className="reader-control reader-control--secondary" type="button" onClick={() => void loadCollection({ preserveDraft: true })}><RotateCcw size={15} />Reload current collection</button>
+              <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{JSON.stringify(editor.draft, null, 2)}</pre><h3>Latest saved value</h3><pre>{JSON.stringify(editor.remote, null, 2)}</pre></details>
+            </> : null}
           </div>
         </form>
       ) : null}

@@ -11,16 +11,28 @@ import { DetailPanel } from "../components/DetailPanel";
 import { PageHeader } from "../components/PageHeader";
 import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
+import { SaveStatus } from "../components/SaveStatus";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import { formatUiDate } from "../lib/presentation";
 import {
-  applyProjectCommandResult,
   changedProjectFields,
   createProjectEditorState,
-  preserveProjectDraftAfterFailure,
-  resetProjectDraft,
+  editableProjectMetadata,
 } from "../lib/projects/editor-state.mjs";
+import type { ProjectEditorState } from "../lib/projects/editor-state.mjs";
+import {
+  applyLatestRevisionDraft,
+  beginRevisionSave,
+  completeRevisionSave,
+  draftStorageKey,
+  editRevisionDraft,
+  failRevisionSave,
+  keepMyRevisionDraft,
+  persistRevisionDraft,
+  readPersistentRevisionDraft,
+  receiveRemoteRevision,
+} from "../lib/drafts/revision-draft.mjs";
 import type {
   EditableProjectStatus,
   NoteBlockCollection,
@@ -52,10 +64,19 @@ type NoteBlockPickerState =
   | { status: "unavailable"; paperId: string; message: string }
   | { status: "error"; paperId: string; message: string };
 
+function browserStorage(): Storage | null {
+  return typeof window === "undefined" ? null : window.localStorage;
+}
+
 function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   const [project, setProject] = useState(snapshot);
-  const [editor, setEditor] = useState(() => createProjectEditorState(snapshot));
-  const [tagDraft, setTagDraft] = useState(snapshot.tags.join(", "));
+  const projectDraftKey = draftStorageKey("project-metadata", snapshot.project_id);
+  const [editor, setEditor] = useState(() => createProjectEditorState(
+    snapshot,
+    readPersistentRevisionDraft(browserStorage(), draftStorageKey("project-metadata", snapshot.project_id)),
+  ));
+  const [tagDraft, setTagDraft] = useState(() => editor.draft.tags.join(", "));
+  const [draftStorageReady, setDraftStorageReady] = useState(false);
   const [editing, setEditing] = useState(false);
   const [paperPicker, setPaperPicker] = useState<PaperPickerState>({ status: "loading" });
   const [paperPickerAttempt, setPaperPickerAttempt] = useState(0);
@@ -69,6 +90,29 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   const dirtyFields = changedProjectFields(editor.draft, editor.baseline);
   const dirty = dirtyFields.length > 0;
   const archived = project.status === "archived";
+
+  useEffect(() => {
+    const restored = createProjectEditorState(
+      snapshot,
+      readPersistentRevisionDraft(browserStorage(), projectDraftKey),
+    );
+    setEditor(restored);
+    setTagDraft(restored.draft.tags.join(", "));
+    setDraftStorageReady(true);
+  }, [projectDraftKey, snapshot]);
+
+  useEffect(() => {
+    if (!draftStorageReady) return;
+    persistRevisionDraft(browserStorage(), projectDraftKey, editor);
+  }, [draftStorageReady, editor, projectDraftKey]);
+
+  function updateEditor(update: (state: ProjectEditorState) => ProjectEditorState) {
+    setEditor((current) => {
+      const next = update(current);
+      if (draftStorageReady) persistRevisionDraft(browserStorage(), projectDraftKey, next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (archived) return;
@@ -139,7 +183,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
       const anchor = event.target instanceof Element
         ? event.target.closest("a[href]")
         : null;
-      if (anchor && !window.confirm("Leave this Project and discard the unsaved metadata draft?")) {
+      if (anchor && !window.confirm("Leave this Project? Your locally preserved metadata draft will remain available.")) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -153,13 +197,28 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   }, [dirty]);
 
   async function reloadProject() {
-    if (dirty && !window.confirm("Reload the current Project and discard your preserved draft?")) return;
     try {
       const current = await apiClient.getCompleteProject(project.project_id);
       setProject(current);
-      setEditor(createProjectEditorState(current));
-      setTagDraft(current.tags.join(", "));
-      setEditing(false);
+      updateEditor((state) => {
+        const received = receiveRemoteRevision(state, {
+          value: editableProjectMetadata(current),
+          revision: current.project_revision,
+          changedElsewhere: current.project_revision !== state.revision
+            && changedProjectFields(state.draft, state.baseline).length > 0,
+        });
+        return {
+          ...received,
+          status: received.saveState === "saved" ? "clean" : "conflict",
+          message: received.saveState === "saved"
+            ? "Current Project loaded."
+            : "The latest saved Project was loaded separately. Choose which version to keep.",
+        };
+      });
+      if (!dirty) {
+        setTagDraft(current.tags.join(", "));
+        setEditing(false);
+      }
       setLinkStatus("idle");
       setLinkMessage("");
       return true;
@@ -172,33 +231,81 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
 
   async function saveProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const started = beginRevisionSave(editor);
+    if (!started.request) return;
+    const request = started.request;
     const changes = Object.fromEntries(
-      dirtyFields.map((field) => [field, editor.draft[field as keyof typeof editor.draft]]),
+      changedProjectFields(request.draft, editor.baseline).map((field) => [field, request.draft[field]]),
     );
-    setEditor((current) => ({ ...current, status: "saving", message: "Saving Project metadata…" }));
+    updateEditor(() => ({ ...started.state, status: "saving", message: "Saving Project metadata…" }));
     try {
-      const response = await apiClient.updateProject(project.project_id, changes, editor.revision);
+      const response = await apiClient.updateProject(project.project_id, changes, request.revision);
       setProject((current) => ({ ...current, ...response.project }));
-      setEditor((current) => applyProjectCommandResult(current, response));
-      setTagDraft(response.project.tags.join(", "));
-      setEditing(false);
+      updateEditor((current) => {
+        const saved = completeRevisionSave(current, request.token, {
+          value: editableProjectMetadata(response.project),
+          revision: response.project.project_revision,
+        });
+        const next = {
+          ...saved,
+          status: saved.saveState === "saved" ? "saved" as const : "dirty" as const,
+          message: saved.saveState === "saved"
+            ? response.status === "no_op" ? "Project metadata already matched the saved version." : "Project metadata saved."
+            : "The saved Project is current. Newer local edits are still unsaved.",
+        };
+        if (saved.saveState === "saved") {
+          setTagDraft(response.project.tags.join(", "));
+          setEditing(false);
+        }
+        return next;
+      });
     } catch (error) {
-      const kind = error instanceof ApiClientError ? error.kind : "error";
-      setEditor((current) => preserveProjectDraftAfterFailure(current, kind));
+      let latest: ProjectDetail | null = null;
+      if (error instanceof ApiClientError && error.kind === "conflict") {
+        try { latest = await apiClient.getCompleteProject(project.project_id); } catch { /* preserve the local draft until retry */ }
+      }
+      updateEditor((current) => {
+        let failed = failRevisionSave(current, request.token, error instanceof ApiClientError ? error.kind : "error");
+        if (latest) failed = receiveRemoteRevision(failed, {
+          value: editableProjectMetadata(latest),
+          revision: latest.project_revision,
+          changedElsewhere: true,
+        });
+        return {
+          ...failed,
+          status: failed.saveState === "changed_elsewhere" ? "conflict" : "error",
+          message: failed.saveState === "changed_elsewhere"
+            ? "This Project changed elsewhere. Your local draft and the latest saved Project are both preserved."
+            : failed.saveState === "offline"
+              ? "The local API is unavailable. Your Project draft is preserved locally."
+              : "Save failed. Your Project draft remains preserved locally.",
+        };
+      });
     }
   }
 
   async function archiveProject() {
     if (!window.confirm("Archive this Project? This does not delete the Project, its Paper links, or any Paper.")) return;
-    setEditor((current) => ({ ...current, status: "saving", message: "Archiving Project…" }));
+    updateEditor((current) => ({ ...current, status: "saving", saveState: "saving", message: "Archiving Project…" }));
     try {
       const response = await apiClient.archiveProject(project.project_id, project.project_revision);
       setProject((current) => ({ ...current, ...response.project }));
-      setEditor((current) => applyProjectCommandResult(current, response));
+      updateEditor((current) => ({
+        ...receiveRemoteRevision(current, {
+          value: editableProjectMetadata(response.project),
+          revision: response.project.project_revision,
+        }),
+        status: "saved",
+        message: "Project archived. Existing links remain readable.",
+      }));
       setEditing(false);
     } catch (error) {
-      const kind = error instanceof ApiClientError ? error.kind : "error";
-      setEditor((current) => preserveProjectDraftAfterFailure(current, kind));
+      updateEditor((current) => ({
+        ...current,
+        saveState: error instanceof ApiClientError && error.kind === "unavailable" ? "offline" : "failed",
+        status: "error",
+        message: "The Project could not be archived. Your Project draft is preserved locally.",
+      }));
     }
   }
 
@@ -324,6 +431,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
         <Section title="Project details" description="Changes are saved only when you choose Save.">
           {editing ? (
             <form className="project-command-panel" onSubmit={saveProject}>
+              <div className="reader-note__heading"><span>Local draft</span><SaveStatus state={editor.saveState} /></div>
               <div className="project-form-grid">
                 <label className={`reader-field ${dirtyFields.includes("name") ? "reader-field--changed" : ""}`}>
                   <span>Name</span>
@@ -331,7 +439,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                     required
                     maxLength={200}
                     value={editor.draft.name}
-                    onChange={(event) => setEditor((current) => ({ ...current, draft: { ...current.draft, name: event.target.value }, status: "dirty" }))}
+                    onChange={(event) => updateEditor((current) => {
+                      const updated = editRevisionDraft(current, { ...current.draft, name: event.target.value });
+                      return { ...updated, status: "dirty", message: "" };
+                    })}
                   />
                 </label>
                 <label className={`reader-field ${dirtyFields.includes("description") ? "reader-field--changed" : ""}`}>
@@ -340,14 +451,20 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                     rows={5}
                     maxLength={5000}
                     value={editor.draft.description}
-                    onChange={(event) => setEditor((current) => ({ ...current, draft: { ...current.draft, description: event.target.value }, status: "dirty" }))}
+                    onChange={(event) => updateEditor((current) => {
+                      const updated = editRevisionDraft(current, { ...current.draft, description: event.target.value });
+                      return { ...updated, status: "dirty", message: "" };
+                    })}
                   />
                 </label>
                 <label className={`reader-field ${dirtyFields.includes("status") ? "reader-field--changed" : ""}`}>
                   <span>Status</span>
                   <select
                     value={editor.draft.status}
-                    onChange={(event) => setEditor((current) => ({ ...current, draft: { ...current.draft, status: event.target.value as EditableProjectStatus }, status: "dirty" }))}
+                    onChange={(event) => updateEditor((current) => {
+                      const updated = editRevisionDraft(current, { ...current.draft, status: event.target.value as EditableProjectStatus });
+                      return { ...updated, status: "dirty", message: "" };
+                    })}
                   >
                     <option value="active">Active</option>
                     <option value="paused">Paused</option>
@@ -358,7 +475,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                   <span>Priority</span>
                   <select
                     value={editor.draft.priority}
-                    onChange={(event) => setEditor((current) => ({ ...current, draft: { ...current.draft, priority: event.target.value as ProjectPriority }, status: "dirty" }))}
+                    onChange={(event) => updateEditor((current) => {
+                      const updated = editRevisionDraft(current, { ...current.draft, priority: event.target.value as ProjectPriority });
+                      return { ...updated, status: "dirty", message: "" };
+                    })}
                   >
                     <option value="low">Low</option>
                     <option value="normal">Normal</option>
@@ -373,40 +493,36 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
                   onChange={(event) => {
                     const value = event.target.value;
                     setTagDraft(value);
-                    setEditor((current) => ({
-                      ...current,
-                      draft: {
+                    updateEditor((current) => {
+                      const updated = editRevisionDraft(current, {
                         ...current.draft,
                         tags: value.split(",").map((tag) => tag.trim()).filter(Boolean),
-                      },
-                      status: "dirty",
-                    }));
+                      });
+                      return { ...updated, status: "dirty", message: "" };
+                    });
                   }}
                   />
                 </label>
               </div>
               <p className="reader-editor__status" role="status">{editor.message || (dirty ? `${dirtyFields.length} field${dirtyFields.length === 1 ? "" : "s"} changed.` : "No unsaved changes.")}</p>
               <div className="reader-editor__actions">
-                <button className="reader-control" type="submit" disabled={editor.status === "saving" || !dirty}><Save size={15} />Save Project</button>
+                <button className="reader-control" type="submit" disabled={Boolean(editor.activeSave) || editor.saveState === "changed_elsewhere" || !dirty}><Save size={15} />{editor.saveState === "saving" ? "Saving…" : "Save Project"}</button>
                 <button
                   className="reader-control reader-control--secondary"
                   type="button"
                   onClick={() => {
-                    if (editor.status === "conflict") {
-                      void reloadProject();
-                      return;
-                    }
                     setTagDraft(editor.baseline.tags.join(", "));
-                    setEditor((current) => resetProjectDraft(current));
+                    updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "" }));
                     setEditing(false);
                   }}
-                  disabled={editor.status === "saving"}
-                ><X size={15} />Cancel</button>
-                {editor.status === "conflict" ? (
-                  <button className="reader-control reader-control--secondary" type="button" onClick={() => reloadProject()}>
-                    <RotateCcw size={15} />Reload current Project
-                  </button>
-                ) : null}
+                  disabled={Boolean(editor.activeSave)}
+                ><X size={15} />Cancel (use latest saved version)</button>
+                {editor.saveState === "changed_elsewhere" ? <>
+                  <button className="reader-control reader-control--secondary" type="button" disabled={editor.remoteRevision === editor.revision} onClick={() => updateEditor((current) => ({ ...keepMyRevisionDraft(current), status: "dirty", message: "Your local Project draft will be saved against the latest version." }))}>Keep my draft</button>
+                  <button className="reader-control reader-control--secondary" type="button" onClick={() => { if (window.confirm("Use the latest saved Project and discard the local draft?")) updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "Latest saved Project in use." })); }}>Use latest server value</button>
+                  <button className="reader-control reader-control--secondary" type="button" onClick={() => void reloadProject()}><RotateCcw size={15} />Reload current Project</button>
+                  <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{JSON.stringify(editor.draft, null, 2)}</pre><h3>Latest saved value</h3><pre>{JSON.stringify(editor.remote, null, 2)}</pre></details>
+                </> : null}
               </div>
             </form>
           ) : (

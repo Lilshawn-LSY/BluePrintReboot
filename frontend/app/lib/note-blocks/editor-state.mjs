@@ -8,6 +8,8 @@ export const NOTE_BLOCK_FIELDS = [
   "tags",
 ];
 
+import { createRevisionDraftState } from "../drafts/revision-draft.mjs";
+
 export const EMPTY_NOTE_BLOCK_DRAFT = {
   block_type: "summary",
   title: "",
@@ -40,13 +42,18 @@ export function changedNoteBlockFields(draft, baseline) {
   return NOTE_BLOCK_FIELDS.filter((field) => !equalField(draft[field], baseline[field]));
 }
 
-export function createNoteBlockEditorState(block = null) {
+export function createNoteBlockEditorState(block = null, record = null, revision = "") {
   const baseline = block ? editableNoteBlock(block) : { ...EMPTY_NOTE_BLOCK_DRAFT, tags: [] };
+  const draftState = createRevisionDraftState({
+    draft: baseline,
+    baseline,
+    revision,
+    record,
+  });
   return {
     mode: block ? "edit" : "create",
     blockId: block?.id || "",
-    draft: { ...baseline, tags: [...baseline.tags] },
-    baseline: { ...baseline, tags: [...baseline.tags] },
+    ...draftState,
     status: "clean",
     message: "",
   };
