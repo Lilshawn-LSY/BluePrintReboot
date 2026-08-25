@@ -38,7 +38,7 @@ test("Projects renders real paginated collection fields and complete typed-link 
   assert.match(projectDetail, /link\.target_state/);
   assert.match(projectDetail, /link\.paper\.title/);
   assert.match(projectDetail, /link\.paper_id/);
-  assert.match(projectDetail, /Linked paper unavailable/);
+  assert.match(projectDetail, /Linked Paper unavailable/);
   assert.match(projectDetail, /Linked Note Blocks/);
   assert.match(projectDetail, /project\.linked_note_block_count/);
   assert.match(client, /links_limit/);
@@ -46,6 +46,8 @@ test("Projects renders real paginated collection fields and complete typed-link 
   assert.match(projects, /Create Project/);
   assert.match(projectDetail, /Edit Project/);
   assert.match(projectDetail, /Archive Project/);
+  assert.match(projectDetail, /Manage links/);
+  assert.match(projectDetail, /project-link-card/);
   assert.doesNotMatch(projects + projectDetail, /Delete Project/);
 });
 

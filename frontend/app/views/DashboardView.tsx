@@ -41,7 +41,7 @@ export function DashboardView() {
             <Section title="Entry points">
               <div className="entry-list">
                 <Link href="/library"><BookOpen size={18} /><span><strong>Open Library</strong><small>Search, browse, and manage your paper collection.</small></span><ArrowRight size={15} /></Link>
-                <Link href="/library"><LibraryBig size={18} /><span><strong>Check library integrity</strong><small>Review missing files, duplicates, and recovery state.</small></span><ArrowRight size={15} /></Link>
+                <Link href="/settings/diagnostics"><LibraryBig size={18} /><span><strong>Check library integrity</strong><small>Review missing files, duplicates, and recovery state.</small></span><ArrowRight size={15} /></Link>
               </div>
             </Section>
           </div>

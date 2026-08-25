@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.6.1",
-  "release_name": "v1.6.1-draft-preservation-and-unified-save-state",
-  "as_of": "2026-08-24",
+  "product_version": "1.6.2",
+  "release_name": "v1.6.2-workspace-information-architecture",
+  "as_of": "2026-08-25",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -115,9 +115,9 @@
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-24",
-        "reference": "v1.6.1 local validation",
-        "summary": "The current offline repository readiness smoke completed with 145 passed, 0 warnings, and 0 failed, including the default pdf-inspector 0.2.6 dependency check."
+        "date": "2026-08-25",
+        "reference": "v1.6.2 local validation",
+        "summary": "The offline repository readiness smoke completed with 145 passed, 0 warnings, and 0 failed, including the default pdf-inspector 0.2.6 dependency check."
       }
     },
     "full_pytest": {
@@ -130,9 +130,9 @@
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-08-24",
-        "reference": "v1.6.1 local validation",
-        "summary": "The v1.6.1 full Python suite completed with 820 passed, 0 failed, and 0 skipped using disposable fixtures, including Reader, draft-preservation, Project, Note Block, and tag-command regressions."
+        "date": "2026-08-25",
+        "reference": "v1.6.2 local validation",
+        "summary": "The v1.6.2 full Python suite completed with 820 passed, 0 failed, and 0 skipped using disposable fixtures, including Reader, draft-preservation, Project, Note Block, and tag-command regressions."
       }
     },
     "focused_reader_snapshot": {
@@ -337,8 +337,8 @@
       "command": "npm --prefix frontend run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-08-24",
-        "reference": "v1.6.1 local validation",
+        "date": "2026-08-25",
+        "reference": "v1.6.2 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -348,9 +348,9 @@
       "command": "npm --prefix frontend run build",
       "counts": null,
       "evidence": {
-        "date": "2026-08-24",
-        "reference": "v1.6.1 local validation",
-        "summary": "The production frontend build passed and emitted the local PDF.js worker asset."
+        "date": "2026-08-25",
+        "reference": "v1.6.2 local validation",
+        "summary": "The production frontend build passed, including the Settings Diagnostics route and local PDF.js worker asset."
       }
     },
     "frontend_node_tests": {
@@ -358,15 +358,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm --prefix frontend test",
       "counts": {
-        "passed": 17,
+        "passed": 18,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-08-24",
-        "reference": "v1.6.1 local validation",
-        "summary": "The complete frontend build and Node test suite passed, including revision-aware local draft recovery, conflict, in-flight-edit, and duplicate-save coverage."
+        "date": "2026-08-25",
+        "reference": "v1.6.2 local validation",
+        "summary": "The complete frontend build and Node test suite passed, including workspace information architecture, revision-aware local draft recovery, conflict, in-flight-edit, and duplicate-save coverage."
       }
     },
     "frontend_projects_tags": {
@@ -1361,11 +1361,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.6.1 manual draft-preservation, Reader workspace, and tag-candidate verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
+    "name": "v1.6.2 workspace information-architecture browser verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
     "evidence": {
-      "date": "2026-08-24",
+      "date": "2026-08-25",
       "reference": "docs/UI_DESIGN_SYSTEM.md",
-      "summary": "Keep v1.6.1 manual draft-preservation, Reader workspace, and tag-candidate verification separate from local implementation and automated validation."
+      "summary": "Keep v1.6.2 Paper Detail, Projects, Settings diagnostics, Tags, and Library browser verification separate from local implementation and automated validation."
     }
   },
   "historical_evidence": {
@@ -1406,7 +1406,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-08-24",
+    "last_reconciled": "2026-08-25",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",

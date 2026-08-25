@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.6.1-draft-preservation-and-unified-save-state**.
+Current runtime target: **v1.6.2-workspace-information-architecture**.
 
-v1.6.1 retains the v1.6.0 desktop Reader workspace and adds automatic browser-local draft preservation around its explicit server saves. Paper Notes, Reader metadata, Note Blocks, Projects, and canonical-tag create/edit/alias forms retain a local draft across route transitions, remounts, refreshes, API failures, and local API restarts. A browser-local draft is only cleared after the exact saved snapshot is confirmed by the server; edits made during a request stay unsaved. The task-facing save vocabulary is **Saved**, **Unsaved changes**, **Saving...**, **Save failed**, **Changed elsewhere**, and **Offline**. Revision conflicts keep the local draft and separately retain the latest server value so the user can keep their draft, use the latest server value, or review both before retrying.
+v1.6.2 is a focused information-architecture and usability pass. Paper Detail now normalizes extracted display-only abstract line wraps without changing stored metadata, Projects lead with the project and its linked research material, Settings links to a separate Diagnostics view, Tags prioritize candidates and the canonical registry, and Library makes selection, filters, and paper actions clearer. Existing explicit saves, browser-local draft preservation, revision conflicts, stable routes, and local-first storage remain unchanged. Reader is intentionally not substantially redesigned in this release.
 
 v1.6.0 focuses on the desktop Reader workspace: the PDF remains central, Paper and Note composition lives together in the right panel, and compact Tags/Full Text utilities open from the left without affecting the global Reader-navigation overlay. Paper Notes continue to save Markdown-compatible plain text explicitly, with Markdown-aware formatting and an optional rendered preview.
 

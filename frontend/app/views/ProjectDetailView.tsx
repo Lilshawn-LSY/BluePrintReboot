@@ -4,10 +4,8 @@ import { Archive, Edit3, Link2, RotateCcw, Save, Unlink, X } from "lucide-react"
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { DataTableShell } from "../components/DataTableShell";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { Breadcrumbs } from "../components/Breadcrumbs";
-import { DetailPanel } from "../components/DetailPanel";
 import { PageHeader } from "../components/PageHeader";
 import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
@@ -50,6 +48,15 @@ const LINK_TYPES: Array<{ value: ProjectLinkType; label: string }> = [
   { value: "raises_question", label: "Raises question" },
   { value: "idea_for_project", label: "Idea for Project" },
 ];
+
+function linkTypeLabel(value: string): string {
+  return LINK_TYPES.find((option) => option.value === value)?.label ?? value.replaceAll("_", " ");
+}
+
+function targetStateTone(value: string): "healthy" | "warning" | "neutral" {
+  if (value === "available") return "healthy";
+  return value.startsWith("orphaned") ? "warning" : "neutral";
+}
 
 type PaperPickerState =
   | { status: "loading" }
@@ -422,377 +429,60 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   return (
     <>
       <Breadcrumbs items={[{ label: "Projects", href: "/projects" }, { label: project.name || "Project" }]} />
-      <PageHeader
-        title={project.name}
-        description={project.description || "No description yet."}
-        actions={<div className="badge-row"><StatusBadge tone={archived ? "neutral" : "accent"}>{project.status}</StatusBadge><StatusBadge>{project.priority}</StatusBadge><StatusBadge>{project.linked_paper_count} Papers</StatusBadge><StatusBadge>{project.linked_note_block_count} Note Blocks</StatusBadge></div>}
-      />
-      {!archived ? (
-        <Section title="Project details" description="Changes are saved only when you choose Save.">
-          {editing ? (
-            <form className="project-command-panel" onSubmit={saveProject}>
-              <div className="reader-note__heading"><span>Local draft</span><SaveStatus state={editor.saveState} /></div>
-              <div className="project-form-grid">
-                <label className={`reader-field ${dirtyFields.includes("name") ? "reader-field--changed" : ""}`}>
-                  <span>Name</span>
-                  <input
-                    required
-                    maxLength={200}
-                    value={editor.draft.name}
-                    onChange={(event) => updateEditor((current) => {
-                      const updated = editRevisionDraft(current, { ...current.draft, name: event.target.value });
-                      return { ...updated, status: "dirty", message: "" };
-                    })}
-                  />
-                </label>
-                <label className={`reader-field ${dirtyFields.includes("description") ? "reader-field--changed" : ""}`}>
-                  <span>Description</span>
-                  <textarea
-                    rows={5}
-                    maxLength={5000}
-                    value={editor.draft.description}
-                    onChange={(event) => updateEditor((current) => {
-                      const updated = editRevisionDraft(current, { ...current.draft, description: event.target.value });
-                      return { ...updated, status: "dirty", message: "" };
-                    })}
-                  />
-                </label>
-                <label className={`reader-field ${dirtyFields.includes("status") ? "reader-field--changed" : ""}`}>
-                  <span>Status</span>
-                  <select
-                    value={editor.draft.status}
-                    onChange={(event) => updateEditor((current) => {
-                      const updated = editRevisionDraft(current, { ...current.draft, status: event.target.value as EditableProjectStatus });
-                      return { ...updated, status: "dirty", message: "" };
-                    })}
-                  >
-                    <option value="active">Active</option>
-                    <option value="paused">Paused</option>
-                    <option value="done">Done</option>
-                  </select>
-                </label>
-                <label className={`reader-field ${dirtyFields.includes("priority") ? "reader-field--changed" : ""}`}>
-                  <span>Priority</span>
-                  <select
-                    value={editor.draft.priority}
-                    onChange={(event) => updateEditor((current) => {
-                      const updated = editRevisionDraft(current, { ...current.draft, priority: event.target.value as ProjectPriority });
-                      return { ...updated, status: "dirty", message: "" };
-                    })}
-                  >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                  </select>
-                </label>
-                <label className={`reader-field project-form-wide ${dirtyFields.includes("tags") ? "reader-field--changed" : ""}`}>
-                  <span>Tags (comma separated)</span>
-                  <input
-                    maxLength={2524}
-                  value={tagDraft}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setTagDraft(value);
-                    updateEditor((current) => {
-                      const updated = editRevisionDraft(current, {
-                        ...current.draft,
-                        tags: value.split(",").map((tag) => tag.trim()).filter(Boolean),
-                      });
-                      return { ...updated, status: "dirty", message: "" };
-                    });
-                  }}
-                  />
-                </label>
-              </div>
-              <p className="reader-editor__status" role="status">{editor.message || (dirty ? `${dirtyFields.length} field${dirtyFields.length === 1 ? "" : "s"} changed.` : "No unsaved changes.")}</p>
-              <div className="reader-editor__actions">
-                <button className="reader-control" type="submit" disabled={Boolean(editor.activeSave) || editor.saveState === "changed_elsewhere" || !dirty}><Save size={15} />{editor.saveState === "saving" ? "Saving…" : "Save Project"}</button>
-                <button
-                  className="reader-control reader-control--secondary"
-                  type="button"
-                  onClick={() => {
-                    setTagDraft(editor.baseline.tags.join(", "));
-                    updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "" }));
-                    setEditing(false);
-                  }}
-                  disabled={Boolean(editor.activeSave)}
-                ><X size={15} />Cancel (use latest saved version)</button>
-                {editor.saveState === "changed_elsewhere" ? <>
-                  <button className="reader-control reader-control--secondary" type="button" disabled={editor.remoteRevision === editor.revision} onClick={() => updateEditor((current) => ({ ...keepMyRevisionDraft(current), status: "dirty", message: "Your local Project draft will be saved against the latest version." }))}>Keep my draft</button>
-                  <button className="reader-control reader-control--secondary" type="button" onClick={() => { if (window.confirm("Use the latest saved Project and discard the local draft?")) updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "Latest saved Project in use." })); }}>Use latest server value</button>
-                  <button className="reader-control reader-control--secondary" type="button" onClick={() => void reloadProject()}><RotateCcw size={15} />Reload current Project</button>
-                  <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{JSON.stringify(editor.draft, null, 2)}</pre><h3>Latest saved value</h3><pre>{JSON.stringify(editor.remote, null, 2)}</pre></details>
-                </> : null}
-              </div>
-            </form>
-          ) : (
-            <div className="reader-editor__actions">
-              <button className="reader-control" type="button" onClick={() => setEditing(true)}><Edit3 size={15} />Edit Project</button>
-              <button className="reader-control reader-control--danger" type="button" onClick={archiveProject}><Archive size={15} />Archive Project</button>
-              {editor.message ? <span className="reader-editor__status" role="status">{editor.message}</span> : null}
-            </div>
-          )}
-        </Section>
-      ) : (
-        <div className="project-archived-note">This Project is archived. Metadata and link write controls are unavailable; stored Paper and Note Block links remain readable.</div>
-      )}
-      <div className="detail-grid">
-        <Section title="Project metadata">
-          <dl className="metadata-list">
-            <div><dt>Created</dt><dd>{formatUiDate(project.created_at)}</dd></div>
-            <div><dt>Updated</dt><dd>{formatUiDate(project.updated_at)}</dd></div>
-            <div><dt>Total links</dt><dd>{project.link_count}</dd></div>
+      <PageHeader title={project.name} description={project.description || "No description yet."} actions={<div className="badge-row"><StatusBadge tone={archived ? "neutral" : "accent"}>{project.status}</StatusBadge><StatusBadge>{project.priority}</StatusBadge></div>} />
+      <Section title="Overview">
+        <div className="project-overview">
+          <dl className="project-overview__facts">
+            <div><dt>Status</dt><dd><StatusBadge tone={archived ? "neutral" : "accent"}>{project.status}</StatusBadge></dd></div>
+            <div><dt>Priority</dt><dd><StatusBadge>{project.priority}</StatusBadge></dd></div>
+            <div><dt>Last updated</dt><dd>{formatUiDate(project.updated_at)}</dd></div>
+            <div><dt>Linked material</dt><dd>{project.linked_paper_count} Papers · {project.linked_note_block_count} Note Blocks</dd></div>
           </dl>
-          <div className="tag-list project-tag-row">
-            {project.tags.length
-              ? project.tags.map((tag) => <StatusBadge key={tag}>{tag}</StatusBadge>)
-              : <span className="muted-text">No Project tags are stored.</span>}
+          <div className="tag-list">{project.tags.length ? project.tags.map((tag) => <StatusBadge key={tag}>{tag}</StatusBadge>) : <span className="muted-text">No project tags yet.</span>}</div>
+          {!archived && !editing ? <div className="reader-editor__actions"><button className="reader-control" type="button" onClick={() => setEditing(true)}><Edit3 size={15} />Edit Project</button><button className="reader-control reader-control--secondary" type="button" onClick={() => void reloadProject()}><RotateCcw size={15} />Reload current Project</button><button className="reader-control reader-control--danger" type="button" onClick={archiveProject}><Archive size={15} />Archive Project</button>{editor.message ? <span className="reader-editor__status" role="status">{editor.message}</span> : null}</div> : null}
+          {archived ? <div className="project-archived-note">This Project is archived. Its linked Papers and Note Blocks remain available to review.</div> : null}
+        </div>
+      </Section>
+      {!archived && editing ? <Section title="Edit Project" description="Changes are saved only when you choose Save.">
+        <form className="project-command-panel" onSubmit={saveProject}>
+          <div className="reader-note__heading"><span>Local draft</span><SaveStatus state={editor.saveState} /></div>
+          <div className="project-form-grid">
+            <label className={`reader-field ${dirtyFields.includes("name") ? "reader-field--changed" : ""}`}><span>Name</span><input required maxLength={200} value={editor.draft.name} onChange={(event) => updateEditor((current) => ({ ...editRevisionDraft(current, { ...current.draft, name: event.target.value }), status: "dirty", message: "" }))} /></label>
+            <label className={`reader-field ${dirtyFields.includes("description") ? "reader-field--changed" : ""}`}><span>Description</span><textarea rows={5} maxLength={5000} value={editor.draft.description} onChange={(event) => updateEditor((current) => ({ ...editRevisionDraft(current, { ...current.draft, description: event.target.value }), status: "dirty", message: "" }))} /></label>
+            <label className={`reader-field ${dirtyFields.includes("status") ? "reader-field--changed" : ""}`}><span>Status</span><select value={editor.draft.status} onChange={(event) => updateEditor((current) => ({ ...editRevisionDraft(current, { ...current.draft, status: event.target.value as EditableProjectStatus }), status: "dirty", message: "" }))}><option value="active">Active</option><option value="paused">Paused</option><option value="done">Done</option></select></label>
+            <label className={`reader-field ${dirtyFields.includes("priority") ? "reader-field--changed" : ""}`}><span>Priority</span><select value={editor.draft.priority} onChange={(event) => updateEditor((current) => ({ ...editRevisionDraft(current, { ...current.draft, priority: event.target.value as ProjectPriority }), status: "dirty", message: "" }))}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option></select></label>
+            <label className={`reader-field project-form-wide ${dirtyFields.includes("tags") ? "reader-field--changed" : ""}`}><span>Tags (comma separated)</span><input maxLength={2524} value={tagDraft} onChange={(event) => { const value = event.target.value; setTagDraft(value); updateEditor((current) => ({ ...editRevisionDraft(current, { ...current.draft, tags: value.split(",").map((tag) => tag.trim()).filter(Boolean) }), status: "dirty", message: "" })); }} /></label>
           </div>
-        </Section>
-        <DetailPanel title="Workspace links">
-          <dl className="metadata-list metadata-list--compact">
-            <div><dt>Paper links</dt><dd>{project.linked_paper_count}</dd></div>
-            <div><dt>Note Block links</dt><dd>{project.linked_note_block_count}</dd></div>
-            <div><dt>Orphaned links</dt><dd>{project.orphaned_link_count}</dd></div>
-            <div><dt>Shown</dt><dd>{project.links.length} of {project.links_total}</dd></div>
-          </dl>
-        </DetailPanel>
-      </div>
-      {!archived && !dirty ? (
-        <Section title="Add a Paper link" description="Choose any existing Paper from the paginated local Paper index. No Paper or Note Block is created.">
-          <form className="project-link-form" onSubmit={addPaperLink}>
-            {paperPicker.status === "loading" ? <span className="muted-text">Loading existing Papers…</span> : null}
-            {paperPicker.status === "error" || paperPicker.status === "unavailable" ? (
-              <span className="reader-editor__actions">
-                <span className="reader-editor__status">{paperPicker.message}</span>
-                <button
-                  className="reader-control reader-control--secondary"
-                  type="button"
-                  onClick={() => {
-                    setPaperPicker({ status: "loading" });
-                    setPaperPickerAttempt((current) => current + 1);
-                  }}
-                >Retry Paper picker</button>
-              </span>
-            ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.length === 0 ? (
-              <span className="muted-text">No existing Papers are available to link.</span>
-            ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? (
-              <>
-                <label className="reader-field">
-                  <span>Existing Paper</span>
-                  <select value={paperId} onChange={(event) => {
-                    const nextPaperId = event.target.value;
-                    setPaperId(nextPaperId);
-                    setNoteBlockId("");
-                    setNoteBlockPicker({ status: "loading", paperId: nextPaperId });
-                  }}>
-                    {paperPicker.data.map((paper) => (
-                      <option key={paper.paper_id} value={paper.paper_id}>
-                        {paper.title || paper.paper_id}{paper.archived ? " (archived Paper)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="reader-field">
-                  <span>Link type</span>
-                  <select value={linkType} onChange={(event) => setLinkType(event.target.value as ProjectLinkType)}>
-                    {LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                </label>
-                <button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId}><Link2 size={15} />Add Paper link</button>
-              </>
-            ) : null}
-          </form>
-          <p className="reader-editor__status" role="status">{linkMessage}</p>
-          {linkStatus === "conflict" ? (
-            <button className="reader-control reader-control--secondary" type="button" onClick={() => reloadProject()}>
-              <RotateCcw size={15} />Reload current Project
-            </button>
-          ) : null}
-        </Section>
-      ) : !archived ? (
-        <div className="project-archived-note">Save or cancel the metadata draft before changing Project links.</div>
-      ) : null}
-      {!archived && !dirty ? (
-        <Section title="Add an existing Note Block" description="Choose a paper, then a note block to link to this project.">
-          <form className="project-link-form" onSubmit={addNoteBlockLink}>
-            {paperPicker.status === "loading" ? <span className="muted-text">Loading existing Papers…</span> : null}
-            {paperPicker.status === "error" || paperPicker.status === "unavailable" ? (
-              <span className="reader-editor__actions">
-                <span className="reader-editor__status">{paperPicker.message}</span>
-                <button
-                  className="reader-control reader-control--secondary"
-                  type="button"
-                  onClick={() => {
-                    setPaperPicker({ status: "loading" });
-                    setPaperPickerAttempt((current) => current + 1);
-                  }}
-                >Retry Paper picker</button>
-              </span>
-            ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.length === 0 ? (
-              <span className="muted-text">No existing Papers are available; a source Paper is required to link a Note Block.</span>
-            ) : null}
-            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? (
-              <>
-                <label className="reader-field">
-                  <span>Source Paper</span>
-                  <select value={paperId} onChange={(event) => {
-                    const nextPaperId = event.target.value;
-                    setPaperId(nextPaperId);
-                    setNoteBlockId("");
-                    setNoteBlockPicker({ status: "loading", paperId: nextPaperId });
-                  }}>
-                    {paperPicker.data.map((paper) => (
-                      <option key={paper.paper_id} value={paper.paper_id}>
-                        {paper.title || paper.paper_id}{paper.archived ? " (archived Paper)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {noteBlockPickerLoading ? <span className="muted-text">Loading existing Note Blocks for the selected Paper…</span> : null}
-                {noteBlockPickerFailure ? (
-                  <span className="reader-editor__actions">
-                    <span className="reader-editor__status">{noteBlockPickerFailure.message}</span>
-                    <button
-                      className="reader-control reader-control--secondary"
-                      type="button"
-                      onClick={() => {
-                        setNoteBlockPicker({ status: "loading", paperId });
-                        setNoteBlockPickerAttempt((current) => current + 1);
-                      }}
-                    >Retry Note Block picker</button>
-                  </span>
-                ) : null}
-                {readyNoteBlockPicker && readyNoteBlockPicker.data.items.length === 0 ? (
-                  <span className="muted-text">This Paper has no stored Note Blocks to link.</span>
-                ) : null}
-                {readyNoteBlockPicker && readyNoteBlockPicker.data.items.length > 0 ? (
-                  <>
-                    <label className="reader-field">
-                      <span>Existing Note Block</span>
-                      <select value={noteBlockId} onChange={(event) => setNoteBlockId(event.target.value)}>
-                        {readyNoteBlockPicker.data.items.map((block) => (
-                          <option key={block.id} value={block.id}>
-                            {block.title || `${block.block_type} Note Block`}{block.page ? ` · Page ${block.page}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="reader-field">
-                      <span>Link type</span>
-                      <select value={linkType} onChange={(event) => setLinkType(event.target.value as ProjectLinkType)}>
-                        {LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                    </label>
-                    <button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId || !noteBlockId}><Link2 size={15} />Add Note Block link</button>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-          </form>
-          <p className="reader-editor__status" role="status">{linkMessage}</p>
-          {linkStatus === "conflict" ? (
-            <button className="reader-control reader-control--secondary" type="button" onClick={() => reloadProject()}>
-              <RotateCcw size={15} />Reload current Project
-            </button>
-          ) : null}
-        </Section>
-      ) : null}
-      <Section title="Linked Papers" description="Stored Paper links remain distinct from structured Note Block links; missing targets are never repaired automatically.">
-        {paperLinks.length === 0 ? (
-          <EmptyState title="No linked Papers" description="This Project has no linked Papers." />
-        ) : (
-          <DataTableShell label="Linked Papers">
-            <table>
-              <thead><tr><th>Paper</th><th>Link type</th><th>Target state</th><th>Source details</th><th>Action</th></tr></thead>
-              <tbody>
-                {paperLinks.map((link) => (
-                  <tr key={link.link_id}>
-                    <td>
-                      {link.paper ? (
-                        <Link className="paper-link" href={`/papers/${encodeURIComponent(link.paper.paper_id)}`}>
-                          {link.paper.title || "Stored title unavailable"}
-                          <small className="mono-id">{link.paper.paper_id}</small>
-                        </Link>
-                      ) : (
-                        <span className="paper-link">
-                          Linked paper unavailable
-                          <small className="mono-id">{link.paper_id}</small>
-                        </span>
-                      )}
-                    </td>
-                    <td>{link.link_type}</td>
-                    <td><StatusBadge tone={link.target_state === "available" ? "healthy" : link.target_state.startsWith("orphaned") ? "warning" : "neutral"}>{link.target_state}</StatusBadge></td>
-                    <td>{link.paper ? `${link.paper.first_author || "Author not stored"} · ${link.paper.year || "Year not stored"}` : <span className="muted-text">Unavailable</span>}</td>
-                    <td>
-                      {!archived ? (
-                        <button
-                          className="reader-control reader-control--secondary"
-                          type="button"
-                          onClick={() => removePaperLink(link.link_id, link.paper?.title || link.paper_id)}
-                          disabled={linkStatus === "saving" || dirty}
-                        ><Unlink size={15} />Remove link</button>
-                      ) : <span className="muted-text">Read only</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </DataTableShell>
-        )}
+          <p className="reader-editor__status" role="status">{editor.message || (dirty ? `${dirtyFields.length} field${dirtyFields.length === 1 ? "" : "s"} changed.` : "No unsaved changes.")}</p>
+          <div className="reader-editor__actions">
+            <button className="reader-control" type="submit" disabled={Boolean(editor.activeSave) || editor.saveState === "changed_elsewhere" || !dirty}><Save size={15} />{editor.saveState === "saving" ? "Saving…" : "Save Project"}</button>
+            <button className="reader-control reader-control--secondary" type="button" onClick={() => { setTagDraft(editor.baseline.tags.join(", ")); updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "" })); setEditing(false); }} disabled={Boolean(editor.activeSave)}><X size={15} />Cancel</button>
+            {editor.saveState === "changed_elsewhere" ? <><button className="reader-control reader-control--secondary" type="button" disabled={editor.remoteRevision === editor.revision} onClick={() => updateEditor((current) => ({ ...keepMyRevisionDraft(current), status: "dirty", message: "Your local Project draft will be saved against the latest version." }))}>Keep my draft</button><button className="reader-control reader-control--secondary" type="button" onClick={() => { if (window.confirm("Use the latest saved Project and discard the local draft?")) updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "Latest saved Project in use." })); }}>Use latest saved version</button><button className="reader-control reader-control--secondary" type="button" onClick={() => void reloadProject()}><RotateCcw size={15} />Reload Project</button><details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{JSON.stringify(editor.draft, null, 2)}</pre><h3>Latest saved value</h3><pre>{JSON.stringify(editor.remote, null, 2)}</pre></details></> : null}
+          </div>
+        </form>
+      </Section> : null}
+      <Section title="Linked Papers" description="Papers connected to this project.">
+        {paperLinks.length === 0 ? <EmptyState title="No linked Papers" description="Add a Paper from Manage links when it becomes useful to this project." /> : <div className="project-linked-card-list">{paperLinks.map((link) => <article className="project-link-card" key={link.link_id}><div className="project-link-card__heading"><div>{link.paper ? <Link className="paper-link" href={`/papers/${encodeURIComponent(link.paper.paper_id)}`}>{link.paper.title || "Stored title unavailable"}</Link> : <strong>Linked Paper unavailable</strong>}<p>{link.paper ? `${link.paper.first_author || "Author not recorded"}${link.paper.year ? ` · ${link.paper.year}` : ""}` : "The Paper is not currently available."}</p></div><div className="badge-row"><StatusBadge>{linkTypeLabel(link.link_type)}</StatusBadge><StatusBadge tone={targetStateTone(link.target_state)}>{link.target_state.replaceAll("_", " ")}</StatusBadge></div></div>{!archived ? <div className="reader-editor__actions"><button className="reader-control reader-control--secondary" type="button" onClick={() => removePaperLink(link.link_id, link.paper?.title || "this Paper")} disabled={linkStatus === "saving" || dirty}><Unlink size={15} />Remove link</button></div> : <span className="muted-text">Read only</span>}</article>)}</div>}
       </Section>
-      <Section title="Linked Note Blocks" description="Stored structured Note Block links retain their source-Paper identity and explicit target state.">
-        {noteBlockLinks.length === 0 ? (
-          <EmptyState title="No linked Note Blocks" description="This Project has no linked Note Blocks." />
-        ) : (
-          <DataTableShell label="Linked Note Blocks">
-            <table>
-              <thead><tr><th>Note Block</th><th>Link type</th><th>Target state</th><th>Source details</th><th>Action</th></tr></thead>
-              <tbody>
-                {noteBlockLinks.map((link) => (
-                  <tr key={link.link_id}>
-                    <td>
-                      {link.note_block ? (
-                        <Link className="paper-link" href={`/papers/${encodeURIComponent(link.note_block.paper_id)}/reader?noteBlock=${encodeURIComponent(link.note_block.block_id)}`}>
-                          {link.note_block.title || `${link.note_block.block_type} Note Block`}
-                          <small>{link.note_block.text_preview || "No text preview"}</small>
-                          <small className="mono-id">{link.note_block.block_id}</small>
-                        </Link>
-                      ) : link.target_state === "orphaned_note_block" ? (
-                        <Link className="paper-link" href={`/papers/${encodeURIComponent(link.paper_id)}/reader?noteBlock=${encodeURIComponent(link.target_id)}`}>
-                          Missing linked Note Block
-                          <small className="mono-id">{link.target_id}</small>
-                        </Link>
-                      ) : (
-                        <span className="paper-link">
-                          Linked Note Block unavailable
-                          <small className="mono-id">{link.target_id}</small>
-                        </span>
-                      )}
-                    </td>
-                    <td>{link.link_type}</td>
-                    <td><StatusBadge tone={link.target_state === "available" ? "healthy" : link.target_state.startsWith("orphaned") ? "warning" : "neutral"}>{link.target_state}</StatusBadge></td>
-                    <td>{link.note_block ? [link.note_block.source_paper_title || link.note_block.paper_id, link.note_block.page && `Page ${link.note_block.page}`, link.note_block.figure && `Figure ${link.note_block.figure}`, link.note_block.tags.join(", ")].filter(Boolean).join(" · ") : <span className="muted-text">Unavailable</span>}</td>
-                    <td>
-                      {!archived ? (
-                        <button
-                          className="reader-control reader-control--secondary"
-                          type="button"
-                          onClick={() => removeNoteBlockLink(link.link_id, link.note_block?.title || link.note_block?.block_type || link.link_id)}
-                          disabled={linkStatus === "saving" || dirty}
-                        ><Unlink size={15} />Remove link</button>
-                      ) : <span className="muted-text">Read only</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </DataTableShell>
-        )}
+      <Section title="Linked Note Blocks" description="Saved observations and ideas connected to this project.">
+        {noteBlockLinks.length === 0 ? <EmptyState title="No linked Note Blocks" description="Add an existing Note Block from Manage links when it supports this project." /> : <div className="project-linked-card-list">{noteBlockLinks.map((link) => <article className="project-link-card" key={link.link_id}><div className="project-link-card__heading"><div>{link.note_block ? <Link className="paper-link" href={`/papers/${encodeURIComponent(link.note_block.paper_id)}/reader?noteBlock=${encodeURIComponent(link.note_block.block_id)}`}>{link.note_block.title || `${link.note_block.block_type} Note Block`}</Link> : link.target_state === "orphaned_note_block" ? <Link className="paper-link" href={`/papers/${encodeURIComponent(link.paper_id)}/reader?noteBlock=${encodeURIComponent(link.target_id)}`}>Missing linked Note Block</Link> : <strong>Linked Note Block unavailable</strong>}<p>{link.note_block ? [link.note_block.source_paper_title, link.note_block.tags.length ? link.note_block.tags.join(", ") : null, link.note_block.page && `Page ${link.note_block.page}`, link.note_block.figure && `Figure ${link.note_block.figure}`, link.note_block.text_preview].filter(Boolean).join(" · ") : "The saved Note Block is not currently available."}</p></div><div className="badge-row"><StatusBadge>{linkTypeLabel(link.link_type)}</StatusBadge><StatusBadge tone={targetStateTone(link.target_state)}>{link.target_state.replaceAll("_", " ")}</StatusBadge></div></div>{!archived ? <div className="reader-editor__actions"><button className="reader-control reader-control--secondary" type="button" onClick={() => removeNoteBlockLink(link.link_id, link.note_block?.title || link.note_block?.block_type || "this Note Block")} disabled={linkStatus === "saving" || dirty}><Unlink size={15} />Remove link</button></div> : <span className="muted-text">Read only</span>}</article>)}</div>}
       </Section>
+      <details id="manage-project-links" className="project-manage-links">
+        <summary>Manage links <span>Add or remove the connections above</span></summary>
+        {archived ? <p className="project-archived-note">Archived Projects keep their links available for review but cannot change them.</p> : dirty ? <p className="project-archived-note">Save or cancel the Project draft before changing links.</p> : <div className="project-manage-links__content">
+          <section aria-labelledby="add-paper-link"><h2 id="add-paper-link">Add Paper</h2><form className="project-link-form" onSubmit={addPaperLink}>
+            {paperPicker.status === "loading" ? <span className="muted-text">Loading Papers…</span> : null}
+            {paperPicker.status === "error" || paperPicker.status === "unavailable" ? <span className="reader-editor__actions"><span className="reader-editor__status">{paperPicker.message}</span><button className="reader-control reader-control--secondary" type="button" onClick={() => { setPaperPicker({ status: "loading" }); setPaperPickerAttempt((current) => current + 1); }}>Retry Papers</button></span> : null}
+            {paperPicker.status === "ready" && paperPicker.data.length === 0 ? <span className="muted-text">No Papers are available to link.</span> : null}
+            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? <><label className="reader-field"><span>Paper</span><select value={paperId} onChange={(event) => { const nextPaperId = event.target.value; setPaperId(nextPaperId); setNoteBlockId(""); setNoteBlockPicker({ status: "loading", paperId: nextPaperId }); }}>{paperPicker.data.map((paper) => <option key={paper.paper_id} value={paper.paper_id}>{paper.title || paper.paper_id}{paper.archived ? " (archived)" : ""}</option>)}</select></label><label className="reader-field"><span>Relationship</span><select value={linkType} onChange={(event) => setLinkType(event.target.value as ProjectLinkType)}>{LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId}><Link2 size={15} />Add Paper</button></> : null}
+          </form></section>
+          <section aria-labelledby="add-note-block-link"><h2 id="add-note-block-link">Add Note Block</h2><form className="project-link-form project-link-form--note-block" onSubmit={addNoteBlockLink}>
+            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? <><label className="reader-field"><span>Source Paper</span><select value={paperId} onChange={(event) => { const nextPaperId = event.target.value; setPaperId(nextPaperId); setNoteBlockId(""); setNoteBlockPicker({ status: "loading", paperId: nextPaperId }); }}>{paperPicker.data.map((paper) => <option key={paper.paper_id} value={paper.paper_id}>{paper.title || paper.paper_id}{paper.archived ? " (archived)" : ""}</option>)}</select></label>{noteBlockPickerLoading ? <span className="muted-text">Loading Note Blocks…</span> : null}{noteBlockPickerFailure ? <span className="reader-editor__actions"><span className="reader-editor__status">{noteBlockPickerFailure.message}</span><button className="reader-control reader-control--secondary" type="button" onClick={() => { setNoteBlockPicker({ status: "loading", paperId }); setNoteBlockPickerAttempt((current) => current + 1); }}>Retry Note Blocks</button></span> : null}{readyNoteBlockPicker && readyNoteBlockPicker.data.items.length === 0 ? <span className="muted-text">This Paper has no saved Note Blocks.</span> : null}{readyNoteBlockPicker && readyNoteBlockPicker.data.items.length > 0 ? <><label className="reader-field"><span>Note Block</span><select value={noteBlockId} onChange={(event) => setNoteBlockId(event.target.value)}>{readyNoteBlockPicker.data.items.map((block) => <option key={block.id} value={block.id}>{block.title || `${block.block_type} Note Block`}{block.page ? ` · Page ${block.page}` : ""}</option>)}</select></label><label className="reader-field"><span>Relationship</span><select value={linkType} onChange={(event) => setLinkType(event.target.value as ProjectLinkType)}>{LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId || !noteBlockId}><Link2 size={15} />Add Note Block</button></> : null}</> : paperPicker.status === "loading" ? <span className="muted-text">Loading Papers…</span> : null}
+          </form></section>
+          <p className="reader-editor__status" role="status">{linkMessage}</p>
+          {linkStatus === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => void reloadProject()}><RotateCcw size={15} />Reload Project</button> : null}
+        </div>}
+      </details>
     </>
   );
 }

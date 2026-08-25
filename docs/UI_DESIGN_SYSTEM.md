@@ -133,6 +133,25 @@ Do not use this foundation pass to turn one archetype into another or to
 redesign the existing Library, Reader panel, Projects, Tags, Dashboard, or
 Settings workflows.
 
+### Workspace information hierarchy patterns
+
+Collection creation and management controls are progressive disclosures. A
+Projects or Tags collection leads with items to review; a create form appears
+only after its explicit action, except when a locally preserved draft needs to
+be recovered. Object details lead with the object and its related research
+material. Forms that create or manage links are secondary to linked Paper and
+Note Block cards.
+
+Diagnostic information does not share the default task surface. Settings may
+describe real workspace/application information and link to Diagnostics;
+verbose health, integrity, count, API, and backup details belong in that
+dedicated diagnostic context. Attention states should link directly there.
+
+Abstracts and other extracted prose use a bounded readable content column
+(about 65–80 characters). Display adapters may join extraction soft-wrapped
+lines, but must preserve blank-line paragraph boundaries and never write the
+normalized value back to persistent metadata.
+
 ## Spacing, typography, and controls
 
 Use the shared spacing scale from `globals.css`. The canonical increments are
