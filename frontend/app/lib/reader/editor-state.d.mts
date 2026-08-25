@@ -1,4 +1,5 @@
 import type { EditablePaperMetadata, MetadataCommandResponse, PaperTagCommandResponse, ReaderSnapshot } from "../api/types";
+import type { RevisionDraftState } from "../drafts/revision-draft.mjs";
 
 export const METADATA_FIELDS: Array<keyof EditablePaperMetadata>;
 
@@ -27,10 +28,7 @@ export function shouldWarnBeforeReplacement(
 
 export interface ReaderEditorState {
   paperId: string;
-  metadata: {
-    draft: EditablePaperMetadata;
-    baseline: EditablePaperMetadata;
-    revision: string;
+  metadata: RevisionDraftState<EditablePaperMetadata> & {
     status: "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
     message: string;
   };
@@ -41,9 +39,7 @@ export interface ReaderEditorState {
     status: "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
     message: string;
   };
-  note: {
-    draft: string;
-    baseline: string;
+  note: RevisionDraftState<string> & {
     sha256: string;
     exists: boolean;
     status: "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
@@ -51,7 +47,7 @@ export interface ReaderEditorState {
   };
 }
 
-export function createReaderEditorState(snapshot: ReaderSnapshot): ReaderEditorState;
+export function createReaderEditorState(snapshot: ReaderSnapshot, noteRecord?: Record<string, unknown> | null, metadataRecord?: Record<string, unknown> | null): ReaderEditorState;
 export function applyMetadataCommandResult(
   state: ReaderEditorState,
   response: MetadataCommandResponse,

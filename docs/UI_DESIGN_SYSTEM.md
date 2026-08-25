@@ -81,6 +81,18 @@ field name.
 
 Do not change the meaning of backend states while changing their display.
 
+### Explicit-save draft states
+
+For a user-authored explicit-save surface, use exactly this visible vocabulary:
+**Saved**, **Unsaved changes**, **Saving...**, **Save failed**, **Changed
+elsewhere**, and **Offline**. Do not make revision hashes, `409`, stale
+revision, or reload terminology the primary label. A local draft remains until
+the matching server response is confirmed; an edit during a request remains
+Unsaved changes after the earlier snapshot succeeds. Changed elsewhere keeps
+the local draft and latest server value separate and must provide an explicit
+keep-my-draft/use-latest path. A save status belongs next to its editor/action
+and uses the shared `SaveStatus` presentation.
+
 ## Layout archetypes
 
 Future page work follows one of these three structures.

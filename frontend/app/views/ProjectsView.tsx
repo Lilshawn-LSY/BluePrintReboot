@@ -10,10 +10,21 @@ import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../compo
 import { PageHeader } from "../components/PageHeader";
 import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
+import { SaveStatus } from "../components/SaveStatus";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import { formatUiDate } from "../lib/presentation";
 import type { EditableProjectMetadata, EditableProjectStatus, ProjectPriority } from "../lib/api/types";
+import {
+  beginRevisionSave,
+  completeRevisionSave,
+  createRevisionDraftState,
+  draftStorageKey,
+  editRevisionDraft,
+  failRevisionSave,
+  persistRevisionDraft,
+  readPersistentRevisionDraft,
+} from "../lib/drafts/revision-draft.mjs";
 
 const EMPTY_PROJECT: EditableProjectMetadata = {
   name: "",
@@ -22,6 +33,12 @@ const EMPTY_PROJECT: EditableProjectMetadata = {
   priority: "normal",
   tags: [],
 };
+
+type ProjectCreateDraft = { project: EditableProjectMetadata; tagText: string };
+
+function browserStorage(): Storage | null {
+  return typeof window === "undefined" ? null : window.localStorage;
+}
 
 function parsedTags(value: string): string[] {
   return value.split(",").map((tag) => tag.trim()).filter(Boolean);
@@ -35,18 +52,39 @@ export function ProjectsView() {
     `projects:${offset}`,
     () => apiClient.getProjects({ limit: pageSize, offset }),
   );
-  const [showCreate, setShowCreate] = useState(false);
-  const [draft, setDraft] = useState<EditableProjectMetadata>(EMPTY_PROJECT);
-  const [tagDraft, setTagDraft] = useState("");
-  const [commandStatus, setCommandStatus] = useState<"idle" | "saving" | "error">("idle");
-  const [commandMessage, setCommandMessage] = useState("");
-  const dirtyCreate = showCreate && (
-    draft.name !== ""
-    || draft.description !== ""
-    || draft.status !== "active"
-    || draft.priority !== "normal"
-    || tagDraft !== ""
-  );
+  const createDraftKey = draftStorageKey("project-create", "new");
+  const [createState, setCreateState] = useState(() => createRevisionDraftState<ProjectCreateDraft>({
+    draft: { project: EMPTY_PROJECT, tagText: "" },
+    revision: "",
+    record: readPersistentRevisionDraft(browserStorage(), draftStorageKey("project-create", "new")),
+  }));
+  const [showCreate, setShowCreate] = useState(() => !Object.is(createState.draft, createState.baseline) && JSON.stringify(createState.draft) !== JSON.stringify(createState.baseline));
+  const [draftStorageReady, setDraftStorageReady] = useState(false);
+  const dirtyCreate = showCreate && JSON.stringify(createState.draft) !== JSON.stringify(createState.baseline);
+
+  useEffect(() => {
+    const restored = createRevisionDraftState<ProjectCreateDraft>({
+      draft: { project: EMPTY_PROJECT, tagText: "" },
+      revision: "",
+      record: readPersistentRevisionDraft(browserStorage(), createDraftKey),
+    });
+    setCreateState(restored);
+    setShowCreate(JSON.stringify(restored.draft) !== JSON.stringify(restored.baseline));
+    setDraftStorageReady(true);
+  }, [createDraftKey]);
+
+  useEffect(() => {
+    if (!draftStorageReady) return;
+    persistRevisionDraft(browserStorage(), createDraftKey, createState);
+  }, [createDraftKey, createState, draftStorageReady]);
+
+  function updateCreate(update: (state: typeof createState) => typeof createState) {
+    setCreateState((current) => {
+      const next = update(current);
+      if (draftStorageReady) persistRevisionDraft(browserStorage(), createDraftKey, next);
+      return next;
+    });
+  }
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -66,7 +104,7 @@ export function ProjectsView() {
       const anchor = event.target instanceof Element
         ? event.target.closest("a[href]")
         : null;
-      if (anchor && !window.confirm("Leave Projects and discard this unsaved Project draft?")) {
+      if (anchor && !window.confirm("Leave Projects? Your locally preserved Project draft will remain available.")) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -81,27 +119,60 @@ export function ProjectsView() {
 
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setCommandStatus("saving");
-    setCommandMessage("");
+    const started = beginRevisionSave(createState);
+    if (!started.request) return;
+    const request = started.request;
+    updateCreate(() => ({ ...started.state, saveState: "saving", lastError: "" }));
     try {
-      const response = await apiClient.createProject({ ...draft, tags: parsedTags(tagDraft) });
-      router.push(`/projects/${encodeURIComponent(response.project.project_id)}`);
+      const response = await apiClient.createProject({ ...request.draft.project, tags: parsedTags(request.draft.tagText) });
+      updateCreate((current) => {
+        const saved = completeRevisionSave(current, request.token, {
+          value: {
+            project: {
+              name: response.project.name,
+              description: response.project.description,
+              status: response.project.status === "archived" ? "active" : response.project.status,
+              priority: response.project.priority,
+              tags: [...response.project.tags],
+            },
+            tagText: response.project.tags.join(", "),
+          },
+          revision: response.project.project_revision,
+        });
+        if (saved.saveState !== "saved") {
+          const transferred = createRevisionDraftState({
+            draft: saved.draft.project,
+            baseline: saved.baseline.project,
+            revision: saved.revision,
+          });
+          persistRevisionDraft(
+            browserStorage(),
+            draftStorageKey("project-metadata", response.project.project_id),
+            {
+              ...transferred,
+              draft: saved.draft.project,
+              baseline: saved.baseline.project,
+              remote: saved.remote.project,
+              remoteRevision: saved.remoteRevision,
+              generation: saved.generation,
+              saveState: "unsaved",
+            },
+          );
+          return saved;
+        }
+        router.push(`/projects/${encodeURIComponent(response.project.project_id)}`);
+        return saved;
+      });
     } catch (error) {
-      const message = error instanceof ApiClientError
-        ? error.message
-        : "The Project could not be created. Your draft is preserved.";
-      setCommandStatus("error");
-      setCommandMessage(`${message} Your draft is preserved.`);
+      updateCreate((current) => ({
+        ...failRevisionSave(current, request.token, error instanceof ApiClientError ? error.kind : "error"),
+        lastError: error instanceof ApiClientError ? error.message : "The Project could not be created.",
+      }));
     }
   }
 
   function closeCreate() {
-    if (dirtyCreate && !window.confirm("Discard this unsaved Project draft?")) return;
     setShowCreate(false);
-    setDraft(EMPTY_PROJECT);
-    setTagDraft("");
-    setCommandStatus("idle");
-    setCommandMessage("");
   }
 
   return (
@@ -124,8 +195,8 @@ export function ProjectsView() {
                 <input
                   required
                   maxLength={200}
-                  value={draft.name}
-                  onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                  value={createState.draft.project.name}
+                  onChange={(event) => updateCreate((current) => editRevisionDraft(current, { ...current.draft, project: { ...current.draft.project, name: event.target.value } }))}
                 />
               </label>
               <label className="reader-field">
@@ -133,15 +204,15 @@ export function ProjectsView() {
                 <textarea
                   rows={4}
                   maxLength={5000}
-                  value={draft.description}
-                  onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                  value={createState.draft.project.description}
+                  onChange={(event) => updateCreate((current) => editRevisionDraft(current, { ...current.draft, project: { ...current.draft.project, description: event.target.value } }))}
                 />
               </label>
               <label className="reader-field">
                 <span>Status</span>
                 <select
-                  value={draft.status}
-                  onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value as EditableProjectStatus }))}
+                  value={createState.draft.project.status}
+                  onChange={(event) => updateCreate((current) => editRevisionDraft(current, { ...current.draft, project: { ...current.draft.project, status: event.target.value as EditableProjectStatus } }))}
                 >
                   <option value="active">Active</option>
                   <option value="paused">Paused</option>
@@ -151,8 +222,8 @@ export function ProjectsView() {
               <label className="reader-field">
                 <span>Priority</span>
                 <select
-                  value={draft.priority}
-                  onChange={(event) => setDraft((current) => ({ ...current, priority: event.target.value as ProjectPriority }))}
+                  value={createState.draft.project.priority}
+                  onChange={(event) => updateCreate((current) => editRevisionDraft(current, { ...current.draft, project: { ...current.draft.project, priority: event.target.value as ProjectPriority } }))}
                 >
                   <option value="low">Low</option>
                   <option value="normal">Normal</option>
@@ -163,20 +234,21 @@ export function ProjectsView() {
                 <span>Tags (comma separated)</span>
                 <input
                   maxLength={2524}
-                  value={tagDraft}
-                  onChange={(event) => setTagDraft(event.target.value)}
+                  value={createState.draft.tagText}
+                  onChange={(event) => updateCreate((current) => editRevisionDraft(current, { ...current.draft, tagText: event.target.value }))}
                 />
               </label>
             </div>
             <p className="reader-editor__status" role="status">
-              {commandStatus === "saving" ? "Creating Project…" : commandMessage}
+              {createState.lastError || (createState.saveState === "offline" ? "The local API is unavailable. Your Project draft is preserved locally." : "")}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="submit" disabled={commandStatus === "saving"}>
-                Create Project
+              <SaveStatus state={createState.saveState} />
+              <button className="reader-control" type="submit" disabled={Boolean(createState.activeSave) || !dirtyCreate}>
+                {createState.saveState === "saving" ? "Creating Project…" : "Create Project"}
               </button>
-              <button className="reader-control reader-control--secondary" type="button" onClick={closeCreate} disabled={commandStatus === "saving"}>
-                <X size={15} />Cancel
+              <button className="reader-control reader-control--secondary" type="button" onClick={closeCreate} disabled={Boolean(createState.activeSave)}>
+                <X size={15} />Close
               </button>
             </div>
           </form>

@@ -143,7 +143,7 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /isReaderRoute/);
-  assert.equal(JSON.parse(packageJson).version, "1.6.0");
+  assert.equal(JSON.parse(packageJson).version, "1.6.1");
   assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
   assert.match(shell, /packageMetadata\.version/);
   assert.match(shell, /applicationVersion=\{packageMetadata\.version\}/);
@@ -209,7 +209,7 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
   assert.match(readerView, /Retry local API/);
   assert.match(readerView, /<ReaderPdf snapshot=\{snapshot\}/);
   assert.match(readerView, /<ReaderWorkspace key=\{resource\.data\.paper\.paper_id\}/);
-  assert.match(readerView, /Discard unsaved Reader changes/);
+  assert.match(readerView, /locally preserved Reader draft/);
 });
 
 test("keeps tokens, API access, and page views separated", async () => {

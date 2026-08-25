@@ -154,7 +154,7 @@ function ContinuousPdfPage({
         textLayerContainer.style.setProperty("--total-scale-factor", String(pageViewport.scale));
         textLayerContainer.style.setProperty("--scale-round-x", "1px");
         textLayerContainer.style.setProperty("--scale-round-y", "1px");
-        renderTask = page.render({ canvasContext, viewport: pageViewport, ...(geometry.transform ? { transform: geometry.transform } : {}) }) as RenderTaskLike;
+        renderTask = page.render({ canvas, canvasContext, viewport: pageViewport, ...(geometry.transform ? { transform: geometry.transform } : {}) }) as RenderTaskLike;
         textLayer = await createPdfTextLayer({ page, container: textLayerContainer, viewport: pageViewport });
         await Promise.all([renderTask.promise, textLayer.render()]);
         if (!cancelled) onRendered(pageNumber, Math.max(0, performance.now() - startedAt));

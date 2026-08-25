@@ -8,6 +8,12 @@ export const METADATA_FIELDS = [
   "keywords",
 ];
 
+import {
+  createRevisionDraftState,
+  editRevisionDraft,
+  rebaseRevisionDraft,
+} from "../drafts/revision-draft.mjs";
+
 export function changedMetadataFields(draft, baseline) {
   return METADATA_FIELDS.filter((field) => draft[field] !== baseline[field]);
 }
@@ -44,13 +50,23 @@ export function shouldWarnBeforeReplacement(metadataDraft, metadataBaseline, not
   return changedMetadataFields(metadataDraft, metadataBaseline).length > 0 || noteDraft !== noteBaseline;
 }
 
-export function createReaderEditorState(snapshot) {
+export function createReaderEditorState(snapshot, noteRecord = null, metadataRecord = null) {
+  const metadataDraft = createRevisionDraftState({
+    draft: snapshot.editable_metadata,
+    baseline: snapshot.editable_metadata,
+    revision: snapshot.metadata_revision,
+    record: metadataRecord,
+  });
+  const noteDraft = createRevisionDraftState({
+    draft: snapshot.saved_note_content,
+    baseline: snapshot.saved_note_content,
+    revision: snapshot.saved_note_baseline.sha256,
+    record: noteRecord,
+  });
   return {
     paperId: snapshot.paper.paper_id,
     metadata: {
-      draft: { ...snapshot.editable_metadata },
-      baseline: { ...snapshot.editable_metadata },
-      revision: snapshot.metadata_revision,
+      ...metadataDraft,
       status: "clean",
       message: "",
     },
@@ -62,9 +78,8 @@ export function createReaderEditorState(snapshot) {
       message: "",
     },
     note: {
-      draft: snapshot.saved_note_content,
-      baseline: snapshot.saved_note_content,
-      sha256: snapshot.saved_note_baseline.sha256,
+      ...noteDraft,
+      sha256: noteDraft.revision,
       exists: snapshot.saved_note_baseline.exists,
       status: "clean",
       message: "",
@@ -103,11 +118,17 @@ export function applyMetadataCommandResult(state, response) {
         ? "Metadata already matched the saved version."
         : `Metadata saved.${headerNotice}`,
     },
-    note: {
-      ...state.note,
-      draft: noteDraft,
-      baseline: noteBaseline,
-      sha256: response.reading_note.sha256,
+    note: (() => {
+      const edited = noteDraft === state.note.draft
+        ? state.note
+        : editRevisionDraft(state.note, noteDraft);
+      const rebased = rebaseRevisionDraft(edited, {
+        value: noteBaseline,
+        revision: response.reading_note.sha256,
+      });
+      return {
+      ...rebased,
+      sha256: rebased.revision,
       exists: response.reading_note.exists,
       status: noteDraft === noteBaseline ? "clean" : "dirty",
       message: headerChanged
@@ -115,7 +136,8 @@ export function applyMetadataCommandResult(state, response) {
         : response.note_header_status === "updated"
           ? "Metadata changed the canonical Reading Note header."
           : state.note.message,
-    },
+      };
+    })(),
   };
 }
 
@@ -176,11 +198,17 @@ export function applyPaperTagCommandResult(state, response) {
         ? "Paper tags already matched the saved version."
         : `Paper tags saved.${headerNotice}`,
     },
-    note: {
-      ...state.note,
-      draft: noteDraft,
-      baseline: noteBaseline,
-      sha256: response.reading_note.sha256,
+    note: (() => {
+      const edited = noteDraft === state.note.draft
+        ? state.note
+        : editRevisionDraft(state.note, noteDraft);
+      const rebased = rebaseRevisionDraft(edited, {
+        value: noteBaseline,
+        revision: response.reading_note.sha256,
+      });
+      return {
+      ...rebased,
+      sha256: rebased.revision,
       exists: response.reading_note.exists,
       status: noteDraft === noteBaseline ? "clean" : "dirty",
       message: headerChanged
@@ -188,6 +216,7 @@ export function applyPaperTagCommandResult(state, response) {
         : response.note_header_status === "updated"
           ? "Paper tags changed the canonical Reading Note header."
           : state.note.message,
-    },
+      };
+    })(),
   };
 }

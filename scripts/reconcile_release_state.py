@@ -826,10 +826,10 @@ def validate_manifest(manifest: Mapping[str, Any]) -> None:
         raise ReleaseStateError(f"manifest top-level keys differ; missing={missing}, extra={extra}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ReleaseStateError(f"schema_version must be {SCHEMA_VERSION}")
-    if manifest.get("product_version") != "1.6.0":
-        raise ReleaseStateError("product_version must identify the current 1.6.0 runtime target")
-    if manifest.get("release_name") != "v1.6.0-reader-workspace-ux-overhaul":
-        raise ReleaseStateError("release_name must identify the current v1.6.0 runtime target")
+    if manifest.get("product_version") != "1.6.1":
+        raise ReleaseStateError("product_version must identify the current 1.6.1 runtime target")
+    if manifest.get("release_name") != "v1.6.1-draft-preservation-and-unified-save-state":
+        raise ReleaseStateError("release_name must identify the current v1.6.1 runtime target")
     _text(manifest.get("as_of"), "as_of")
     _validate_controlled_statuses(manifest)
     _validate_private_values(manifest)

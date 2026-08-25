@@ -7,6 +7,7 @@ import { Breadcrumbs } from "../components/Breadcrumbs";
 import { PdfJsReader } from "../components/PdfJsReader";
 import { FullTextWorkspace } from "../components/FullTextWorkspace";
 import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
+import { SaveStatus } from "../components/SaveStatus";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
@@ -22,6 +23,18 @@ import {
 } from "../lib/reader/editor-state.mjs";
 import { createExclusiveMutationGate } from "../lib/reader/mutation-coordinator.mjs";
 import { formatPaperNoteMarkdown, type PaperNoteFormatAction } from "../lib/reader/note-formatting.mjs";
+import {
+  beginRevisionSave,
+  completeRevisionSave,
+  draftStorageKey,
+  editRevisionDraft,
+  failRevisionSave,
+  keepMyRevisionDraft,
+  persistRevisionDraft,
+  readPersistentRevisionDraft,
+  receiveRemoteRevision,
+  applyLatestRevisionDraft,
+} from "../lib/drafts/revision-draft.mjs";
 
 
 type EditorStatus = "clean" | "dirty" | "saving" | "saved" | "conflict" | "error";
@@ -67,8 +80,16 @@ function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
 }
 
 
-function statusLabel(status: string): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+function commandSaveState(status: string): "saved" | "unsaved" | "saving" | "failed" | "changed_elsewhere" {
+  const states: Record<string, "saved" | "unsaved" | "saving" | "failed" | "changed_elsewhere"> = {
+    clean: "saved",
+    dirty: "unsaved",
+    saving: "saving",
+    saved: "saved",
+    conflict: "changed_elsewhere",
+    error: "failed",
+  };
+  return states[status] ?? "failed";
 }
 
 function paperNoteBody(content: string): string {
@@ -141,6 +162,10 @@ function errorState(error: unknown): { status: EditorStatus; message: string } {
   return { status: "error", message: "Save failed. Your draft remains unchanged." };
 }
 
+function browserStorage(): Storage | null {
+  return typeof window === "undefined" ? null : window.localStorage;
+}
+
 
 function enrichmentStateForError(error: unknown, action: "fetch" | "apply"): Pick<EnrichmentState, "status" | "message"> {
   if (error instanceof ApiClientError && error.kind === "conflict") {
@@ -198,7 +223,23 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const [metadataEditorOpen, setMetadataEditorOpen] = useState(false);
   const [metadataReviewOpen, setMetadataReviewOpen] = useState(false);
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
-  const [editor, setEditor] = useState(() => createReaderEditorState(snapshot));
+  const noteDraftKey = useMemo(
+    () => draftStorageKey("paper-note", snapshot.paper.paper_id),
+    [snapshot.paper.paper_id],
+  );
+  const metadataDraftKey = useMemo(
+    () => draftStorageKey("paper-metadata", snapshot.paper.paper_id),
+    [snapshot.paper.paper_id],
+  );
+  const [editor, setEditor] = useState(() => createReaderEditorState(
+    snapshot,
+    readPersistentRevisionDraft(browserStorage(), draftStorageKey("paper-note", snapshot.paper.paper_id)),
+    readPersistentRevisionDraft(browserStorage(), draftStorageKey("paper-metadata", snapshot.paper.paper_id)),
+  ));
+  // Client components are rendered once on the server, where localStorage is
+  // unavailable. Do not let that clean server-rendered state erase the real
+  // browser draft before this client-only restoration completes.
+  const [draftStorageReady, setDraftStorageReady] = useState(false);
   const [enrichment, setEnrichment] = useState<EnrichmentState>({
     status: "idle",
     preview: null,
@@ -214,6 +255,39 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     "reader-canonical-tag-book",
     () => apiClient.getAllTags(),
   );
+  useEffect(() => {
+    setEditor(createReaderEditorState(
+      snapshot,
+      readPersistentRevisionDraft(browserStorage(), noteDraftKey),
+      readPersistentRevisionDraft(browserStorage(), metadataDraftKey),
+    ));
+    setDraftStorageReady(true);
+  }, [metadataDraftKey, noteDraftKey, snapshot]);
+  useEffect(() => {
+    if (!draftStorageReady) return;
+    persistRevisionDraft(browserStorage(), noteDraftKey, editor.note);
+  }, [draftStorageReady, editor.note, noteDraftKey]);
+  useEffect(() => {
+    if (!draftStorageReady) return;
+    persistRevisionDraft(browserStorage(), metadataDraftKey, editor.metadata);
+  }, [draftStorageReady, editor.metadata, metadataDraftKey]);
+
+  const updateNote = (update: (note: typeof editor.note) => typeof editor.note) => {
+    setEditor((current) => {
+      const note = update(current.note);
+      // Persist in the same event turn as the editor state change. The effect
+      // above is a second guard for non-input transitions.
+      if (draftStorageReady) persistRevisionDraft(browserStorage(), noteDraftKey, note);
+      return { ...current, note };
+    });
+  };
+  const updateMetadata = (update: (metadata: typeof editor.metadata) => typeof editor.metadata) => {
+    setEditor((current) => {
+      const metadata = update(current.metadata);
+      if (draftStorageReady) persistRevisionDraft(browserStorage(), metadataDraftKey, metadata);
+      return { ...current, metadata };
+    });
+  };
   useEffect(() => {
     let current = true;
     void apiClient.getTagCandidates(snapshot.paper.paper_id)
@@ -279,7 +353,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       if (!link) return;
       const destination = new URL(link.getAttribute("href") || "", window.location.href);
       if (destination.href === window.location.href) return;
-      if (!window.confirm("Discard unsaved Reader changes and leave this paper?")) {
+      if (!window.confirm("Leave this paper? Your locally preserved Reader draft will remain available.")) {
         event.preventDefault();
         event.stopPropagation();
       }
@@ -294,28 +368,60 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
 
   const saveMetadata = async () => {
     if (!metadataChanged.length || mutationBusy) return;
+    const started = beginRevisionSave(editor.metadata);
+    if (!started.request) return;
     const mutationToken = beginMutation();
     if (mutationToken === null) return;
+    const request = started.request;
     const changes = Object.fromEntries(
-      metadataChanged.map((field) => [field, editor.metadata.draft[field]]),
+      changedMetadataFields(request.draft, editor.metadata.baseline).map((field) => [field, request.draft[field]]),
     ) as Partial<EditablePaperMetadata>;
-    setEditor((current) => ({
-      ...current,
-      metadata: { ...current.metadata, status: "saving", message: "Saving metadata…" },
-    }));
+    updateMetadata(() => ({ ...started.state, status: "saving", message: "Saving metadata…" }));
     try {
       const response = await apiClient.saveReaderMetadata(
         snapshot.paper.paper_id,
         changes,
-        editor.metadata.revision,
+        request.revision,
       );
-      setEditor((current) => applyMetadataCommandResult(current, response));
+      setEditor((current) => {
+        const updated = applyMetadataCommandResult(current, response);
+        const saved = completeRevisionSave(current.metadata, request.token, {
+          value: response.metadata,
+          revision: response.metadata_revision,
+        });
+        const metadata = {
+          ...saved,
+          status: saved.saveState === "saved" ? "saved" as const : "dirty" as const,
+          message: saved.saveState === "saved"
+            ? updated.metadata.message
+            : "The saved metadata is current. Newer local edits are still unsaved.",
+        };
+        persistRevisionDraft(browserStorage(), metadataDraftKey, metadata);
+        persistRevisionDraft(browserStorage(), noteDraftKey, updated.note);
+        return { ...updated, metadata };
+      });
     } catch (error) {
-      const failure = errorState(error);
-      setEditor((current) => ({
-        ...current,
-        metadata: { ...current.metadata, ...failure },
-      }));
+      let latest: ReaderSnapshot | null = null;
+      if (error instanceof ApiClientError && error.kind === "conflict") {
+        try { latest = await apiClient.getReaderSnapshot(snapshot.paper.paper_id); } catch { /* preserve the local draft until retry */ }
+      }
+      updateMetadata((current) => {
+        let failed = failRevisionSave(current, request.token, error instanceof ApiClientError ? error.kind : "error");
+        if (latest) failed = receiveRemoteRevision(failed, {
+          value: latest.editable_metadata,
+          revision: latest.metadata_revision,
+          changedElsewhere: true,
+        });
+        return {
+          ...failed,
+          status: failed.saveState === "changed_elsewhere" ? "conflict" : "error",
+          message: failed.saveState === "changed_elsewhere"
+            ? "This metadata changed elsewhere. Your local draft and latest saved values are both preserved."
+            : failed.saveState === "offline"
+              ? "The local API is unavailable. Your metadata draft is preserved locally."
+              : "Save failed. Your metadata draft remains preserved locally.",
+        };
+      });
     } finally {
       finishMutation(mutationToken);
     }
@@ -410,37 +516,76 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   };
 
   const saveNote = async () => {
-    if (editor.note.draft === editor.note.baseline || mutationBusy) return;
+    if (mutationBusy) return;
+    const started = beginRevisionSave(editor.note);
+    if (!started.request) return;
     const mutationToken = beginMutation();
     if (mutationToken === null) return;
-    setEditor((current) => ({
-      ...current,
-      note: { ...current.note, status: "saving", message: "Saving Reading Note…" },
+    const request = started.request;
+    updateNote(() => ({
+      ...started.state,
+      sha256: started.state.revision,
+      status: "saving",
+      message: "Saving Paper Note…",
     }));
     try {
       const response = await apiClient.saveReadingNote(
         snapshot.paper.paper_id,
-        editor.note.draft,
-        editor.note.sha256,
+        request.draft,
+        request.revision,
       );
-      setEditor((current) => ({
-        ...current,
-        note: {
-          ...current.note,
-          draft: response.content,
-          baseline: response.content,
-          sha256: response.sha256,
+      updateNote((current) => {
+        const saved = completeRevisionSave(current, request.token, {
+          value: response.content,
+          revision: response.sha256,
+        });
+        return {
+          ...saved,
+          sha256: saved.revision,
           exists: true,
-          status: "saved",
-          message: response.status === "no_op" ? "Reading Note already matched the saved version." : "Reading Note saved.",
-        },
-      }));
+          status: saved.saveState === "saved" ? "saved" : "dirty",
+          message: saved.saveState === "saved"
+            ? response.status === "no_op" ? "Paper Note already matched the saved version." : "Paper Note saved."
+            : "The saved version is current. Newer local edits are still unsaved.",
+        };
+      });
     } catch (error) {
-      const failure = errorState(error);
-      setEditor((current) => ({
-        ...current,
-        note: { ...current.note, ...failure },
-      }));
+      let latest: ReaderSnapshot | null = null;
+      if (error instanceof ApiClientError && error.kind === "conflict") {
+        try {
+          latest = await apiClient.getReaderSnapshot(snapshot.paper.paper_id);
+        } catch {
+          // The conflict itself remains actionable even if a just-restarted
+          // backend cannot yet supply the latest copy.
+        }
+      }
+      updateNote((current) => {
+        let failed = failRevisionSave(
+          current,
+          request.token,
+          error instanceof ApiClientError ? error.kind : "error",
+        );
+        if (latest) {
+          failed = receiveRemoteRevision(failed, {
+            value: latest.saved_note_content,
+            revision: latest.saved_note_baseline.sha256,
+            changedElsewhere: true,
+          });
+        }
+        return {
+          ...failed,
+          sha256: failed.revision,
+          exists: latest ? latest.saved_note_baseline.exists : current.exists,
+          status: failed.saveState === "changed_elsewhere" ? "conflict" : "error",
+          message: failed.saveState === "changed_elsewhere"
+            ? latest
+              ? "This Paper Note changed elsewhere. Your local draft and the latest saved version are both preserved."
+              : "This Paper Note changed elsewhere. Your local draft is preserved; refresh the latest saved version to resolve it."
+            : failed.saveState === "offline"
+              ? "The local API is unavailable. Your Paper Note draft is preserved locally."
+              : "Save failed. Your Paper Note draft remains preserved locally.",
+        };
+      });
     } finally {
       finishMutation(mutationToken);
     }
@@ -485,7 +630,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   };
 
   const reloadMetadata = async () => {
-    if (metadataChanged.length && !window.confirm("Replace this metadata draft with the current saved version?")) return;
     try {
       const current = await apiClient.getReaderSnapshot(snapshot.paper.paper_id);
       setEditor((state) => {
@@ -493,14 +637,20 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         const refreshed = noteDirty
           ? refreshDirtyDraftHeader(state.note.draft, current.saved_note_content)
           : { content: current.saved_note_content, changed: false };
-        return {
+        const metadata = receiveRemoteRevision(state.metadata, {
+          value: current.editable_metadata,
+          revision: current.metadata_revision,
+          changedElsewhere: current.metadata_revision !== state.metadata.revision
+            && changedMetadataFields(state.metadata.draft, state.metadata.baseline).length > 0,
+        });
+        const next = {
           ...state,
           metadata: {
-            draft: { ...current.editable_metadata },
-            baseline: { ...current.editable_metadata },
-            revision: current.metadata_revision,
-            status: "clean",
-            message: "Current metadata loaded.",
+            ...metadata,
+            status: metadata.saveState === "saved" ? "clean" as const : "conflict" as const,
+            message: metadata.saveState === "saved"
+              ? "Current metadata loaded."
+              : "The latest saved metadata was loaded separately. Choose which version to keep.",
           },
           note: {
             ...state.note,
@@ -508,44 +658,52 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
             baseline: current.saved_note_content,
             sha256: current.saved_note_baseline.sha256,
             exists: current.saved_note_baseline.exists,
-            status: refreshed.content === current.saved_note_content ? "clean" : "dirty",
+            status: refreshed.content === current.saved_note_content ? "clean" as const : "dirty" as const,
             message: refreshed.changed
               ? "The current canonical header was applied; the unsaved note body was retained."
               : state.note.message,
           },
         };
+        persistRevisionDraft(browserStorage(), metadataDraftKey, next.metadata);
+        persistRevisionDraft(browserStorage(), noteDraftKey, next.note);
+        return next;
       });
     } catch {
-      setEditor((current) => ({
+      updateMetadata((current) => ({
         ...current,
-        metadata: { ...current.metadata, status: "error", message: "Current metadata could not be loaded. Your draft remains unchanged." },
+        saveState: "offline",
+        status: "error",
+        message: "Current metadata could not be loaded. Your draft remains preserved locally.",
       }));
     }
   };
 
   const reloadNote = async () => {
-    if (
-      editor.note.draft !== editor.note.baseline
-      && !window.confirm("Replace this Reading Note draft with the current saved version?")
-    ) return;
     try {
       const current = await apiClient.getReaderSnapshot(snapshot.paper.paper_id);
-      setEditor((state) => ({
-        ...state,
-        note: {
-          ...state.note,
-          draft: current.saved_note_content,
-          baseline: current.saved_note_content,
-          sha256: current.saved_note_baseline.sha256,
+      updateNote((note) => {
+        const received = receiveRemoteRevision(note, {
+          value: current.saved_note_content,
+          revision: current.saved_note_baseline.sha256,
+          changedElsewhere: current.saved_note_baseline.sha256 !== note.revision
+            && !Object.is(note.draft, note.baseline),
+        });
+        return {
+          ...received,
+          sha256: received.revision,
           exists: current.saved_note_baseline.exists,
-          status: "clean",
-          message: "Current Reading Note loaded.",
-        },
-      }));
+          status: received.saveState === "saved" ? "clean" : "conflict",
+          message: received.saveState === "saved"
+            ? "Current Paper Note loaded."
+            : "The latest saved Paper Note was loaded separately. Choose which version to keep.",
+        };
+      });
     } catch {
-      setEditor((current) => ({
+      updateNote((current) => ({
         ...current,
-        note: { ...current.note, status: "error", message: "Current Reading Note could not be loaded. Your draft remains unchanged." },
+        saveState: "offline",
+        status: "error",
+        message: "Current Paper Note could not be loaded. Your draft remains preserved locally.",
       }));
     }
   };
@@ -660,16 +818,13 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   };
 
   const updateMetadataField = (field: keyof EditablePaperMetadata, value: string) => {
-    setEditor((current) => {
-      const draft = { ...current.metadata.draft, [field]: value };
+    updateMetadata((current) => {
+      const draft = { ...current.draft, [field]: value };
+      const updated = editRevisionDraft(current, draft);
       return {
-        ...current,
-        metadata: {
-          ...current.metadata,
-          draft,
-          status: changedMetadataFields(draft, current.metadata.baseline).length ? "dirty" : "clean",
-          message: "",
-        },
+        ...updated,
+        status: changedMetadataFields(draft, current.baseline).length ? "dirty" : "clean",
+        message: "",
       };
     });
   };
@@ -683,15 +838,18 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     if (action === "link" && linkUrl === null) return;
     const formatted = formatPaperNoteMarkdown(currentValue, selectionStart, selectionEnd, action, { url: linkUrl ?? undefined });
     const nextDraft = replacePaperNoteBody(editor.note.draft, formatted.value);
-    setEditor((current) => ({
-      ...current,
-      note: {
-        ...current.note,
-        draft: replacePaperNoteBody(current.note.draft, formatted.value),
-        status: nextDraft === current.note.baseline ? "clean" : "dirty",
+    updateNote((current) => {
+      const updated = editRevisionDraft(
+        current,
+        replacePaperNoteBody(current.draft, formatted.value),
+      );
+      return {
+        ...updated,
+        sha256: updated.revision,
+        status: nextDraft === current.baseline ? "clean" : "dirty",
         message: "",
-      },
-    }));
+      };
+    });
     window.requestAnimationFrame(() => {
       textarea?.focus();
       textarea?.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
@@ -758,7 +916,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                   <button className="reader-research-panel__collapse" type="button" aria-label="Collapse research panel" onClick={() => setResearchPanelCollapsed(true)}><ChevronLeft size={16} /></button>
                 </div>
                 <div className="reader-paper-context__actions">
-                  <StatusBadge tone={editor.note.status === "conflict" || editor.note.status === "error" || noteUnavailable ? "danger" : editor.note.status === "saved" ? "accent" : "neutral"}>{noteUnavailable ? "Note unavailable" : statusLabel(editor.note.status)}</StatusBadge>
+                  {noteUnavailable ? <StatusBadge tone="danger">Note unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
                   <button className="reader-control reader-control--secondary" type="button" onClick={() => setMetadataEditorOpen((current) => !current)}>{metadataEditorOpen ? "Hide details" : "Edit details"}</button>
                   <button className="reader-control" type="button" disabled={enrichment.status === "loading" || enrichment.status === "saving" || mutationBusy} onClick={() => { setMetadataReviewOpen(true); void fetchMetadataCandidates(enrichment.status === "conflict"); }}><RotateCcw size={15} />{enrichment.status === "loading" ? "Checking…" : "Enrich"}</button>
                 </div>
@@ -770,9 +928,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               <div>
                 <h2 id="metadata-editor-title">Paper metadata</h2>
               </div>
-              <StatusBadge tone={editor.metadata.status === "conflict" || editor.metadata.status === "error" ? "danger" : editor.metadata.status === "saved" ? "accent" : "neutral"}>
-                {statusLabel(editor.metadata.status)}
-              </StatusBadge>
+              <SaveStatus state={editor.metadata.saveState} />
             </div>
             <div className="reader-editor__fields">
               {(Object.keys(FIELD_LABELS) as Array<keyof EditablePaperMetadata>).map((field) => {
@@ -785,7 +941,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                       <textarea
                         rows={5}
                         value={editor.metadata.draft[field]}
-                        disabled={mutationBusy}
                         onChange={(event) => updateMetadataField(field, event.target.value)}
                       />
                     ) : (
@@ -793,7 +948,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                         type="text"
                         inputMode={field === "year" ? "numeric" : "text"}
                         value={editor.metadata.draft[field]}
-                        disabled={mutationBusy}
                         onChange={(event) => updateMetadataField(field, event.target.value)}
                       />
                     )}
@@ -805,14 +959,24 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               {editor.metadata.message || `${metadataChanged.length} changed field${metadataChanged.length === 1 ? "" : "s"}.`}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={!metadataChanged.length || mutationBusy} onClick={saveMetadata}>
-                <Save size={15} />{editor.metadata.status === "saving" ? "Saving…" : "Save Metadata"}
+              <button className="reader-control" type="button" disabled={!metadataChanged.length || mutationBusy || Boolean(editor.metadata.activeSave) || editor.metadata.saveState === "changed_elsewhere"} onClick={saveMetadata}>
+                <Save size={15} />{editor.metadata.saveState === "saving" ? "Saving…" : "Save Metadata"}
               </button>
-              {editor.metadata.status === "conflict" ? (
-                <button className="reader-control reader-control--secondary" type="button" onClick={reloadMetadata}>
-                  <RotateCcw size={15} />Reload current metadata
-                </button>
-              ) : null}
+              {editor.metadata.saveState === "changed_elsewhere" ? <>
+                <button className="reader-control reader-control--secondary" type="button" disabled={editor.metadata.remoteRevision === editor.metadata.revision} onClick={() => updateMetadata((current) => {
+                  const kept = keepMyRevisionDraft(current);
+                  return { ...kept, status: "dirty", message: "Your local metadata draft will be saved against the latest version." };
+                })}>Keep my draft</button>
+                <button className="reader-control reader-control--secondary" type="button" onClick={() => {
+                  if (!window.confirm("Use the latest saved metadata and discard the local draft?")) return;
+                  updateMetadata((current) => {
+                    const latest = applyLatestRevisionDraft(current);
+                    return { ...latest, status: "clean", message: "Latest saved metadata in use." };
+                  });
+                }}>Use latest server value</button>
+                <button className="reader-control reader-control--secondary" type="button" onClick={reloadMetadata}><RotateCcw size={15} />Reload current metadata</button>
+                <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{JSON.stringify(editor.metadata.draft, null, 2)}</pre><h3>Latest saved value</h3><pre>{JSON.stringify(editor.metadata.remote, null, 2)}</pre></details>
+              </> : null}
             </div>
           </section>
           ) : null}
@@ -822,9 +986,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               <div>
                 <h2 id="reading-note-editor-title">Paper Note</h2>
               </div>
-              <StatusBadge tone={editor.note.status === "conflict" || editor.note.status === "error" || noteUnavailable ? "danger" : editor.note.status === "saved" ? "accent" : "neutral"}>
-                {noteUnavailable ? "Unavailable" : statusLabel(editor.note.status)}
-              </StatusBadge>
+              {noteUnavailable ? <StatusBadge tone="danger">Unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
             </div>
             {noteUnavailable ? (
               <div className="reader-note__message" role="status">
@@ -832,14 +994,14 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               </div>
             ) : null}
             <div className="reader-note__formatting" role="toolbar" aria-label="Paper Note formatting">
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("heading")}>Heading</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bold")}>Bold</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("italic")}>Italic</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bullets")}>Bullets</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("numbered")}>Numbered</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("task")}>Task</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("quote")}>Quote</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy || noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("link")}>Link</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("heading")}>Heading</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bold")}>Bold</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("italic")}>Italic</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bullets")}>Bullets</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("numbered")}>Numbered</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("task")}>Task</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("quote")}>Quote</button>
+              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("link")}>Link</button>
               <button className={notePreviewOpen ? "reader-control reader-control--active" : "reader-control reader-control--secondary"} type="button" disabled={noteUnavailable} aria-pressed={notePreviewOpen} onClick={() => setNotePreviewOpen((current) => !current)}>{notePreviewOpen ? "Edit note" : "Preview"}</button>
             </div>
             {notePreviewOpen ? <PaperNoteMarkdownPreview content={paperNoteBody(editor.note.draft)} /> : (
@@ -850,31 +1012,42 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                   className="reader-note__textarea"
                   rows={18}
                   value={paperNoteBody(editor.note.draft)}
-                  disabled={mutationBusy || noteUnavailable}
-                  onChange={(event) => setEditor((current) => ({
-                    ...current,
-                    note: {
-                      ...current.note,
-                      draft: replacePaperNoteBody(current.note.draft, event.target.value),
-                      status: replacePaperNoteBody(current.note.draft, event.target.value) === current.note.baseline ? "clean" : "dirty",
+                  disabled={noteUnavailable}
+                  onChange={(event) => updateNote((current) => {
+                    const nextDraft = replacePaperNoteBody(current.draft, event.target.value);
+                    const updated = editRevisionDraft(current, nextDraft);
+                    return {
+                      ...updated,
+                      sha256: updated.revision,
+                      status: nextDraft === current.baseline ? "clean" : "dirty",
                       message: "",
-                    },
-                  }))}
+                    };
+                  })}
                 />
               </label>
             )}
             <p className="reader-editor__status" role="status" aria-live="polite">
-              {editor.note.message || (editor.note.exists ? "Markdown-compatible plain text. Save remains explicit." : "No persisted note exists; Save will create it.")}
+              {editor.note.message || (editor.note.exists ? "Markdown-compatible plain text. Local drafts are preserved until an explicit Save succeeds." : "No persisted note exists; Save will create it.")}
             </p>
             <div className="reader-editor__actions">
-              <button className="reader-control" type="button" disabled={editor.note.draft === editor.note.baseline || mutationBusy || noteUnavailable} onClick={saveNote}>
-                <Save size={15} />{editor.note.status === "saving" ? "Saving…" : "Save Paper Note"}
+              <button className="reader-control" type="button" disabled={editor.note.draft === editor.note.baseline || mutationBusy || Boolean(editor.note.activeSave) || editor.note.saveState === "changed_elsewhere" || noteUnavailable} onClick={saveNote}>
+                <Save size={15} />{editor.note.saveState === "saving" ? "Saving…" : "Save Paper Note"}
               </button>
-              {editor.note.status === "conflict" ? (
-                <button className="reader-control reader-control--secondary" type="button" onClick={reloadNote}>
-                  <RotateCcw size={15} />Reload current Paper Note
-                </button>
-              ) : null}
+              {editor.note.saveState === "changed_elsewhere" ? <>
+                <button className="reader-control reader-control--secondary" type="button" disabled={editor.note.remoteRevision === editor.note.revision} onClick={() => updateNote((current) => {
+                  const kept = keepMyRevisionDraft(current);
+                  return { ...kept, sha256: kept.revision, status: "dirty", message: "Your local draft will be saved against the latest version when you choose Save." };
+                })}>Keep my draft</button>
+                <button className="reader-control reader-control--secondary" type="button" onClick={() => {
+                  if (!window.confirm("Use the latest saved Paper Note and discard the local draft?")) return;
+                  updateNote((current) => {
+                    const latest = applyLatestRevisionDraft(current);
+                    return { ...latest, sha256: latest.revision, status: "clean", message: "Latest saved Paper Note in use." };
+                  });
+                }}>Use latest server value</button>
+                <button className="reader-control reader-control--secondary" type="button" onClick={reloadNote}><RotateCcw size={15} />Reload current Paper Note</button>
+                <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{paperNoteBody(editor.note.draft)}</pre><h3>Latest saved value</h3><pre>{paperNoteBody(editor.note.remote)}</pre></details>
+              </> : null}
             </div>
           </section>
           <NoteBlocksWorkspace key={snapshot.paper.paper_id} paperId={snapshot.paper.paper_id} />
@@ -900,7 +1073,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 <section className="reader-utility-section" aria-labelledby="paper-tags-editor-title">
                   <div className="reader-note__heading">
                     <h2 id="paper-tags-editor-title">Tags</h2>
-                    <StatusBadge tone={editor.tags.status === "conflict" || editor.tags.status === "error" ? "danger" : editor.tags.status === "saved" ? "accent" : "neutral"}>{statusLabel(editor.tags.status)}</StatusBadge>
+                    <SaveStatus state={commandSaveState(editor.tags.status)} />
                   </div>
                   <div>
                     <h3>Current</h3>
