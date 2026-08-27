@@ -496,8 +496,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     <div className="page-stack">
       {resource.status === "loading" ? <LoadingState label="Loading Project detail" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
-      {resource.status === "error" ? <ErrorState title="Project read model unavailable" description={resource.message} onRetry={resource.retry} /> : null}
-      {resource.status === "not-found" ? <EmptyState title="Project not found" description="The requested Project identity is not present in the local read model." /> : null}
+      {resource.status === "error" ? <ErrorState title="Project couldn't be loaded" description={resource.message} onRetry={resource.retry} /> : null}
+      {resource.status === "not-found" ? <EmptyState title="Project not found" description="This project is not available in your workspace." /> : null}
       {resource.status === "success" ? <ProjectWorkspace key={resource.data.project_revision} snapshot={resource.data} /> : null}
     </div>
   );

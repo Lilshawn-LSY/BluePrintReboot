@@ -54,12 +54,13 @@ function browserStorage(): Storage | null {
 export function TagsView() {
   const { triggerRef: createTriggerRef, restoreTriggerFocus } = useDisclosureFocus<HTMLButtonElement>();
   const resource = useApiResource("tags", async () => {
-    const [tags, summary, governance] = await Promise.all([
+    const [tags, summary, governance, queue] = await Promise.all([
       apiClient.getAllTags(),
       apiClient.getTagSummary(),
       apiClient.getTagGovernance(),
+      apiClient.getTagReviewQueue(),
     ]);
-    return { tags, summary, governance };
+    return { tags, summary, governance, queue };
   });
   const [selectedKey, setSelectedKey] = useState("");
   const createDraftKey = draftStorageKey("canonical-tag-create", "new");
@@ -74,7 +75,6 @@ export function TagsView() {
   const [busy, setBusy] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [registrySearch, setRegistrySearch] = useState("");
-  const candidateReviewHref = "/library?review=tag-candidates#paper-collection";
 
   const selected = resource.status === "success"
     ? resource.data.governance.items.find((tag) => tag.canonical_key === selectedKey)
@@ -155,7 +155,7 @@ export function TagsView() {
       setNotice(success);
       resource.retry();
     } catch (error) {
-      setNotice(error instanceof ApiClientError ? error.message : "The canonical Tag Book command could not be completed.");
+      setNotice(error instanceof ApiClientError ? error.message : "The tag update could not be completed.");
     } finally {
       setBusy(false);
     }
@@ -208,7 +208,7 @@ export function TagsView() {
           remoteRevision: latestRevision || failed.remoteRevision,
           lastError: failed.saveState === "changed_elsewhere"
             ? "The Tag Book changed elsewhere. Your new-tag draft is preserved; refresh it before retrying."
-            : error instanceof ApiClientError ? error.message : "The canonical Tag Book command could not be completed.",
+            : error instanceof ApiClientError ? error.message : "The tag update could not be completed.",
         };
       });
     } finally {
@@ -346,36 +346,39 @@ export function TagsView() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Tags" description="Review candidates, browse the tag book, and manage one tag at a time." actions={<button ref={createTriggerRef} className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-canonical-tag"><Plus size={15} />Create tag</button>} />
-      {resource.status === "loading" ? <LoadingState label="Loading canonical Tags" /> : null}
+      <PageHeader title="Tags" description="Review suggestions, browse the tag book, and manage one tag at a time." actions={<button ref={createTriggerRef} className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-canonical-tag"><Plus size={15} />Create tag</button>} />
+      {resource.status === "loading" ? <LoadingState label="Loading tags" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "error" ? <ErrorState title="Tag Book unavailable" description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <ErrorState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "success" ? (
         <>
-          <Section title="Review candidates" description="Candidates need a deliberate review before they become Paper tags; counts use local evidence and no values are fabricated." actions={<Link className="text-link" href={candidateReviewHref}>Review in Library</Link>}>
-            {resource.data.summary.availability === "unavailable" ? (
-              <EmptyState title="Candidate summary unavailable" description="No paper index is available to review candidates." />
-            ) : resource.data.summary.state === "empty" ? (
-              <EmptyState title="No candidate evidence" description={`The real source was evaluated across ${resource.data.summary.evaluated_paper_count} paper records and produced no candidates.`} />
-            ) : (
-              <div className="summary-strip summary-strip--six">
-                <div><span>Candidates</span><Link className="summary-value-link" href={candidateReviewHref} aria-label="Open Library to review tag candidates"><strong>{resource.data.summary.candidate_count}</strong></Link></div>
-                <div><span>Known matches</span><strong>{resource.data.summary.known_canonical_match_count}</strong></div>
-                <div><span>High</span><strong>{resource.data.summary.quality_counts.high}</strong></div>
-                <div><span>Medium</span><strong>{resource.data.summary.quality_counts.medium}</strong></div>
-                <div><span>Weak</span><strong>{resource.data.summary.quality_counts.weak}</strong></div>
-                <div><span>Rejected</span><strong>{resource.data.summary.quality_counts.rejected}</strong></div>
-              </div>
+          <Section title="Review candidates" description="Review each Paper’s saved suggestions before you apply a tag.">
+            {resource.data.summary.availability === "unavailable" ? <p className="muted-text">Candidate summary unavailable.</p> : <p className="toolbar-note">{resource.data.summary.candidate_count === 0 ? "No candidate evidence yet." : `${resource.data.summary.candidate_count} saved candidate${resource.data.summary.candidate_count === 1 ? "" : "s"} across ${resource.data.summary.evaluated_paper_count} Paper${resource.data.summary.evaluated_paper_count === 1 ? "" : "s"}. ${resource.data.summary.quality_counts.high} high-confidence.`}</p>}
+            {resource.data.queue.items.length === 0 ? <EmptyState title="No candidates to review" description="Generate suggestions from a Paper when you are ready; nothing is generated from this page." /> : (
+              <DataTableShell label="Papers with tag candidates">
+                <table>
+                  <thead><tr><th>Paper</th><th>To review</th><th>Progress</th><th>Suggestions</th><th /></tr></thead>
+                  <tbody>{resource.data.queue.items.map((item) => (
+                    <tr key={item.paper_id}>
+                      <td><strong>{item.title}</strong></td>
+                      <td>{item.candidate_count}</td>
+                      <td>{item.unresolved_count} unresolved · {item.resolved_count} ready · {item.approved_count} approved</td>
+                      <td>{item.candidate_labels.length ? <div className="tag-list">{item.candidate_labels.map((label) => <StatusBadge key={label}>{label}</StatusBadge>)}</div> : <span className="muted-text">No labels available</span>}</td>
+                      <td><Link className="reader-control" href={`/papers/${encodeURIComponent(item.paper_id)}/reader?utility=tags&review=tag-candidates`}>Review</Link></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </DataTableShell>
             )}
           </Section>
 
-          <Section title="Canonical registry" description={`${resource.data.governance.items.length} canonical tag${resource.data.governance.items.length === 1 ? "" : "s"}.`}>
-            <Toolbar label="Canonical tag registry search"><label className="search-shell tag-registry-search"><span className="sr-only">Search canonical tags</span><input type="search" value={registrySearch} placeholder="Search label, category, or alias…" onChange={(event) => setRegistrySearch(event.target.value)} /></label></Toolbar>
+          <Section title="Tag registry" description={`${resource.data.governance.items.length} tag${resource.data.governance.items.length === 1 ? "" : "s"}.`}>
+            <Toolbar label="Tag registry search"><label className="search-shell tag-registry-search"><span className="sr-only">Search tags</span><input type="search" value={registrySearch} placeholder="Search label, category, or alias…" onChange={(event) => setRegistrySearch(event.target.value)} /></label></Toolbar>
             {resource.data.governance.items.length === 0 ? (
               <EmptyState title="Tag Book is empty" description="Create an explicit canonical tag to begin managing the registry." />
             ) : (
-              <DataTableShell label="Canonical Tag Book">
+              <DataTableShell label="Tag registry">
                 <table>
                   <thead><tr><th>Tag</th><th>Category</th><th>Aliases</th><th>Status</th><th /></tr></thead>
                   <tbody>{resource.data.governance.items.filter((tag) => [tag.label, tag.category, ...tag.aliases].join(" ").toLocaleLowerCase().includes(registrySearch.trim().toLocaleLowerCase())).map((tag) => (
@@ -391,7 +394,7 @@ export function TagsView() {
             )}
           </Section>
 
-          {showCreate ? <Section title="Create canonical tag" description="Create a registry entry when you need one.">
+          {showCreate ? <Section title="Create tag" description="Create a registry entry when you need one.">
             <form id="create-canonical-tag" className="project-command-panel project-command-panel--disclosure" onSubmit={(event) => { event.preventDefault(); void createCanonicalTag(); }}>
               <div className="project-form-grid">
                 <label className="reader-field"><span>Label</span><input value={createDraft.draft.label} onChange={(event) => updateCreateDraft((current) => editRevisionDraft(current, { ...current.draft, label: event.target.value }))} required maxLength={200} /></label>
@@ -420,7 +423,7 @@ export function TagsView() {
                 {selectedEditor.lastError ? <p className="reader-editor__status" role="status">{selectedEditor.lastError}</p> : null}
                 {selectedEditor.saveState === "changed_elsewhere" ? <div className="reader-editor__actions">
                   <button className="reader-control reader-control--secondary" type="button" onClick={() => updateTagEditor(keepMyRevisionDraft)}>Keep my draft</button>
-                  <button className="reader-control reader-control--secondary" type="button" onClick={() => updateTagEditor(applyLatestRevisionDraft)}>Use latest server value</button>
+                  <button className="reader-control reader-control--secondary" type="button" onClick={() => updateTagEditor(applyLatestRevisionDraft)}>Use latest saved version</button>
                 </div> : null}
                 {selectedEditor.saveState === "changed_elsewhere" ? <details className="reader-conflict-review"><summary>Review local and latest server values</summary><p><strong>My draft:</strong> {selectedEditor.draft.label} · {selectedEditor.draft.category}</p><p><strong>Latest server value:</strong> {selectedEditor.remote.label} · {selectedEditor.remote.category}</p></details> : null}
               </form>
@@ -429,7 +432,7 @@ export function TagsView() {
                 <div className="tag-list alias-chip-list">{selected.aliases.length ? selected.aliases.map((value) => <span key={value} className="alias-chip"><span>{value}</span><button className="icon-button alias-chip__remove" type="button" disabled={busy} aria-label={`Remove alias ${value}`} onClick={() => { if (window.confirm(`Remove alias “${value}” from ${selected.label}? Historical Paper tags will remain.`)) void run(() => apiClient.removeCanonicalTagAlias(selected.canonical_key, value, resource.data.governance.registry_revision), `Alias “${value}” removed from the registry only.`); }}><X size={13} aria-hidden="true" /></button></span>) : <span className="muted-text">No aliases yet.</span>}</div>
                 <div className="project-link-form"><label className="reader-field"><span>New alias</span><input value={selectedEditor.draft.aliasText} onChange={(event) => updateTagEditor((current) => editRevisionDraft(current, { ...current.draft, aliasText: event.target.value }))} maxLength={200} /></label><button className="reader-control" type="button" disabled={busy || Boolean(selectedEditor.activeSave) || selectedEditor.saveState === "changed_elsewhere" || !selectedEditor.draft.aliasText.trim()} onClick={() => void addCanonicalAlias()}>Add alias</button></div>
                 <details className="tag-advanced-details"><summary>Advanced registry details</summary><span className="mono-id">Canonical key: {selected.canonical_key}</span></details>
-                {selected.status === "active" ? <button className="reader-control reader-control--danger" type="button" disabled={busy} onClick={() => { if (window.confirm(`Deprecate ${selected.label}? Historical Paper references will remain.`)) void run(() => apiClient.deprecateCanonicalTag(selected.canonical_key, resource.data.governance.registry_revision), "Canonical tag deprecated. Historical references remain visible."); }}>Deprecate tag</button> : <p className="muted-text">This tag is deprecated and remains available for historical inspection.</p>}
+                {selected.status === "active" ? <button className="reader-control reader-control--danger" type="button" disabled={busy} onClick={() => { if (window.confirm(`Deprecate ${selected.label}? Historical Paper references will remain.`)) void run(() => apiClient.deprecateCanonicalTag(selected.canonical_key, resource.data.governance.registry_revision), "Tag deprecated. Historical references remain visible."); }}>Deprecate tag</button> : <p className="muted-text">This tag is deprecated and remains available for historical inspection.</p>}
               </div>
             </>}
           </Section> : null}

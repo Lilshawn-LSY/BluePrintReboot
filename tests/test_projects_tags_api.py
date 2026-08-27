@@ -15,6 +15,7 @@ from api.schemas import (
     PaginatedProjectList,
     PaginatedTagList,
     ProjectDetail,
+    TagCandidateReviewQueueResponse,
 )
 from services import project_read_model, tag_book, tag_read_model
 
@@ -118,6 +119,7 @@ def client_for(
     tags: list[dict[str, object]] | None = None,
     fallback: bool = False,
     summary: dict[str, object] | None = None,
+    review_queue: dict[str, object] | None = None,
 ) -> TestClient:
     application = create_app()
     application.dependency_overrides[dependencies.get_project_list_items] = (
@@ -134,7 +136,53 @@ def client_for(
     application.dependency_overrides[dependencies.get_candidate_summary] = (
         lambda: deepcopy(summary or candidate_summary())
     )
+    application.dependency_overrides[dependencies.get_candidate_review_queue] = (
+        lambda: deepcopy(review_queue or {"items": [], "total": 0})
+    )
     return TestClient(application)
+
+
+def test_tag_candidate_review_queue_is_paginated_allowlisted_and_routes_by_paper_identity() -> None:
+    queue = {
+        "items": [
+            {
+                "paper_id": "paper-b",
+                "title": "Second paper",
+                "candidate_count": 2,
+                "unresolved_count": 1,
+                "resolved_count": 1,
+                "approved_count": 0,
+                "candidate_labels": ["Method", "Dataset"],
+                "review_revision": "private",
+            },
+            {
+                "paper_id": "paper-a",
+                "title": "First paper",
+                "candidate_count": 1,
+                "unresolved_count": 0,
+                "resolved_count": 0,
+                "approved_count": 1,
+                "candidate_labels": ["Field"],
+            },
+        ],
+        "total": 2,
+    }
+    response = client_for(review_queue=queue).get("/tags/review-queue", params={"limit": 1, "offset": 1})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert TagCandidateReviewQueueResponse.model_validate(body)
+    assert body["items"] == [{
+        "paper_id": "paper-a",
+        "title": "First paper",
+        "candidate_count": 1,
+        "unresolved_count": 0,
+        "resolved_count": 0,
+        "approved_count": 1,
+        "candidate_labels": ["Field"],
+    }]
+    assert body["has_more"] is False
+    assert "review_revision" not in body["items"][0]
 
 
 def _write_json(path: Path, value: object) -> None:

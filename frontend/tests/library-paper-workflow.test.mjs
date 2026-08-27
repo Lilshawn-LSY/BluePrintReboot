@@ -16,14 +16,14 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.match(library, />Library state</);
   assert.match(library, /Reset filters/);
   assert.match(library, /apiClient\.getPapers\(\{ limit: PAGE_SIZE, offset, archiveStatus, q, tag, year, status: readingStatus \}\)/);
-  assert.match(library, /library-paper-row__select/);
-  assert.match(library, /aria-pressed=\{selectedPaperId === paper\.paper_id\}/);
+  assert.match(library, /aria-label=\{`Inspect \$\{paper\.title/);
+  assert.match(library, /href=\{`\/papers\/\$\{encodeURIComponent\(paper\.paper_id\)\}`\}/);
   assert.match(library, /onClick=\{\(\) => selectPaper\(paper\.paper_id\)\}/);
-  assert.match(library, /useSearchParams/);
-  assert.match(library, /reviewingTagCandidates/);
-  assert.match(library, /Review tag candidates/);
+  assert.match(library, /setTimeout\(\(\) =>/);
+  assert.match(library, /READING_STATUSES/);
+  assert.match(library, />Inspect</);
   assert.match(library, /selectionControls\.current\.get\(dismissedPaperId\)\?\.focus\(\)/);
-  assert.match(library, />Open details<\/Link>/);
+  assert.match(library, /className="paper-link"/);
   assert.match(library, /<LibraryPaperInspector/);
   assert.doesNotMatch(library, /<th>Actions<\/th>/);
   assert.doesNotMatch(library, />Detail<\/Link>/);
@@ -38,8 +38,7 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.match(inspector, /Linked to \$\{count\} project/);
   assert.match(css, /\.library-collection-layout--with-inspector/);
   assert.match(css, /\.library-paper-row\[data-selected="true"\]/);
-  assert.match(css, /\.library-review-guidance/);
-  assert.match(css, /\.library-paper-row__detail-link/);
+  assert.match(css, /\.library-paper-row__tags/);
   assert.match(css, /\.library-paper-inspector__abstract/);
 });
 

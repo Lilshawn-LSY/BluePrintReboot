@@ -20,7 +20,7 @@ from services.tag_governance import CanonicalTagGovernanceService
 from services.metadata_enrichment import MetadataEnrichmentService
 from services.pdf_scan_import import PdfScanImportService
 from services.settings_read_model import SettingsSummary
-from services.tag_read_model import CandidateSummary, CanonicalTag
+from services.tag_read_model import CandidateReviewQueue, CandidateSummary, CanonicalTag
 
 
 class ReadModelUnavailable(Exception):
@@ -113,6 +113,13 @@ def get_canonical_tags() -> tuple[list[CanonicalTag], bool]:
 def get_candidate_summary() -> CandidateSummary:
     try:
         return tag_read_model.build_candidate_summary()
+    except Exception:
+        raise ReadModelUnavailable from None
+
+
+def get_candidate_review_queue() -> CandidateReviewQueue:
+    try:
+        return tag_read_model.build_candidate_review_queue()
     except Exception:
         raise ReadModelUnavailable from None
 

@@ -508,6 +508,24 @@ export interface CandidateSummary {
   };
 }
 
+export interface TagCandidateReviewQueueItem {
+  paper_id: string;
+  title: string;
+  candidate_count: number;
+  unresolved_count: number;
+  resolved_count: number;
+  approved_count: number;
+  candidate_labels: string[];
+}
+
+export interface TagCandidateReviewQueue {
+  items: TagCandidateReviewQueueItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
 export type SettingsState = "healthy" | "warning" | "unavailable" | "empty";
 
 export interface SettingsWorkspaceResource {
@@ -557,4 +575,5 @@ export interface DashboardSnapshot {
   health: HealthSummary;
   library: LibraryStatus;
   papers: PaginatedPaperList;
+  projects: ProjectListItem[];
 }

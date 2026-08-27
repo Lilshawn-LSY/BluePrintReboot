@@ -11,6 +11,7 @@ from typing import Any
 from api.schemas import (
     CandidateQualityCounts,
     CandidateSummaryResponse,
+    TagCandidateReviewQueueItem,
     CanonicalTag,
     EditablePaperMetadata,
     FullTextDocumentResponse,
@@ -813,6 +814,39 @@ def adapt_candidate_summary(source: Mapping[str, Any]) -> CandidateSummaryRespon
         if isinstance(error, TagContractError):
             raise
         raise TagContractError("Candidate summary contains unsupported values.") from None
+
+
+def adapt_candidate_review_queue_item(source: Mapping[str, Any]) -> TagCandidateReviewQueueItem:
+    """Allowlist a task-facing queue item without exposing review-store state."""
+
+    try:
+        candidate_count = _nonnegative_integer(
+            source.get("candidate_count"), "candidate_count", TagContractError,
+        )
+        if candidate_count < 1:
+            raise TagContractError("Candidate queue items require a reviewable candidate.")
+        labels = _strict_string_list(
+            source.get("candidate_labels"), "candidate_labels", TagContractError,
+        )
+        if len(labels) > 3:
+            raise TagContractError("Candidate review labels exceed their bound.")
+        paper_id = _strict_text(source.get("paper_id"), "paper_id", TagContractError)
+        title = _strict_text(source.get("title"), "title", TagContractError)
+        if not paper_id or not title:
+            raise TagContractError("Candidate queue Paper identity and title are required.")
+        return TagCandidateReviewQueueItem(
+            paper_id=paper_id,
+            title=title,
+            candidate_count=candidate_count,
+            unresolved_count=_nonnegative_integer(source.get("unresolved_count"), "unresolved_count", TagContractError),
+            resolved_count=_nonnegative_integer(source.get("resolved_count"), "resolved_count", TagContractError),
+            approved_count=_nonnegative_integer(source.get("approved_count"), "approved_count", TagContractError),
+            candidate_labels=labels,
+        )
+    except ValueError as error:
+        if isinstance(error, TagContractError):
+            raise
+        raise TagContractError("Candidate review queue item contains unsupported values.") from None
 
 
 def _settings_mapping(value: object, field_name: str) -> Mapping[str, Any]:

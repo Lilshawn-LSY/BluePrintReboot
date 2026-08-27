@@ -163,8 +163,10 @@ normalized value back to persistent metadata.
 Use the shared spacing scale from `globals.css`. The canonical increments are
 4px (`--space-1`), 8px (`--space-2`), 12px (`--space-3`), 16px
 (`--space-4`), 24px (`--space-6`), 32px (`--space-8`), and 48px
-(`--space-12`). Compatibility aliases may exist, but new work should choose
-the canonical tokens rather than introducing arbitrary values.
+(`--space-12`). `--space-5` intentionally aliases `--space-4` and
+`--space-10` intentionally aliases `--space-12` for existing component
+compatibility; new work should choose canonical tokens rather than introduce
+arbitrary values.
 
 - Use 4–8px for inline and micro separation, 12–16px for compact controls and
   related content, 24px for grouped content, 32px for sections, and 48px only
@@ -200,6 +202,38 @@ Do not introduce a global read/edit mode. Editor surfaces may keep directly
 editable controls, but informational fields should not turn into inputs merely
 for visual consistency. Preserve explicit Save, reload, conflict, and
 revision-safety behavior.
+
+## Reader interaction patterns
+
+The Reader keeps compact Paper context at the top of the research panel. Its
+persistent modes are **Note**, **Blocks**, and **Details**. Switching modes
+hides inactive work without destroying its editor, selection, draft, preview,
+conflict, or link-management state. The Note mode is the default, and tabs
+retain semantic roles, visible focus, and ordinary keyboard focus order.
+
+On desktop, the research panel is session-resizable from 320px to 520px. A
+pointer resize must be paired with an accessible range control and reset
+action. Tags and Full Text open as overlay utility drawers by default: an
+overlay does not add a grid column or reduce the PDF stage width. Opening a
+drawer moves focus into it; Escape and its close control return focus to the
+initiating control.
+
+PDF controls provide previous/next page, zoom, fit width, fit page, and manual
+zoom. Fit width uses the usable PDF stage width; fit page considers both stage
+dimensions. Manual zoom leaves fit mode cleanly. Logical PDF/text-layer
+geometry remains independent of backing-canvas high-DPI rendering.
+
+When a browser-local draft is restored, show a compact live `Draft restored`
+notice or the existing unsaved state. Normal in-app navigation does not
+interrupt work with a confirmation when that draft is safely preserved.
+Explicit discard, deliberate replacement with a saved version, and destructive
+operations retain their confirmation semantics.
+
+Collection toolbars use the shared `Toolbar` structure. Prefer structured
+controls for known values, including searchable canonical-tag suggestions and
+reading-status selects. Text search may debounce before refresh, every filter
+change resets pagination, and a collection title remains a normal navigation
+link with a separate Inspect action for contextual inspection.
 
 ## Accessibility and responsiveness
 

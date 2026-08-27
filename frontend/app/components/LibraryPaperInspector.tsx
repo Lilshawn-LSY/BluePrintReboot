@@ -2,12 +2,13 @@
 
 import { BookOpen, X } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "./AsyncStates";
 import { StatusBadge } from "./StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
 import { formatAuthorSummary } from "../lib/presentation";
+import { abstractDisplayParagraphs } from "../lib/abstract-display.mjs";
 
 function projectContext(count: number): string {
   if (count === 0) return "Not linked to a project";
@@ -22,6 +23,11 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
   enrichmentContent?: ReactNode;
 }) {
   const resource = useApiResource(`library-inspector:${paperId}`, () => apiClient.getPaper(paperId));
+  const [abstractExpanded, setAbstractExpanded] = useState(false);
+  const abstractParagraphs = useMemo(
+    () => resource.status === "success" ? abstractDisplayParagraphs(resource.data.abstract) : [],
+    [resource],
+  );
 
   return (
     <aside className="library-paper-inspector" aria-label="Selected paper">
@@ -49,7 +55,8 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
           </div>
           <section className="library-paper-inspector__section" aria-labelledby="selected-paper-abstract">
             <h3 id="selected-paper-abstract">Abstract</h3>
-            <p className="library-paper-inspector__abstract">{resource.data.abstract || "No abstract yet."}</p>
+            {abstractParagraphs.length ? <div className={abstractExpanded ? "library-paper-inspector__abstract is-expanded" : "library-paper-inspector__abstract"}>{abstractParagraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div> : <p className="library-paper-inspector__abstract">No abstract yet.</p>}
+            {abstractParagraphs.length ? <button className="text-link library-paper-inspector__abstract-toggle" type="button" aria-expanded={abstractExpanded} onClick={() => setAbstractExpanded((current) => !current)}>{abstractExpanded ? "Show less" : "Show more"}</button> : null}
           </section>
           <section className="library-paper-inspector__section" aria-labelledby="selected-paper-organization">
             <h3 id="selected-paper-organization">Organization</h3>

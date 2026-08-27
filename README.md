@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.6.2-workspace-information-architecture**.
+Current runtime target: **v1.6.3-reader-interaction-ux-polish**.
 
-v1.6.2 is a focused information-architecture and usability pass. Paper Detail now normalizes extracted display-only abstract line wraps without changing stored metadata, Projects lead with the project and its linked research material, Settings links to a separate Diagnostics view, Tags prioritize candidates and the canonical registry, and Library makes selection, filters, and paper actions clearer. Existing explicit saves, browser-local draft preservation, revision conflicts, stable routes, and local-first storage remain unchanged. Reader is intentionally not substantially redesigned in this release.
+v1.6.3 is a focused Reader interaction and UX polish pass. Reader keeps its compact Paper context while placing Paper Note, Note Blocks, and Details in persistent task tabs; the research panel is session-resizable, Tags and Full Text open as a focus-managed PDF overlay, and PDF.js adds fit-width, fit-page, and manual zoom modes. Library uses structured filters, conventional Paper Detail links, and explicit inspection; Dashboard emphasizes resuming reading and active projects; Projects adds lightweight search/filter/sort controls. Tags now has a read-only candidate-review queue that links directly to the right Reader state without generating or applying candidates. Explicit saves, browser-local drafts, conflict safety, stable routes, PDF identity, and local-first storage remain unchanged.
 
 v1.6.0 focuses on the desktop Reader workspace: the PDF remains central, Paper and Note composition lives together in the right panel, and compact Tags/Full Text utilities open from the left without affecting the global Reader-navigation overlay. Paper Notes continue to save Markdown-compatible plain text explicitly, with Markdown-aware formatting and an optional rendered preview.
 
@@ -102,13 +102,14 @@ The launcher uses the repository `.venv` and binds only to `127.0.0.1`. The loca
 - Remove Note Block link: `DELETE http://127.0.0.1:8000/projects/{project_id}/note-block-links/{link_id}`
 - Canonical Tags: [http://127.0.0.1:8000/tags](http://127.0.0.1:8000/tags)
 - Tag candidate summary: [http://127.0.0.1:8000/tags/summary](http://127.0.0.1:8000/tags/summary)
+- Tag candidate review queue: [http://127.0.0.1:8000/tags/review-queue](http://127.0.0.1:8000/tags/review-queue)
 - Canonical tag governance: `GET /tags/governance`, `POST /tags`, `PATCH /tags/{canonical_key}`, `POST|DELETE /tags/{canonical_key}/aliases`, and `POST /tags/{canonical_key}/deprecate`
 - Paper tag candidates: `GET|POST /papers/{paper_id}/tag-candidates`, followed by `POST /papers/{paper_id}/tag-candidates/{candidate_id}/approve|reject|promote|apply`
 - Safe Settings summary: [http://127.0.0.1:8000/settings/summary](http://127.0.0.1:8000/settings/summary)
 
 `GET /papers` accepts `limit` (1-100, default 20), `offset` (default 0), `archive_status` (`active`, `archived`, or `all`; default `active`), bounded `q` metadata search, and exact `tag`, `year`, and reading `status` filters. Results are ordered by case-insensitive title and then stable `paper_id`; all query filters apply before pagination.
 
-`GET /projects` and `GET /tags` accept `limit` (1-100, default 20) and `offset` (default 0). Projects are ordered by case-insensitive name then stable `project_id`; Tags are ordered by case-insensitive label then canonical key. `GET /projects/{project_id}` accepts `links_limit` (1-100, default 20) and `links_offset` (default 0). Missing linked Papers remain successful detail reads with `target_state: "orphaned"`; Note Block targets distinguish `available`, `orphaned_note_block`, `orphaned_paper`, and `unavailable`, without invented metadata or automatic link repair. Tag summary counts are derived from real deterministic service output; a missing or unreadable candidate source is an explicit unavailable state.
+`GET /projects` and `GET /tags` accept `limit` (1-100, default 20) and `offset` (default 0). Projects are ordered by case-insensitive name then stable `project_id`; Tags are ordered by case-insensitive label then canonical key. `GET /projects/{project_id}` accepts `links_limit` (1-100, default 20) and `links_offset` (default 0). Missing linked Papers remain successful detail reads with `target_state: "orphaned"`; Note Block targets distinguish `available`, `orphaned_note_block`, `orphaned_paper`, and `unavailable`, without invented metadata or automatic link repair. Tag summary counts and the review queue derive only from persisted service output; a missing or unreadable candidate source is an explicit unavailable state. The queue does not generate candidates or apply tags.
 
 `GET /settings/summary` has no query or write surface. It returns four strict sections: Application, Workspace, Data integrity, and Backup readiness. Its lightweight reader caps file discovery, index rows, per-file JSON reads, and total JSON bytes per request; checks only file presence and app-owned metadata; and never hashes or parses PDFs, extracts text, opens snapshot archives, verifies restores, or writes cache/report/status files. Missing diagnostics use `state: "unavailable"` with `count: null`, which is distinct from a verified zero.
 
@@ -285,6 +286,7 @@ Foundation release documents:
 - [Reader frontend parity checklist](docs/READER_FRONTEND_PARITY_CHECKLIST.md)
 - [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
 - [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
+- [v1.6.3 Reader interaction & UX polish release notes](docs/release_notes/v1.6.3.md)
 - [v1.1.0 FastAPI read-only foundation release notes](docs/release_notes/v1.1.0.md)
 - [v1.1.1 Paper API release notes](docs/release_notes/v1.1.1.md)
 - [v1.1.2 Rich Paper Metadata release notes](docs/release_notes/v1.1.2.md)

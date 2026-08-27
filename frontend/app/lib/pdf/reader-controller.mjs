@@ -5,6 +5,23 @@ export const ZOOM_STEP = 0.25;
 export const RENDER_QUALITY_MULTIPLIER = 1.5;
 export const MAX_OUTPUT_SCALE = 3;
 
+// These helpers deliberately operate on logical PDF viewport dimensions only.
+// Canvas DPR scaling remains in canvasRenderGeometry so fit modes cannot change
+// text-layer alignment or high-density rendering quality.
+export function fitWidthZoom({ availableWidth, pageWidth, horizontalPadding = 0 }) {
+  const width = Math.max(1, Number(availableWidth) - Math.max(0, Number(horizontalPadding) || 0));
+  const page = Math.max(1, Number(pageWidth) || 1);
+  return clamp(width / page, MIN_ZOOM, MAX_ZOOM);
+}
+
+export function fitPageZoom({ availableWidth, availableHeight, pageWidth, pageHeight, horizontalPadding = 0, verticalPadding = 0 }) {
+  const width = Math.max(1, Number(availableWidth) - Math.max(0, Number(horizontalPadding) || 0));
+  const height = Math.max(1, Number(availableHeight) - Math.max(0, Number(verticalPadding) || 0));
+  const pageWidthValue = Math.max(1, Number(pageWidth) || 1);
+  const pageHeightValue = Math.max(1, Number(pageHeight) || 1);
+  return clamp(Math.min(width / pageWidthValue, height / pageHeightValue), MIN_ZOOM, MAX_ZOOM);
+}
+
 function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }

@@ -3,7 +3,7 @@
 import { Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { DataTableShell } from "../components/DataTableShell";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
@@ -11,6 +11,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { SaveStatus } from "../components/SaveStatus";
+import { Toolbar } from "../components/Toolbar";
 import { useApiResource } from "../hooks/useApiResource";
 import { useDisclosureFocus } from "../hooks/useDisclosureFocus";
 import { ApiClientError, apiClient } from "../lib/api/client";
@@ -49,11 +50,12 @@ export function ProjectsView() {
   const router = useRouter();
   const { triggerRef: createTriggerRef, restoreTriggerFocus } = useDisclosureFocus<HTMLButtonElement>();
   const [offset, setOffset] = useState(0);
-  const pageSize = 50;
-  const resource = useApiResource(
-    `projects:${offset}`,
-    () => apiClient.getProjects({ limit: pageSize, offset }),
-  );
+  const pageSize = 20;
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
+  const [sort, setSort] = useState<"updated" | "name" | "priority">("updated");
+  const resource = useApiResource("projects", apiClient.getAllProjects);
   const createDraftKey = draftStorageKey("project-create", "new");
   const [createState, setCreateState] = useState(() => createRevisionDraftState<ProjectCreateDraft>({
     draft: { project: EMPTY_PROJECT, tagText: "" },
@@ -62,7 +64,21 @@ export function ProjectsView() {
   }));
   const [showCreate, setShowCreate] = useState(() => !Object.is(createState.draft, createState.baseline) && JSON.stringify(createState.draft) !== JSON.stringify(createState.baseline));
   const [draftStorageReady, setDraftStorageReady] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
   const dirtyCreate = showCreate && JSON.stringify(createState.draft) !== JSON.stringify(createState.baseline);
+  const visibleProjects = useMemo(() => {
+    if (resource.status !== "success") return [];
+    const query = search.trim().toLocaleLowerCase();
+    const priorityRank: Record<string, number> = { high: 0, normal: 1, low: 2 };
+    return resource.data
+      .filter((project) => (!query || [project.name, project.description, ...project.tags].join(" ").toLocaleLowerCase().includes(query)) && (!statusFilter || project.status === statusFilter) && (!priorityFilter || project.priority === priorityFilter))
+      .sort((left, right) => {
+        if (sort === "updated") return right.updated_at.localeCompare(left.updated_at) || left.name.localeCompare(right.name);
+        if (sort === "priority") return (priorityRank[left.priority] ?? 9) - (priorityRank[right.priority] ?? 9) || left.name.localeCompare(right.name);
+        return left.name.localeCompare(right.name);
+      });
+  }, [priorityFilter, resource, search, sort, statusFilter]);
+  const pagedProjects = visibleProjects.slice(offset, offset + pageSize);
 
   useEffect(() => {
     const restored = createRevisionDraftState<ProjectCreateDraft>({
@@ -72,6 +88,7 @@ export function ProjectsView() {
     });
     setCreateState(restored);
     setShowCreate(JSON.stringify(restored.draft) !== JSON.stringify(restored.baseline));
+    setDraftRestored(JSON.stringify(restored.draft) !== JSON.stringify(restored.baseline));
     setDraftStorageReady(true);
   }, [createDraftKey]);
 
@@ -93,29 +110,9 @@ export function ProjectsView() {
       if (!dirtyCreate) return;
       event.preventDefault();
     };
-    const warnNavigation = (event: globalThis.MouseEvent) => {
-      if (
-        !dirtyCreate
-        || event.defaultPrevented
-        || event.button !== 0
-        || event.metaKey
-        || event.ctrlKey
-        || event.shiftKey
-        || event.altKey
-      ) return;
-      const anchor = event.target instanceof Element
-        ? event.target.closest("a[href]")
-        : null;
-      if (anchor && !window.confirm("Leave Projects? Your locally preserved Project draft will remain available.")) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
     window.addEventListener("beforeunload", warn);
-    document.addEventListener("click", warnNavigation, true);
     return () => {
       window.removeEventListener("beforeunload", warn);
-      document.removeEventListener("click", warnNavigation, true);
     };
   }, [dirtyCreate]);
 
@@ -191,19 +188,25 @@ export function ProjectsView() {
       />
       {resource.status === "loading" ? <LoadingState label="Loading Projects" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
-      {resource.status === "error" ? <ErrorState title="Project read model unavailable" description={resource.message} onRetry={resource.retry} /> : null}
+      {resource.status === "error" ? <ErrorState title="Projects couldn't be loaded" description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <ErrorState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "success" ? (
-        <Section title="Projects" description={`${resource.data.total} Project${resource.data.total === 1 ? "" : "s"}.`}>
-          {resource.data.items.length === 0 ? (
-            <EmptyState title="No Projects" description="The local Project store is empty. This view never substitutes sample Projects." />
+        <Section title="All projects" description={`${visibleProjects.length} Project${visibleProjects.length === 1 ? "" : "s"}.`}>
+          <Toolbar label="Project collection filters">
+            <label className="library-filter-field library-toolbar__search"><span>Search</span><span className="search-shell"><input type="search" value={search} placeholder="Name, description, or tag…" onChange={(event) => { setSearch(event.target.value); setOffset(0); }} /></span></label>
+            <label className="library-filter-field"><span>Status</span><select className="library-filter" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setOffset(0); }}><option value="">All statuses</option><option value="active">Active</option><option value="paused">Paused</option><option value="done">Done</option><option value="archived">Archived</option></select></label>
+            <label className="library-filter-field"><span>Priority</span><select className="library-filter" value={priorityFilter} onChange={(event) => { setPriorityFilter(event.target.value); setOffset(0); }}><option value="">All priorities</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option></select></label>
+            <label className="library-filter-field"><span>Sort</span><select className="library-filter" value={sort} onChange={(event) => { setSort(event.target.value as typeof sort); setOffset(0); }}><option value="updated">Recently updated</option><option value="name">Name</option><option value="priority">Priority</option></select></label>
+          </Toolbar>
+          {visibleProjects.length === 0 ? (
+            <EmptyState title={resource.data.length ? "No matching projects" : "No projects yet"} description={resource.data.length ? "Change the filters to see more projects." : "Create a project when you are ready to connect related work."} />
           ) : (
             <>
-              <DataTableShell label="Stored Projects">
+              <DataTableShell label="Projects">
                 <table>
                 <thead><tr><th>Project</th><th>Status</th><th>Priority</th><th>Tags</th><th>Paper links</th><th>Note Block links</th><th>Updated</th></tr></thead>
                 <tbody>
-                  {resource.data.items.map((project) => (
+                  {pagedProjects.map((project) => (
                     <tr key={project.project_id}>
                       <td>
                         <Link className="paper-link" href={`/projects/${encodeURIComponent(project.project_id)}`}>{project.name}</Link>
@@ -226,9 +229,9 @@ export function ProjectsView() {
                 </table>
               </DataTableShell>
               <div className="reader-editor__actions" aria-label="Project pages">
-                <button className="reader-control reader-control--secondary" type="button" disabled={resource.data.offset === 0} onClick={() => setOffset(Math.max(0, resource.data.offset - pageSize))}>Previous</button>
-                <span className="muted-text">Showing {resource.data.offset + 1}–{resource.data.offset + resource.data.items.length} of {resource.data.total}</span>
-                <button className="reader-control reader-control--secondary" type="button" disabled={!resource.data.has_more} onClick={() => setOffset(resource.data.offset + resource.data.items.length)}>Next</button>
+                <button className="reader-control reader-control--secondary" type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button>
+                <span className="muted-text">Showing {offset + 1}–{offset + pagedProjects.length} of {visibleProjects.length}</span>
+                <button className="reader-control reader-control--secondary" type="button" disabled={offset + pagedProjects.length >= visibleProjects.length} onClick={() => setOffset(offset + pagedProjects.length)}>Next</button>
               </div>
             </>
           )}
@@ -263,7 +266,7 @@ export function ProjectsView() {
                 <input maxLength={2524} value={createState.draft.tagText} onChange={(event) => updateCreate((current) => editRevisionDraft(current, { ...current.draft, tagText: event.target.value }))} />
               </label>
             </div>
-            <p className="reader-editor__status" role="status">{createState.lastError || (createState.saveState === "offline" ? "The local API is unavailable. Your Project draft is preserved locally." : "")}</p>
+            <p className="reader-editor__status" role="status">{createState.lastError || (draftRestored ? "Draft restored" : createState.saveState === "offline" ? "The local API is unavailable. Your Project draft is preserved locally." : "")}</p>
             <div className="reader-editor__actions">
               <SaveStatus state={createState.saveState} />
               <button className="reader-control" type="submit" disabled={Boolean(createState.activeSave) || !dirtyCreate}>{createState.saveState === "saving" ? "Creating Project…" : "Create Project"}</button>

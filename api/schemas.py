@@ -285,6 +285,26 @@ class CandidateSummaryResponse(StrictResponseModel):
     quality_counts: CandidateQualityCounts
 
 
+class TagCandidateReviewQueueItem(StrictResponseModel):
+    """Task-facing review state for one current Paper."""
+
+    paper_id: str
+    title: str
+    candidate_count: int = Field(ge=1)
+    unresolved_count: int = Field(ge=0)
+    resolved_count: int = Field(ge=0)
+    approved_count: int = Field(ge=0)
+    candidate_labels: list[str] = Field(max_length=3)
+
+
+class TagCandidateReviewQueueResponse(StrictResponseModel):
+    items: list[TagCandidateReviewQueueItem]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1, le=100)
+    offset: int = Field(ge=0)
+    has_more: bool
+
+
 class CanonicalTagGovernanceItem(CanonicalTag):
     description: str
 

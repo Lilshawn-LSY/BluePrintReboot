@@ -58,7 +58,7 @@ test("Settings includes loading, API-offline, controlled error, partial warning,
   assert.match(view, /status === "loading"/);
   assert.match(view, /status === "unavailable"/);
   assert.match(view, /status === "error"/);
-  assert.match(view, /Settings read model unavailable/);
+  assert.match(view, /Settings couldn't be loaded/);
   assert.match(view, /onRetry=\{resource\.retry\}/);
   assert.match(view, /stateTone\(item\.state\)/);
   assert.match(view, /stateTone\(issue\.state\)/);
@@ -90,6 +90,6 @@ test("existing read-parity views remain wired to their established clients", asy
   assert.match(library, /apiClient\.getPapers/);
   assert.match(papers, /Library is the primary Paper collection surface/);
   assert.match(reader, /apiClient\.getReaderSnapshot/);
-  assert.match(projects, /apiClient\.getProjects/);
+  assert.match(projects, /apiClient\.getAllProjects/);
   assert.match(tags, /apiClient\.getAllTags/);
 });

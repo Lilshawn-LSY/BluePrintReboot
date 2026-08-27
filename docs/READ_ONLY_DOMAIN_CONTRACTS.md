@@ -95,3 +95,12 @@ Reader snapshots now use exactly one index snapshot for paper detail, editable m
 Related API reads share a short-lived Health result keyed by diagnostic arguments. Completion of a same-process workspace write invalidates it immediately through the workspace mutation generation; changes from another local process are stale for at most one second. This preserves the separate `/health`, `/library/status`, and `/papers` contracts without repeating a full disk scan during one dashboard load.
 
 Collection APIs remain paginated. The frontend Projects list exposes previous/next pages, while Paper/Project/Tag selectors collect successive pages until `has_more` is false. Project link detail collects every link page only while project and link revisions remain unchanged; revision drift fails the read instead of mixing revisions. Entities after the first 100 are therefore not silently inaccessible.
+
+## v1.6.3 Tags candidate-review queue
+
+`GET /tags/review-queue` is a bounded read-only view over already-persisted
+per-Paper candidate-review contexts. It returns only safe Paper display fields,
+aggregate candidate-state counts, and a short candidate-label preview. It does
+not invoke candidate generation, mutate a review context, apply a Paper tag,
+or expose storage paths or raw records. Missing review storage is an empty
+queue; malformed review storage remains an explicit unavailable read state.

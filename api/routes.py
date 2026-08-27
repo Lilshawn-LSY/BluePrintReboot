@@ -14,6 +14,7 @@ from api.adapters import (
     FullTextContractError,
     adapt_full_text_document,
     adapt_full_text_status,
+    adapt_candidate_review_queue_item,
     adapt_candidate_summary,
     adapt_canonical_tag,
     adapt_paper_detail,
@@ -30,6 +31,7 @@ from api.adapters import (
 )
 from api.dependencies import (
     ReadModelUnavailable,
+    get_candidate_review_queue,
     get_candidate_summary,
     get_canonical_tags,
     get_health_summary,
@@ -59,6 +61,7 @@ from api.schemas import (
     ArchiveProjectRequest,
     ArchiveStatus,
     CandidateSummaryResponse,
+    TagCandidateReviewQueueResponse,
     CanonicalTagAliasRequest,
     CanonicalTagCreateRequest,
     CanonicalTagDeprecateRequest,
@@ -147,7 +150,7 @@ from services.pdf_scan_import import (
     PdfScanImportUnavailable,
 )
 from services.settings_read_model import SettingsSummary as DomainSettingsSummary
-from services.tag_read_model import CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
+from services.tag_read_model import CandidateReviewQueue as DomainCandidateReviewQueue, CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
 from services.tag_candidate_review import (
     CandidateCollection,
     TagCandidateReviewConflict,
@@ -636,6 +639,33 @@ def tag_candidate_summary(
         return adapt_candidate_summary(summary)
     except TagContractError:
         raise ReadModelUnavailable from None
+
+
+@router.get(
+    "/tags/review-queue",
+    response_model=TagCandidateReviewQueueResponse,
+    summary="List Papers with reviewable tag candidates",
+    description="Return a bounded queue from persisted candidate reviews. This read never generates or applies candidates.",
+    responses={503: {"model": APIError, "description": "The local tag review queue is temporarily unavailable."}},
+)
+def tag_candidate_review_queue(
+    queue: Annotated[DomainCandidateReviewQueue, Depends(get_candidate_review_queue)],
+    limit: Annotated[int, Query(ge=1, le=100, description="Maximum Papers to return (1-100).")]=50,
+    offset: Annotated[int, Query(ge=0, description="Zero-based queue offset.")]=0,
+) -> TagCandidateReviewQueueResponse:
+    try:
+        adapted = [adapt_candidate_review_queue_item(item) for item in queue["items"]]
+    except (KeyError, TagContractError):
+        raise ReadModelUnavailable from None
+    total = len(adapted)
+    items = adapted[offset : offset + limit]
+    return TagCandidateReviewQueueResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=offset + len(items) < total,
+    )
 
 
 @router.get(

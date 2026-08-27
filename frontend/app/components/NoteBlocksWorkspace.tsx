@@ -548,7 +548,7 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
               <button className="reader-control reader-control--secondary" type="button" onClick={() => {
                 if (!window.confirm("Use the latest saved Note Block and discard the local draft?")) return;
                 updateEditor((current) => ({ ...applyLatestRevisionDraft(current), status: "clean", message: "Latest saved Note Block in use." }));
-              }}>Use latest server value</button>
+              }}>Use latest saved version</button>
               <button className="reader-control reader-control--secondary" type="button" onClick={() => void loadCollection({ preserveDraft: true })}><RotateCcw size={15} />Reload current collection</button>
               <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{JSON.stringify(editor.draft, null, 2)}</pre><h3>Latest saved value</h3><pre>{JSON.stringify(editor.remote, null, 2)}</pre></details>
             </> : null}

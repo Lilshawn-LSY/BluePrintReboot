@@ -63,6 +63,10 @@ export function isBlueprintTagGovernancePath(parts) {
   return Array.isArray(parts) && parts.length === 2 && parts[0] === "tags" && parts[1] === "governance";
 }
 
+export function isBlueprintTagReviewQueuePath(parts) {
+  return Array.isArray(parts) && parts.length === 2 && parts[0] === "tags" && parts[1] === "review-queue";
+}
+
 export function isBlueprintCanonicalTagPath(parts) {
   return Array.isArray(parts) && parts.length === 2 && parts[0] === "tags" && parts[1] !== "governance";
 }
@@ -144,6 +148,7 @@ export function isAllowedBlueprintPath(parts) {
     || path === "projects"
     || path === "tags"
     || path === "tags/summary"
+    || isBlueprintTagReviewQueuePath(parts)
     || path === "tags/governance"
     || path === "settings/summary"
     || (parts.length === 2 && parts[0] === "papers" && !["scan", "import", "reconnect"].includes(parts[1]))
