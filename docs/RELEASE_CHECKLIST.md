@@ -2,6 +2,31 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.6.4-visual-hierarchy-density
+
+- [x] Reader chrome no longer repeats the Paper title as a large heading or a
+  healthy `active` lifecycle state; Paper Note and metadata save status stay
+  beside their respective editors.
+- [x] Paper Note formatting remains selection-preserving and keyboard
+  accessible through compact icon controls with labels, and utility drawers
+  retain focus, Escape, and PDF-position behavior while showing one utility at
+  a time.
+- [x] Project Detail uses one compact metadata summary, places primary editing
+  above lower-frequency recovery/archive actions, and presents linked Papers
+  and Note Blocks as compact navigation rows with confirmation-gated removal.
+- [x] Dashboard and detail surfaces use shared page-archetype widths; the
+  empty Continue reading state is compact, and normal sidebar chrome omits the
+  product version while retaining accessible collapse and Settings navigation.
+- [x] No API or persistence contract, explicit Save behavior, browser-local
+  draft behavior, conflict handling, archive semantics, managed-PDF safety, or
+  Reader PDF behavior changed.
+- [ ] User-performed browser verification is still required at 1920px, 1440px,
+  1366px, and 1280px for Reader toolbar/drawer behavior, panel sizing, Project
+  metadata and linked rows, Dashboard split layout, and expanded/collapsed
+  sidebar states.
+- [ ] Hosted CI, merge, tag, GitHub Release, post-merge validation, and
+  clean-PC restore remain separate evidence and are not implied by local validation.
+
 ## v1.6.3-reader-interaction-ux-polish
 
 - [x] Reader keeps compact Paper context while persistent Note, Blocks, and

@@ -47,14 +47,14 @@ export function DashboardView() {
   );
 
   return (
-    <div className="page-stack">
+    <div className="page-stack page-stack--dashboard">
       <PageHeader title="Dashboard" description="Pick up the research work that is already in motion." />
       {resource.status === "loading" ? <LoadingState label="Loading workspace overview" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} /> : null}
       {resource.status === "error" || resource.status === "not-found" ? <ErrorState description={resource.message} /> : null}
       {resource.status === "success" ? <>
         <Section title="Continue reading" actions={<Link className="text-link" href="/library">Open Library <ArrowRight size={14} /></Link>}>
-          {continueReading.length === 0 ? <EmptyState title="No papers marked Reading" description="Mark a paper as Reading in the Reader when you want it to appear here." /> : <DataTableShell label="Papers to continue reading"><table><thead><tr><th>Paper</th><th>Reading</th><th /></tr></thead><tbody>{continueReading.map((paper) => <tr key={paper.paper_id}><td><Link className="paper-link" href={`/papers/${encodeURIComponent(paper.paper_id)}/reader`}>{paper.title}<small>{paper.first_author || "Author unknown"}{paper.year ? ` · ${paper.year}` : ""}</small></Link></td><td><StatusBadge>{paper.status}</StatusBadge></td><td>{!paper.missing_pdf ? <Link className="text-link" href={`/papers/${encodeURIComponent(paper.paper_id)}/reader`}>Read</Link> : <StatusBadge tone="danger">Missing PDF</StatusBadge>}</td></tr>)}</tbody></table></DataTableShell>}
+          {continueReading.length === 0 ? <div className="dashboard-empty-state"><EmptyState title="No papers marked Reading" description="Mark a paper as Reading in the Reader when you want it to appear here." /></div> : <DataTableShell label="Papers to continue reading"><table><thead><tr><th>Paper</th><th>Reading</th><th /></tr></thead><tbody>{continueReading.map((paper) => <tr key={paper.paper_id}><td><Link className="paper-link" href={`/papers/${encodeURIComponent(paper.paper_id)}/reader`}>{paper.title}<small>{paper.first_author || "Author unknown"}{paper.year ? ` · ${paper.year}` : ""}</small></Link></td><td><StatusBadge>{paper.status}</StatusBadge></td><td>{!paper.missing_pdf ? <Link className="text-link" href={`/papers/${encodeURIComponent(paper.paper_id)}/reader`}>Read</Link> : <StatusBadge tone="danger">Missing PDF</StatusBadge>}</td></tr>)}</tbody></table></DataTableShell>}
         </Section>
         <div className="split-layout">
           <Section title="Active projects" actions={<Link className="text-link" href="/projects">View projects <ArrowRight size={14} /></Link>}>

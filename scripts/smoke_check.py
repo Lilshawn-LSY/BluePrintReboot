@@ -82,6 +82,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.5.11.md",
     "docs/release_notes/v1.5.12.md",
     "docs/release_notes/v1.6.3.md",
+    "docs/release_notes/v1.6.4.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",
@@ -381,13 +382,16 @@ def check_frontend_contract(project_root: Path) -> SmokeCheckResult:
         if "SidebarNavigation" not in shell or "main-content" not in shell:
             raise ValueError("frontend application shell is incomplete")
         if (
-            "packageMetadata.version" not in shell
-            or "applicationVersion={packageMetadata.version}" not in shell
-            or "v{applicationVersion}" not in sidebar
+            "packageMetadata.version" in shell
+            or "applicationVersion" in shell
+            or "v{applicationVersion}" in sidebar
+            or "Research workspace · v" in sidebar
         ):
-            raise ValueError("frontend application shell does not use the current package version")
+            raise ValueError("frontend application shell exposes version data in ordinary chrome")
         if "version-label" in shell or "Local workspace" in shell:
-            raise ValueError("frontend application shell restores obsolete version top chrome")
+            raise ValueError("frontend application shell restores obsolete workspace chrome")
+        if "sidebar-nav--secondary" not in sidebar:
+            raise ValueError("frontend application shell is missing its secondary Settings navigation group")
         if "v1.5.4" in shell or "Project commands" in shell:
             raise ValueError("frontend application shell retains the stale v1.5.4 feature label")
         for method in (

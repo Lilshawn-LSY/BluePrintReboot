@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, FileText, RotateCcw, Save, Tags, X } from "lucide-react";
+import { Bold, ChevronLeft, ChevronRight, Eye, FileText, Heading2, Italic, Link2, List, ListOrdered, ListTodo, Pencil, Quote, RotateCcw, Save, Tags, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
@@ -305,7 +305,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     selectedFields: [],
     message: "",
   });
-  const [candidateReview, setCandidateReview] = useState<CandidateReviewState>(() => initialCandidateReview());
+  const [candidateReview, setCandidateReview] = useState<CandidateReviewState>(() => initialCandidateReview() as CandidateReviewState);
   const [tagBook, setTagBook] = useState<TagBookState>({ status: "idle" });
   const closeMetadataReview = useCallback(() => {
     if (enrichment.status !== "saving") setMetadataReviewOpen(false);
@@ -410,7 +410,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     candidateAbortControllerRef.current = null;
     requestGate.invalidate(paperId);
     setSelectedSuggestions([]);
-    setCandidateReview(initialCandidateReview());
+    setCandidateReview(initialCandidateReview() as CandidateReviewState);
     return () => {
       candidateAbortControllerRef.current?.abort();
       candidateAbortControllerRef.current = null;
@@ -429,11 +429,11 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       .then((collection) => {
         if (!candidateRequestGateRef.current.isCurrent(request)) return;
         setSelectedSuggestions([]);
-        setCandidateReview(savedCandidateReviewReady(collection));
+        setCandidateReview(savedCandidateReviewReady(collection) as CandidateReviewState);
       })
       .catch(() => {
         if (!candidateRequestGateRef.current.isCurrent(request) || controller.signal.aborted) return;
-        setCandidateReview(candidateReviewLoadFailure());
+        setCandidateReview(candidateReviewLoadFailure() as CandidateReviewState);
       })
       .finally(() => {
         if (candidateRequestGateRef.current.isCurrent(request)) candidateAbortControllerRef.current = null;
@@ -1100,24 +1100,22 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   return (
     <div className="reader-workspace">
       <header className="reader-workspace__chrome">
+        <h1 className="sr-only">Reader: {editor.metadata.draft.title || snapshot.paper.title}</h1>
         <Breadcrumbs items={[{ label: "Library", href: "/library" }, { label: editor.metadata.draft.title || snapshot.paper.title, href: detailHref }, { label: "Reader" }]} />
-        <div className="reader-workspace__identity">
-          <h1 title={editor.metadata.draft.title || snapshot.paper.title}>{editor.metadata.draft.title || snapshot.paper.title}</h1>
-          <div className="reader-workspace__utilities" aria-label="Reader utilities">
-            <button
-              className={activeUtility === "tags" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
-              type="button"
-              aria-pressed={activeUtility === "tags"}
-              onClick={(event) => openUtility("tags", event.currentTarget)}
-            ><Tags size={15} />Tags</button>
-            <button
-              className={activeUtility === "full-text" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
-              type="button"
-              aria-pressed={activeUtility === "full-text"}
-              onClick={(event) => openUtility("full-text", event.currentTarget)}
-            ><FileText size={15} />Full Text</button>
-            <StatusBadge tone={snapshot.paper.archived ? "neutral" : "accent"}>{snapshot.paper.lifecycle_state}</StatusBadge>
-          </div>
+        <div className="reader-workspace__utilities" aria-label="Reader utilities">
+          <button
+            className={activeUtility === "tags" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
+            type="button"
+            aria-pressed={activeUtility === "tags"}
+            onClick={(event) => openUtility("tags", event.currentTarget)}
+          ><Tags size={15} />Tags</button>
+          <button
+            className={activeUtility === "full-text" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
+            type="button"
+            aria-pressed={activeUtility === "full-text"}
+            onClick={(event) => openUtility("full-text", event.currentTarget)}
+          ><FileText size={15} />Full Text</button>
+          {snapshot.paper.lifecycle_state !== "active" ? <StatusBadge tone={snapshot.paper.archived ? "neutral" : "warning"}>{snapshot.paper.lifecycle_state}</StatusBadge> : null}
         </div>
       </header>
       <div ref={readerLayoutRef} className={`${activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"}${researchPanelResizing ? " is-resizing" : ""}`} data-research-collapsed={researchPanelCollapsed} style={layoutStyle}>
@@ -1135,10 +1133,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                   </div>
                   <button className="reader-research-panel__collapse" type="button" aria-label="Collapse research panel" onClick={() => setResearchPanelCollapsed(true)}><ChevronLeft size={16} /></button>
                 </div>
-                <div className="reader-paper-context__actions">
-                  {noteUnavailable ? <StatusBadge tone="danger">Note unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
-                  {draftRestored ? <span className="draft-restored-notice" role="status">Draft restored</span> : null}
-                </div>
+                {draftRestored ? <div className="reader-paper-context__actions"><span className="draft-restored-notice" role="status">Draft restored</span></div> : null}
               </section>
               <div className="reader-panel-tabs" role="tablist" aria-label="Research panel tasks">
                 {RESEARCH_PANEL_TABS.map((tab, index) => <button ref={(node) => { researchTabRefs.current[index] = node; }} key={tab} id={`reader-tab-${tab}`} className={activeResearchTab === tab ? "reader-panel-tabs__tab is-active" : "reader-panel-tabs__tab"} type="button" role="tab" aria-selected={activeResearchTab === tab} aria-controls={`reader-panel-${tab}`} onKeyDown={(event) => moveResearchTab(event, tab)} onClick={() => setActiveResearchTab(tab)}>{tab === "note" ? "Note" : tab === "blocks" ? "Blocks" : "Details"}</button>)}
@@ -1215,15 +1210,15 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               </div>
             ) : null}
             <div className="reader-note__formatting" role="toolbar" aria-label="Paper Note formatting">
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("heading")}>Heading</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bold")}>Bold</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("italic")}>Italic</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bullets")}>Bullets</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("numbered")}>Numbered</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("task")}>Task</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("quote")}>Quote</button>
-              <button ref={linkTriggerRef} className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("link")}>Link</button>
-              <button className={notePreviewOpen ? "reader-control reader-control--active" : "reader-control reader-control--secondary"} type="button" disabled={noteUnavailable} aria-pressed={notePreviewOpen} onClick={() => setNotePreviewOpen((current) => !current)}>{notePreviewOpen ? "Edit note" : "Preview"}</button>
+              <button className="reader-control reader-control--secondary" type="button" title="Heading" aria-label="Heading" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("heading")}><Heading2 size={15} /></button>
+              <button className="reader-control reader-control--secondary" type="button" title="Bold" aria-label="Bold" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bold")}><Bold size={15} /></button>
+              <button className="reader-control reader-control--secondary" type="button" title="Italic" aria-label="Italic" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("italic")}><Italic size={15} /></button>
+              <button className="reader-control reader-control--secondary" type="button" title="Bullets" aria-label="Bullets" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("bullets")}><List size={15} /></button>
+              <button className="reader-control reader-control--secondary" type="button" title="Numbered list" aria-label="Numbered list" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("numbered")}><ListOrdered size={15} /></button>
+              <button className="reader-control reader-control--secondary" type="button" title="Task list" aria-label="Task list" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("task")}><ListTodo size={15} /></button>
+              <button className="reader-control reader-control--secondary" type="button" title="Quote" aria-label="Quote" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("quote")}><Quote size={15} /></button>
+              <button ref={linkTriggerRef} className="reader-control reader-control--secondary" type="button" title="Link" aria-label="Link" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("link")}><Link2 size={15} /></button>
+              <button className={notePreviewOpen ? "reader-control reader-control--active" : "reader-control reader-control--secondary"} type="button" title={notePreviewOpen ? "Edit note" : "Preview note"} aria-label={notePreviewOpen ? "Edit note" : "Preview note"} disabled={noteUnavailable} aria-pressed={notePreviewOpen} onClick={() => setNotePreviewOpen((current) => !current)}>{notePreviewOpen ? <Pencil size={15} /> : <Eye size={15} />}</button>
             </div>
             {notePreviewOpen ? <PaperNoteMarkdownPreview content={paperNoteBody(editor.note.draft)} /> : (
               <label className="reader-field">
@@ -1308,13 +1303,10 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         {activeUtility ? (
           <aside ref={utilityDrawerRef} className="reader-utility-drawer" aria-label="Reader utilities" tabIndex={-1}>
             <div className="reader-utility-drawer__header">
-              <div className="reader-utility-drawer__tabs" role="tablist" aria-label="Reader utilities">
-                <button className={activeUtility === "tags" ? "reader-utility-drawer__tab is-active" : "reader-utility-drawer__tab"} type="button" role="tab" aria-controls="reader-utility-panel" aria-selected={activeUtility === "tags"} onClick={() => setActiveUtility("tags")}>Tags</button>
-                <button className={activeUtility === "full-text" ? "reader-utility-drawer__tab is-active" : "reader-utility-drawer__tab"} type="button" role="tab" aria-controls="reader-utility-panel" aria-selected={activeUtility === "full-text"} onClick={() => setActiveUtility("full-text")}>Full Text</button>
-              </div>
+              <h2 id="reader-utility-drawer-title">{activeUtility === "tags" ? "Tags" : "Full Text"}</h2>
               <button className="reader-research-panel__collapse" type="button" aria-label="Close utility drawer" onClick={closeUtility}><X size={16} /></button>
             </div>
-            <div id="reader-utility-panel" className="reader-utility-drawer__content" role="tabpanel">
+            <div id="reader-utility-panel" className="reader-utility-drawer__content" role="region" aria-labelledby="reader-utility-drawer-title">
               {activeUtility === "full-text" ? <FullTextWorkspace key={`full-text:${snapshot.paper.paper_id}`} paperId={snapshot.paper.paper_id} /> : null}
               {activeUtility === "tags" ? (
                 <section className="reader-utility-section" aria-labelledby="paper-tags-editor-title">
@@ -1357,7 +1349,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                     ) : candidateReview.status === "ready" ? <p className="muted-text">No suggested tags are ready to apply.</p> : null}
                     {candidateReview.status === "error" ? <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy} onClick={() => {
                       setSelectedSuggestions([]);
-                      setCandidateReview(initialCandidateReview());
+                      setCandidateReview(initialCandidateReview() as CandidateReviewState);
                     }}><RotateCcw size={15} />Retry loading suggestions</button> : null}
                     <button className="reader-control" type="button" disabled={!selectedSuggestions.length || candidateReview.status === "loading" || mutationBusy} onClick={applySelectedSuggestions}><Save size={15} />Apply selected</button>
                     {candidateReview.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />Refresh suggestions</button> : null}

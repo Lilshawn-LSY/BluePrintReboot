@@ -19,8 +19,7 @@ test("the shared shell preserves normal navigation preference independently from
   assert.match(shell, /readerSidebarPinned/);
   assert.match(shell, /readerSidebarOpen/);
   assert.match(shell, /reader-navigation-zone/);
-  assert.match(shell, /packageMetadata\.version/);
-  assert.match(shell, /applicationVersion=\{packageMetadata\.version\}/);
+  assert.doesNotMatch(shell, /packageMetadata\.version|applicationVersion/);
   assert.doesNotMatch(shell, /Local workspace|version-label/);
 
   assert.match(sidebar, /Collapse sidebar/);
@@ -28,7 +27,10 @@ test("the shared shell preserves normal navigation preference independently from
   assert.match(sidebar, /Pin navigation/);
   assert.match(sidebar, /Close navigation/);
   assert.match(sidebar, /aria-label=\{collapsed \? label : undefined\}/);
-  assert.match(sidebar, /v\{applicationVersion\}/);
+  assert.match(sidebar, /Research workspace<\/small>/);
+  assert.doesNotMatch(sidebar, /v\{applicationVersion\}|Research workspace · v/);
+  assert.match(sidebar, /sidebar-nav--secondary/);
+  assert.match(sidebar, /sidebar-toggle sidebar-toggle--icon/);
 
   assert.match(breadcrumbs, /aria-label="Breadcrumb"/);
   assert.match(breadcrumbs, /aria-current="page"/);
@@ -40,6 +42,7 @@ test("the shared shell preserves normal navigation preference independently from
     ".breadcrumbs__current",
     "--space-12",
     "--control-height",
+    ".sidebar-nav--secondary",
   ]) {
     assert.match(css, new RegExp(selector.replaceAll(".", "\\.")));
   }

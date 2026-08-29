@@ -8,9 +8,9 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.6.3-reader-interaction-ux-polish**.
+Current runtime target: **v1.6.4-visual-hierarchy-density**.
 
-v1.6.3 is a focused Reader interaction and UX polish pass. Reader keeps its compact Paper context while placing Paper Note, Note Blocks, and Details in persistent task tabs; the research panel is session-resizable, Tags and Full Text open as a focus-managed PDF overlay, and PDF.js adds fit-width, fit-page, and manual zoom modes. Library uses structured filters, conventional Paper Detail links, and explicit inspection; Dashboard emphasizes resuming reading and active projects; Projects adds lightweight search/filter/sort controls. Tags now has a read-only candidate-review queue that links directly to the right Reader state without generating or applying candidates. Explicit saves, browser-local drafts, conflict safety, stable routes, PDF identity, and local-first storage remain unchanged.
+v1.6.4 is a focused visual hierarchy and density pass. Reader uses compact, task-focused chrome, icon-first Paper Note formatting, and a single-purpose utility drawer; Project Detail leads with concise state and higher-density linked material; Dashboard and detail pages use intentional content widths; and the shell keeps maintenance version data out of ordinary navigation. Explicit saves, browser-local drafts, conflict safety, stable routes, PDF identity, PDF fit/zoom behavior, and local-first storage remain unchanged.
 
 v1.6.0 focuses on the desktop Reader workspace: the PDF remains central, Paper and Note composition lives together in the right panel, and compact Tags/Full Text utilities open from the left without affecting the global Reader-navigation overlay. Paper Notes continue to save Markdown-compatible plain text explicitly, with Markdown-aware formatting and an optional rendered preview.
 
@@ -286,6 +286,7 @@ Foundation release documents:
 - [Reader frontend parity checklist](docs/READER_FRONTEND_PARITY_CHECKLIST.md)
 - [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
 - [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
+- [v1.6.4 Visual hierarchy & density pass release notes](docs/release_notes/v1.6.4.md)
 - [v1.6.3 Reader interaction & UX polish release notes](docs/release_notes/v1.6.3.md)
 - [v1.1.0 FastAPI read-only foundation release notes](docs/release_notes/v1.1.0.md)
 - [v1.1.1 Paper API release notes](docs/release_notes/v1.1.1.md)
