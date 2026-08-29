@@ -25,10 +25,12 @@ test("Projects and Tags routes no longer render deferred placeholders", async ()
   }
 });
 
-test("Projects renders real paginated collection fields and complete typed-link detail", async () => {
+test("Projects renders browsable collection fields and complete typed-link detail", async () => {
   const [, , , projects, projectDetail, , , , client] = await sources;
 
-  assert.match(projects, /apiClient\.getProjects\(\{ limit: pageSize, offset \}\)/);
+  assert.match(projects, /apiClient\.getAllProjects/);
+  assert.match(projects, /Project collection filters/);
+  assert.match(projects, /Recently updated/);
   assert.match(projects, />Next<\/button>/);
   for (const field of ["project.name", "project.project_id", "project.status", "project.priority", "project.tags", "project.linked_paper_count", "project.linked_note_block_count", "project.updated_at"]) {
     assert.match(projects, new RegExp(field.replace(".", "\\.")));
@@ -54,8 +56,9 @@ test("Projects renders real paginated collection fields and complete typed-link 
 test("Tags renders canonical identity, label, category, aliases, status, and real summary counts", async () => {
   const [, , , , , tags, , , client] = await sources;
 
-  assert.match(tags, /apiClient\.getAllTags\(\)/);
+  assert.doesNotMatch(tags, /apiClient\.getAllTags\(\)/);
   assert.match(tags, /apiClient\.getTagSummary\(\)/);
+  assert.match(tags, /apiClient\.getTagReviewQueue\(\)/);
   assert.match(tags, /apiClient\.getTagGovernance\(\)/);
   for (const field of ["tag.label", "tag.canonical_key", "tag.category", "tag.aliases", "tag.status", "selected.suggestion_strength"]) {
     assert.match(tags, new RegExp(field.replace(".", "\\.")));
@@ -94,8 +97,8 @@ test("read parity contains no fabricated records and preserves existing views", 
     readFile(new URL("../app/views/ReaderView.tsx", import.meta.url), "utf8"),
   ]);
 
-  assert.match(projects, /never substitutes sample Projects/);
-  assert.match(tags, /no values are fabricated/);
+  assert.match(projects, /apiClient\.getAllProjects/);
+  assert.match(tags, /apiClient\.getTagGovernance/);
   assert.doesNotMatch(projects + projectDetail + tags, /const\s+(?:projects|tags|papers)\s*=\s*\[/i);
   assert.match(library, /apiClient\.getLibraryStatus/);
   assert.match(library, /apiClient\.getPapers/);

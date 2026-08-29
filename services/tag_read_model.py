@@ -7,7 +7,8 @@ from typing import Any, Literal, TypedDict
 from services import tag_book
 from storage.atomic_json import read_json_file
 from storage.index_store import read_index_snapshot
-from storage.paths import INDEX_CSV
+from storage.paths import INDEX_CSV, TAG_CANDIDATE_REVIEWS_JSON
+from storage.tag_candidate_review_store import load_tag_candidate_reviews
 
 
 class CanonicalTag(TypedDict):
@@ -34,6 +35,23 @@ class CandidateSummary(TypedDict):
     candidate_count: int
     known_canonical_match_count: int
     quality_counts: CandidateQualityCounts
+
+
+class CandidateReviewQueueItem(TypedDict):
+    """One current Paper with candidates that still need explicit review."""
+
+    paper_id: str
+    title: str
+    candidate_count: int
+    unresolved_count: int
+    resolved_count: int
+    approved_count: int
+    candidate_labels: list[str]
+
+
+class CandidateReviewQueue(TypedDict):
+    items: list[CandidateReviewQueueItem]
+    total: int
 
 
 def _require_mapping_json(path: Path) -> None:
@@ -207,3 +225,62 @@ def build_candidate_summary(
         "known_canonical_match_count": len(known_matches),
         "quality_counts": quality_counts,
     }
+
+
+def build_candidate_review_queue(
+    *,
+    index_csv: Path | None = None,
+    review_store_path: Path | None = None,
+) -> CandidateReviewQueue:
+    """Project persisted candidate reviews into a safe, read-only Paper queue.
+
+    This function reads existing review contexts only: it never generates,
+    resolves, approves, or applies candidate tags.  Rejected and applied items
+    stay available on their Paper-level review surface but are not actionable
+    queue entries.  A malformed review store raises rather than being silently
+    treated as an empty one.
+    """
+
+    source_path = Path(index_csv) if index_csv is not None else INDEX_CSV
+    review_path = Path(review_store_path) if review_store_path is not None else TAG_CANDIDATE_REVIEWS_JSON
+    records = read_index_snapshot(source_path).to_dict("records")
+    paper_titles = {
+        str(record.get("paper_id", "")): str(record.get("title", "")).strip()
+        for record in records
+        if str(record.get("paper_id", "")).strip()
+    }
+    reviews = load_tag_candidate_reviews(review_path)
+    items: list[CandidateReviewQueueItem] = []
+    for paper_id, context in reviews["papers"].items():
+        title = paper_titles.get(str(paper_id))
+        if title is None:
+            # Do not expose or repair an orphaned review context from a normal
+            # task surface; it has no current Reader destination.
+            continue
+        reviewable = [
+            candidate
+            for candidate in context["candidates"]
+            if str(candidate.get("state", "")) in {"unresolved", "resolved", "approved"}
+        ]
+        if not reviewable:
+            continue
+        labels: list[str] = []
+        for candidate in reviewable:
+            label = str(candidate.get("tag_text") or candidate.get("normalized_tag") or "").strip()
+            if label and label not in labels:
+                labels.append(label)
+            if len(labels) == 3:
+                break
+        items.append(
+            {
+                "paper_id": str(paper_id),
+                "title": title or "Untitled paper",
+                "candidate_count": len(reviewable),
+                "unresolved_count": sum(candidate.get("state") == "unresolved" for candidate in reviewable),
+                "resolved_count": sum(candidate.get("state") == "resolved" for candidate in reviewable),
+                "approved_count": sum(candidate.get("state") == "approved" for candidate in reviewable),
+                "candidate_labels": labels,
+            }
+        )
+    items.sort(key=lambda item: (item["title"].casefold(), item["paper_id"]))
+    return {"items": items, "total": len(items)}

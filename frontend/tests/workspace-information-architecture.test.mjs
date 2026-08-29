@@ -58,12 +58,12 @@ test("Settings links to a dedicated Diagnostics route without losing diagnostic 
 test("Tags prioritizes candidate review and keeps registry internals and creation progressive", async () => {
   const tags = await readFile(new URL("../app/views/TagsView.tsx", import.meta.url), "utf8");
   assert.match(tags, /title="Review candidates"/);
-  assert.match(tags, /Review in Library/);
-  assert.match(tags, /Open Library to review tag candidates/);
-  assert.match(tags, /library\?review=tag-candidates#paper-collection/);
+  assert.match(tags, /getTagReviewQueue/);
+  assert.match(tags, /utility=tags&review=tag-candidates/);
+  assert.match(tags, />Review</);
   assert.match(tags, /aria-controls="create-canonical-tag"/);
   assert.match(tags, /useDisclosureFocus<HTMLButtonElement>/);
-  assert.match(tags, /\{showCreate \? <Section title="Create canonical tag"/);
+  assert.match(tags, /\{showCreate \? <Section title="Create tag"/);
   assert.match(tags, /categoryLabel\(tag\.category\)/);
   assert.match(tags, /className="alias-chip"/);
   assert.match(tags, /aria-label=\{`Remove alias \$\{value\}`\}/);
@@ -81,10 +81,10 @@ test("Library labels its filters, exposes active filters, and keeps keyboard sel
   assert.match(library, /Active papers only/);
   assert.match(library, /active-filter-bar/);
   assert.match(library, /Reset filters/);
-  assert.match(library, /aria-pressed=\{selectedPaperId === paper\.paper_id\}/);
-  assert.match(library, /aria-label=\{`Select \$\{paper\.title/);
+  assert.match(library, /href=\{`\/papers\/\$\{encodeURIComponent\(paper\.paper_id\)\}`\}/);
+  assert.match(library, />Inspect</);
   assert.match(library, /selectionControls\.current\.get\(dismissedPaperId\)\?\.focus\(\)/);
-  assert.match(library, /reviewingTagCandidates/);
+  assert.match(library, /library-canonical-tags/);
   assert.match(inspector, /Open Reader/);
   assert.match(inspector, /View Paper Detail/);
   assert.match(library, /href="\/settings\/diagnostics"/);

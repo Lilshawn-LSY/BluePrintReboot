@@ -23,6 +23,7 @@ from services.tag_governance import (
     TagGovernanceInvalid,
 )
 from services import tag_book
+from services.tag_read_model import build_candidate_review_queue
 from storage.index_store import INDEX_COLUMNS, read_index_snapshot, save_index
 
 
@@ -199,6 +200,31 @@ def test_candidate_generation_is_persisted_review_only_and_known_tags_resolve(tm
     assert index_csv.read_bytes() == before_index
     assert (notes_dir / "paper-1.md").read_bytes() == before_note
     assert candidates.collection("paper-1").review_revision == generated.review_revision
+
+
+def test_candidate_review_queue_projects_existing_review_state_without_mutating_it(tmp_path: Path) -> None:
+    index_csv, _notes_dir, _tag_book_dir, _governance, candidates = _workspace(tmp_path)
+    generated = candidates.generate("paper-1")
+    review_path = index_csv.parent / "tag_candidate_reviews.json"
+    before_index = index_csv.read_bytes()
+    before_reviews = review_path.read_bytes()
+
+    queue = build_candidate_review_queue(
+        index_csv=index_csv,
+        review_store_path=review_path,
+    )
+
+    assert queue["total"] == 1
+    item = queue["items"][0]
+    assert item["paper_id"] == "paper-1"
+    assert item["title"] == "Single-cell RNA sequencing with a CRISPR screen"
+    assert item["candidate_count"] == len(generated.items)
+    assert item["unresolved_count"] == 1
+    assert item["resolved_count"] == 1
+    assert item["approved_count"] == 0
+    assert item["candidate_labels"]
+    assert index_csv.read_bytes() == before_index
+    assert review_path.read_bytes() == before_reviews
 
 
 def test_candidate_approve_reject_promote_and_explicit_apply_use_reader_command(tmp_path: Path) -> None:

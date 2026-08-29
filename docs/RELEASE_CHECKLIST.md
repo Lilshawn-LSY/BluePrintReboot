@@ -2,7 +2,34 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
-## v1.6.2-workspace-information-architecture
+## v1.6.3-reader-interaction-ux-polish
+
+- [x] Reader keeps compact Paper context while persistent Note, Blocks, and
+  Details task tabs preserve existing editor and conflict state; the context
+  panel has session-scoped, keyboard-accessible width adjustment.
+- [x] Tags and Full Text use a focus-managed overlay drawer by default, so
+  opening a utility does not resize the PDF stage or reset the reading
+  position. PDF.js provides fit-width, fit-page, and manual zoom modes.
+- [x] Browser-local drafts continue to survive normal Reader and Project route
+  changes without a blocking confirmation; explicit discard/replacement and
+  destructive confirmations remain deliberate actions.
+- [x] Library has structured filters and a conventional Paper Detail title
+  link alongside explicit inspection. Projects adds browse controls, and the
+  Dashboard emphasizes returning to active research.
+- [x] `GET /tags/review-queue` is a bounded, read-only summary of existing
+  persisted candidate reviews. It neither generates nor applies candidates and
+  its Reader handoff keeps existing review and tag-revision safeguards.
+- [x] Product-facing copy uses saved-version and task language rather than
+  implementation terminology; advanced Tag identity remains disclosed only in
+  advanced details.
+- [ ] User-performed browser verification is still required for desktop and
+  narrow-desktop Reader layout, utility-drawer focus return, PDF fit modes,
+  restored drafts, collection controls, and the candidate-review handoff.
+- [ ] Hosted CI, merge, tag, GitHub Release, post-merge validation, and
+  clean-PC restore remain separate evidence and are not implied by local
+  validation.
+
+## Historical v1.6.2-workspace-information-architecture
 
 - [x] Paper Detail joins display-only abstract line wraps without changing the
   stored abstract and retains true paragraph boundaries in the display.

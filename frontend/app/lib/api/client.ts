@@ -1,4 +1,4 @@
-import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, FullTextDocument, FullTextStatus, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection } from "./types";
+import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, FullTextDocument, FullTextStatus, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection, TagCandidateReviewQueue } from "./types";
 import { collectAllPaginatedItems } from "./pagination.mjs";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
@@ -12,7 +12,7 @@ export class ApiClientError extends Error {
 
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: object; notFoundMessage?: string } = {},
+  options: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: object; notFoundMessage?: string; signal?: AbortSignal } = {},
 ): Promise<T> {
   let response: Response;
   try {
@@ -23,6 +23,7 @@ async function request<T>(
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
+      signal: options.signal,
     });
   } catch {
     throw new ApiClientError("The local BluePrintReboot API could not be reached.", "unavailable");
@@ -232,6 +233,7 @@ export const apiClient = {
   getTags,
   getAllTags: () => collectAllPaginatedItems(getTags),
   getTagSummary: () => request<CandidateSummary>("/tags/summary"),
+  getTagReviewQueue: (options: { limit?: number; offset?: number } = {}) => request<TagCandidateReviewQueue>(`/tags/review-queue?${new URLSearchParams({ limit: String(options.limit ?? 50), offset: String(options.offset ?? 0) })}`),
   getTagGovernance: () => request<CanonicalTagGovernanceSnapshot>("/tags/governance"),
   createCanonicalTag: (input: { label: string; category: string; description: string; suggestionStrength: number; expectedRevision: string }) => request<CanonicalTagGovernanceResponse>(
     "/tags",
@@ -316,8 +318,9 @@ export const apiClient = {
     `/papers/${encodeURIComponent(paperId)}/tags`,
     { method: "DELETE", body: { tag, expected_revision: expectedRevision } },
   ),
-  getTagCandidates: (paperId: string) => request<TagCandidateCollection>(
+  getTagCandidates: (paperId: string, options: { signal?: AbortSignal } = {}) => request<TagCandidateCollection>(
     `/papers/${encodeURIComponent(paperId)}/tag-candidates`,
+    { signal: options.signal },
   ),
   generateTagCandidates: (paperId: string, resetRejections = false) => request<TagCandidateCollection>(
     `/papers/${encodeURIComponent(paperId)}/tag-candidates/generate`,
@@ -348,11 +351,12 @@ export const apiClient = {
     { method: "PUT", body: { content, expected_sha256: expectedSha256 } },
   ),
   getDashboard: async (): Promise<DashboardSnapshot> => {
-    const [health, library, papers] = await Promise.all([
+    const [health, library, papers, projects] = await Promise.all([
       request<HealthSummary>("/health"),
       request<LibraryStatus>("/library/status"),
-      request<PaginatedPaperList>("/papers?limit=5&offset=0&archive_status=active"),
+      getPapers({ limit: 5, offset: 0, archiveStatus: "active", status: "reading" }),
+      collectAllPaginatedItems(getProjects),
     ]);
-    return { health, library, papers };
+    return { health, library, papers, projects };
   },
 };

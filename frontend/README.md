@@ -1,6 +1,6 @@
 # BluePrintReboot frontend
 
-The v1.6.2 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. It keeps the established explicit server saves and browser-local draft preservation while improving the hierarchy of Paper Detail, Projects, Settings/Diagnostics, Tags, and Library. There is no server autosave, offline write queue/background sync, combined save, automatic/background or bulk enrichment/tagging, filesystem watcher, drag/drop, OCR, destructive tag deletion, ontology editing, Note Block delete/reorder, Project delete/unarchive, or Settings write.
+The v1.6.3 frontend is a desktop-first local application built with Vinext/Next.js, React, and TypeScript. It keeps explicit server saves and browser-local draft preservation while adding task tabs and adaptive PDF viewing to Reader, direct tag-candidate review, and more focused collection workflows. There is no server autosave, offline write queue/background sync, combined save, automatic/background or bulk enrichment/tagging, filesystem watcher, drag/drop, OCR, destructive tag deletion, ontology editing, Note Block delete/reorder, Project delete/unarchive, or Settings write.
 
 ## Local development
 

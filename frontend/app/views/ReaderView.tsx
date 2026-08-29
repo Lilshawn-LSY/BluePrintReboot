@@ -1,7 +1,8 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, FileText, RotateCcw, Save, Tags, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { PdfJsReader } from "../components/PdfJsReader";
@@ -10,8 +11,9 @@ import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
 import { SaveStatus } from "../components/SaveStatus";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
+import { useModalFocus } from "../hooks/useModalFocus";
 import { ApiClientError, apiClient } from "../lib/api/client";
-import type { EditablePaperMetadata, MetadataEnrichmentPreview, PaperTagCommandResponse, ReaderSnapshot, TagCandidateCollection } from "../lib/api/types";
+import type { CanonicalTag, EditablePaperMetadata, MetadataEnrichmentPreview, PaperTagCommandResponse, ReaderSnapshot, TagCandidateCollection } from "../lib/api/types";
 import {
   applyMetadataEnrichmentCommandResult,
   applyMetadataCommandResult,
@@ -23,6 +25,9 @@ import {
 } from "../lib/reader/editor-state.mjs";
 import { createExclusiveMutationGate } from "../lib/reader/mutation-coordinator.mjs";
 import { formatPaperNoteMarkdown, type PaperNoteFormatAction } from "../lib/reader/note-formatting.mjs";
+import { candidateReviewLoadFailure, createLatestPaperRequestGate, initialCandidateReview, savedCandidateReviewReady } from "../lib/reader/candidate-review-lifecycle.mjs";
+import { readerResearchTabFromSearchParams, readerUtilityFromSearchParams } from "../lib/reader/reader-route-state.mjs";
+import { DEFAULT_RESEARCH_PANEL_WIDTH, MAX_RESEARCH_PANEL_WIDTH, MIN_RESEARCH_PANEL_WIDTH, clampResearchPanelWidth, researchPanelWidthFromPointer } from "../lib/reader/split-pane.mjs";
 import {
   beginRevisionSave,
   completeRevisionSave,
@@ -55,7 +60,20 @@ type CandidateReviewState = {
   message: string;
 };
 
+type TagBookState =
+  | { status: "idle" | "loading" }
+  | { status: "success"; data: CanonicalTag[] }
+  | { status: "error"; message: string };
+
 type ReaderUtility = "tags" | "full-text" | null;
+type ResearchPanelTab = "note" | "blocks" | "details";
+const RESEARCH_PANEL_TABS: ResearchPanelTab[] = ["note", "blocks", "details"];
+
+const RESEARCH_PANEL_WIDTH_KEY = "blueprint-reboot:reader-research-panel-width";
+
+function readerSessionStorage(): Storage | null {
+  return typeof window === "undefined" ? null : window.sessionStorage;
+}
 
 const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   title: "Title",
@@ -67,7 +85,17 @@ const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   keywords: "Keywords",
 };
 
-function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
+function ReaderPdf({
+  snapshot,
+  layoutResizeActive,
+  layoutResizeVersion,
+  onCaptureLayoutAnchor,
+}: {
+  snapshot: ReaderSnapshot;
+  layoutResizeActive: boolean;
+  layoutResizeVersion: number;
+  onCaptureLayoutAnchor: (capture: (() => void) | null) => void;
+}) {
   if (snapshot.pdf_state === "missing" || snapshot.paper.missing_pdf || !snapshot.paper.relative_pdf_path) {
     return (
       <EmptyState
@@ -76,7 +104,12 @@ function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
       />
     );
   }
-  return <PdfJsReader paperId={snapshot.paper.paper_id} />;
+  return <PdfJsReader
+    paperId={snapshot.paper.paper_id}
+    layoutResizeActive={layoutResizeActive}
+    layoutResizeVersion={layoutResizeVersion}
+    onCaptureLayoutAnchor={onCaptureLayoutAnchor}
+  />;
 }
 
 
@@ -213,14 +246,40 @@ function candidateReviewFailure(error: unknown): Pick<CandidateReviewState, "sta
 
 
 function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
+  const searchParams = useSearchParams();
+  const readerSearch = searchParams.toString();
+  const noteBlockId = searchParams.get("noteBlock")?.trim() ?? "";
   const mutationGate = useRef(createExclusiveMutationGate());
   const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const metadataReviewRef = useRef<HTMLDivElement | null>(null);
+  const metadataTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const linkInputRef = useRef<HTMLInputElement | null>(null);
+  const linkTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const utilityDrawerRef = useRef<HTMLElement | null>(null);
+  const utilityTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const linkSelectionRef = useRef({ start: 0, end: 0 });
+  const researchTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const candidateReviewSectionRef = useRef<HTMLDivElement | null>(null);
+  const readerLayoutRef = useRef<HTMLDivElement | null>(null);
+  const researchResizePointerRef = useRef<number | null>(null);
+  const researchPanelWidthRef = useRef(DEFAULT_RESEARCH_PANEL_WIDTH);
+  const keyboardResizeFrameRef = useRef<number | null>(null);
+  const capturePdfLayoutAnchorRef = useRef<(() => void) | null>(null);
+  const candidateRequestGateRef = useRef(createLatestPaperRequestGate());
+  const candidateAbortControllerRef = useRef<AbortController | null>(null);
+  const tagBookRequestRef = useRef(0);
   const [mutationBusy, setMutationBusy] = useState(false);
   const [researchPanelCollapsed, setResearchPanelCollapsed] = useState(false);
-  const [activeUtility, setActiveUtility] = useState<ReaderUtility>(null);
+  const [researchPanelWidth, setResearchPanelWidth] = useState(DEFAULT_RESEARCH_PANEL_WIDTH);
+  const [researchPanelResizing, setResearchPanelResizing] = useState(false);
+  const [researchPanelResizeVersion, setResearchPanelResizeVersion] = useState(0);
+  const [activeResearchTab, setActiveResearchTab] = useState<ResearchPanelTab>(() => readerResearchTabFromSearchParams(searchParams));
+  const [blocksVisited, setBlocksVisited] = useState(() => readerResearchTabFromSearchParams(searchParams) === "blocks");
+  const [activeUtility, setActiveUtility] = useState<ReaderUtility>(() => readerUtilityFromSearchParams(searchParams));
+  const candidateReviewRequested = searchParams.get("review") === "tag-candidates";
+  const [draftRestored, setDraftRestored] = useState(false);
   const [notePreviewOpen, setNotePreviewOpen] = useState(false);
-  const [metadataEditorOpen, setMetadataEditorOpen] = useState(false);
+  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("https://");
   const [metadataReviewOpen, setMetadataReviewOpen] = useState(false);
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const noteDraftKey = useMemo(
@@ -246,23 +305,61 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     selectedFields: [],
     message: "",
   });
-  const [candidateReview, setCandidateReview] = useState<CandidateReviewState>({
-    status: "idle",
-    collection: null,
-    message: "Generate suggestions to begin an explicit review. Generation never applies Paper tags.",
+  const [candidateReview, setCandidateReview] = useState<CandidateReviewState>(() => initialCandidateReview());
+  const [tagBook, setTagBook] = useState<TagBookState>({ status: "idle" });
+  const closeMetadataReview = useCallback(() => {
+    if (enrichment.status !== "saving") setMetadataReviewOpen(false);
+  }, [enrichment.status]);
+  const closeLinkPopover = useCallback(() => setLinkPopoverOpen(false), []);
+  const metadataDialogRef = useModalFocus<HTMLDivElement>({
+    active: metadataReviewOpen,
+    onRequestClose: closeMetadataReview,
+    restoreFocusRef: metadataTriggerRef,
   });
-  const tagBook = useApiResource(
-    "reader-canonical-tag-book",
-    () => apiClient.getAllTags(),
-  );
+  const linkDialogRef = useModalFocus<HTMLFormElement>({
+    active: linkPopoverOpen,
+    onRequestClose: closeLinkPopover,
+    initialFocusRef: linkInputRef,
+    restoreFocusRef: linkTriggerRef,
+  });
+  useEffect(() => {
+    const savedWidth = Number(readerSessionStorage()?.getItem(RESEARCH_PANEL_WIDTH_KEY));
+    if (Number.isFinite(savedWidth) && savedWidth > 0) {
+      const width = clampResearchPanelWidth(savedWidth);
+      researchPanelWidthRef.current = width;
+      setResearchPanelWidth(width);
+    }
+  }, []);
   useEffect(() => {
     setEditor(createReaderEditorState(
       snapshot,
       readPersistentRevisionDraft(browserStorage(), noteDraftKey),
       readPersistentRevisionDraft(browserStorage(), metadataDraftKey),
     ));
+    const noteDraft = readPersistentRevisionDraft(browserStorage(), noteDraftKey);
+    const metadataDraft = readPersistentRevisionDraft(browserStorage(), metadataDraftKey);
+    setDraftRestored(Boolean(
+      (noteDraft && JSON.stringify(noteDraft.draft) !== JSON.stringify(noteDraft.baseline))
+      || (metadataDraft && JSON.stringify(metadataDraft.draft) !== JSON.stringify(metadataDraft.baseline)),
+    ));
     setDraftStorageReady(true);
   }, [metadataDraftKey, noteDraftKey, snapshot]);
+  useEffect(() => {
+    const routeParams = new URLSearchParams(readerSearch);
+    const requestedResearchTab = readerResearchTabFromSearchParams(routeParams);
+    setActiveResearchTab(requestedResearchTab);
+    if (requestedResearchTab === "blocks") setBlocksVisited(true);
+    setActiveUtility(readerUtilityFromSearchParams(routeParams));
+  }, [readerSearch]);
+  useEffect(() => {
+    if (activeResearchTab === "blocks") setBlocksVisited(true);
+  }, [activeResearchTab]);
+  useEffect(() => {
+    readerSessionStorage()?.setItem(RESEARCH_PANEL_WIDTH_KEY, String(researchPanelWidth));
+  }, [researchPanelWidth]);
+  useEffect(() => () => {
+    if (keyboardResizeFrameRef.current !== null) window.cancelAnimationFrame(keyboardResizeFrameRef.current);
+  }, []);
   useEffect(() => {
     if (!draftStorageReady) return;
     persistRevisionDraft(browserStorage(), noteDraftKey, editor.note);
@@ -289,36 +386,75 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     });
   };
   useEffect(() => {
-    let current = true;
-    void apiClient.getTagCandidates(snapshot.paper.paper_id)
-      .then((collection) => {
-        if (!current || collection.state !== "generated") return;
-        setCandidateReview((state) => state.status === "idle" ? {
-          status: "ready",
-          collection,
-          message: collection.items.length
-            ? "Saved suggestions are ready to review. Nothing has been applied to this Paper."
-            : "No saved suggestions are available for this Paper.",
-        } : state);
+    if (activeUtility !== "tags" || tagBook.status !== "idle") return;
+    const requestId = tagBookRequestRef.current + 1;
+    tagBookRequestRef.current = requestId;
+    setTagBook({ status: "loading" });
+    void apiClient.getAllTags()
+      .then((data) => {
+        if (tagBookRequestRef.current !== requestId) return;
+        setTagBook({ status: "success", data });
       })
       .catch((error) => {
-        if (!current) return;
-        setCandidateReview((state) => state.status === "idle" ? {
-          ...state,
-          ...candidateReviewFailure(error),
-        } : state);
+        if (tagBookRequestRef.current !== requestId) return;
+        setTagBook({
+          status: "error",
+          message: error instanceof ApiClientError ? error.message : "Canonical tag suggestions could not be loaded.",
+        });
       });
-    return () => { current = false; };
+  }, [activeUtility, tagBook.status]);
+  useEffect(() => {
+    const paperId = snapshot.paper.paper_id;
+    const requestGate = candidateRequestGateRef.current;
+    candidateAbortControllerRef.current?.abort();
+    candidateAbortControllerRef.current = null;
+    requestGate.invalidate(paperId);
+    setSelectedSuggestions([]);
+    setCandidateReview(initialCandidateReview());
+    return () => {
+      candidateAbortControllerRef.current?.abort();
+      candidateAbortControllerRef.current = null;
+      requestGate.invalidate(paperId);
+    };
   }, [snapshot.paper.paper_id]);
   useEffect(() => {
-    if (!metadataReviewOpen) return;
-    metadataReviewRef.current?.focus();
+    if (activeUtility !== "tags" || candidateReview.status !== "idle") return;
+    const paperId = snapshot.paper.paper_id;
+    const request = candidateRequestGateRef.current.begin(paperId);
+    const controller = new AbortController();
+    candidateAbortControllerRef.current?.abort();
+    candidateAbortControllerRef.current = controller;
+    setCandidateReview((state) => ({ ...state, status: "loading", message: "Loading saved suggestions…" }));
+    void apiClient.getTagCandidates(paperId, { signal: controller.signal })
+      .then((collection) => {
+        if (!candidateRequestGateRef.current.isCurrent(request)) return;
+        setSelectedSuggestions([]);
+        setCandidateReview(savedCandidateReviewReady(collection));
+      })
+      .catch(() => {
+        if (!candidateRequestGateRef.current.isCurrent(request) || controller.signal.aborted) return;
+        setCandidateReview(candidateReviewLoadFailure());
+      })
+      .finally(() => {
+        if (candidateRequestGateRef.current.isCurrent(request)) candidateAbortControllerRef.current = null;
+      });
+  }, [activeUtility, candidateReview.status, snapshot.paper.paper_id]);
+  useEffect(() => {
+    if (!activeUtility) return;
+    window.requestAnimationFrame(() => utilityDrawerRef.current?.focus());
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && enrichment.status !== "saving") setMetadataReviewOpen(false);
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setActiveUtility(null);
+      window.requestAnimationFrame(() => utilityTriggerRef.current?.focus());
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [metadataReviewOpen, enrichment.status]);
+  }, [activeUtility]);
+  useEffect(() => {
+    if (activeUtility !== "tags" || !candidateReviewRequested) return;
+    window.requestAnimationFrame(() => candidateReviewSectionRef.current?.scrollIntoView({ block: "start" }));
+  }, [activeUtility, candidateReviewRequested]);
   const metadataChanged = useMemo(
     () => changedMetadataFields(editor.metadata.draft, editor.metadata.baseline),
     [editor.metadata.draft, editor.metadata.baseline],
@@ -346,23 +482,9 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       event.preventDefault();
       event.returnValue = "";
     };
-    const warnBeforeLink = (event: MouseEvent) => {
-      if (!hasDirtyDraft || event.defaultPrevented || event.button !== 0) return;
-      const target = event.target;
-      const link = target instanceof Element ? target.closest("a[href]") : null;
-      if (!link) return;
-      const destination = new URL(link.getAttribute("href") || "", window.location.href);
-      if (destination.href === window.location.href) return;
-      if (!window.confirm("Leave this paper? Your locally preserved Reader draft will remain available.")) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    };
     window.addEventListener("beforeunload", warnBeforeUnload);
-    document.addEventListener("click", warnBeforeLink, true);
     return () => {
       window.removeEventListener("beforeunload", warnBeforeUnload);
-      document.removeEventListener("click", warnBeforeLink, true);
     };
   }, [hasDirtyDraft]);
 
@@ -829,14 +951,21 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     });
   };
 
-  const formatPaperNote = (action: PaperNoteFormatAction) => {
+  const formatPaperNote = (action: PaperNoteFormatAction, explicitLinkUrl?: string) => {
     const textarea = noteTextareaRef.current;
     const currentValue = paperNoteBody(editor.note.draft);
-    const selectionStart = textarea?.selectionStart ?? currentValue.length;
-    const selectionEnd = textarea?.selectionEnd ?? currentValue.length;
-    const linkUrl = action === "link" ? window.prompt("Link URL", "https://") : undefined;
-    if (action === "link" && linkUrl === null) return;
-    const formatted = formatPaperNoteMarkdown(currentValue, selectionStart, selectionEnd, action, { url: linkUrl ?? undefined });
+    const selectionStart = action === "link" && explicitLinkUrl !== undefined
+      ? linkSelectionRef.current.start
+      : textarea?.selectionStart ?? currentValue.length;
+    const selectionEnd = action === "link" && explicitLinkUrl !== undefined
+      ? linkSelectionRef.current.end
+      : textarea?.selectionEnd ?? currentValue.length;
+    if (action === "link" && explicitLinkUrl === undefined) {
+      linkSelectionRef.current = { start: selectionStart, end: selectionEnd };
+      setLinkPopoverOpen(true);
+      return;
+    }
+    const formatted = formatPaperNoteMarkdown(currentValue, selectionStart, selectionEnd, action, { url: explicitLinkUrl });
     const nextDraft = replacePaperNoteBody(editor.note.draft, formatted.value);
     updateNote((current) => {
       const updated = editRevisionDraft(
@@ -850,10 +979,12 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         message: "",
       };
     });
-    window.requestAnimationFrame(() => {
-      textarea?.focus();
-      textarea?.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
-    });
+    if (!(action === "link" && explicitLinkUrl !== undefined)) {
+      window.requestAnimationFrame(() => {
+        textarea?.focus();
+        textarea?.setSelectionRange(formatted.selectionStart, formatted.selectionEnd);
+      });
+    }
   };
 
   const preserveNoteSelection = (event: ReactMouseEvent<HTMLButtonElement>) => {
@@ -877,6 +1008,95 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   )) ?? [];
   const noteUnavailable = snapshot.warnings.includes("saved_note_unavailable");
   const detailHref = `/papers/${encodeURIComponent(snapshot.paper.paper_id)}`;
+  const openUtility = (utility: Exclude<ReaderUtility, null>, trigger: HTMLButtonElement) => {
+    utilityTriggerRef.current = trigger;
+    setActiveUtility((current) => current === utility ? null : utility);
+  };
+  const closeUtility = () => {
+    setActiveUtility(null);
+    window.requestAnimationFrame(() => utilityTriggerRef.current?.focus());
+  };
+  const moveResearchTab = (event: ReactKeyboardEvent<HTMLButtonElement>, tab: ResearchPanelTab) => {
+    const currentIndex = RESEARCH_PANEL_TABS.indexOf(tab);
+    const nextIndex = event.key === "ArrowRight" ? (currentIndex + 1) % RESEARCH_PANEL_TABS.length
+      : event.key === "ArrowLeft" ? (currentIndex - 1 + RESEARCH_PANEL_TABS.length) % RESEARCH_PANEL_TABS.length
+        : event.key === "Home" ? 0
+          : event.key === "End" ? RESEARCH_PANEL_TABS.length - 1
+            : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    setActiveResearchTab(RESEARCH_PANEL_TABS[nextIndex]);
+    window.requestAnimationFrame(() => researchTabRefs.current[nextIndex]?.focus());
+  };
+  const capturePdfLayoutAnchor = useCallback((capture: (() => void) | null) => {
+    capturePdfLayoutAnchorRef.current = capture;
+  }, []);
+  const applyResearchPanelWidth = useCallback((width: number) => {
+    const nextWidth = clampResearchPanelWidth(width);
+    researchPanelWidthRef.current = nextWidth;
+    readerLayoutRef.current?.style.setProperty("--reader-research-width", `${nextWidth}px`);
+    return nextWidth;
+  }, []);
+  const finishResearchPanelResize = useCallback(() => {
+    const width = researchPanelWidthRef.current;
+    researchResizePointerRef.current = null;
+    setResearchPanelWidth(width);
+    setResearchPanelResizing(false);
+    setResearchPanelResizeVersion((current) => current + 1);
+  }, []);
+  const beginResearchPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    capturePdfLayoutAnchorRef.current?.();
+    researchResizePointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResearchPanelResizing(true);
+  };
+  const moveResearchPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (researchResizePointerRef.current !== event.pointerId) return;
+    const containerRight = readerLayoutRef.current?.getBoundingClientRect().right;
+    if (!containerRight) return;
+    event.preventDefault();
+    const width = researchPanelWidthFromPointer({
+      containerRight,
+      clientX: event.clientX,
+      minimum: MIN_RESEARCH_PANEL_WIDTH,
+      maximum: MAX_RESEARCH_PANEL_WIDTH,
+    });
+    applyResearchPanelWidth(width);
+    event.currentTarget.setAttribute("aria-valuenow", String(width));
+    event.currentTarget.setAttribute("aria-valuetext", `${width} pixels`);
+  };
+  const endResearchPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (researchResizePointerRef.current !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    finishResearchPanelResize();
+  };
+  const resizeResearchPanelWithKeyboard = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 32 : 16;
+    const current = researchPanelWidthRef.current;
+    const nextWidth = event.key === "ArrowLeft"
+      ? current + step
+      : event.key === "ArrowRight"
+        ? current - step
+        : event.key === "Home"
+          ? MIN_RESEARCH_PANEL_WIDTH
+          : event.key === "End"
+            ? MAX_RESEARCH_PANEL_WIDTH
+            : current;
+    if (nextWidth === current) return;
+    event.preventDefault();
+    capturePdfLayoutAnchorRef.current?.();
+    const width = applyResearchPanelWidth(nextWidth);
+    setResearchPanelWidth(width);
+    setResearchPanelResizing(true);
+    if (keyboardResizeFrameRef.current !== null) window.cancelAnimationFrame(keyboardResizeFrameRef.current);
+    keyboardResizeFrameRef.current = window.requestAnimationFrame(() => {
+      keyboardResizeFrameRef.current = null;
+      finishResearchPanelResize();
+    });
+  };
+  const layoutStyle = { "--reader-research-width": `${researchPanelWidth}px` } as CSSProperties;
   return (
     <div className="reader-workspace">
       <header className="reader-workspace__chrome">
@@ -888,20 +1108,20 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               className={activeUtility === "tags" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
               type="button"
               aria-pressed={activeUtility === "tags"}
-              onClick={() => setActiveUtility((current) => current === "tags" ? null : "tags")}
+              onClick={(event) => openUtility("tags", event.currentTarget)}
             ><Tags size={15} />Tags</button>
             <button
               className={activeUtility === "full-text" ? "reader-control reader-control--active" : "reader-control reader-control--secondary"}
               type="button"
               aria-pressed={activeUtility === "full-text"}
-              onClick={() => setActiveUtility((current) => current === "full-text" ? null : "full-text")}
+              onClick={(event) => openUtility("full-text", event.currentTarget)}
             ><FileText size={15} />Full Text</button>
             <StatusBadge tone={snapshot.paper.archived ? "neutral" : "accent"}>{snapshot.paper.lifecycle_state}</StatusBadge>
           </div>
         </div>
       </header>
-      <div className={activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"} data-research-collapsed={researchPanelCollapsed}>
-        <aside className="reader-research-panel" aria-label="Paper Note and Note Blocks" data-collapsed={researchPanelCollapsed}>
+      <div ref={readerLayoutRef} className={`${activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"}${researchPanelResizing ? " is-resizing" : ""}`} data-research-collapsed={researchPanelCollapsed} style={layoutStyle}>
+        <aside id="reader-research-panel" className="reader-research-panel" aria-label="Paper Note and Note Blocks" data-collapsed={researchPanelCollapsed}>
           {researchPanelCollapsed ? (
             <button className="reader-research-panel__collapse" type="button" aria-label="Expand research panel" onClick={() => setResearchPanelCollapsed(false)}><ChevronRight size={16} /></button>
           ) : (
@@ -917,13 +1137,14 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 </div>
                 <div className="reader-paper-context__actions">
                   {noteUnavailable ? <StatusBadge tone="danger">Note unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
-                  <button className="reader-control reader-control--secondary" type="button" onClick={() => setMetadataEditorOpen((current) => !current)}>{metadataEditorOpen ? "Hide details" : "Edit details"}</button>
-                  <button className="reader-control" type="button" disabled={enrichment.status === "loading" || enrichment.status === "saving" || mutationBusy} onClick={() => { setMetadataReviewOpen(true); void fetchMetadataCandidates(enrichment.status === "conflict"); }}><RotateCcw size={15} />{enrichment.status === "loading" ? "Checking…" : "Enrich"}</button>
+                  {draftRestored ? <span className="draft-restored-notice" role="status">Draft restored</span> : null}
                 </div>
               </section>
+              <div className="reader-panel-tabs" role="tablist" aria-label="Research panel tasks">
+                {RESEARCH_PANEL_TABS.map((tab, index) => <button ref={(node) => { researchTabRefs.current[index] = node; }} key={tab} id={`reader-tab-${tab}`} className={activeResearchTab === tab ? "reader-panel-tabs__tab is-active" : "reader-panel-tabs__tab"} type="button" role="tab" aria-selected={activeResearchTab === tab} aria-controls={`reader-panel-${tab}`} onKeyDown={(event) => moveResearchTab(event, tab)} onClick={() => setActiveResearchTab(tab)}>{tab === "note" ? "Note" : tab === "blocks" ? "Blocks" : "Details"}</button>)}
+              </div>
               <div className="reader-research-panel__content">
-          {metadataEditorOpen ? (
-          <section className="reader-editor reader-metadata-editor" aria-labelledby="metadata-editor-title">
+          <section id="reader-panel-details" className="reader-editor reader-metadata-editor" aria-labelledby="reader-tab-details" role="tabpanel" hidden={activeResearchTab !== "details"}>
             <div className="reader-note__heading">
               <div>
                 <h2 id="metadata-editor-title">Paper metadata</h2>
@@ -962,6 +1183,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               <button className="reader-control" type="button" disabled={!metadataChanged.length || mutationBusy || Boolean(editor.metadata.activeSave) || editor.metadata.saveState === "changed_elsewhere"} onClick={saveMetadata}>
                 <Save size={15} />{editor.metadata.saveState === "saving" ? "Saving…" : "Save Metadata"}
               </button>
+              <button ref={metadataTriggerRef} className="reader-control reader-control--secondary" type="button" disabled={enrichment.status === "saving" || mutationBusy} onClick={() => { setMetadataReviewOpen(true); void fetchMetadataCandidates(enrichment.status === "conflict"); }}><RotateCcw size={15} />{enrichment.status === "loading" ? "Checking…" : "Find updates"}</button>
               {editor.metadata.saveState === "changed_elsewhere" ? <>
                 <button className="reader-control reader-control--secondary" type="button" disabled={editor.metadata.remoteRevision === editor.metadata.revision} onClick={() => updateMetadata((current) => {
                   const kept = keepMyRevisionDraft(current);
@@ -973,15 +1195,14 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                     const latest = applyLatestRevisionDraft(current);
                     return { ...latest, status: "clean", message: "Latest saved metadata in use." };
                   });
-                }}>Use latest server value</button>
+                }}>Use latest saved version</button>
                 <button className="reader-control reader-control--secondary" type="button" onClick={reloadMetadata}><RotateCcw size={15} />Reload current metadata</button>
                 <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{JSON.stringify(editor.metadata.draft, null, 2)}</pre><h3>Latest saved value</h3><pre>{JSON.stringify(editor.metadata.remote, null, 2)}</pre></details>
               </> : null}
             </div>
           </section>
-          ) : null}
 
-          <section className="reader-editor reader-note" aria-labelledby="reading-note-editor-title">
+          <section id="reader-panel-note" className="reader-editor reader-note" aria-labelledby="reader-tab-note" role="tabpanel" hidden={activeResearchTab !== "note"}>
             <div className="reader-note__heading">
               <div>
                 <h2 id="reading-note-editor-title">Paper Note</h2>
@@ -1001,7 +1222,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("numbered")}>Numbered</button>
               <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("task")}>Task</button>
               <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("quote")}>Quote</button>
-              <button className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("link")}>Link</button>
+              <button ref={linkTriggerRef} className="reader-control reader-control--secondary" type="button" disabled={noteUnavailable || notePreviewOpen} onMouseDown={preserveNoteSelection} onClick={() => formatPaperNote("link")}>Link</button>
               <button className={notePreviewOpen ? "reader-control reader-control--active" : "reader-control reader-control--secondary"} type="button" disabled={noteUnavailable} aria-pressed={notePreviewOpen} onClick={() => setNotePreviewOpen((current) => !current)}>{notePreviewOpen ? "Edit note" : "Preview"}</button>
             </div>
             {notePreviewOpen ? <PaperNoteMarkdownPreview content={paperNoteBody(editor.note.draft)} /> : (
@@ -1044,28 +1265,54 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                     const latest = applyLatestRevisionDraft(current);
                     return { ...latest, sha256: latest.revision, status: "clean", message: "Latest saved Paper Note in use." };
                   });
-                }}>Use latest server value</button>
+                }}>Use latest saved version</button>
                 <button className="reader-control reader-control--secondary" type="button" onClick={reloadNote}><RotateCcw size={15} />Reload current Paper Note</button>
                 <details className="reader-note__conflict-review"><summary>Review local and latest</summary><h3>My draft</h3><pre>{paperNoteBody(editor.note.draft)}</pre><h3>Latest saved value</h3><pre>{paperNoteBody(editor.note.remote)}</pre></details>
               </> : null}
             </div>
           </section>
-          <NoteBlocksWorkspace key={snapshot.paper.paper_id} paperId={snapshot.paper.paper_id} />
+          <section id="reader-panel-blocks" role="tabpanel" aria-labelledby="reader-tab-blocks" hidden={activeResearchTab !== "blocks"}>
+            {blocksVisited ? <NoteBlocksWorkspace key={snapshot.paper.paper_id} paperId={snapshot.paper.paper_id} focusBlockId={noteBlockId} /> : null}
+          </section>
               </div>
             </>
           )}
         </aside>
+        {!researchPanelCollapsed ? (
+          <div
+            className="reader-panel-resize"
+            role="separator"
+            tabIndex={0}
+            aria-controls="reader-research-panel"
+            aria-orientation="vertical"
+            aria-label="Resize research panel. Use Left and Right Arrow keys."
+            aria-valuemin={MIN_RESEARCH_PANEL_WIDTH}
+            aria-valuemax={MAX_RESEARCH_PANEL_WIDTH}
+            aria-valuenow={researchPanelWidth}
+            aria-valuetext={`${researchPanelWidth} pixels`}
+            onPointerDown={beginResearchPanelResize}
+            onPointerMove={moveResearchPanelResize}
+            onPointerUp={endResearchPanelResize}
+            onPointerCancel={endResearchPanelResize}
+            onKeyDown={resizeResearchPanelWithKeyboard}
+          />
+        ) : null}
         <section className="reader-stage" aria-label="Managed PDF viewing region">
-          <ReaderPdf snapshot={snapshot} />
+          <ReaderPdf
+            snapshot={snapshot}
+            layoutResizeActive={researchPanelResizing}
+            layoutResizeVersion={researchPanelResizeVersion}
+            onCaptureLayoutAnchor={capturePdfLayoutAnchor}
+          />
         </section>
         {activeUtility ? (
-          <aside className="reader-utility-drawer" aria-label="Reader utilities">
+          <aside ref={utilityDrawerRef} className="reader-utility-drawer" aria-label="Reader utilities" tabIndex={-1}>
             <div className="reader-utility-drawer__header">
               <div className="reader-utility-drawer__tabs" role="tablist" aria-label="Reader utilities">
                 <button className={activeUtility === "tags" ? "reader-utility-drawer__tab is-active" : "reader-utility-drawer__tab"} type="button" role="tab" aria-controls="reader-utility-panel" aria-selected={activeUtility === "tags"} onClick={() => setActiveUtility("tags")}>Tags</button>
                 <button className={activeUtility === "full-text" ? "reader-utility-drawer__tab is-active" : "reader-utility-drawer__tab"} type="button" role="tab" aria-controls="reader-utility-panel" aria-selected={activeUtility === "full-text"} onClick={() => setActiveUtility("full-text")}>Full Text</button>
               </div>
-              <button className="reader-research-panel__collapse" type="button" aria-label="Close utility drawer" onClick={() => setActiveUtility(null)}><X size={16} /></button>
+              <button className="reader-research-panel__collapse" type="button" aria-label="Close utility drawer" onClick={closeUtility}><X size={16} /></button>
             </div>
             <div id="reader-utility-panel" className="reader-utility-drawer__content" role="tabpanel">
               {activeUtility === "full-text" ? <FullTextWorkspace key={`full-text:${snapshot.paper.paper_id}`} paperId={snapshot.paper.paper_id} /> : null}
@@ -1097,16 +1344,21 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                       </datalist>
                       <button className="reader-control" type="button" disabled={!editor.tags.draft.trim() || mutationBusy} onClick={() => changePaperTag("add", editor.tags.draft)}><Save size={15} />{editor.tags.status === "saving" ? "Adding…" : "Add"}</button>
                     </div>
+                    {tagBook.status === "error" ? <p className="reader-editor__status" role="status">{tagBook.message} <button className="text-link" type="button" onClick={() => setTagBook({ status: "idle" })}>Retry suggestions</button></p> : null}
                     {editor.tags.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={reloadPaperTags}><RotateCcw size={15} />Reload tags</button> : null}
                   </div>
-                  <div>
-                    <div className="reader-note__heading"><h3>Suggestions</h3><button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />{candidateReview.status === "loading" ? "Finding…" : "Suggest tags"}</button></div>
+                  <div ref={candidateReviewSectionRef}>
+                    <div className="reader-note__heading"><h3>Review suggestions</h3><button className="reader-control reader-control--secondary" type="button" disabled={candidateReview.status === "loading" || mutationBusy} onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />{candidateReview.status === "loading" ? "Finding…" : "Suggest tags"}</button></div>
                     <p className="reader-editor__status" role="status" aria-live="polite">{candidateReview.message}</p>
                     {availableSuggestions.length ? (
                       <div className="reader-suggestion-list" aria-label="Suggested tags to review">
                         {availableSuggestions.map((candidate) => <label className="reader-suggestion" key={candidate.candidate_id}><input type="checkbox" checked={selectedSuggestions.includes(candidate.candidate_id)} disabled={candidateReview.status === "loading" || mutationBusy} onChange={() => setSelectedSuggestions((current) => current.includes(candidate.candidate_id) ? current.filter((id) => id !== candidate.candidate_id) : [...current, candidate.candidate_id])} />{candidate.tag_text}</label>)}
                       </div>
-                    ) : candidateReview.collection?.state === "generated" ? <p className="muted-text">No suggested tags are ready to apply.</p> : null}
+                    ) : candidateReview.status === "ready" ? <p className="muted-text">No suggested tags are ready to apply.</p> : null}
+                    {candidateReview.status === "error" ? <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy} onClick={() => {
+                      setSelectedSuggestions([]);
+                      setCandidateReview(initialCandidateReview());
+                    }}><RotateCcw size={15} />Retry loading suggestions</button> : null}
                     <button className="reader-control" type="button" disabled={!selectedSuggestions.length || candidateReview.status === "loading" || mutationBusy} onClick={applySelectedSuggestions}><Save size={15} />Apply selected</button>
                     {candidateReview.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />Refresh suggestions</button> : null}
                   </div>
@@ -1116,12 +1368,21 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           </aside>
         ) : null}
       </div>
+      {linkPopoverOpen ? (
+        <div className="metadata-review-backdrop" role="presentation">
+          <form ref={linkDialogRef} className="reader-link-dialog" role="dialog" aria-modal="true" aria-labelledby="paper-note-link-title" onSubmit={(event) => { event.preventDefault(); if (!linkUrl.trim()) return; formatPaperNote("link", linkUrl.trim()); closeLinkPopover(); }}>
+            <div className="reader-note__heading"><h2 id="paper-note-link-title">Add link</h2><button className="reader-research-panel__collapse" type="button" aria-label="Close link dialog" onClick={closeLinkPopover}><X size={16} /></button></div>
+            <label className="reader-field"><span>Link address</span><input ref={linkInputRef} type="url" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://example.org" /></label>
+            <div className="reader-editor__actions"><button className="reader-control" type="submit" disabled={!linkUrl.trim()}>Insert link</button><button className="reader-control reader-control--secondary" type="button" onClick={closeLinkPopover}>Cancel</button></div>
+          </form>
+        </div>
+      ) : null}
       {metadataReviewOpen ? (
         <div className="metadata-review-backdrop" role="presentation">
-          <div className="metadata-review-dialog" role="dialog" aria-modal="true" aria-labelledby="metadata-enrichment-title" tabIndex={-1} ref={metadataReviewRef}>
+          <div className="metadata-review-dialog" role="dialog" aria-modal="true" aria-labelledby="metadata-enrichment-title" tabIndex={-1} ref={metadataDialogRef}>
             <div className="reader-note__heading">
               <div><p className="eyebrow">Review before save</p><h2 id="metadata-enrichment-title">Metadata updates</h2></div>
-              <button className="reader-research-panel__collapse" type="button" aria-label="Close metadata updates" disabled={enrichment.status === "saving"} onClick={() => setMetadataReviewOpen(false)}><X size={16} /></button>
+              <button className="reader-research-panel__collapse" type="button" aria-label="Close metadata updates" disabled={enrichment.status === "saving"} onClick={closeMetadataReview}><X size={16} /></button>
             </div>
             <p className="reader-editor__status" role="status" aria-live="polite">{enrichment.message || "Looking for metadata updates. Nothing is applied automatically."}</p>
             {metadataChanged.length ? <p className="metadata-enrichment__notice">Your unsaved metadata edits stay separate; only checked updates are applied.</p> : null}
@@ -1159,7 +1420,7 @@ export function ReaderView({ paperId }: { paperId: string }) {
           <button className="reader-control" type="button" onClick={() => setRetryCount((value) => value + 1)}>Retry local API</button>
         </div>
       ) : null}
-      {resource.status === "not-found" ? <EmptyState title="Paper not found" description="The requested paper identity is not present in the local read model." /> : null}
+      {resource.status === "not-found" ? <EmptyState title="Paper not found" description="This paper is not available in your library." /> : null}
       {resource.status === "error" ? (
         <div className="reader-metadata-state">
           <ErrorState description={resource.message} />

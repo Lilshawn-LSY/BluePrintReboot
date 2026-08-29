@@ -32,7 +32,7 @@ export function SettingsView() {
           <div>
             <p className="eyebrow">BluePrintReboot</p>
             <h2>Local research workspace</h2>
-            <p>This web workspace does not currently offer editable settings. Your papers, notes, projects, and tags stay in their existing local stores.</p>
+            <p>This web workspace does not currently offer editable settings. Your papers, notes, projects, and tags stay on this device.</p>
           </div>
           <dl className="metadata-list metadata-list--compact">
             <div><dt>Application version</dt><dd>{packageMetadata.version}</dd></div>
@@ -57,7 +57,7 @@ export function DiagnosticsView() {
       />
       {resource.status === "loading" ? <LoadingState label="Loading Settings summary" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
-      {resource.status === "error" ? <ErrorState title="Settings read model unavailable" description={resource.message} onRetry={resource.retry} /> : null}
+      {resource.status === "error" ? <ErrorState title="Settings couldn't be loaded" description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <ErrorState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "success" ? (
         <>

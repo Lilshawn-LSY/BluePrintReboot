@@ -92,7 +92,7 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(readerView, /<Breadcrumbs items=/);
   assert.match(readerView, /Loading Reader snapshot/);
   assert.match(readerView, /Managed PDF missing/);
-  assert.match(readerView, /<PdfJsReader paperId=\{snapshot\.paper\.paper_id\}/);
+  assert.match(readerView, /<PdfJsReader\s+paperId=\{snapshot\.paper\.paper_id\}/);
   assert.match(readerView, /current\.saved_note_content/);
   assert.match(readerView, /saved_note_unavailable/);
   assert.match(readerView, /reader-note__textarea/);
@@ -103,7 +103,9 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(reader, /PDF page number/);
   assert.match(reader, /Zoom out/);
   assert.match(reader, /Zoom in/);
-  assert.match(reader, /Reset PDF zoom/);
+  assert.match(reader, /Fit width/);
+  assert.match(reader, /Fit page/);
+  assert.match(reader, /Set manual zoom to 100 percent/);
   assert.match(reader, /Loading PDF\.js Reader/);
   assert.match(reader, /Retry PDF\.js/);
   assert.match(reader, /Use native viewer fallback/);
@@ -143,7 +145,7 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /isReaderRoute/);
-  assert.equal(JSON.parse(packageJson).version, "1.6.2");
+  assert.equal(JSON.parse(packageJson).version, "1.6.3");
   assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
   assert.match(shell, /packageMetadata\.version/);
   assert.match(shell, /applicationVersion=\{packageMetadata\.version\}/);
@@ -185,11 +187,10 @@ test("Reader workspace keeps browser, research, PDF, and utility scrolling inten
   assert.match(reader, /onMouseDown=\{preserveNoteSelection\}/);
   assert.match(shell, /reader-navigation-zone/);
   assert.match(css, /\.app-shell--reader\[data-reader-sidebar-open="true"\] \.sidebar/);
-  assert.match(css, /grid-template-areas: "utility stage research"/);
-  assert.match(css, /grid-template-columns: var\(--reader-utility-width\) minmax\(0, 1fr\) var\(--reader-research-width\)/);
+  assert.match(css, /grid-template-areas: "stage research"/);
+  assert.match(css, /grid-template-columns: minmax\(0, 1fr\) var\(--reader-research-width\)/);
   assert.match(css, /\.reader-research-panel \{ grid-area: research;[\s\S]*border-left/);
-  assert.match(css, /\.reader-utility-drawer \{ grid-area: utility;[\s\S]*border-right/);
-  assert.match(css, /\.reader-layout--with-utility \.reader-utility-drawer \{ position: absolute; inset: 0 auto 0 0;/);
+  assert.match(css, /\.reader-utility-drawer \{ position: absolute; inset: 0 auto 0 0;[\s\S]*border-right/);
 });
 
 test("Reader snapshot states remain independent and stale paper state is hidden", async () => {
@@ -207,9 +208,9 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
   assert.match(readerView, /No persisted note exists/);
   assert.match(readerView, /persisted note could not be read/);
   assert.match(readerView, /Retry local API/);
-  assert.match(readerView, /<ReaderPdf snapshot=\{snapshot\}/);
+  assert.match(readerView, /<ReaderPdf\s+snapshot=\{snapshot\}/);
   assert.match(readerView, /<ReaderWorkspace key=\{resource\.data\.paper\.paper_id\}/);
-  assert.match(readerView, /locally preserved Reader draft/);
+  assert.match(readerView, /Draft restored/);
 });
 
 test("keeps tokens, API access, and page views separated", async () => {

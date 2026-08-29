@@ -2,7 +2,7 @@
 
 import { Archive, Edit3, Link2, RotateCcw, Save, Unlink, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { Breadcrumbs } from "../components/Breadcrumbs";
@@ -87,16 +87,23 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   const [editing, setEditing] = useState(false);
   const [paperPicker, setPaperPicker] = useState<PaperPickerState>({ status: "loading" });
   const [paperPickerAttempt, setPaperPickerAttempt] = useState(0);
-  const [paperId, setPaperId] = useState("");
+  const [paperLinkPaperId, setPaperLinkPaperId] = useState("");
+  const [paperLinkType, setPaperLinkType] = useState<ProjectLinkType>("related");
+  const [noteBlockPaperId, setNoteBlockPaperId] = useState("");
   const [noteBlockPicker, setNoteBlockPicker] = useState<NoteBlockPickerState>({ status: "idle" });
   const [noteBlockPickerAttempt, setNoteBlockPickerAttempt] = useState(0);
   const [noteBlockId, setNoteBlockId] = useState("");
-  const [linkType, setLinkType] = useState<ProjectLinkType>("related");
+  const [noteBlockLinkType, setNoteBlockLinkType] = useState<ProjectLinkType>("related");
   const [linkStatus, setLinkStatus] = useState<"idle" | "saving" | "conflict" | "error">("idle");
   const [linkMessage, setLinkMessage] = useState("");
   const dirtyFields = changedProjectFields(editor.draft, editor.baseline);
   const dirty = dirtyFields.length > 0;
+  const editorRef = useRef(editor);
   const archived = project.status === "archived";
+
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
 
   useEffect(() => {
     const restored = createProjectEditorState(
@@ -114,8 +121,14 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   }, [draftStorageReady, editor, projectDraftKey]);
 
   function updateEditor(update: (state: ProjectEditorState) => ProjectEditorState) {
+    const known = editorRef.current;
+    const immediate = update(known);
+    editorRef.current = immediate;
+    if (draftStorageReady) persistRevisionDraft(browserStorage(), projectDraftKey, immediate);
     setEditor((current) => {
+      if (current === known) return immediate;
       const next = update(current);
+      editorRef.current = next;
       if (draftStorageReady) persistRevisionDraft(browserStorage(), projectDraftKey, next);
       return next;
     });
@@ -128,7 +141,8 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
       .then((data) => {
         if (!active) return;
         setPaperPicker({ status: "ready", data });
-        setPaperId((current) => current || data[0]?.paper_id || "");
+        setPaperLinkPaperId((current) => current || data[0]?.paper_id || "");
+        setNoteBlockPaperId((current) => current || data[0]?.paper_id || "");
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -145,12 +159,12 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   }, [archived, paperPickerAttempt]);
 
   useEffect(() => {
-    if (archived || !paperId) return;
+    if (archived || !noteBlockPaperId) return;
     let active = true;
-    apiClient.getNoteBlocks(paperId)
+    apiClient.getNoteBlocks(noteBlockPaperId)
       .then((data) => {
         if (!active) return;
-        setNoteBlockPicker({ status: "ready", paperId, data });
+        setNoteBlockPicker({ status: "ready", paperId: noteBlockPaperId, data });
         setNoteBlockId((current) => (
           data.items.some((block) => block.id === current)
             ? current
@@ -163,14 +177,14 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
           status: error instanceof ApiClientError && (error.kind === "unavailable" || error.kind === "read-model")
             ? "unavailable"
             : "error",
-          paperId,
+          paperId: noteBlockPaperId,
           message: error instanceof ApiClientError
             ? error.message
             : "The selected Paper's Note Blocks could not be loaded.",
         });
       });
     return () => { active = false; };
-  }, [archived, noteBlockPickerAttempt, paperId]);
+  }, [archived, noteBlockPickerAttempt, noteBlockPaperId]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -206,6 +220,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
   async function reloadProject() {
     try {
       const current = await apiClient.getCompleteProject(project.project_id);
+      const preserveLocalDraft = changedProjectFields(
+        editorRef.current.draft,
+        editorRef.current.baseline,
+      ).length > 0;
       setProject(current);
       updateEditor((state) => {
         const received = receiveRemoteRevision(state, {
@@ -222,7 +240,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
             : "The latest saved Project was loaded separately. Choose which version to keep.",
         };
       });
-      if (!dirty) {
+      if (!preserveLocalDraft) {
         setTagDraft(current.tags.join(", "));
         setEditing(false);
       }
@@ -318,14 +336,14 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
 
   async function addPaperLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!paperId) return;
+    if (!paperLinkPaperId) return;
     setLinkStatus("saving");
     setLinkMessage("Adding Paper link…");
     try {
       const response = await apiClient.addProjectPaperLink(
         project.project_id,
-        paperId,
-        linkType,
+        paperLinkPaperId,
+        paperLinkType,
         project.links_revision,
       );
       const refreshed = await reloadProject();
@@ -385,15 +403,15 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
 
   async function addNoteBlockLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!paperId || !noteBlockId) return;
+    if (!noteBlockPaperId || !noteBlockId) return;
     setLinkStatus("saving");
     setLinkMessage("Adding Note Block link…");
     try {
       const response = await apiClient.addProjectNoteBlockLink(
         project.project_id,
-        paperId,
+        noteBlockPaperId,
         noteBlockId,
-        linkType,
+        noteBlockLinkType,
         project.links_revision,
       );
       const refreshed = await reloadProject();
@@ -415,8 +433,8 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
 
   const paperLinks = project.links.filter((link) => link.target_type === "paper");
   const noteBlockLinks = project.links.filter((link) => link.target_type === "note_block");
-  const noteBlockPickerMatchesPaper = noteBlockPicker.status !== "idle" && noteBlockPicker.paperId === paperId;
-  const noteBlockPickerLoading = Boolean(paperId) && (
+  const noteBlockPickerMatchesPaper = noteBlockPicker.status !== "idle" && noteBlockPicker.paperId === noteBlockPaperId;
+  const noteBlockPickerLoading = Boolean(noteBlockPaperId) && (
     !noteBlockPickerMatchesPaper || noteBlockPicker.status === "loading"
   );
   const noteBlockPickerFailure = noteBlockPickerMatchesPaper && (
@@ -474,10 +492,10 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
             {paperPicker.status === "loading" ? <span className="muted-text">Loading Papers…</span> : null}
             {paperPicker.status === "error" || paperPicker.status === "unavailable" ? <span className="reader-editor__actions"><span className="reader-editor__status">{paperPicker.message}</span><button className="reader-control reader-control--secondary" type="button" onClick={() => { setPaperPicker({ status: "loading" }); setPaperPickerAttempt((current) => current + 1); }}>Retry Papers</button></span> : null}
             {paperPicker.status === "ready" && paperPicker.data.length === 0 ? <span className="muted-text">No Papers are available to link.</span> : null}
-            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? <><label className="reader-field"><span>Paper</span><select value={paperId} onChange={(event) => { const nextPaperId = event.target.value; setPaperId(nextPaperId); setNoteBlockId(""); setNoteBlockPicker({ status: "loading", paperId: nextPaperId }); }}>{paperPicker.data.map((paper) => <option key={paper.paper_id} value={paper.paper_id}>{paper.title || paper.paper_id}{paper.archived ? " (archived)" : ""}</option>)}</select></label><label className="reader-field"><span>Relationship</span><select value={linkType} onChange={(event) => setLinkType(event.target.value as ProjectLinkType)}>{LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId}><Link2 size={15} />Add Paper</button></> : null}
+            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? <><label className="reader-field"><span>Paper</span><select value={paperLinkPaperId} onChange={(event) => setPaperLinkPaperId(event.target.value)}>{paperPicker.data.map((paper) => <option key={paper.paper_id} value={paper.paper_id}>{paper.title || paper.paper_id}{paper.archived ? " (archived)" : ""}</option>)}</select></label><label className="reader-field"><span>Relationship</span><select value={paperLinkType} onChange={(event) => setPaperLinkType(event.target.value as ProjectLinkType)}>{LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperLinkPaperId}><Link2 size={15} />Add Paper</button></> : null}
           </form></section>
           <section aria-labelledby="add-note-block-link"><h2 id="add-note-block-link">Add Note Block</h2><form className="project-link-form project-link-form--note-block" onSubmit={addNoteBlockLink}>
-            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? <><label className="reader-field"><span>Source Paper</span><select value={paperId} onChange={(event) => { const nextPaperId = event.target.value; setPaperId(nextPaperId); setNoteBlockId(""); setNoteBlockPicker({ status: "loading", paperId: nextPaperId }); }}>{paperPicker.data.map((paper) => <option key={paper.paper_id} value={paper.paper_id}>{paper.title || paper.paper_id}{paper.archived ? " (archived)" : ""}</option>)}</select></label>{noteBlockPickerLoading ? <span className="muted-text">Loading Note Blocks…</span> : null}{noteBlockPickerFailure ? <span className="reader-editor__actions"><span className="reader-editor__status">{noteBlockPickerFailure.message}</span><button className="reader-control reader-control--secondary" type="button" onClick={() => { setNoteBlockPicker({ status: "loading", paperId }); setNoteBlockPickerAttempt((current) => current + 1); }}>Retry Note Blocks</button></span> : null}{readyNoteBlockPicker && readyNoteBlockPicker.data.items.length === 0 ? <span className="muted-text">This Paper has no saved Note Blocks.</span> : null}{readyNoteBlockPicker && readyNoteBlockPicker.data.items.length > 0 ? <><label className="reader-field"><span>Note Block</span><select value={noteBlockId} onChange={(event) => setNoteBlockId(event.target.value)}>{readyNoteBlockPicker.data.items.map((block) => <option key={block.id} value={block.id}>{block.title || `${block.block_type} Note Block`}{block.page ? ` · Page ${block.page}` : ""}</option>)}</select></label><label className="reader-field"><span>Relationship</span><select value={linkType} onChange={(event) => setLinkType(event.target.value as ProjectLinkType)}>{LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="reader-control" type="submit" disabled={linkStatus === "saving" || !paperId || !noteBlockId}><Link2 size={15} />Add Note Block</button></> : null}</> : paperPicker.status === "loading" ? <span className="muted-text">Loading Papers…</span> : null}
+            {paperPicker.status === "ready" && paperPicker.data.length > 0 ? <><label className="reader-field"><span>Source Paper</span><select value={noteBlockPaperId} onChange={(event) => { const nextPaperId = event.target.value; setNoteBlockPaperId(nextPaperId); setNoteBlockId(""); setNoteBlockPicker({ status: "loading", paperId: nextPaperId }); }}>{paperPicker.data.map((paper) => <option key={paper.paper_id} value={paper.paper_id}>{paper.title || paper.paper_id}{paper.archived ? " (archived)" : ""}</option>)}</select></label>{noteBlockPickerLoading ? <span className="muted-text">Loading Note Blocks…</span> : null}{noteBlockPickerFailure ? <span className="reader-editor__actions"><span className="reader-editor__status">{noteBlockPickerFailure.message}</span><button className="reader-control reader-control--secondary" type="button" onClick={() => { setNoteBlockPicker({ status: "loading", paperId: noteBlockPaperId }); setNoteBlockPickerAttempt((current) => current + 1); }}>Retry Note Blocks</button></span> : null}{readyNoteBlockPicker && readyNoteBlockPicker.data.items.length === 0 ? <span className="muted-text">This Paper has no saved Note Blocks.</span> : null}{readyNoteBlockPicker && readyNoteBlockPicker.data.items.length > 0 ? <><label className="reader-field"><span>Note Block</span><select value={noteBlockId} onChange={(event) => setNoteBlockId(event.target.value)}>{readyNoteBlockPicker.data.items.map((block) => <option key={block.id} value={block.id}>{block.title || `${block.block_type} Note Block`}{block.page ? ` · Page ${block.page}` : ""}</option>)}</select></label><label className="reader-field"><span>Relationship</span><select value={noteBlockLinkType} onChange={(event) => setNoteBlockLinkType(event.target.value as ProjectLinkType)}>{LINK_TYPES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><button className="reader-control" type="submit" disabled={linkStatus === "saving" || !noteBlockPaperId || !noteBlockId}><Link2 size={15} />Add Note Block</button></> : null}</> : paperPicker.status === "loading" ? <span className="muted-text">Loading Papers…</span> : null}
           </form></section>
           <p className="reader-editor__status" role="status">{linkMessage}</p>
           {linkStatus === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => void reloadProject()}><RotateCcw size={15} />Reload Project</button> : null}
@@ -496,8 +514,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     <div className="page-stack">
       {resource.status === "loading" ? <LoadingState label="Loading Project detail" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
-      {resource.status === "error" ? <ErrorState title="Project read model unavailable" description={resource.message} onRetry={resource.retry} /> : null}
-      {resource.status === "not-found" ? <EmptyState title="Project not found" description="The requested Project identity is not present in the local read model." /> : null}
+      {resource.status === "error" ? <ErrorState title="Project couldn't be loaded" description={resource.message} onRetry={resource.retry} /> : null}
+      {resource.status === "not-found" ? <EmptyState title="Project not found" description="This project is not available in your workspace." /> : null}
       {resource.status === "success" ? <ProjectWorkspace key={resource.data.project_revision} snapshot={resource.data} /> : null}
     </div>
   );

@@ -34,6 +34,19 @@ export const MAX_ZOOM: number;
 export const ZOOM_STEP: number;
 export const RENDER_QUALITY_MULTIPLIER: number;
 export const MAX_OUTPUT_SCALE: number;
+export function fitWidthZoom(options: {
+  availableWidth: number;
+  pageWidth: number;
+  horizontalPadding?: number;
+}): number;
+export function fitPageZoom(options: {
+  availableWidth: number;
+  availableHeight: number;
+  pageWidth: number;
+  pageHeight: number;
+  horizontalPadding?: number;
+  verticalPadding?: number;
+}): number;
 export function normalizeOutputScale(value: unknown): number;
 export function canvasRenderGeometry(
   viewport: { width: number; height: number },
