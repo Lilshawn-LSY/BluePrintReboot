@@ -24,7 +24,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
     ? abstractDisplayParagraphs(resource.data.abstract)
     : [];
   return (
-    <div className="page-stack paper-detail-overview">
+    <div className="page-stack page-stack--detail paper-detail-overview">
       {resource.status === "loading" ? <LoadingState label="Loading paper" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} /> : null}
       {resource.status === "not-found" ? <EmptyState title="Paper not found" description="Return to the Library to choose a paper." /> : null}

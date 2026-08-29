@@ -30,19 +30,20 @@ def test_version_contract_is_consistent() -> None:
     shell = read_text("frontend/app/components/AppShell.tsx")
     sidebar = read_text("frontend/app/components/SidebarNavigation.tsx")
 
-    assert APP_VERSION == "1.6.3"
+    assert APP_VERSION == "1.6.4"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.6.3-reader-interaction-ux-polish"
+    assert manifest["release_name"] == "v1.6.4-visual-hierarchy-density"
     assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
     assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
-    assert 'import packageMetadata from "../../package.json"' in shell
-    assert "packageMetadata.version" in shell
-    assert "applicationVersion={packageMetadata.version}" in shell
-    assert "v{applicationVersion}" in sidebar
+    assert 'import packageMetadata from "../../package.json"' not in shell
+    assert "packageMetadata.version" not in shell
+    assert "applicationVersion" not in shell
+    assert "v{applicationVersion}" not in sidebar
+    assert "Research workspace</small>" in sidebar
     assert "Local workspace" not in shell
     assert "version-label" not in shell
     assert "v1.5.4" not in shell

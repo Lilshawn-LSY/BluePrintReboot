@@ -3,7 +3,6 @@
 import { usePathname } from "next/navigation";
 import { PanelLeftOpen } from "lucide-react";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
-import packageMetadata from "../../package.json";
 import { SidebarNavigation } from "./SidebarNavigation";
 
 const NORMAL_SIDEBAR_PREFERENCE_KEY = "blueprint.ui.normal-sidebar-collapsed";
@@ -62,7 +61,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       ) : null}
       <SidebarNavigation
-        applicationVersion={packageMetadata.version}
         readerMode={readerRoute}
         collapsed={readerRoute ? false : normalSidebarCollapsed}
         onToggleCollapsed={toggleNormalSidebar}

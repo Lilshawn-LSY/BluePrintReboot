@@ -31,11 +31,14 @@ test("Projects keeps the collection first and subordinates creation and link man
   assert.match(projects, /useDisclosureFocus<HTMLButtonElement>/);
   assert.match(projects, /restoreTriggerFocus\(\)/);
   assert.ok(projects.indexOf('title="Projects"') < projects.indexOf('title="Create Project"'));
-  assert.match(detail, /<Section title="Overview">/);
+  assert.doesNotMatch(detail, /<Section title="Overview">/);
+  assert.match(detail, /compact-metadata-row project-metadata-summary/);
   assert.match(detail, /<Section title="Linked Papers"/);
   assert.match(detail, /<Section title="Linked Note Blocks"/);
   assert.match(detail, /<details id="manage-project-links"/);
-  assert.match(detail, /project-link-card/);
+  assert.match(detail, /project-material-row/);
+  assert.match(detail, /project-secondary-actions/);
+  assert.ok(detail.indexOf('title="Linked Papers"') < detail.indexOf('title="Edit Project"'));
   assert.match(detail, /linkTypeLabel\(link\.link_type\)/);
   assert.match(detail, /targetStateTone\(link\.target_state\)/);
   assert.doesNotMatch(detail, /<DataTableShell/);

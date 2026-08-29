@@ -49,6 +49,10 @@ The shell does not spend persistent top-chrome space on a version label or a
 duplicate local-workspace label. Product version, API contract version, and
 other maintenance data belong primarily in Settings diagnostics.
 
+Settings may sit in a visually secondary, lower navigation group when the
+shell has enough height. This changes emphasis, not route availability or
+keyboard access.
+
 ## Information hierarchy
 
 Every UI decision should place information in one of four tiers.
@@ -80,6 +84,12 @@ field name.
   diagnostics surface.
 
 Do not change the meaning of backend states while changing their display.
+
+Avoid duplicate state: show a save state beside the editor or command it
+describes, not again in a parent context. Likewise, quiet ordinary system
+health such as an active lifecycle state belongs out of persistent workspace
+chrome; exceptional, actionable, or unavailable state remains visible close to
+the affected work.
 
 ### Explicit-save draft states
 
@@ -119,6 +129,12 @@ Main information
 Context / secondary information
 ```
 
+Use the shared `page-stack--detail` modifier for a bounded detail reading
+width (about 1200–1400px). Project Detail starts with a compact metadata row,
+not a large fact-card strip: status, priority, updated time, linked-material
+counts, and project tags belong together near the identity. Linked research
+material appears ahead of editing and lower-frequency management.
+
 ### Workspace
 
 Reader prioritizes the active work area:
@@ -132,6 +148,11 @@ Optional contextual panels
 Do not use this foundation pass to turn one archetype into another or to
 redesign the existing Library, Reader panel, Projects, Tags, Dashboard, or
 Settings workflows.
+
+Dashboard uses the shared `page-stack--dashboard` modifier (about
+1200–1350px) for a readable working surface. Broad collection surfaces keep
+the default shell width. Reader remains unrestricted because its PDF workspace
+is the active surface.
 
 ### Workspace information hierarchy patterns
 
@@ -189,6 +210,15 @@ Primary actions are the one action that advances the current task. Secondary
 actions are neutral alternatives. Destructive or irreversible actions retain a
 distinct danger treatment and their existing confirmation requirements.
 
+Project Detail exposes Edit Project as its ordinary primary action. Reload and
+Archive are lower-frequency recovery/destructive actions and may share a
+compact secondary disclosure, while remaining keyboard-discoverable. Linked
+Paper and Note Block rows reserve their visible space for identity, compact
+citation/context, relationship, exceptional target state, and navigation;
+unlink is a labelled secondary row action and keeps its confirmation behavior.
+Ordinary rows target roughly 56–72px where their content permits. Two-line
+title clamping is acceptable when the full label remains exposed accessibly.
+
 ## Copy and edit behavior
 
 Use a page title and, at most, one concise user-facing sentence. Omit section
@@ -205,11 +235,26 @@ revision-safety behavior.
 
 ## Reader interaction patterns
 
+Reader top chrome is a single compact desktop row where practical. Breadcrumbs
+provide Paper identity and expose a truncated Paper title through the existing
+full-title tooltip; do not add a second visible title heading. A visually
+hidden document heading may preserve semantic hierarchy. Tags and Full Text
+remain immediate utility controls. Ordinary active lifecycle state is quiet;
+archived, unavailable, conflict, and other exceptional state remains visible
+where relevant.
+
 The Reader keeps compact Paper context at the top of the research panel. Its
 persistent modes are **Note**, **Blocks**, and **Details**. Switching modes
 hides inactive work without destroying its editor, selection, draft, preview,
 conflict, or link-management state. The Note mode is the default, and tabs
 retain semantic roles, visible focus, and ordinary keyboard focus order.
+
+Paper context is informational: author, year, DOI/arXiv when present, panel
+collapse, and a meaningful restored-draft notice. Paper Note `SaveStatus`
+belongs only beside the Paper Note editor; metadata `SaveStatus` belongs only
+in Details. The Paper Note formatting toolbar uses compact icon or typographic
+controls with an accessible name and title for every icon-only action. Its
+selection-preservation behavior is part of the control contract.
 
 On desktop, the research panel is session-resizable from 320px to 520px. A
 pointer resize must be paired with an accessible range control and reset
@@ -222,6 +267,11 @@ PDF controls provide previous/next page, zoom, fit width, fit page, and manual
 zoom. Fit width uses the usable PDF stage width; fit page considers both stage
 dimensions. Manual zoom leaves fit mode cleanly. Logical PDF/text-layer
 geometry remains independent of backing-canvas high-DPI rendering.
+
+The utility drawer header names the currently open utility and includes Close.
+Do not repeat a full Tags/Full Text tab switcher inside the drawer unless a
+future workflow has a material reason for one. Its overlay, focus management,
+Escape behavior, and PDF-position preservation remain unchanged.
 
 When a browser-local draft is restored, show a compact live `Draft restored`
 notice or the existing unsaved state. Normal in-app navigation does not

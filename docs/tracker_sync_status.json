@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.6.3",
-  "release_name": "v1.6.3-reader-interaction-ux-polish",
-  "as_of": "2026-08-27",
+  "product_version": "1.6.4",
+  "release_name": "v1.6.4-visual-hierarchy-density",
+  "as_of": "2026-08-29",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 146,
+        "passed": 147,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-27",
-        "reference": "v1.6.3 local validation",
-        "summary": "The offline repository readiness smoke completed with 146 passed, 0 warnings, and 0 failed, including the v1.6.3 Tags queue contract and default pdf-inspector 0.2.6 dependency check."
+        "date": "2026-08-29",
+        "reference": "v1.6.4 local validation",
+        "summary": "The offline repository readiness smoke completed with 147 passed, 0 warnings, and 0 failed, including the v1.6.4 release-state, shared visual-system, and default pdf-inspector 0.2.6 checks."
       }
     },
     "full_pytest": {
@@ -130,9 +130,9 @@
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-08-27",
-        "reference": "v1.6.3 local validation",
-        "summary": "The v1.6.3 full Python suite completed with 822 passed, 0 failed, and 0 skipped using disposable fixtures, including the read-only Tags candidate-review queue and existing Reader, draft, Project, Note Block, and tag-command regressions."
+        "date": "2026-08-29",
+        "reference": "v1.6.4 local validation",
+        "summary": "The v1.6.4 full Python suite completed with 822 passed, 0 failed, and 0 skipped using disposable fixtures, including existing Reader, draft, Project, Note Block, tag-command, API, and release-contract regressions."
       }
     },
     "focused_reader_snapshot": {
@@ -337,8 +337,8 @@
       "command": "npm --prefix frontend run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-08-27",
-        "reference": "v1.6.3 local validation",
+        "date": "2026-08-29",
+        "reference": "v1.6.4 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -348,9 +348,9 @@
       "command": "npm --prefix frontend run build",
       "counts": null,
       "evidence": {
-        "date": "2026-08-27",
-        "reference": "v1.6.3 local validation",
-        "summary": "The production frontend build passed with Reader task tabs, overlay utilities, adaptive PDF viewing, and the local PDF.js worker asset."
+        "date": "2026-08-29",
+        "reference": "v1.6.4 local validation",
+        "summary": "The production frontend build passed with compact Reader chrome, overlay utilities, adaptive PDF viewing, and the local PDF.js worker asset."
       }
     },
     "frontend_node_tests": {
@@ -358,15 +358,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm --prefix frontend test",
       "counts": {
-        "passed": 19,
+          "passed": 22,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-08-27",
-        "reference": "v1.6.3 local validation",
-        "summary": "The complete frontend Node suite passed with Reader tabs, session panel sizing, overlay drawer focus/Escape behavior, PDF fit calculations, structured Library controls, candidate-review handoff, local draft recovery, and conflict coverage."
+        "date": "2026-08-29",
+        "reference": "v1.6.4 local validation",
+        "summary": "The complete frontend Node suite passed with compact Reader chrome and utilities, session panel sizing, PDF fit calculations, Project linked-material density, Dashboard/shell presentation, local draft recovery, and conflict coverage."
       }
     },
     "frontend_projects_tags": {
@@ -1361,11 +1361,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.6.3 Reader interaction and UX polish browser verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
+    "name": "v1.6.4 Visual hierarchy and density browser verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
     "evidence": {
-      "date": "2026-08-27",
+      "date": "2026-08-29",
       "reference": "docs/UI_DESIGN_SYSTEM.md",
-      "summary": "Keep v1.6.3 Reader layout, utility-drawer focus, PDF fit modes, restored drafts, collection controls, and Tags queue browser verification separate from local implementation and automated validation."
+      "summary": "Keep v1.6.4 Reader compact chrome and utility-drawer focus, Project linked-material density, Dashboard and sidebar layout, plus PDF fit modes and restored drafts browser verification separate from local implementation and automated validation."
     }
   },
   "historical_evidence": {
@@ -1406,7 +1406,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-08-27",
+    "last_reconciled": "2026-08-29",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",
