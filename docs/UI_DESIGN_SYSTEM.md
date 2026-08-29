@@ -4,13 +4,42 @@
 
 This document defines the shared desktop research-workspace foundation for
 BluePrintReboot v1.6.5. It guides the application shell, navigation,
-information exposure, density, and interaction language. It does not authorize
-a backend contract change, a color-palette redesign, or a page-specific
-workflow redesign.
+information exposure, density, interaction language, and the stable White /
+Ink / Blueprint Blue palette. It does not authorize a backend contract change
+or a page-specific workflow redesign.
 
 The executable source of truth for numeric values and shared classes is
 `frontend/app/globals.css` and the components under `frontend/app/components/`.
 This document explains how to use those primitives consistently.
+
+## Final palette: White / Ink / Blueprint Blue
+
+The application is a cool white research surface, not a coloured dashboard.
+White represents a working document or control surface; Ink carries content
+and structure; Blueprint Blue identifies interaction and selection. Blue is
+never a broad decorative background or a replacement for semantic feedback.
+
+| Role | Token | Value | Use |
+| --- | --- | --- | --- |
+| Working surface | `--color-surface` | `#FFFFFF` | Editors, forms, inspectors, drawers, PDF/document surfaces. |
+| Canvas | `--color-canvas` | `#F7F8F8` | General application background. |
+| Subtle surface | `--color-surface-subtle` | `#FAFBFB` | Quiet control and table context. |
+| Sidebar | `--color-sidebar` | `#F3F4F4` | Neutral navigation base. |
+| Ink | `--color-text` | `#171A1B` | Main readable text. |
+| Strong secondary ink | `--color-text-strong-secondary` | `#2B3032` | Dense structural surfaces such as the Reader stage. |
+| Secondary ink | `--color-text-secondary` | `#596164` | Supporting copy and metadata. |
+| Muted ink | `--color-text-muted` | `#7A8386` | De-emphasized structural detail. |
+| Faint rule | `--color-rule-faint` | `#E3E6E6` | Ordinary rows and metadata separation. |
+| Default rule | `--color-rule` | `#C9CED0` | Inputs, toolbars, and secondary boundaries. |
+| Strong rule | `--color-rule-strong` | `#202425` | Major table, Reader, and section transitions only. |
+| Ink Blue | `--color-accent` | `#245E88` | Links and quieter text accents. |
+| Signal Blue | `--color-accent-strong` | `#3D82B4` | Active tabs, selection rules, focus, active Reader modes, and important interactive borders. |
+| Blue Line | `--color-accent-light` | `#A8CBE0` | Light interactive borders, especially canonical tags. |
+| Soft Blue | `--color-accent-soft` | `#EAF4FA` | Selected rows and subtle active context. |
+| Blue subtle | `--color-accent-subtle` | `#F6FBFE` | Canonical-tag context only. |
+
+Semantic danger, warning, and success colors remain independent. Muted green
+communicates success only; it is not an application accent.
 
 ## v1.6.5 visual-language grammar
 
@@ -28,8 +57,9 @@ gradients, soft shadows, or generic dashboard styling.
   functional containment relationship.
 - The shared structural tokens are `--rule-faint` for quiet row separation,
   `--rule` for ordinary control and inspector boundaries, and `--rule-strong`
-  for major table, toolbar, workspace, and section structure. `--border`
-  aliases the default rule for compatible controls.
+  for major table, toolbar, workspace, and section structure. Do not turn
+  strong rules into a box around every surface. `--border` aliases the default
+  rule for compatible controls.
 - Use `--radius-sm` for controls and working surfaces. `--radius-md` is still
   deliberately small and should be reserved for the few bounded surfaces that
   benefit from it. Shadows indicate an actual overlay or floating surface;
@@ -42,10 +72,10 @@ gradients, soft shadows, or generic dashboard styling.
 - Avoid all-caps marketing eyebrows. When compact context notation is useful,
   use a quiet mono label with an accent rule rather than a repeated promotional
   label.
-- Ordinary domain metadata is a quiet inline label. Taxonomy values may use a
-  compact chip. Strong badges are reserved for exceptional or actionable states
-  such as Missing PDF, Conflict, Offline, Failed, or Archived. This is a
-  visual distinction only; it never changes the underlying state semantics.
+- Ordinary domain metadata is a quiet inline, mono status marker. Strong
+  rectangular badges are reserved for exceptional or actionable states such as
+  Missing PDF, Conflict, Offline, Failed, or Archived. This is a visual
+  distinction only; it never changes the underlying state semantics.
 - Selection uses a restrained surface change plus an inset accent rule. Hover
   changes color, a rule, or a subtle background only. Do not use lift, scale,
   or decorative motion.
@@ -99,6 +129,15 @@ Settings may sit in a visually secondary, lower navigation group when the
 shell has enough height. This changes emphasis, not route availability or
 keyboard access.
 
+The selected sidebar destination uses a neutral white surface plus a 2px
+Signal Blue inset rule, not a broad blue fill. Collapse, pin, close, and
+secondary shell controls remain neutral until hover or focus.
+
+Reader is the most instrument-like application surface. Its active tabs,
+utility controls, fit modes, and resize/focus affordances use Signal Blue as
+an underline, border, text/icon, or focus treatment. Inactive controls stay
+Ink/neutral; large blue Reader backgrounds are not part of the grammar.
+
 ## Information hierarchy
 
 Every UI decision should place information in one of four tiers.
@@ -137,6 +176,30 @@ health such as an active lifecycle state belongs out of persistent workspace
 chrome; exceptional, actionable, or unavailable state remains visible close to
 the affected work.
 
+## Tag and status notation
+
+Tag-like values have distinct visual meaning and must not collapse into a row
+of colourful pills.
+
+- **Canonical tags** are compact, near-square labels with restrained padding,
+  a Signal Blue left rule, a Blue Line border, and the faintest blue context.
+  Use them for the
+  maintained taxonomy on Papers, Projects, Library rows, Tags, and Reader.
+- **Aliases and imported keywords** are small neutral rectangular labels with
+  a faint/default rule. They have no blue emphasis by default.
+- **Candidate or generated suggestions** are quieter still: plain inline text
+  or a very light rectangular treatment. Long natural-language suggestions may
+  wrap within their table/list cell rather than force a capsule or overflow.
+
+This hierarchy communicates canonical taxonomy > alias > candidate without
+changing tag semantics, candidate review, or persistence.
+
+`StatusBadge` has parallel levels: a small mono label with a square marker for
+ordinary states such as Active, Reading, Available, High priority, link type,
+or Saved; and a small unfilled/semantic rectangular badge for exceptional
+states. Preserve semantic danger, warning, and success colours, and keep Save
+Status explicit and adjacent to its operation.
+
 ### Explicit-save draft states
 
 For a user-authored explicit-save surface, use exactly this visible vocabulary:
@@ -163,6 +226,15 @@ Toolbar / actions
 Collection (list or table)
 Optional inspector or context surface
 ```
+
+Library keeps the collection as the primary surface. At wide desktop widths,
+its selected-paper inspector is a bounded side-by-side dossier and the table
+column remains shrinkable. Between roughly 1280px and 1440px, the same
+inspector becomes a bounded right overlay so opening it never creates
+body-level horizontal overflow. Table scrolling, when needed, remains local to
+the table shell; title is the flexible column while author, year, reading,
+tags, and Inspect have deliberate constrained widths. The inspector preserves
+its existing close and focus-return behavior in both presentations.
 
 ### Detail
 
@@ -241,8 +313,9 @@ arbitrary values.
 - Page titles use `--font-size-xl`; section titles use `--font-size-md`; body
   copy uses `--font-size-base`; helper and metadata copy use
   `--font-size-sm` or `--font-size-xs`.
-- Tables use compact 12px cell padding (`--space-3`). Preserve readable
-  headers and horizontal scrolling rather than forcing data to wrap badly.
+- Tables use compact 12px cell padding (`--space-3`), a strong header baseline,
+  and faint ordinary-row separators. Preserve readable headers and horizontal
+  scrolling rather than forcing data to wrap badly or becoming row cards.
 - Standard controls use `--control-height` (36px); compact shell controls use
   `--control-height-compact` (32px). Reuse `reader-control`, its secondary
   variant, and the existing semantic button patterns rather than creating a
@@ -250,8 +323,9 @@ arbitrary values.
 - Use `--rule-faint`, `--rule`, and `--rule-strong` according to structural
   importance. `--radius-sm` is 3px and `--radius-md` is 4px: keep the
   interface precise without making controls harsh. Focus must remain plainly
-  visible through the shared focus ring. Disabled controls must retain their
-  label and visibly communicate that they cannot be used.
+  visible through the shared Blueprint Blue focus ring and border. Disabled
+  controls must retain their label and visibly communicate that they cannot be
+  used.
 
 Primary actions are the one action that advances the current task. Secondary
 actions are neutral alternatives. Destructive or irreversible actions retain a

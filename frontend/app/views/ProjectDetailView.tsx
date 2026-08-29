@@ -453,7 +453,7 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
         <span><small>Priority</small><StatusBadge>{project.priority}</StatusBadge></span>
         <span><small>Updated</small><strong>{formatUiDate(project.updated_at)}</strong></span>
         <span><small>Linked material</small><strong>{project.linked_paper_count} Papers · {project.linked_note_block_count} Note Blocks</strong></span>
-        <span className="project-metadata-summary__tags"><small>Tags</small><span className="tag-list">{project.tags.length ? project.tags.map((tag) => <StatusBadge presentation="chip" key={tag}>{tag}</StatusBadge>) : <span className="muted-text">No project tags</span>}</span></span>
+        <span className="project-metadata-summary__tags"><small>Tags</small><span className="tag-list">{project.tags.length ? project.tags.map((tag) => <StatusBadge presentation="chip" taxonomy="canonical" key={tag}>{tag}</StatusBadge>) : <span className="muted-text">No project tags</span>}</span></span>
       </div>
       {editor.message && !editing ? <p className="project-operation-status" role="status">{editor.message}</p> : null}
       {archived ? <div className="project-archived-note">This Project is archived. Its linked Papers and Note Blocks remain available to review.</div> : null}

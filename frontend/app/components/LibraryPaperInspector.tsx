@@ -61,7 +61,7 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
           <section className="library-paper-inspector__section" aria-labelledby="selected-paper-organization">
             <h3 id="selected-paper-organization">Organization</h3>
             <p className="library-paper-inspector__context">{projectContext(resource.data.project_links.length)}</p>
-            {resource.data.tags.length ? <div className="tag-list">{resource.data.tags.map((item) => <StatusBadge presentation="chip" key={item}>{item}</StatusBadge>)}</div> : <p className="library-paper-inspector__context">No tags yet</p>}
+            {resource.data.tags.length ? <div className="tag-list">{resource.data.tags.map((item) => <StatusBadge presentation="chip" taxonomy="canonical" key={item}>{item}</StatusBadge>)}</div> : <p className="library-paper-inspector__context">No tags yet</p>}
           </section>
           {enrichmentContent ? <section className="library-paper-inspector__section library-paper-inspector__enrichment" aria-label="Metadata enrichment">{enrichmentContent}</section> : null}
         </>

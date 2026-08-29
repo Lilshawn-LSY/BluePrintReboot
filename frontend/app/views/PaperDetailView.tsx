@@ -49,11 +49,11 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
               </Section>
             </div>
             <aside className="paper-detail-context" aria-label="Paper context">
-              <DetailPanel title="Organization"><p>{projectContext(resource.data.project_links.length)}</p>{resource.data.tags.length ? <div className="tag-list project-tag-row">{resource.data.tags.map((tag) => <StatusBadge presentation="chip" key={tag}>{tag}</StatusBadge>)}</div> : <p className="deferred-note">No tags yet</p>}</DetailPanel>
+              <DetailPanel title="Organization"><p>{projectContext(resource.data.project_links.length)}</p>{resource.data.tags.length ? <div className="tag-list project-tag-row">{resource.data.tags.map((tag) => <StatusBadge presentation="chip" taxonomy="canonical" key={tag}>{tag}</StatusBadge>)}</div> : <p className="deferred-note">No tags yet</p>}</DetailPanel>
               <DetailPanel title="Reading context"><p>{resource.data.note_available ? "A reading note is ready in Reader." : "Open Reader to begin a reading note."}</p></DetailPanel>
             </aside>
           </div>
-          {resource.data.keywords.length ? <Section title="Keywords"><div className="tag-list">{resource.data.keywords.map((keyword) => <StatusBadge presentation="chip" key={keyword}>{keyword}</StatusBadge>)}</div></Section> : null}
+          {resource.data.keywords.length ? <Section title="Keywords"><div className="tag-list">{resource.data.keywords.map((keyword) => <StatusBadge presentation="chip" taxonomy="alias" key={keyword}>{keyword}</StatusBadge>)}</div></Section> : null}
         </>
       ) : null}
     </div>

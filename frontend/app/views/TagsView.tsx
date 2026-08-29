@@ -363,7 +363,7 @@ export function TagsView() {
                       <td><strong>{item.title}</strong></td>
                       <td>{item.candidate_count}</td>
                       <td>{item.unresolved_count} unresolved · {item.resolved_count} ready · {item.approved_count} approved</td>
-                      <td>{item.candidate_labels.length ? <div className="tag-list">{item.candidate_labels.map((label) => <StatusBadge presentation="chip" key={label}>{label}</StatusBadge>)}</div> : <span className="muted-text">No labels available</span>}</td>
+                      <td>{item.candidate_labels.length ? <div className="tag-list">{item.candidate_labels.map((label) => <StatusBadge presentation="chip" taxonomy="candidate" key={label}>{label}</StatusBadge>)}</div> : <span className="muted-text">No labels available</span>}</td>
                       <td><Link className="reader-control" href={`/papers/${encodeURIComponent(item.paper_id)}/reader?utility=tags&review=tag-candidates`}>Review</Link></td>
                     </tr>
                   ))}</tbody>
@@ -383,7 +383,7 @@ export function TagsView() {
                   <tbody>{resource.data.governance.items.filter((tag) => [tag.label, tag.category, ...tag.aliases].join(" ").toLocaleLowerCase().includes(registrySearch.trim().toLocaleLowerCase())).map((tag) => (
                     <tr key={tag.canonical_key}>
                       <td><strong>{tag.label}</strong><details className="tag-advanced-details"><summary>Advanced details</summary><span className="mono-id">{tag.canonical_key}</span></details></td><td>{categoryLabel(tag.category)}</td>
-                      <td><div className="tag-list">{tag.aliases.length ? tag.aliases.map((value) => <StatusBadge presentation="chip" key={value}>{value}</StatusBadge>) : <span className="muted-text">None stored</span>}</div></td>
+                      <td><div className="tag-list">{tag.aliases.length ? tag.aliases.map((value) => <StatusBadge presentation="chip" taxonomy="alias" key={value}>{value}</StatusBadge>) : <span className="muted-text">None stored</span>}</div></td>
                       <td><StatusBadge tone={tag.status === "active" ? "neutral" : "warning"}>{tag.status}</StatusBadge></td>
                       <td><button className="reader-control reader-control--secondary" type="button" disabled={busy || Boolean(tagEditor?.state.activeSave)} onClick={() => setSelectedKey(tag.canonical_key)}>Manage tag</button></td>
                     </tr>

@@ -216,7 +216,7 @@ export function ProjectsView() {
                       <td>
                         <div className="tag-list">
                           {project.tags.length
-                            ? project.tags.map((tag) => <StatusBadge presentation="chip" key={tag}>{tag}</StatusBadge>)
+                            ? project.tags.map((tag) => <StatusBadge presentation="chip" taxonomy="canonical" key={tag}>{tag}</StatusBadge>)
                             : <span className="muted-text">None stored</span>}
                         </div>
                       </td>
