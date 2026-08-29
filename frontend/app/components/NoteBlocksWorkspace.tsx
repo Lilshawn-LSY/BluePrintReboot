@@ -1,7 +1,7 @@
 "use client";
 
 import { Edit3, Link2, Plus, RotateCcw, Save, Unlink, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import type {
@@ -107,7 +107,7 @@ function browserStorage(): Storage | null {
 }
 
 
-export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
+export function NoteBlocksWorkspace({ paperId, focusBlockId = "" }: { paperId: string; focusBlockId?: string }) {
   const [collection, setCollection] = useState<CollectionState>({ status: "loading" });
   const [editor, setEditor] = useState<NoteBlockEditorState | null>(null);
   const [expandedBlockId, setExpandedBlockId] = useState("");
@@ -118,6 +118,7 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
   const [selectedLinkType, setSelectedLinkType] = useState<ProjectLinkType>("related");
   const [linkStatus, setLinkStatus] = useState<LinkStatus>("idle");
   const [linkMessage, setLinkMessage] = useState("");
+  const focusedDeepLinkRef = useRef("");
   const editorDraftKey = draftStorageKey("note-block", `${paperId}:${editor?.blockId || "new"}`);
   const changedFields = useMemo(
     () => editor ? changedNoteBlockFields(editor.draft, editor.baseline) : [],
@@ -213,11 +214,21 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
   }, [paperId]);
 
   useEffect(() => {
-    if (collection.status !== "ready") return;
-    const target = new URLSearchParams(window.location.search).get("noteBlock");
+    if (!focusBlockId) {
+      focusedDeepLinkRef.current = "";
+      return;
+    }
+    if (collection.status !== "ready" || focusedDeepLinkRef.current === focusBlockId) return;
+    const target = document.getElementById(`note-block-${focusBlockId}`);
     if (!target) return;
-    document.getElementById(`note-block-${target}`)?.scrollIntoView({ block: "center" });
-  }, [collection]);
+    setExpandedBlockId(focusBlockId);
+    focusedDeepLinkRef.current = focusBlockId;
+    const frame = window.requestAnimationFrame(() => {
+      target.scrollIntoView({ block: "center" });
+      target.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [collection, focusBlockId]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -477,7 +488,7 @@ export function NoteBlocksWorkspace({ paperId }: { paperId: string }) {
           {collection.data.items.map((block) => {
             const links = collection.data.project_links.filter((link) => link.note_block_id === block.id);
             return (
-              <article className={expandedBlockId === block.id ? "note-block-card is-expanded" : "note-block-card"} id={`note-block-${block.id}`} key={block.id}>
+              <article className={expandedBlockId === block.id ? "note-block-card is-expanded" : "note-block-card"} id={`note-block-${block.id}`} key={block.id} tabIndex={focusBlockId === block.id ? -1 : undefined}>
                 <div className="reader-note__heading">
                   <div><strong>{block.title || block.block_type}</strong></div>
                   <StatusBadge>{block.block_type}</StatusBadge>

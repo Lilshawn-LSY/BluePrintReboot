@@ -56,7 +56,7 @@ test("Projects renders browsable collection fields and complete typed-link detai
 test("Tags renders canonical identity, label, category, aliases, status, and real summary counts", async () => {
   const [, , , , , tags, , , client] = await sources;
 
-  assert.match(tags, /apiClient\.getAllTags\(\)/);
+  assert.doesNotMatch(tags, /apiClient\.getAllTags\(\)/);
   assert.match(tags, /apiClient\.getTagSummary\(\)/);
   assert.match(tags, /apiClient\.getTagReviewQueue\(\)/);
   assert.match(tags, /apiClient\.getTagGovernance\(\)/);
@@ -98,7 +98,7 @@ test("read parity contains no fabricated records and preserves existing views", 
   ]);
 
   assert.match(projects, /apiClient\.getAllProjects/);
-  assert.match(tags, /apiClient\.getAllTags/);
+  assert.match(tags, /apiClient\.getTagGovernance/);
   assert.doesNotMatch(projects + projectDetail + tags, /const\s+(?:projects|tags|papers)\s*=\s*\[/i);
   assert.match(library, /apiClient\.getLibraryStatus/);
   assert.match(library, /apiClient\.getPapers/);

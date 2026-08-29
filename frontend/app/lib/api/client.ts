@@ -352,7 +352,7 @@ export const apiClient = {
     const [health, library, papers, projects] = await Promise.all([
       request<HealthSummary>("/health"),
       request<LibraryStatus>("/library/status"),
-      request<PaginatedPaperList>("/papers?limit=5&offset=0&archive_status=active"),
+      getPapers({ limit: 5, offset: 0, archiveStatus: "active", status: "reading" }),
       collectAllPaginatedItems(getProjects),
     ]);
     return { health, library, papers, projects };

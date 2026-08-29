@@ -57,7 +57,7 @@ test("Project Detail can add an existing Note Block through the canonical read a
   assert.match(detail, /Add Note Block/);
   assert.match(detail, /Source Paper/);
   assert.match(detail, /<span>Note Block<\/span>/);
-  assert.match(detail, /apiClient\.getNoteBlocks\(paperId\)/);
+  assert.match(detail, /apiClient\.getNoteBlocks\(noteBlockPaperId\)/);
   assert.match(detail, /apiClient\.addProjectNoteBlockLink/);
   assert.match(detail, /Retry Note Blocks/);
   assert.match(detail, /This Paper has no saved Note Blocks/);

@@ -54,13 +54,12 @@ function browserStorage(): Storage | null {
 export function TagsView() {
   const { triggerRef: createTriggerRef, restoreTriggerFocus } = useDisclosureFocus<HTMLButtonElement>();
   const resource = useApiResource("tags", async () => {
-    const [tags, summary, governance, queue] = await Promise.all([
-      apiClient.getAllTags(),
+    const [summary, governance, queue] = await Promise.all([
       apiClient.getTagSummary(),
       apiClient.getTagGovernance(),
       apiClient.getTagReviewQueue(),
     ]);
-    return { tags, summary, governance, queue };
+    return { summary, governance, queue };
   });
   const [selectedKey, setSelectedKey] = useState("");
   const createDraftKey = draftStorageKey("canonical-tag-create", "new");
