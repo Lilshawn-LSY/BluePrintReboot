@@ -20,7 +20,9 @@ test("Reader tabs, persistent sizing, and an overlay drawer retain the existing 
   for (const label of ["Note", "Blocks", "Details"]) assert.match(reader, new RegExp(`"${label}"`));
   assert.match(reader, /RESEARCH_PANEL_WIDTH_KEY/);
   assert.match(reader, /sessionStorage/);
-  assert.match(reader, /type="range"/);
+  assert.match(reader, /role="separator"/);
+  assert.match(reader, /onPointerDown=\{beginResearchPanelResize\}/);
+  assert.match(reader, /onKeyDown=\{resizeResearchPanelWithKeyboard\}/);
   assert.match(reader, /hidden=\{activeResearchTab !== "note"\}/);
   assert.match(reader, /hidden=\{activeResearchTab !== "blocks"\}/);
   assert.match(reader, /hidden=\{activeResearchTab !== "details"\}/);

@@ -12,7 +12,7 @@ export class ApiClientError extends Error {
 
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: object; notFoundMessage?: string } = {},
+  options: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: object; notFoundMessage?: string; signal?: AbortSignal } = {},
 ): Promise<T> {
   let response: Response;
   try {
@@ -23,6 +23,7 @@ async function request<T>(
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
+      signal: options.signal,
     });
   } catch {
     throw new ApiClientError("The local BluePrintReboot API could not be reached.", "unavailable");
@@ -317,8 +318,9 @@ export const apiClient = {
     `/papers/${encodeURIComponent(paperId)}/tags`,
     { method: "DELETE", body: { tag, expected_revision: expectedRevision } },
   ),
-  getTagCandidates: (paperId: string) => request<TagCandidateCollection>(
+  getTagCandidates: (paperId: string, options: { signal?: AbortSignal } = {}) => request<TagCandidateCollection>(
     `/papers/${encodeURIComponent(paperId)}/tag-candidates`,
+    { signal: options.signal },
   ),
   generateTagCandidates: (paperId: string, resetRejections = false) => request<TagCandidateCollection>(
     `/papers/${encodeURIComponent(paperId)}/tag-candidates/generate`,

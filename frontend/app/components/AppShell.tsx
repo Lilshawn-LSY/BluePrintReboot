@@ -48,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     >
       <a className="skip-link" href="#main-content">Skip to content</a>
       {readerRoute ? (
-        <div className="reader-navigation-zone" onMouseEnter={() => setReaderSidebarOpen(true)}>
+        <div className="reader-navigation-zone">
           <button
             className="reader-navigation-trigger"
             type="button"

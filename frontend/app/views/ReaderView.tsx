@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, FileText, RotateCcw, Save, Tags, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { Breadcrumbs } from "../components/Breadcrumbs";
@@ -25,7 +25,9 @@ import {
 } from "../lib/reader/editor-state.mjs";
 import { createExclusiveMutationGate } from "../lib/reader/mutation-coordinator.mjs";
 import { formatPaperNoteMarkdown, type PaperNoteFormatAction } from "../lib/reader/note-formatting.mjs";
+import { candidateReviewLoadFailure, createLatestPaperRequestGate, initialCandidateReview, savedCandidateReviewReady } from "../lib/reader/candidate-review-lifecycle.mjs";
 import { readerResearchTabFromSearchParams, readerUtilityFromSearchParams } from "../lib/reader/reader-route-state.mjs";
+import { DEFAULT_RESEARCH_PANEL_WIDTH, MAX_RESEARCH_PANEL_WIDTH, MIN_RESEARCH_PANEL_WIDTH, clampResearchPanelWidth, researchPanelWidthFromPointer } from "../lib/reader/split-pane.mjs";
 import {
   beginRevisionSave,
   completeRevisionSave,
@@ -67,14 +69,7 @@ type ReaderUtility = "tags" | "full-text" | null;
 type ResearchPanelTab = "note" | "blocks" | "details";
 const RESEARCH_PANEL_TABS: ResearchPanelTab[] = ["note", "blocks", "details"];
 
-const DEFAULT_RESEARCH_PANEL_WIDTH = 400;
-const MIN_RESEARCH_PANEL_WIDTH = 320;
-const MAX_RESEARCH_PANEL_WIDTH = 520;
 const RESEARCH_PANEL_WIDTH_KEY = "blueprint-reboot:reader-research-panel-width";
-
-function clampResearchPanelWidth(value: number): number {
-  return Math.min(MAX_RESEARCH_PANEL_WIDTH, Math.max(MIN_RESEARCH_PANEL_WIDTH, Math.round(value)));
-}
 
 function readerSessionStorage(): Storage | null {
   return typeof window === "undefined" ? null : window.sessionStorage;
@@ -90,7 +85,17 @@ const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   keywords: "Keywords",
 };
 
-function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
+function ReaderPdf({
+  snapshot,
+  layoutResizeActive,
+  layoutResizeVersion,
+  onCaptureLayoutAnchor,
+}: {
+  snapshot: ReaderSnapshot;
+  layoutResizeActive: boolean;
+  layoutResizeVersion: number;
+  onCaptureLayoutAnchor: (capture: (() => void) | null) => void;
+}) {
   if (snapshot.pdf_state === "missing" || snapshot.paper.missing_pdf || !snapshot.paper.relative_pdf_path) {
     return (
       <EmptyState
@@ -99,7 +104,12 @@ function ReaderPdf({ snapshot }: { snapshot: ReaderSnapshot }) {
       />
     );
   }
-  return <PdfJsReader paperId={snapshot.paper.paper_id} />;
+  return <PdfJsReader
+    paperId={snapshot.paper.paper_id}
+    layoutResizeActive={layoutResizeActive}
+    layoutResizeVersion={layoutResizeVersion}
+    onCaptureLayoutAnchor={onCaptureLayoutAnchor}
+  />;
 }
 
 
@@ -249,9 +259,19 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const linkSelectionRef = useRef({ start: 0, end: 0 });
   const researchTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const candidateReviewSectionRef = useRef<HTMLDivElement | null>(null);
+  const readerLayoutRef = useRef<HTMLDivElement | null>(null);
+  const researchResizePointerRef = useRef<number | null>(null);
+  const researchPanelWidthRef = useRef(DEFAULT_RESEARCH_PANEL_WIDTH);
+  const keyboardResizeFrameRef = useRef<number | null>(null);
+  const capturePdfLayoutAnchorRef = useRef<(() => void) | null>(null);
+  const candidateRequestGateRef = useRef(createLatestPaperRequestGate());
+  const candidateAbortControllerRef = useRef<AbortController | null>(null);
+  const tagBookRequestRef = useRef(0);
   const [mutationBusy, setMutationBusy] = useState(false);
   const [researchPanelCollapsed, setResearchPanelCollapsed] = useState(false);
   const [researchPanelWidth, setResearchPanelWidth] = useState(DEFAULT_RESEARCH_PANEL_WIDTH);
+  const [researchPanelResizing, setResearchPanelResizing] = useState(false);
+  const [researchPanelResizeVersion, setResearchPanelResizeVersion] = useState(0);
   const [activeResearchTab, setActiveResearchTab] = useState<ResearchPanelTab>(() => readerResearchTabFromSearchParams(searchParams));
   const [blocksVisited, setBlocksVisited] = useState(() => readerResearchTabFromSearchParams(searchParams) === "blocks");
   const [activeUtility, setActiveUtility] = useState<ReaderUtility>(() => readerUtilityFromSearchParams(searchParams));
@@ -285,11 +305,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     selectedFields: [],
     message: "",
   });
-  const [candidateReview, setCandidateReview] = useState<CandidateReviewState>({
-    status: "idle",
-    collection: null,
-    message: "Generate suggestions to begin an explicit review. Generation never applies Paper tags.",
-  });
+  const [candidateReview, setCandidateReview] = useState<CandidateReviewState>(() => initialCandidateReview());
   const [tagBook, setTagBook] = useState<TagBookState>({ status: "idle" });
   const closeMetadataReview = useCallback(() => {
     if (enrichment.status !== "saving") setMetadataReviewOpen(false);
@@ -308,7 +324,11 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   });
   useEffect(() => {
     const savedWidth = Number(readerSessionStorage()?.getItem(RESEARCH_PANEL_WIDTH_KEY));
-    if (Number.isFinite(savedWidth) && savedWidth > 0) setResearchPanelWidth(clampResearchPanelWidth(savedWidth));
+    if (Number.isFinite(savedWidth) && savedWidth > 0) {
+      const width = clampResearchPanelWidth(savedWidth);
+      researchPanelWidthRef.current = width;
+      setResearchPanelWidth(width);
+    }
   }, []);
   useEffect(() => {
     setEditor(createReaderEditorState(
@@ -337,6 +357,9 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   useEffect(() => {
     readerSessionStorage()?.setItem(RESEARCH_PANEL_WIDTH_KEY, String(researchPanelWidth));
   }, [researchPanelWidth]);
+  useEffect(() => () => {
+    if (keyboardResizeFrameRef.current !== null) window.cancelAnimationFrame(keyboardResizeFrameRef.current);
+  }, []);
   useEffect(() => {
     if (!draftStorageReady) return;
     persistRevisionDraft(browserStorage(), noteDraftKey, editor.note);
@@ -364,46 +387,57 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   };
   useEffect(() => {
     if (activeUtility !== "tags" || tagBook.status !== "idle") return;
-    let current = true;
+    const requestId = tagBookRequestRef.current + 1;
+    tagBookRequestRef.current = requestId;
     setTagBook({ status: "loading" });
     void apiClient.getAllTags()
       .then((data) => {
-        if (current) setTagBook({ status: "success", data });
+        if (tagBookRequestRef.current !== requestId) return;
+        setTagBook({ status: "success", data });
       })
       .catch((error) => {
-        if (!current) return;
+        if (tagBookRequestRef.current !== requestId) return;
         setTagBook({
           status: "error",
           message: error instanceof ApiClientError ? error.message : "Canonical tag suggestions could not be loaded.",
         });
       });
-    return () => { current = false; };
   }, [activeUtility, tagBook.status]);
   useEffect(() => {
+    const paperId = snapshot.paper.paper_id;
+    const requestGate = candidateRequestGateRef.current;
+    candidateAbortControllerRef.current?.abort();
+    candidateAbortControllerRef.current = null;
+    requestGate.invalidate(paperId);
+    setSelectedSuggestions([]);
+    setCandidateReview(initialCandidateReview());
+    return () => {
+      candidateAbortControllerRef.current?.abort();
+      candidateAbortControllerRef.current = null;
+      requestGate.invalidate(paperId);
+    };
+  }, [snapshot.paper.paper_id]);
+  useEffect(() => {
     if (activeUtility !== "tags" || candidateReview.status !== "idle") return;
-    let current = true;
+    const paperId = snapshot.paper.paper_id;
+    const request = candidateRequestGateRef.current.begin(paperId);
+    const controller = new AbortController();
+    candidateAbortControllerRef.current?.abort();
+    candidateAbortControllerRef.current = controller;
     setCandidateReview((state) => ({ ...state, status: "loading", message: "Loading saved suggestions…" }));
-    void apiClient.getTagCandidates(snapshot.paper.paper_id)
+    void apiClient.getTagCandidates(paperId, { signal: controller.signal })
       .then((collection) => {
-        if (!current) return;
-        setCandidateReview({
-          status: "ready",
-          collection,
-          message: collection.state === "generated"
-            ? collection.items.length
-              ? "Saved suggestions are ready to review. Nothing has been applied to this Paper."
-              : "No saved suggestions are available for this Paper."
-            : "Generate suggestions to begin an explicit review. Generation never applies Paper tags.",
-        });
+        if (!candidateRequestGateRef.current.isCurrent(request)) return;
+        setSelectedSuggestions([]);
+        setCandidateReview(savedCandidateReviewReady(collection));
       })
-      .catch((error) => {
-        if (!current) return;
-        setCandidateReview((state) => ({
-          ...state,
-          ...candidateReviewFailure(error),
-        }));
+      .catch(() => {
+        if (!candidateRequestGateRef.current.isCurrent(request) || controller.signal.aborted) return;
+        setCandidateReview(candidateReviewLoadFailure());
+      })
+      .finally(() => {
+        if (candidateRequestGateRef.current.isCurrent(request)) candidateAbortControllerRef.current = null;
       });
-    return () => { current = false; };
   }, [activeUtility, candidateReview.status, snapshot.paper.paper_id]);
   useEffect(() => {
     if (!activeUtility) return;
@@ -994,6 +1028,74 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     setActiveResearchTab(RESEARCH_PANEL_TABS[nextIndex]);
     window.requestAnimationFrame(() => researchTabRefs.current[nextIndex]?.focus());
   };
+  const capturePdfLayoutAnchor = useCallback((capture: (() => void) | null) => {
+    capturePdfLayoutAnchorRef.current = capture;
+  }, []);
+  const applyResearchPanelWidth = useCallback((width: number) => {
+    const nextWidth = clampResearchPanelWidth(width);
+    researchPanelWidthRef.current = nextWidth;
+    readerLayoutRef.current?.style.setProperty("--reader-research-width", `${nextWidth}px`);
+    return nextWidth;
+  }, []);
+  const finishResearchPanelResize = useCallback(() => {
+    const width = researchPanelWidthRef.current;
+    researchResizePointerRef.current = null;
+    setResearchPanelWidth(width);
+    setResearchPanelResizing(false);
+    setResearchPanelResizeVersion((current) => current + 1);
+  }, []);
+  const beginResearchPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.preventDefault();
+    capturePdfLayoutAnchorRef.current?.();
+    researchResizePointerRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResearchPanelResizing(true);
+  };
+  const moveResearchPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (researchResizePointerRef.current !== event.pointerId) return;
+    const containerRight = readerLayoutRef.current?.getBoundingClientRect().right;
+    if (!containerRight) return;
+    event.preventDefault();
+    const width = researchPanelWidthFromPointer({
+      containerRight,
+      clientX: event.clientX,
+      minimum: MIN_RESEARCH_PANEL_WIDTH,
+      maximum: MAX_RESEARCH_PANEL_WIDTH,
+    });
+    applyResearchPanelWidth(width);
+    event.currentTarget.setAttribute("aria-valuenow", String(width));
+    event.currentTarget.setAttribute("aria-valuetext", `${width} pixels`);
+  };
+  const endResearchPanelResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (researchResizePointerRef.current !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    finishResearchPanelResize();
+  };
+  const resizeResearchPanelWithKeyboard = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 32 : 16;
+    const current = researchPanelWidthRef.current;
+    const nextWidth = event.key === "ArrowLeft"
+      ? current + step
+      : event.key === "ArrowRight"
+        ? current - step
+        : event.key === "Home"
+          ? MIN_RESEARCH_PANEL_WIDTH
+          : event.key === "End"
+            ? MAX_RESEARCH_PANEL_WIDTH
+            : current;
+    if (nextWidth === current) return;
+    event.preventDefault();
+    capturePdfLayoutAnchorRef.current?.();
+    const width = applyResearchPanelWidth(nextWidth);
+    setResearchPanelWidth(width);
+    setResearchPanelResizing(true);
+    if (keyboardResizeFrameRef.current !== null) window.cancelAnimationFrame(keyboardResizeFrameRef.current);
+    keyboardResizeFrameRef.current = window.requestAnimationFrame(() => {
+      keyboardResizeFrameRef.current = null;
+      finishResearchPanelResize();
+    });
+  };
   const layoutStyle = { "--reader-research-width": `${researchPanelWidth}px` } as CSSProperties;
   return (
     <div className="reader-workspace">
@@ -1018,8 +1120,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           </div>
         </div>
       </header>
-      <div className={activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"} data-research-collapsed={researchPanelCollapsed} style={layoutStyle}>
-        <aside className="reader-research-panel" aria-label="Paper Note and Note Blocks" data-collapsed={researchPanelCollapsed}>
+      <div ref={readerLayoutRef} className={`${activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"}${researchPanelResizing ? " is-resizing" : ""}`} data-research-collapsed={researchPanelCollapsed} style={layoutStyle}>
+        <aside id="reader-research-panel" className="reader-research-panel" aria-label="Paper Note and Note Blocks" data-collapsed={researchPanelCollapsed}>
           {researchPanelCollapsed ? (
             <button className="reader-research-panel__collapse" type="button" aria-label="Expand research panel" onClick={() => setResearchPanelCollapsed(false)}><ChevronRight size={16} /></button>
           ) : (
@@ -1177,23 +1279,31 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           )}
         </aside>
         {!researchPanelCollapsed ? (
-          <div className="reader-panel-resize" aria-label="Resize research panel">
-            <input
-              className="reader-panel-resize__range"
-              type="range"
-              min={MIN_RESEARCH_PANEL_WIDTH}
-              max={MAX_RESEARCH_PANEL_WIDTH}
-              step={8}
-              value={researchPanelWidth}
-              aria-label="Research panel width"
-              aria-valuetext={`${researchPanelWidth} pixels`}
-              onChange={(event) => setResearchPanelWidth(clampResearchPanelWidth(Number(event.target.value)))}
-            />
-            <button className="reader-panel-resize__reset" type="button" title="Reset panel width" aria-label="Reset research panel width" onClick={() => setResearchPanelWidth(DEFAULT_RESEARCH_PANEL_WIDTH)}><RotateCcw size={13} /></button>
-          </div>
+          <div
+            className="reader-panel-resize"
+            role="separator"
+            tabIndex={0}
+            aria-controls="reader-research-panel"
+            aria-orientation="vertical"
+            aria-label="Resize research panel. Use Left and Right Arrow keys."
+            aria-valuemin={MIN_RESEARCH_PANEL_WIDTH}
+            aria-valuemax={MAX_RESEARCH_PANEL_WIDTH}
+            aria-valuenow={researchPanelWidth}
+            aria-valuetext={`${researchPanelWidth} pixels`}
+            onPointerDown={beginResearchPanelResize}
+            onPointerMove={moveResearchPanelResize}
+            onPointerUp={endResearchPanelResize}
+            onPointerCancel={endResearchPanelResize}
+            onKeyDown={resizeResearchPanelWithKeyboard}
+          />
         ) : null}
         <section className="reader-stage" aria-label="Managed PDF viewing region">
-          <ReaderPdf snapshot={snapshot} />
+          <ReaderPdf
+            snapshot={snapshot}
+            layoutResizeActive={researchPanelResizing}
+            layoutResizeVersion={researchPanelResizeVersion}
+            onCaptureLayoutAnchor={capturePdfLayoutAnchor}
+          />
         </section>
         {activeUtility ? (
           <aside ref={utilityDrawerRef} className="reader-utility-drawer" aria-label="Reader utilities" tabIndex={-1}>
@@ -1244,7 +1354,11 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                       <div className="reader-suggestion-list" aria-label="Suggested tags to review">
                         {availableSuggestions.map((candidate) => <label className="reader-suggestion" key={candidate.candidate_id}><input type="checkbox" checked={selectedSuggestions.includes(candidate.candidate_id)} disabled={candidateReview.status === "loading" || mutationBusy} onChange={() => setSelectedSuggestions((current) => current.includes(candidate.candidate_id) ? current.filter((id) => id !== candidate.candidate_id) : [...current, candidate.candidate_id])} />{candidate.tag_text}</label>)}
                       </div>
-                    ) : candidateReview.collection?.state === "generated" ? <p className="muted-text">No suggested tags are ready to apply.</p> : null}
+                    ) : candidateReview.status === "ready" ? <p className="muted-text">No suggested tags are ready to apply.</p> : null}
+                    {candidateReview.status === "error" ? <button className="reader-control reader-control--secondary" type="button" disabled={mutationBusy} onClick={() => {
+                      setSelectedSuggestions([]);
+                      setCandidateReview(initialCandidateReview());
+                    }}><RotateCcw size={15} />Retry loading suggestions</button> : null}
                     <button className="reader-control" type="button" disabled={!selectedSuggestions.length || candidateReview.status === "loading" || mutationBusy} onClick={applySelectedSuggestions}><Save size={15} />Apply selected</button>
                     {candidateReview.status === "conflict" ? <button className="reader-control reader-control--secondary" type="button" onClick={() => generateTagCandidates(false)}><RotateCcw size={15} />Refresh suggestions</button> : null}
                   </div>

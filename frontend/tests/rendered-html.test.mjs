@@ -92,7 +92,7 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(readerView, /<Breadcrumbs items=/);
   assert.match(readerView, /Loading Reader snapshot/);
   assert.match(readerView, /Managed PDF missing/);
-  assert.match(readerView, /<PdfJsReader paperId=\{snapshot\.paper\.paper_id\}/);
+  assert.match(readerView, /<PdfJsReader\s+paperId=\{snapshot\.paper\.paper_id\}/);
   assert.match(readerView, /current\.saved_note_content/);
   assert.match(readerView, /saved_note_unavailable/);
   assert.match(readerView, /reader-note__textarea/);
@@ -208,7 +208,7 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
   assert.match(readerView, /No persisted note exists/);
   assert.match(readerView, /persisted note could not be read/);
   assert.match(readerView, /Retry local API/);
-  assert.match(readerView, /<ReaderPdf snapshot=\{snapshot\}/);
+  assert.match(readerView, /<ReaderPdf\s+snapshot=\{snapshot\}/);
   assert.match(readerView, /<ReaderWorkspace key=\{resource\.data\.paper\.paper_id\}/);
   assert.match(readerView, /Draft restored/);
 });

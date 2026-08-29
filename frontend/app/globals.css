@@ -97,8 +97,8 @@ button, input, textarea, select { font: inherit; }
 .app-shell--reader .main-content { width: 100%; height: 100%; min-height: 0; max-width: none; margin: 0; padding: 0; }
 .app-shell--reader .sidebar { position: fixed; inset: 0 auto 0 0; width: var(--sidebar-width); transform: translateX(calc(-100% - var(--reader-reveal-zone))); transition: transform 160ms ease; box-shadow: 0 0 1.25rem rgb(25 32 28 / 0.18); }
 .app-shell--reader[data-reader-sidebar-open="true"] .sidebar { transform: translateX(0); }
-.reader-navigation-zone { position: fixed; inset: 0 auto 0 0; z-index: var(--z-reader-reveal); width: var(--reader-reveal-zone); }
-.reader-navigation-trigger { position: absolute; top: var(--space-2); left: var(--space-1); width: var(--control-height-compact); height: var(--control-height-compact); display: grid; place-items: center; padding: 0; border: var(--border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text-secondary); box-shadow: var(--shadow-subtle); cursor: pointer; }
+.reader-navigation-zone { position: fixed; top: var(--space-2); left: var(--space-1); z-index: var(--z-reader-reveal); width: var(--control-height-compact); height: var(--control-height-compact); pointer-events: none; }
+.reader-navigation-trigger { width: var(--control-height-compact); height: var(--control-height-compact); display: grid; place-items: center; padding: 0; border: var(--border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text-secondary); box-shadow: var(--shadow-subtle); cursor: pointer; pointer-events: auto; }
 .reader-navigation-trigger:hover { color: var(--color-accent); border-color: var(--color-accent); }
 .main-content { width: min(100%, var(--content-max)); margin: 0 auto; padding: var(--content-padding); }
 .page-stack { display: grid; gap: var(--space-6); }
@@ -423,10 +423,10 @@ tbody tr:hover { background: var(--color-surface-subtle); }
 .reader-research-panel .reader-metadata-editor { padding-bottom: var(--space-4); border-bottom: var(--border); }
 .reader-research-panel .reader-note { gap: var(--space-3); }
 .reader-research-panel .reader-note-blocks { padding-top: var(--space-4); border-top: var(--border); }
-.reader-panel-resize { position: absolute; inset: 0 calc(var(--reader-research-width) - 0.625rem) 0 auto; z-index: 3; display: grid; align-content: center; justify-items: center; gap: var(--space-1); pointer-events: none; }
-.reader-panel-resize__range { width: 0.875rem; height: 8rem; margin: 0; appearance: slider-vertical; writing-mode: vertical-lr; direction: rtl; cursor: col-resize; pointer-events: auto; accent-color: var(--color-accent); }
-.reader-panel-resize__reset { width: 1.375rem; height: 1.375rem; display: grid; place-items: center; padding: 0; border: var(--border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-secondary); cursor: pointer; pointer-events: auto; opacity: 0; }
-.reader-panel-resize:hover .reader-panel-resize__reset, .reader-panel-resize:focus-within .reader-panel-resize__reset { opacity: 1; }
+.reader-panel-resize { position: absolute; inset: 0 calc(var(--reader-research-width) - 0.5rem) 0 auto; z-index: 3; width: 1rem; cursor: col-resize; touch-action: none; user-select: none; }
+.reader-panel-resize::before { position: absolute; inset: 0 auto 0 50%; width: 2px; content: ""; background: transparent; transform: translateX(-50%); transition: background-color 120ms ease, box-shadow 120ms ease; }
+.reader-panel-resize:hover::before, .reader-panel-resize:focus-visible::before, .reader-layout.is-resizing .reader-panel-resize::before { background: var(--color-accent); box-shadow: 0 0 0 2px rgb(65 105 87 / 0.16); }
+.reader-layout.is-resizing, .reader-layout.is-resizing * { cursor: col-resize !important; user-select: none !important; }
 .draft-restored-notice { color: var(--color-accent); font-size: var(--font-size-xs); font-weight: 650; }
 .reader-note__formatting { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .reader-note__formatting .reader-control { min-height: var(--control-height-compact); padding: var(--space-1) var(--space-2); font-size: var(--font-size-xs); }

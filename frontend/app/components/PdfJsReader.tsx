@@ -4,6 +4,7 @@ import { AlertCircle, ChevronLeft, ChevronRight, ExternalLink, LoaderCircle, Rot
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { paperPdfUrl } from "../lib/api/client";
 import { createPdfLoadingTask, createPdfTextLayer, readPdfNetworkDiagnostics, type PDFDocumentProxy } from "../lib/pdf/pdfjs-adapter";
+import { createPdfViewportAnchor, scrollTopForPdfViewportAnchor } from "../lib/pdf/resize-anchor.mjs";
 import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, ZOOM_STEP, canvasRenderGeometry, classifyPdfError, fitPageZoom, fitWidthZoom } from "../lib/pdf/reader-controller.mjs";
 import { readPageSelection, type PdfPageSelection } from "../lib/pdf/selection-coordinates.mjs";
 
@@ -53,6 +54,7 @@ const INITIAL_DIAGNOSTICS: PdfReaderDiagnostics = {
 
 type RenderTaskLike = { promise: Promise<void>; cancel?: () => void };
 type PdfViewMode = "fit-width" | "fit-page" | "manual";
+type PdfViewportAnchor = ReturnType<typeof createPdfViewportAnchor>;
 
 const PDF_VIEW_PREFERENCE_KEY = "blueprint-reboot:pdf-view-preference";
 const PDF_VIEWPORT_PADDING = 48;
@@ -201,7 +203,19 @@ function ContinuousPdfPage({
   );
 }
 
-export function PdfJsReader({ paperId, onSelectionChange }: { paperId: string; onSelectionChange?: (selection: PdfPageSelection | null) => void }) {
+export function PdfJsReader({
+  paperId,
+  onSelectionChange,
+  layoutResizeActive = false,
+  layoutResizeVersion = 0,
+  onCaptureLayoutAnchor,
+}: {
+  paperId: string;
+  onSelectionChange?: (selection: PdfPageSelection | null) => void;
+  layoutResizeActive?: boolean;
+  layoutResizeVersion?: number;
+  onCaptureLayoutAnchor?: (capture: (() => void) | null) => void;
+}) {
   const pdfUrl = useMemo(() => paperPdfUrl(paperId), [paperId]);
   const [state, setState] = useState<PdfReaderUiState>(INITIAL_STATE);
   const [diagnostics, setDiagnostics] = useState<PdfReaderDiagnostics>(INITIAL_DIAGNOSTICS);
@@ -214,6 +228,7 @@ export function PdfJsReader({ paperId, onSelectionChange }: { paperId: string; o
   const [viewMode, setViewMode] = useState<PdfViewMode>(() => viewPreferenceRef.current.mode);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [fallbackActive, setFallbackActive] = useState(false);
+  const pendingLayoutAnchorRef = useRef<PdfViewportAnchor | null>(null);
   const diagnosticsEnabled = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_BLUEPRINT_READER_DIAGNOSTICS === "1";
 
   useEffect(() => {
@@ -254,6 +269,68 @@ export function PdfJsReader({ paperId, onSelectionChange }: { paperId: string; o
     setViewportRoot(element);
   }, []);
 
+  const captureLayoutAnchor = useCallback(() => {
+    if (pendingLayoutAnchorRef.current) return;
+    const viewport = viewportRootRef.current;
+    if (!viewport) return;
+    const viewportRect = viewport.getBoundingClientRect();
+    const viewportAnchorY = viewportRect.top + viewport.clientHeight / 2;
+    const pages = Array.from(viewport.querySelectorAll<HTMLElement>(".reader-page-surface[data-page-number]"));
+    let target: HTMLElement | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (const page of pages) {
+      const rect = page.getBoundingClientRect();
+      if (rect.height <= 0) continue;
+      if (rect.top <= viewportAnchorY && rect.bottom >= viewportAnchorY) {
+        target = page;
+        break;
+      }
+      const distance = Math.min(Math.abs(rect.top - viewportAnchorY), Math.abs(rect.bottom - viewportAnchorY));
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        target = page;
+      }
+    }
+    if (!target) return;
+    const targetRect = target.getBoundingClientRect();
+    const pageNumber = Number(target.dataset.pageNumber);
+    pendingLayoutAnchorRef.current = createPdfViewportAnchor({
+      pageNumber,
+      pageTop: viewport.scrollTop + targetRect.top - viewportRect.top,
+      pageHeight: targetRect.height,
+      viewportTop: viewport.scrollTop,
+      viewportHeight: viewport.clientHeight,
+    });
+  }, []);
+
+  const restoreLayoutAnchor = useCallback(() => {
+    const anchor = pendingLayoutAnchorRef.current;
+    const viewport = viewportRootRef.current;
+    if (!anchor || !viewport) return false;
+    const target = viewport.querySelector<HTMLElement>(`#pdf-page-${anchor.pageNumber}`);
+    if (!target) return false;
+    const viewportRect = viewport.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    if (targetRect.height <= 0) return false;
+    viewport.scrollTop = scrollTopForPdfViewportAnchor({
+      pageTop: viewport.scrollTop + targetRect.top - viewportRect.top,
+      pageHeight: targetRect.height,
+      relativePageOffset: anchor.relativePageOffset,
+      viewportAnchorOffset: anchor.viewportAnchorOffset,
+    });
+    pendingLayoutAnchorRef.current = null;
+    return true;
+  }, []);
+
+  useEffect(() => {
+    onCaptureLayoutAnchor?.(captureLayoutAnchor);
+    return () => onCaptureLayoutAnchor?.(null);
+  }, [captureLayoutAnchor, onCaptureLayoutAnchor]);
+
+  useEffect(() => {
+    if (layoutResizeActive) captureLayoutAnchor();
+  }, [captureLayoutAnchor, layoutResizeActive]);
+
   useEffect(() => {
     if (!pdfDocument || state.mode !== "ready") return;
     let active = true;
@@ -271,18 +348,28 @@ export function PdfJsReader({ paperId, onSelectionChange }: { paperId: string; o
     const zoom = mode === "fit-width"
       ? fitWidthZoom({ availableWidth: viewport.clientWidth, pageWidth: pageSize.width, horizontalPadding: PDF_VIEWPORT_PADDING })
       : fitPageZoom({ availableWidth: viewport.clientWidth, availableHeight: viewport.clientHeight, pageWidth: pageSize.width, pageHeight: pageSize.height, horizontalPadding: PDF_VIEWPORT_PADDING, verticalPadding: PDF_VIEWPORT_PADDING });
-    setState((current) => ({ ...current, zoom, rendering: true }));
+    setState((current) => current.zoom === zoom ? current : { ...current, zoom, rendering: true });
   }, [pageSize]);
 
   useEffect(() => {
-    if (!viewportRoot || !pageSize.width || viewMode === "manual") return;
+    if (!viewportRoot || !pageSize.width || viewMode === "manual" || layoutResizeActive) return;
     const update = () => applyFitMode(viewMode);
     update();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(update);
     observer.observe(viewportRoot);
     return () => observer.disconnect();
-  }, [applyFitMode, pageSize.width, viewMode, viewportRoot]);
+  }, [applyFitMode, layoutResizeActive, pageSize.width, viewMode, viewportRoot]);
+
+  useEffect(() => {
+    if (layoutResizeActive || !pendingLayoutAnchorRef.current) return;
+    // A manual zoom does not rerender page geometry. For fit modes this is a
+    // fallback behind onRendered, which restores as soon as the anchor page's
+    // new canvas/text layer dimensions are available.
+    if (viewMode !== "manual") return;
+    const frame = window.requestAnimationFrame(() => { restoreLayoutAnchor(); });
+    return () => window.cancelAnimationFrame(frame);
+  }, [layoutResizeActive, layoutResizeVersion, restoreLayoutAnchor, viewMode]);
 
   useEffect(() => {
     try {
@@ -316,9 +403,10 @@ export function PdfJsReader({ paperId, onSelectionChange }: { paperId: string; o
   };
   const onVisible = useCallback((pageNumber: number) => setState((current) => current.mode === "ready" && current.pageNumber !== pageNumber ? { ...current, pageNumber } : current), []);
   const onRendered = useCallback((pageNumber: number, durationMs: number) => {
+    if (!layoutResizeActive && pendingLayoutAnchorRef.current?.pageNumber === pageNumber) restoreLayoutAnchor();
     setState((current) => current.pageNumber === pageNumber ? { ...current, rendering: false } : current);
     setDiagnostics((current) => ({ ...current, renderCount: current.renderCount + 1, firstPageRenderDurationMs: current.firstPageRenderDurationMs ?? durationMs }));
-  }, []);
+  }, [layoutResizeActive, restoreLayoutAnchor]);
   const onRenderError = useCallback((error: unknown) => setState((current) => ({ ...current, mode: "error", rendering: false, ...classifyPdfError(error, "render") })), []);
 
   if (fallbackActive) return <NativePdfFallback pdfUrl={pdfUrl} onRetry={() => { setFallbackActive(false); setLoadAttempt((value) => value + 1); }} />;
