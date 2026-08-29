@@ -211,12 +211,12 @@ export function ProjectsView() {
                       <td>
                         <Link className="paper-link" href={`/projects/${encodeURIComponent(project.project_id)}`}>{project.name}</Link>
                       </td>
-                      <td><StatusBadge tone={project.status === "active" ? "accent" : "neutral"}>{project.status}</StatusBadge></td>
+                      <td><StatusBadge tone={project.status === "archived" ? "warning" : "neutral"}>{project.status}</StatusBadge></td>
                       <td>{project.priority}</td>
                       <td>
                         <div className="tag-list">
                           {project.tags.length
-                            ? project.tags.map((tag) => <StatusBadge key={tag}>{tag}</StatusBadge>)
+                            ? project.tags.map((tag) => <StatusBadge presentation="chip" key={tag}>{tag}</StatusBadge>)
                             : <span className="muted-text">None stored</span>}
                         </div>
                       </td>

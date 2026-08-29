@@ -45,7 +45,7 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
           <p className="library-paper-inspector__citation">{[formatAuthorSummary(resource.data.authors, resource.data.first_author), resource.data.journal, resource.data.year].filter(Boolean).join(" · ")}</p>
           <div className="badge-row">
             <StatusBadge>{resource.data.status}</StatusBadge>
-            {resource.data.priority ? <StatusBadge tone="accent">{resource.data.priority}</StatusBadge> : null}
+            {resource.data.priority ? <StatusBadge>{resource.data.priority}</StatusBadge> : null}
             {resource.data.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}
           </div>
           <div className="library-paper-inspector__actions">
@@ -61,7 +61,7 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
           <section className="library-paper-inspector__section" aria-labelledby="selected-paper-organization">
             <h3 id="selected-paper-organization">Organization</h3>
             <p className="library-paper-inspector__context">{projectContext(resource.data.project_links.length)}</p>
-            {resource.data.tags.length ? <div className="tag-list">{resource.data.tags.map((item) => <StatusBadge key={item}>{item}</StatusBadge>)}</div> : <p className="library-paper-inspector__context">No tags yet</p>}
+            {resource.data.tags.length ? <div className="tag-list">{resource.data.tags.map((item) => <StatusBadge presentation="chip" key={item}>{item}</StatusBadge>)}</div> : <p className="library-paper-inspector__context">No tags yet</p>}
           </section>
           {enrichmentContent ? <section className="library-paper-inspector__section library-paper-inspector__enrichment" aria-label="Metadata enrichment">{enrichmentContent}</section> : null}
         </>

@@ -1115,7 +1115,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
             aria-pressed={activeUtility === "full-text"}
             onClick={(event) => openUtility("full-text", event.currentTarget)}
           ><FileText size={15} />Full Text</button>
-          {snapshot.paper.lifecycle_state !== "active" ? <StatusBadge tone={snapshot.paper.archived ? "neutral" : "warning"}>{snapshot.paper.lifecycle_state}</StatusBadge> : null}
+          {snapshot.paper.lifecycle_state !== "active" ? <StatusBadge tone="warning">{snapshot.paper.lifecycle_state}</StatusBadge> : null}
         </div>
       </header>
       <div ref={readerLayoutRef} className={`${activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"}${researchPanelResizing ? " is-resizing" : ""}`} data-research-collapsed={researchPanelCollapsed} style={layoutStyle}>
@@ -1373,7 +1373,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         <div className="metadata-review-backdrop" role="presentation">
           <div className="metadata-review-dialog" role="dialog" aria-modal="true" aria-labelledby="metadata-enrichment-title" tabIndex={-1} ref={metadataDialogRef}>
             <div className="reader-note__heading">
-              <div><p className="eyebrow">Review before save</p><h2 id="metadata-enrichment-title">Metadata updates</h2></div>
+              <div><h2 id="metadata-enrichment-title">Metadata updates</h2></div>
               <button className="reader-research-panel__collapse" type="button" aria-label="Close metadata updates" disabled={enrichment.status === "saving"} onClick={closeMetadataReview}><X size={16} /></button>
             </div>
             <p className="reader-editor__status" role="status" aria-live="polite">{enrichment.message || "Looking for metadata updates. Nothing is applied automatically."}</p>

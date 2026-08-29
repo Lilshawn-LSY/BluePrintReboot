@@ -8,9 +8,16 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.6.4-visual-hierarchy-density**.
+Current runtime target: **v1.6.5-visual-language-design-system-refinement**.
 
-v1.6.4 is a focused visual hierarchy and density pass. Reader uses compact, task-focused chrome, icon-first Paper Note formatting, and a single-purpose utility drawer; Project Detail leads with concise state and higher-density linked material; Dashboard and detail pages use intentional content widths; and the shell keeps maintenance version data out of ordinary navigation. Explicit saves, browser-local drafts, conflict safety, stable routes, PDF identity, PDF fit/zoom behavior, and local-first storage remain unchanged.
+v1.6.5 is a visual language and design-system refinement. The desktop workspace
+now uses a restrained hierarchy of technical rules, flatter collection and
+document surfaces, tighter working geometry, structural mono metadata, and
+quiet ordinary status labels. Dashboard is a workbench; Library and Tags are
+catalogue surfaces; Project Detail is a dossier; Settings is a utility surface;
+and Reader keeps minimal, hairline workspace chrome. Explicit saves,
+browser-local drafts, conflict safety, stable routes, PDF identity, PDF
+fit/zoom behavior, and local-first storage remain unchanged.
 
 v1.6.0 focuses on the desktop Reader workspace: the PDF remains central, Paper and Note composition lives together in the right panel, and compact Tags/Full Text utilities open from the left without affecting the global Reader-navigation overlay. Paper Notes continue to save Markdown-compatible plain text explicitly, with Markdown-aware formatting and an optional rendered preview.
 
@@ -286,6 +293,7 @@ Foundation release documents:
 - [Reader frontend parity checklist](docs/READER_FRONTEND_PARITY_CHECKLIST.md)
 - [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
 - [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
+- [v1.6.5 Visual language & design system refinement release notes](docs/release_notes/v1.6.5.md)
 - [v1.6.4 Visual hierarchy & density pass release notes](docs/release_notes/v1.6.4.md)
 - [v1.6.3 Reader interaction & UX polish release notes](docs/release_notes/v1.6.3.md)
 - [v1.1.0 FastAPI read-only foundation release notes](docs/release_notes/v1.1.0.md)

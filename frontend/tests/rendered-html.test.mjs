@@ -145,7 +145,7 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /isReaderRoute/);
-  assert.equal(JSON.parse(packageJson).version, "1.6.4");
+  assert.equal(JSON.parse(packageJson).version, "1.6.5");
   assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
   assert.doesNotMatch(shell, /packageMetadata\.version|applicationVersion/);
   assert.doesNotMatch(sidebar, /v\{applicationVersion\}|Research workspace · v/);

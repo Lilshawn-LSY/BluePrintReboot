@@ -3,13 +3,59 @@
 ## Purpose and scope
 
 This document defines the shared desktop research-workspace foundation for
-BluePrintReboot v1.6. It guides the application shell, navigation, information
-exposure, density, and interaction language. It does not authorize a backend
-contract change, a color-palette redesign, or a page-specific workflow redesign.
+BluePrintReboot v1.6.5. It guides the application shell, navigation,
+information exposure, density, and interaction language. It does not authorize
+a backend contract change, a color-palette redesign, or a page-specific
+workflow redesign.
 
 The executable source of truth for numeric values and shared classes is
 `frontend/app/globals.css` and the components under `frontend/app/components/`.
 This document explains how to use those primitives consistently.
+
+## v1.6.5 visual-language grammar
+
+BluePrint is a scientific notebook, technical drafting sheet, and local desktop
+research tool. Its identity comes from information structure, calm density,
+typographic roles, and a clear hierarchy of rules—not from decorative cards,
+gradients, soft shadows, or generic dashboard styling.
+
+- Use the canvas for ordinary reading, lists, metadata, and section context.
+  Reserve white surfaces for actual work: editors, forms, inspectors, drawers,
+  and PDF/document areas.
+- Prefer aligned rows, tables, list rules, and section boundaries to enclosing
+  every content group in a bordered panel. A boundary remains appropriate when
+  it describes an input surface, selected inspector, modal, drawer, or another
+  functional containment relationship.
+- The shared structural tokens are `--rule-faint` for quiet row separation,
+  `--rule` for ordinary control and inspector boundaries, and `--rule-strong`
+  for major table, toolbar, workspace, and section structure. `--border`
+  aliases the default rule for compatible controls.
+- Use `--radius-sm` for controls and working surfaces. `--radius-md` is still
+  deliberately small and should be reserved for the few bounded surfaces that
+  benefit from it. Shadows indicate an actual overlay or floating surface;
+  ordinary panels and collection surfaces are flat.
+- Human-facing titles, abstracts, notes, and prose use the readable sans
+  family. The mono family is reserved for structural labels, table headings,
+  compact counts, page/zoom values, dates where helpful, and technical
+  identifiers such as DOI or arXiv. It must not become the default reading
+  face.
+- Avoid all-caps marketing eyebrows. When compact context notation is useful,
+  use a quiet mono label with an accent rule rather than a repeated promotional
+  label.
+- Ordinary domain metadata is a quiet inline label. Taxonomy values may use a
+  compact chip. Strong badges are reserved for exceptional or actionable states
+  such as Missing PDF, Conflict, Offline, Failed, or Archived. This is a
+  visual distinction only; it never changes the underlying state semantics.
+- Selection uses a restrained surface change plus an inset accent rule. Hover
+  changes color, a rule, or a subtle background only. Do not use lift, scale,
+  or decorative motion.
+
+Page archetypes express the same grammar in different proportions: Dashboard
+is a compact workbench; Library and Tags are catalogue/index surfaces;
+Project Detail is a dossier; Settings is a quiet utility surface; and Reader
+is an instrument workspace with the strongest alignment, hairline separation,
+and least decorative chrome. The optional drafting-grid motif is intentionally
+not used behind prose, editable content, or PDF pages.
 
 ## Application shell and navigation
 
@@ -201,10 +247,11 @@ arbitrary values.
   `--control-height-compact` (32px). Reuse `reader-control`, its secondary
   variant, and the existing semantic button patterns rather than creating a
   second control system.
-- Use `--border`, `--radius-sm` (4px), and `--radius-md` (8px) consistently.
-  Focus must remain plainly visible through the shared focus ring. Disabled
-  controls must retain their label and visibly communicate that they cannot be
-  used.
+- Use `--rule-faint`, `--rule`, and `--rule-strong` according to structural
+  importance. `--radius-sm` is 3px and `--radius-md` is 4px: keep the
+  interface precise without making controls harsh. Focus must remain plainly
+  visible through the shared focus ring. Disabled controls must retain their
+  label and visibly communicate that they cannot be used.
 
 Primary actions are the one action that advances the current task. Secondary
 actions are neutral alternatives. Destructive or irreversible actions retain a

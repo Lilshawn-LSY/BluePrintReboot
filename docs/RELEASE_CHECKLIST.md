@@ -2,6 +2,28 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.6.5-visual-language-design-system-refinement
+
+- [x] Shared visual tokens define faint, default, and strong structural rules;
+  ordinary collection surfaces are flat and shadows remain limited to overlays.
+- [x] Controls and working regions use tighter technical geometry, while
+  editors, forms, inspectors, drawers, and PDF/document areas retain useful
+  surface boundaries.
+- [x] Typography distinguishes readable research prose from compact structural
+  mono metadata without turning the workspace into a monospace interface.
+- [x] Ordinary status, relationship, and priority values use quiet inline
+  labels; taxonomy uses compact chips; exceptional/actionable states retain
+  strong badges.
+- [x] Dashboard, Library, Project Detail, Tags, Settings, and Reader apply the
+  same rule-led system without changing routes, information architecture,
+  explicit Save semantics, draft preservation, conflicts, or PDF behavior.
+- [ ] User-performed browser verification is still required at 1920px, 1440px,
+  1366px, and 1280px for rule hierarchy, compact controls, list/table density,
+  inspector and drawer depth, Reader resize separation, PDF fit/zoom, and
+  draft/conflict presentation.
+- [ ] Hosted CI, merge, tag, GitHub Release, post-merge validation, and
+  clean-PC restore remain separate evidence and are not implied by local validation.
+
 ## v1.6.4-visual-hierarchy-density
 
 - [x] Reader chrome no longer repeats the Paper title as a large heading or a

@@ -449,11 +449,11 @@ function ProjectWorkspace({ snapshot }: { snapshot: ProjectDetail }) {
       <Breadcrumbs items={[{ label: "Projects", href: "/projects" }, { label: project.name || "Project" }]} />
       <PageHeader title={project.name} description={project.description || "No description yet."} actions={!archived && !editing ? <div className="project-header-actions"><button className="reader-control" type="button" onClick={() => setEditing(true)}><Edit3 size={15} />Edit Project</button><details className="project-secondary-actions"><summary aria-label="More Project actions" title="More Project actions">More</summary><div><button className="reader-control reader-control--secondary" type="button" onClick={() => void reloadProject()}><RotateCcw size={15} />Reload current Project</button><button className="reader-control reader-control--danger" type="button" onClick={archiveProject}><Archive size={15} />Archive Project</button></div></details></div> : null} />
       <div className="compact-metadata-row project-metadata-summary" aria-label="Project metadata">
-        <span><small>Status</small><StatusBadge tone={archived ? "neutral" : "accent"}>{project.status}</StatusBadge></span>
+        <span><small>Status</small><StatusBadge tone={archived ? "warning" : "neutral"}>{project.status}</StatusBadge></span>
         <span><small>Priority</small><StatusBadge>{project.priority}</StatusBadge></span>
         <span><small>Updated</small><strong>{formatUiDate(project.updated_at)}</strong></span>
         <span><small>Linked material</small><strong>{project.linked_paper_count} Papers · {project.linked_note_block_count} Note Blocks</strong></span>
-        <span className="project-metadata-summary__tags"><small>Tags</small><span className="tag-list">{project.tags.length ? project.tags.map((tag) => <StatusBadge key={tag}>{tag}</StatusBadge>) : <span className="muted-text">No project tags</span>}</span></span>
+        <span className="project-metadata-summary__tags"><small>Tags</small><span className="tag-list">{project.tags.length ? project.tags.map((tag) => <StatusBadge presentation="chip" key={tag}>{tag}</StatusBadge>) : <span className="muted-text">No project tags</span>}</span></span>
       </div>
       {editor.message && !editing ? <p className="project-operation-status" role="status">{editor.message}</p> : null}
       {archived ? <div className="project-archived-note">This Project is archived. Its linked Papers and Note Blocks remain available to review.</div> : null}
