@@ -211,8 +211,8 @@ export function ProjectsView() {
                       <td>
                         <Link className="paper-link" href={`/projects/${encodeURIComponent(project.project_id)}`}>{project.name}</Link>
                       </td>
-                      <td><StatusBadge tone={project.status === "archived" ? "warning" : "neutral"}>{project.status}</StatusBadge></td>
-                      <td>{project.priority}</td>
+                      <td><StatusBadge>{project.status}</StatusBadge></td>
+                      <td><StatusBadge>{project.priority}</StatusBadge></td>
                       <td>
                         <div className="tag-list">
                           {project.tags.length

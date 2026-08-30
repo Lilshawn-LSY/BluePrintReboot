@@ -11,7 +11,7 @@ test("Library makes the paper collection primary and selects papers into a conte
 
   assert.match(library, /<PageHeader title="Library"/);
   assert.match(library, /<Section title="Papers">/);
-  assert.ok(library.indexOf('<Section title="Papers">') < library.indexOf('title="Scan and import PDFs"'));
+  assert.match(library, /library-operation-drawer/);
   assert.match(library, /placeholder="Title, author, journal, DOI…"/);
   assert.match(library, />Library state</);
   assert.match(library, /Reset filters/);
@@ -36,7 +36,7 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.match(inspector, /aria-label="Selected paper"/);
   assert.match(inspector, /Open Reader/);
   assert.match(inspector, /View Paper Detail/);
-  assert.match(inspector, /Enrich metadata/);
+  assert.match(inspector, /Find metadata/);
   assert.match(inspector, /No tags yet/);
   assert.match(inspector, /Linked to \$\{count\} project/);
   assert.match(css, /\.library-collection-layout--with-inspector/);
@@ -60,7 +60,7 @@ test("metadata enrichment remains explicit and contextual to the selected paper"
 
   assert.match(library, /previewMetadataEnrichment\(paperId\)/);
   assert.match(library, /saveReaderMetadata\(enrichment\.paper_id, changes, enrichment\.metadata_revision\)/);
-  assert.match(library, /Review each candidate before applying it\./);
+  assert.match(library, /Review and choose fields before applying\./);
   assert.match(library, /Apply selected fields/);
   assert.match(library, /checked=\{selectedFields\.includes\(field\.field\)\}/);
   assert.match(library, /Candidate details/);

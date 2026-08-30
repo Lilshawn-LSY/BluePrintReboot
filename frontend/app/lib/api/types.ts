@@ -56,6 +56,9 @@ export interface PaperDetail extends PaperListItem {
   profile_available: boolean;
   lifecycle_state: string;
   recoverable_warnings: string[];
+  reading_status_revision: string;
+  pdf_revision: string;
+  lifecycle_revision: string;
 }
 
 export type ReaderPdfState = "available" | "missing";
@@ -191,6 +194,27 @@ export interface MetadataCommandResponse {
   reading_note: PersistedReadingNote;
 }
 
+export interface ReadingStatusCommandResponse {
+  status: "saved" | "no_op";
+  reading_status: "unread" | "reading" | "read" | "finished";
+  reading_status_revision: string;
+}
+
+export interface RemoveManagedPdfResponse {
+  status: "removed" | "already_missing";
+  paper_id: string;
+  pdf_removed: boolean;
+  recovery_copy_created: boolean;
+  message: string;
+}
+
+export interface ArchivePaperResponse {
+  status: "archived" | "already_archived";
+  paper_id: string;
+  lifecycle_revision: string;
+  message: string;
+}
+
 export type MetadataEnrichmentFieldName = keyof EditablePaperMetadata;
 export type MetadataEnrichmentFieldState = "unchanged" | "conflict" | "available" | "unavailable";
 
@@ -309,7 +333,7 @@ export interface ManagedPdfScanResponse {
   candidates: ManagedPdfScanCandidate[];
 }
 
-export type ManagedPdfImportStatus = "imported" | "already_registered" | "missing" | "invalid" | "unavailable";
+export type ManagedPdfImportStatus = "imported" | "already_registered" | "duplicate_content" | "missing" | "invalid" | "unavailable";
 
 export interface ManagedPdfImportResult {
   relative_path: string;

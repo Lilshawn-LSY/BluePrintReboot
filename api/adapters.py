@@ -1108,6 +1108,13 @@ def adapt_paper_detail(source: Mapping[str, Any]) -> PaperDetail:
         profile_available=_boolean(source.get("profile_available", False), "profile_available"),
         lifecycle_state=_text(source.get("lifecycle_state")) or ("archived" if base.archived else "active"),
         recoverable_warnings=_string_list(source.get("recoverable_warnings")),
+        reading_status_revision=_strict_revision(
+            source.get("reading_status_revision"), "reading_status_revision", PaperContractError,
+        ),
+        pdf_revision=_strict_revision(source.get("pdf_revision"), "pdf_revision", PaperContractError),
+        lifecycle_revision=_strict_revision(
+            source.get("lifecycle_revision"), "lifecycle_revision", PaperContractError,
+        ),
     )
 
 

@@ -5,8 +5,9 @@
 This document defines the shared desktop research-workspace foundation for
 BluePrintReboot v1.6.5. It guides the application shell, navigation,
 information exposure, density, interaction language, and the stable White /
-Ink / Blueprint Blue palette. It does not authorize a backend contract change
-or a page-specific workflow redesign.
+Ink / Blueprint Blue palette. It does not authorize unrelated backend contract
+changes or a page-specific workflow redesign; the bounded workflow commands
+documented below remain governed by their service and recovery contracts.
 
 The executable source of truth for numeric values and shared classes is
 `frontend/app/globals.css` and the components under `frontend/app/components/`.
@@ -32,11 +33,12 @@ never a broad decorative background or a replacement for semantic feedback.
 | Faint rule | `--color-rule-faint` | `#E3E6E6` | Ordinary rows and metadata separation. |
 | Default rule | `--color-rule` | `#C9CED0` | Inputs, toolbars, and secondary boundaries. |
 | Strong rule | `--color-rule-strong` | `#202425` | Major table, Reader, and section transitions only. |
-| Ink Blue | `--color-accent` | `#245E88` | Links and quieter text accents. |
-| Signal Blue | `--color-accent-strong` | `#3D82B4` | Active tabs, selection rules, focus, active Reader modes, and important interactive borders. |
-| Blue Line | `--color-accent-light` | `#A8CBE0` | Light interactive borders, especially canonical tags. |
-| Soft Blue | `--color-accent-soft` | `#EAF4FA` | Selected rows and subtle active context. |
-| Blue subtle | `--color-accent-subtle` | `#F6FBFE` | Canonical-tag context only. |
+| Blueprint Blue 700 | `--blue-700` | `#1769AA` | Strong links and hover emphasis. |
+| Blueprint Blue 600 | `--blue-600` | `#1A73E8` | Links, strong interaction, and focus-adjacent emphasis. |
+| Blueprint Blue 500 | `--blue-500` | `#4285F4` | Active interaction and selected structural markers. |
+| Blueprint Blue 300 | `--blue-300` | `#8AB4F8` | Light interactive borders, especially canonical tags. |
+| Blueprint Blue 100 | `--blue-100` | `#DDEBFF` | Restrained selected surfaces. |
+| Blueprint Blue 050 | `--blue-050` | `#F3F7FF` | Faint canonical-tag and focus-adjacent context. |
 
 Semantic danger, warning, and success colors remain independent. Muted green
 communicates success only; it is not an application accent.
@@ -64,11 +66,12 @@ gradients, soft shadows, or generic dashboard styling.
   deliberately small and should be reserved for the few bounded surfaces that
   benefit from it. Shadows indicate an actual overlay or floating surface;
   ordinary panels and collection surfaces are flat.
-- Human-facing titles, abstracts, notes, and prose use the readable sans
-  family. The mono family is reserved for structural labels, table headings,
-  compact counts, page/zoom values, dates where helpful, and technical
-  identifiers such as DOI or arXiv. It must not become the default reading
-  face.
+- UI Sans uses the local/system `IBM Plex Sans` / `IBM Plex Sans KR` fallback
+  stack for navigation, controls, tables, and metadata. Research Serif uses
+  the `Source Serif 4` / Korean-serif fallback stack only for rendered
+  prose-heavy reading previews. Technical Mono uses the `IBM Plex Mono` /
+  system-mono stack for page values, counts, and identifiers such as DOI or
+  arXiv. These are role stacks, not runtime network font dependencies.
 - Avoid all-caps marketing eyebrows. When compact context notation is useful,
   use a quiet mono label with an accent rule rather than a repeated promotional
   label.
@@ -118,8 +121,11 @@ Nested object pages use the shared `Breadcrumbs` component:
 - `Tags / <tag name>` when a tag-detail route exists.
 
 Breadcrumb identities must be compact, navigable where meaningful, and allowed
-to truncate rather than force a large layout. When a breadcrumb provides the
-parent route, do not also add a standalone "Back to …" link.
+to truncate rather than force a large layout. In Reader, the fixed navigation
+trigger has a reserved structural grid slot: the `Library` parent label and
+final `Reader` label never truncate, while only the intervening Paper title may
+shrink. When a breadcrumb provides the parent route, do not also add a
+standalone "Back to …" link.
 
 The shell does not spend persistent top-chrome space on a version label or a
 duplicate local-workspace label. Product version, API contract version, and
@@ -405,6 +411,35 @@ controls for known values, including searchable canonical-tag suggestions and
 reading-status selects. Text search may debounce before refresh, every filter
 change resets pagination, and a collection title remains a normal navigation
 link with a separate Inspect action for contextual inspection.
+
+## Relationship labels, bounded operations, and removal
+
+Project relationship types are semantic metadata, not primary interactions.
+Use `RelationshipLabel` consistently for linked Papers and Note Blocks in
+Project Detail and Reader context. Labels are compact rectangular notations
+with a 2px side rule and no bright pill fill: Related is neutral, Background
+is slate, Key reference is Ink, Idea for Project is muted amber, Supports
+Project is muted teal, and Raises question is muted violet. Blueprint Blue
+remains reserved for interaction and canonical-tag structure.
+
+Library scan, import, reconnect, and upload feedback uses a compact operation
+result strip. Full per-file detail belongs in the bounded Library operation
+drawer; it must not grow the collection page below the toolbar. PDF drop state
+is temporary and appears only while files are dragged over Library.
+
+`Remove PDF file` deletes only managed PDF bytes after a verified recovery copy
+in the workspace recovery area. The Paper record, metadata, Reading Note, Note
+Blocks, Tags, and Project links remain, and the Paper is shown as Missing PDF.
+`Remove Paper from Library` is an archive action that removes it from active
+Library views while preserving its managed PDF and all related research.
+Permanent Paper deletion is deliberately unavailable until a complete
+research-data deletion/recovery contract exists.
+
+The shared BluePrint mark is an inline vector Constructed B: an Ink datum line,
+quiet construction outline, and Blueprint Blue geometric counters. It must be
+recognizable at 16–32px, remain readable in the collapsed sidebar, expose no
+separate focus target, and work in monochrome. Do not substitute raster artwork,
+gradients, generic book/science imagery, or a plain text `B`.
 
 ## Accessibility and responsiveness
 

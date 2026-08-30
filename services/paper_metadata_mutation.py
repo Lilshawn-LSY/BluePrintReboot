@@ -34,6 +34,10 @@ WEB_EDITABLE_METADATA_FIELDS = (
     "abstract",
     "keywords",
 )
+# ``finished`` remains supported for libraries created with the earlier
+# frontend wording.  The command deliberately preserves the established
+# values instead of normalising a user's historical index in place.
+READING_STATUSES = frozenset({"unread", "reading", "read", "finished"})
 
 
 @dataclass(frozen=True)
@@ -84,6 +88,52 @@ def paper_metadata_revision(record: dict[str, object]) -> str:
 
     payload = json.dumps(
         normalized_web_metadata(record),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def paper_reading_status_revision(record: dict[str, object]) -> str:
+    """Return the narrow optimistic-concurrency baseline for reading progress."""
+
+    status = str(record.get("status", "unread") or "unread").strip().casefold()
+    payload = json.dumps(
+        {"status": status if status in READING_STATUSES else "unread"},
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def paper_pdf_revision(record: dict[str, object]) -> str:
+    """Return a file-identity revision without exposing a local path to clients."""
+
+    payload = json.dumps(
+        {
+            "paper_id": str(record.get("paper_id", "") or ""),
+            "filename": str(record.get("filename", "") or ""),
+            "pdf_sha256": str(record.get("pdf_sha256", "") or ""),
+            "pdf_size_bytes": str(record.get("pdf_size_bytes", "") or ""),
+            "pdf_modified_at": str(record.get("pdf_modified_at", "") or ""),
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def paper_lifecycle_revision(record: dict[str, object]) -> str:
+    """Return the archive-state baseline used by the safe Library removal command."""
+
+    payload = json.dumps(
+        {
+            "paper_id": str(record.get("paper_id", "") or ""),
+            "is_archived": str(record.get("is_archived", "false") or "false").casefold(),
+            "archived_at": str(record.get("archived_at", "") or ""),
+        },
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,

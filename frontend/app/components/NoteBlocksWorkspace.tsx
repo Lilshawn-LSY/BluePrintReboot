@@ -21,6 +21,7 @@ import {
 import type { NoteBlockEditorState } from "../lib/note-blocks/editor-state.mjs";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "./AsyncStates";
 import { StatusBadge } from "./StatusBadge";
+import { RelationshipLabel } from "./RelationshipLabel";
 import { SaveStatus } from "./SaveStatus";
 import {
   applyLatestRevisionDraft,
@@ -96,7 +97,7 @@ function replaceBlock(
     ...collection,
     items: exists
       ? collection.items.map((item) => item.id === block.id ? block : item)
-      : [...collection.items, block],
+      : [block, ...collection.items],
     note_blocks_revision: revision,
     total,
   };
@@ -119,6 +120,7 @@ export function NoteBlocksWorkspace({ paperId, focusBlockId = "" }: { paperId: s
   const [linkStatus, setLinkStatus] = useState<LinkStatus>("idle");
   const [linkMessage, setLinkMessage] = useState("");
   const focusedDeepLinkRef = useRef("");
+  const editorTitleRef = useRef<HTMLInputElement | null>(null);
   const editorDraftKey = draftStorageKey("note-block", `${paperId}:${editor?.blockId || "new"}`);
   const changedFields = useMemo(
     () => editor ? changedNoteBlockFields(editor.draft, editor.baseline) : [],
@@ -335,6 +337,8 @@ export function NoteBlocksWorkspace({ paperId, focusBlockId = "" }: { paperId: s
       });
       if (activeEditor.mode === "create") {
         clearPersistentRevisionDraft(browserStorage(), draftStorageKey("note-block", `${paperId}:new`));
+        setExpandedBlockId(response.block.id);
+        window.requestAnimationFrame(() => editorTitleRef.current?.focus());
       }
     } catch (error) {
       let remote: { block: NoteBlock; revision: string } | null = null;
@@ -499,7 +503,7 @@ export function NoteBlocksWorkspace({ paperId, focusBlockId = "" }: { paperId: s
                   <div className="tag-list">
                     {links.map((link) => (
                       <span className="note-block-project-link" key={link.link_id}>
-                        <StatusBadge>{link.project_name || link.project_id} · {link.link_type}</StatusBadge>
+                        <span className="note-block-project-link__summary"><span>{link.project_name || link.project_id}</span><RelationshipLabel type={link.link_type} /></span>
                         {link.project_status !== "archived" && link.project_status !== "unavailable" ? (
                           <button className="reader-control reader-control--secondary" type="button" disabled={linkStatus === "saving"} onClick={() => removeProjectLink(link)}><Unlink size={14} />Unlink</button>
                         ) : null}
@@ -542,7 +546,7 @@ export function NoteBlocksWorkspace({ paperId, focusBlockId = "" }: { paperId: s
             <SaveStatus state={editor.saveState} />
           </div>
           <label className={`reader-field ${changedFields.includes("block_type") ? "reader-field--changed" : ""}`}><span>Block type{changedFields.includes("block_type") ? " (changed)" : ""}</span><select value={editor.draft.block_type} onChange={(event) => updateDraft("block_type", event.target.value as NoteBlockType)}>{BLOCK_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
-          <label className={`reader-field ${changedFields.includes("title") ? "reader-field--changed" : ""}`}><span>Title{changedFields.includes("title") ? " (changed)" : ""}</span><input maxLength={1000} value={editor.draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
+          <label className={`reader-field ${changedFields.includes("title") ? "reader-field--changed" : ""}`}><span>Title{changedFields.includes("title") ? " (changed)" : ""}</span><input ref={editorTitleRef} maxLength={1000} value={editor.draft.title} onChange={(event) => updateDraft("title", event.target.value)} /></label>
           <label className={`reader-field ${changedFields.includes("text") ? "reader-field--changed" : ""}`}><span>Text{changedFields.includes("text") ? " (changed)" : ""}</span><textarea rows={8} maxLength={100000} value={editor.draft.text} onChange={(event) => updateDraft("text", event.target.value)} /></label>
           <div className="project-form-grid">
             <label className={`reader-field ${changedFields.includes("page") ? "reader-field--changed" : ""}`}><span>Page</span><input maxLength={100} value={editor.draft.page} onChange={(event) => updateDraft("page", event.target.value)} /></label>

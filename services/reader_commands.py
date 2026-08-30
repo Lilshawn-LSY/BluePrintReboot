@@ -14,8 +14,10 @@ from services.paper_metadata_mutation import (
     normalized_web_metadata,
     normalized_paper_tag,
     paper_metadata_revision,
+    paper_reading_status_revision,
     paper_tag_values,
     paper_tags_revision,
+    READING_STATUSES,
 )
 from services.reading_note_template import (
     reading_note_header_values,
@@ -86,6 +88,13 @@ class ReadingNoteCommandResult:
     content: str
     sha256: str
     size_bytes: int
+
+
+@dataclass(frozen=True)
+class ReadingStatusCommandResult:
+    status: Literal["saved", "no_op"]
+    reading_status: Literal["unread", "reading", "read", "finished"]
+    reading_status_revision: str
 
 
 @dataclass(frozen=True)
@@ -305,6 +314,52 @@ class ReaderCommandService:
                 canonical_note_header=reading_note_header_values(updated),
                 canonical_note_header_text=_canonical_note_header_text(updated),
                 reading_note=persisted_note,
+            )
+
+    def save_reading_status(
+        self,
+        paper_id: str,
+        reading_status: str,
+        expected_revision: str,
+    ) -> ReadingStatusCommandResult:
+        """Persist one existing reading status through the standard metadata boundary."""
+
+        normalized = str(reading_status or "").strip().casefold()
+        if normalized not in READING_STATUSES:
+            raise ValueError("Unsupported reading status.")
+        with _persistent_command_lock(self.index_csv):
+            try:
+                current = _record_for(paper_id, self.index_csv)
+            except Exception:
+                raise ReaderCommandUnavailable from None
+            if current is None:
+                raise ReaderCommandNotFound
+            if paper_reading_status_revision(current) != expected_revision:
+                raise ReaderCommandConflict
+            try:
+                mutation = apply_paper_metadata_change(
+                    paper_id,
+                    {"status": normalized},
+                    index_csv=self.index_csv,
+                    notes_dir=self.notes_dir,
+                    create_missing_note=False,
+                )
+                if not mutation.ok:
+                    raise ReaderCommandUnavailable
+                updated = _record_for(paper_id, self.index_csv)
+                if updated is None:
+                    raise ReaderCommandUnavailable
+            except ReaderCommandUnavailable:
+                raise
+            except Exception:
+                raise ReaderCommandUnavailable from None
+            saved_status = str(updated.get("status", "unread") or "unread").strip().casefold()
+            if saved_status not in READING_STATUSES:
+                raise ReaderCommandUnavailable
+            return ReadingStatusCommandResult(
+                status="saved" if saved_status != str(current.get("status", "unread") or "unread").strip().casefold() else "no_op",
+                reading_status=saved_status,  # type: ignore[arg-type]
+                reading_status_revision=paper_reading_status_revision(updated),
             )
 
     def add_paper_tag(

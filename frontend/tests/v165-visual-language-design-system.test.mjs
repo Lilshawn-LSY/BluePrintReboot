@@ -18,10 +18,12 @@ test("shared White, Ink, Blueprint Blue, rule, and geometry tokens define the v1
     "--color-text": "#171a1b",
     "--color-rule": "#c9ced0",
     "--color-rule-strong": "#202425",
-    "--color-accent": "#245e88",
-    "--color-accent-strong": "#3d82b4",
-    "--color-accent-light": "#a8cbe0",
-    "--color-accent-soft": "#eaf4fa",
+    "--blue-700": "#1769aa",
+    "--blue-600": "#1a73e8",
+    "--blue-500": "#4285f4",
+    "--blue-300": "#8ab4f8",
+    "--blue-100": "#ddebff",
+    "--blue-050": "#f3f7ff",
   })) {
     assert.match(css, new RegExp(`${token}: ${value};`));
   }

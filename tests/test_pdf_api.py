@@ -176,8 +176,12 @@ def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> No
         *existing,
         "/papers/{paper_id}/pdf",
         "/papers/scan",
-            "/papers/import",
-            "/papers/reconnect",
+        "/papers/import",
+        "/papers/reconnect",
+        "/papers/upload",
+        "/papers/{paper_id}/reading-status",
+        "/papers/{paper_id}/remove-pdf",
+        "/papers/{paper_id}/archive",
         "/papers/{paper_id}/reader",
         "/papers/{paper_id}/full-text/status",
         "/papers/{paper_id}/full-text",
@@ -213,6 +217,10 @@ def test_pdf_route_preserves_existing_get_routes_beside_bounded_commands() -> No
     assert set(paths["/papers/{paper_id}/metadata"]) == {"patch"}
     assert set(paths["/papers/scan"]) == {"post"}
     assert set(paths["/papers/import"]) == {"post"}
+    assert set(paths["/papers/upload"]) == {"post"}
+    assert set(paths["/papers/{paper_id}/reading-status"]) == {"patch"}
+    assert set(paths["/papers/{paper_id}/remove-pdf"]) == {"post"}
+    assert set(paths["/papers/{paper_id}/archive"]) == {"post"}
     assert set(paths["/papers/{paper_id}/metadata/enrichment-preview"]) == {"post"}
     assert set(paths["/papers/{paper_id}/reading-note"]) == {"put"}
     assert set(paths["/projects"]) == {"get", "post"}

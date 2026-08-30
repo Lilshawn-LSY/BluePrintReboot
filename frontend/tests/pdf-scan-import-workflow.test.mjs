@@ -48,6 +48,27 @@ test("managed PDF scan and import bridge requests are exact POST JSON commands",
   }
 });
 
+test("managed PDF uploads are a bounded multipart command rather than a generic file proxy", async () => {
+  const form = new FormData();
+  form.append("files", new Blob(["%PDF-1.4\n"], { type: "application/pdf" }), "upload.pdf");
+  const response = await proxyBlueprintRequest(
+    new Request("http://localhost/api/blueprint/papers/upload", { method: "POST", body: form }),
+    ["papers", "upload"],
+    {
+      apiUrl: API_URL,
+      fetchImpl: async (_url, options) => {
+        assert.equal(options.method, "POST");
+        assert.match(options.headers.get("Content-Type") || "", /^multipart\/form-data; boundary=/);
+        assert.ok(options.body instanceof Uint8Array);
+        return Response.json({ message: "ok", imported_count: 0, results: [] });
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(isAllowedBlueprintRequest("POST", ["papers", "upload"]), true);
+  assert.equal(isAllowedBlueprintRequest("GET", ["papers", "upload"]), false);
+});
+
 test("Library scan/import workflow renders explicit preview, selection, duplicate, and partial-failure states", async () => {
   const [library, inspector, client, types] = await Promise.all([
     readFile(new URL("../app/views/LibraryView.tsx", import.meta.url), "utf8"),
@@ -59,6 +80,7 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
   assert.match(client, /scanManagedPdfs/);
   assert.match(client, /importManagedPdfs/);
   assert.match(client, /reconnectManagedPdf/);
+  assert.match(client, /uploadManagedPdfs/);
   assert.match(client, /"\/papers\/scan"/);
   assert.match(client, /"\/papers\/import"/);
   assert.match(client, /"\/papers\/reconnect"/);
@@ -70,6 +92,9 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
   assert.match(library, /toggleSelection/);
   assert.match(library, /Import selected/);
   assert.match(library, /apiClient\.importManagedPdfs\(selectedPaths\)/);
+  assert.match(library, /library-drop-overlay/);
+  assert.match(library, /accept="application\/pdf,.pdf"/);
+  assert.match(library, /operation-result-strip/);
   assert.match(library, /already_registered/);
   assert.match(library, /duplicate_content/);
   assert.match(library, /reconnect_available/);

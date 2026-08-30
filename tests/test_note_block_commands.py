@@ -85,6 +85,20 @@ def test_create_and_update_every_allowlisted_field(tmp_path: Path) -> None:
     assert updated.block["created_at"] == created.block["created_at"]
 
 
+def test_new_reader_note_block_is_persisted_before_existing_blocks(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    first = service.create_note_block("paper-1", _content(title="First"), note_blocks_revision("paper-1", []))
+    second = service.create_note_block(
+        "paper-1",
+        _content(title="Second"),
+        first.note_blocks_revision,
+    )
+
+    stored = list_note_blocks("paper-1", service.note_blocks_dir)
+
+    assert [block["id"] for block in stored] == [second.block["id"], first.block["id"]]
+
+
 def test_exact_no_op_does_not_rewrite_file(tmp_path: Path) -> None:
     service = _service(tmp_path)
     created = service.create_note_block("paper-1", _content(), note_blocks_revision("paper-1", []))

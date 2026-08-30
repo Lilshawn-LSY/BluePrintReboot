@@ -19,6 +19,7 @@ from services.tag_candidate_review import TagCandidateReviewService
 from services.tag_governance import CanonicalTagGovernanceService
 from services.metadata_enrichment import MetadataEnrichmentService
 from services.pdf_scan_import import PdfScanImportService
+from services.paper_removal import PaperRemovalService
 from services.settings_read_model import SettingsSummary
 from services.tag_read_model import CandidateReviewQueue, CandidateSummary, CanonicalTag
 
@@ -30,6 +31,7 @@ class ReadModelUnavailable(Exception):
 _reader_command_service = ReaderCommandService()
 _metadata_enrichment_service = MetadataEnrichmentService()
 _pdf_scan_import_service = PdfScanImportService()
+_paper_removal_service = PaperRemovalService(index_csv=library_read_model.INDEX_CSV, papers_dir=library_read_model.PAPERS_DIR)
 _project_command_service = ProjectCommandService()
 _note_block_command_service = NoteBlockCommandService()
 _tag_governance_service = CanonicalTagGovernanceService()
@@ -145,6 +147,10 @@ def get_metadata_enrichment_service() -> MetadataEnrichmentService:
 
 def get_pdf_scan_import_service() -> PdfScanImportService:
     return _pdf_scan_import_service
+
+
+def get_paper_removal_service() -> PaperRemovalService:
+    return _paper_removal_service
 
 
 def get_project_command_service() -> ProjectCommandService:

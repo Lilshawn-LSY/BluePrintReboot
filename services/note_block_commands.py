@@ -270,7 +270,7 @@ class NoteBlockCommandService:
             }
             persisted = self._persist(
                 paper_id,
-                [*blocks, created],
+                [created, *blocks],
                 expected_block_id=created["id"],
             )
             block = next(item for item in persisted if item["id"] == created["id"])

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { DataTableShell } from "../components/DataTableShell";
 import { LibraryPaperInspector } from "../components/LibraryPaperInspector";
@@ -10,6 +10,7 @@ import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { Toolbar } from "../components/Toolbar";
 import { useApiResource } from "../hooks/useApiResource";
+import { useModalFocus } from "../hooks/useModalFocus";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import type { EditablePaperMetadata, ManagedPdfImportResponse, ManagedPdfScanResponse, MetadataEnrichmentPreview } from "../lib/api/types";
 
@@ -45,6 +46,9 @@ function libraryAttentionMessage(data: { status: { missing_count: number; duplic
 
 export function LibraryView() {
   const selectionControls = useRef(new Map<string, HTMLButtonElement>());
+  const importTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragDepthRef = useRef(0);
   const resource = useApiResource("library", async () => {
     const [health, status] = await Promise.all([apiClient.getHealth(), apiClient.getLibraryStatus()]);
     return { health, status };
@@ -59,6 +63,7 @@ export function LibraryView() {
   const [offset, setOffset] = useState(0);
   const [selectedPaperId, setSelectedPaperId] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
   const collection = useApiResource(
     `library-papers:${q}:${tag}:${year}:${readingStatus}:${archiveStatus}:${offset}`,
     () => apiClient.getPapers({ limit: PAGE_SIZE, offset, archiveStatus, q, tag, year, status: readingStatus }),
@@ -78,6 +83,9 @@ export function LibraryView() {
   const [enrichmentBusy, setEnrichmentBusy] = useState(false);
   const [selectedFields, setSelectedFields] = useState<Array<keyof EditablePaperMetadata>>([]);
   const canonicalTags = useApiResource("library-canonical-tags", apiClient.getAllTags);
+
+  const closeImport = () => { setShowImport(false); setDragActive(false); dragDepthRef.current = 0; };
+  const activeImportDialogRef = useModalFocus<HTMLElement>({ active: showImport, onRequestClose: closeImport, restoreFocusRef: importTriggerRef });
 
   const resetCollection = () => { setOffset(0); setSelectedPaperId(""); setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); };
   const clearFilters = () => { setSearchInput(""); setQ(""); setTag(""); setTagInput(""); setYear(""); setReadingStatus(""); setArchiveStatus("active"); resetCollection(); };
@@ -105,6 +113,35 @@ export function LibraryView() {
   const toggleSelection = (relativePath: string) => setSelectedPaths((current) => current.includes(relativePath)
     ? current.filter((item) => item !== relativePath)
     : [...current, relativePath]);
+  const uploadPdfs = async (files: File[]) => {
+    const pdfs = files.filter((file) => file.name.toLowerCase().endsWith(".pdf") && (!file.type || file.type === "application/pdf"));
+    const rejected = files.length - pdfs.length;
+    if (rejected) setImportError(`Only PDF files can be imported. ${rejected} unsupported file${rejected === 1 ? " was" : "s were"} not uploaded.`);
+    if (!pdfs.length) return;
+    setImportBusy(true); setImportResult(null);
+    try {
+      setImportResult(await apiClient.uploadManagedPdfs(pdfs));
+      collection.retry(); resource.retry();
+    } catch (error) { setImportError(friendlyCommandError(error)); }
+    finally { setImportBusy(false); }
+  };
+  const onDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault(); dragDepthRef.current += 1; setDragActive(true);
+  };
+  const onDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+  };
+  const onDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) { dragDepthRef.current = 0; setDragActive(false); }
+  };
+  const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (!event.dataTransfer.files.length) return;
+    event.preventDefault(); dragDepthRef.current = 0; setDragActive(false);
+    void uploadPdfs(Array.from(event.dataTransfer.files));
+  };
   const reconnect = async (paperId: string, relativePath: string) => {
     setReconnectBusy(relativePath); setReconnectMessage(""); setImportError("");
     try {
@@ -149,15 +186,17 @@ export function LibraryView() {
   };
 
   return (
-    <div className="page-stack">
-      <PageHeader title="Library" actions={<button className="reader-control" type="button" onClick={openImport} disabled={scanBusy || importBusy || Boolean(reconnectBusy)}>{scanBusy ? "Scanning PDFs…" : "Scan / import"}</button>} />
+    <div className="page-stack library-page" onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      <PageHeader title="Library" actions={<button ref={importTriggerRef} className="reader-control" type="button" onClick={openImport} disabled={scanBusy || importBusy || Boolean(reconnectBusy)}>{scanBusy ? "Scanning PDFs…" : "Scan / import"}</button>} />
+      {importResult ? <div className="operation-result-strip" role="status"><span>Import completed · {importResult.imported_count} imported · {importResult.results.filter((item) => item.status === "already_registered" || item.status === "duplicate_content").length} duplicate{importResult.results.filter((item) => item.status === "already_registered" || item.status === "duplicate_content").length === 1 ? "" : "s"}</span><button className="text-link" type="button" onClick={() => setShowImport(true)}>Details</button><button className="icon-button" type="button" aria-label="Dismiss import result" onClick={() => setImportResult(null)}>×</button></div> : null}
+      {dragActive ? <div className="library-drop-overlay" role="status" aria-live="polite"><strong>Drop PDFs to import</strong><span>PDF files only</span></div> : null}
       {attention ? <div className="library-attention" role="alert"><div><strong>Library needs attention</strong><p>{libraryAttentionMessage(resource.data)}</p></div><Link className="text-link" href="/settings/diagnostics">Review Diagnostics</Link></div> : null}
       <Section title="Papers">
         <Toolbar label="Library collection filters">
           <label className="library-filter-field library-toolbar__search"><span>Search</span><span className="search-shell"><input type="search" value={searchInput} placeholder="Title, author, journal, DOI…" onChange={(event) => setSearchInput(event.target.value)} /></span></label>
           <label className="library-filter-field"><span>Tag</span><input className="library-filter" list="library-canonical-tags" value={tagInput} placeholder="Any tag" onChange={(event) => { setTagInput(event.target.value); setTag(canonicalTagValue(event.target.value)); resetCollection(); }} /><datalist id="library-canonical-tags">{canonicalTags.status === "success" ? canonicalTags.data.map((item) => <option key={item.canonical_key} value={item.label} />) : null}</datalist></label>
           <label className="library-filter-field library-filter-field--year"><span>Year</span><input className="library-filter library-filter--year" value={year} inputMode="numeric" maxLength={4} placeholder="Any" onChange={(event) => { setYear(event.target.value); resetCollection(); }} /></label>
-          <label className="library-filter-field"><span>Reading status</span><select className="library-filter" value={readingStatus} onChange={(event) => { setReadingStatus(event.target.value); resetCollection(); }}><option value="">Any status</option>{READING_STATUSES.map((status) => <option key={status} value={status}>{status === "unread" ? "Unread" : status === "reading" ? "Reading" : status === "read" ? "Read" : "Finished"}</option>)}</select></label>
+          <label className="library-filter-field"><span>Reading status</span><select className="library-filter" value={readingStatus} onChange={(event) => { setReadingStatus(event.target.value); resetCollection(); }}><option value="">Any status</option>{READING_STATUSES.map((status) => <option key={status} value={status}>{status === "unread" ? "Unread" : status === "reading" ? "Reading" : status === "finished" ? "Finished" : "Read"}</option>)}</select></label>
           <label className="library-filter-field"><span>Library state</span><select className="library-filter" value={archiveStatus} onChange={(event) => { setArchiveStatus(event.target.value as "active" | "archived" | "all"); resetCollection(); }}><option value="active">Active papers only</option><option value="archived">Archived papers only</option><option value="all">All papers</option></select></label>
         </Toolbar>
         <div className="active-filter-bar" aria-live="polite">
@@ -174,18 +213,18 @@ export function LibraryView() {
               <div className="library-pagination"><span className="toolbar-note">{collection.data.total} matching paper{collection.data.total === 1 ? "" : "s"}</span><div className="reader-editor__actions"><button className="reader-control reader-control--secondary" type="button" disabled={offset === 0} onClick={() => changePage(Math.max(0, offset - PAGE_SIZE))}>Previous</button><button className="reader-control reader-control--secondary" type="button" disabled={!collection.data.has_more} onClick={() => changePage(offset + PAGE_SIZE)}>Next</button></div></div>
             </> : null}
           </div>
-          {selectedPaperId ? <LibraryPaperInspector key={selectedPaperId} paperId={selectedPaperId} onDismiss={closeInspector} onEnrich={previewEnrichment} enrichmentBusy={enrichmentBusy} enrichmentContent={enrichmentPaperId === selectedPaperId ? <MetadataEnrichmentPanel enrichment={enrichment} error={enrichmentError} busy={enrichmentBusy} selectedFields={selectedFields} onToggleField={toggleField} onApply={applyEnrichment} onRetry={() => previewEnrichment(selectedPaperId)} onClose={() => { setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); }} /> : undefined} /> : null}
+          {selectedPaperId ? <LibraryPaperInspector key={selectedPaperId} paperId={selectedPaperId} onDismiss={closeInspector} onLibraryChanged={() => { collection.retry(); resource.retry(); }} onEnrich={previewEnrichment} enrichmentBusy={enrichmentBusy} enrichmentContent={enrichmentPaperId === selectedPaperId ? <MetadataEnrichmentPanel enrichment={enrichment} error={enrichmentError} busy={enrichmentBusy} selectedFields={selectedFields} onToggleField={toggleField} onApply={applyEnrichment} onRetry={() => previewEnrichment(selectedPaperId)} onClose={() => { setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); }} /> : undefined} /> : null}
         </div>
       </Section>
 
-      {showImport ? <Section title="Scan and import PDFs" description="Preview PDFs first, then choose the files to add." actions={<button className="reader-control reader-control--secondary" type="button" onClick={() => setShowImport(false)}>Close</button>}>
+      {showImport ? <div className="library-operation-backdrop"><section ref={activeImportDialogRef} className="library-operation-drawer" role="dialog" aria-modal="true" aria-labelledby="library-import-title" tabIndex={-1}><div className="library-operation-drawer__heading"><div><h2 id="library-import-title">Scan and import PDFs</h2><p>Preview managed PDFs or choose local PDF files to add.</p></div><button className="reader-control reader-control--secondary" type="button" onClick={closeImport}>Close</button></div><div className="reader-editor__actions"><input ref={fileInputRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={(event) => { const files = Array.from(event.currentTarget.files || []); event.currentTarget.value = ""; void uploadPdfs(files); }} /><button className="reader-control" type="button" disabled={importBusy} onClick={() => fileInputRef.current?.click()}>{importBusy ? "Importing PDFs…" : "Choose PDFs"}</button><span className="toolbar-note">You can also drag PDFs onto Library.</span></div>
         {scanError ? <ErrorState title="PDF scan unavailable" description={scanError} onRetry={scanPdfs} /> : null}
         {scan?.status === "unavailable" ? <UnavailableState title="PDF scan unavailable" description={scan.message} onRetry={scanPdfs} /> : null}
         {scan?.status === "ok" ? <div className="pdf-import-workflow"><p className="pdf-import-workflow__summary" role="status">{scan.message}</p>{scan.candidates.length === 0 ? <EmptyState title="No PDFs found" description="Add PDF files to the managed papers directory and scan when ready." /> : <DataTableShell label="PDF scan candidates"><table><thead><tr><th>Select</th><th>PDF</th><th>Status</th><th>Details</th><th>Repair</th></tr></thead><tbody>{scan.candidates.map((candidate) => <tr key={candidate.relative_path}><td><input aria-label={`Select ${candidate.relative_path}`} type="checkbox" checked={selectedPaths.includes(candidate.relative_path)} disabled={!candidate.can_import || importBusy} onChange={() => toggleSelection(candidate.relative_path)} /></td><td><strong>{candidate.filename}</strong><small className="mono-id">{candidate.relative_path}</small></td><td><StatusBadge tone={scanTone(candidate.status)}>{candidate.status.replaceAll("_", " ")}</StatusBadge></td><td>{candidate.message}</td><td>{candidate.can_reconnect ? <button className="reader-control reader-control--secondary" type="button" disabled={Boolean(reconnectBusy)} onClick={() => reconnect(candidate.reconnect_paper_id, candidate.relative_path)}>{reconnectBusy === candidate.relative_path ? "Reconnecting…" : "Reconnect existing Paper"}</button> : candidate.status === "reconnect_ambiguous" ? <span className="muted-text">Manual review required</span> : "—"}</td></tr>)}</tbody></table></DataTableShell>}{scan.candidates.some((candidate) => candidate.can_import) ? <div className="reader-editor__actions"><button className="reader-control" type="button" onClick={importSelected} disabled={!selectedPaths.length || importBusy || scanBusy}>{importBusy ? "Importing selected PDFs…" : `Import selected (${selectedPaths.length})`}</button><span className="toolbar-note">Only new PDFs can be selected. Duplicates and reconnects do not create a second paper.</span></div> : null}</div> : null}
         {importError ? <ErrorState title="PDF command unavailable" description={importError} onRetry={scanPdfs} /> : null}
         {reconnectMessage ? <p className="reader-editor__status" role="status">{reconnectMessage}</p> : null}
-        {importResult ? <div className="pdf-import-result" role="status"><p><strong>{importResult.message}</strong></p><ul>{importResult.results.map((result) => <li key={result.relative_path}><StatusBadge tone={scanTone(result.status)}>{result.status.replaceAll("_", " ")}</StatusBadge> {result.filename}: {result.message}{result.paper_id ? <Link className="text-link" href={`/papers/${encodeURIComponent(result.paper_id)}`}>Open Paper Detail</Link> : null}</li>)}</ul></div> : null}
-      </Section> : null}
+        {importResult ? <div className="pdf-import-result" role="status"><p><strong>{importResult.message}</strong></p><ul>{importResult.results.map((result) => <li key={`${result.relative_path}-${result.filename}`}><StatusBadge tone={scanTone(result.status)}>{result.status.replaceAll("_", " ")}</StatusBadge> {result.filename}: {result.message}{result.paper_id ? <Link className="text-link" href={`/papers/${encodeURIComponent(result.paper_id)}`}>Open Paper Detail</Link> : null}</li>)}</ul></div> : null}
+      </section></div> : null}
     </div>
   );
 }
@@ -203,5 +242,6 @@ function MetadataEnrichmentPanel({ enrichment, error, busy, selectedFields, onTo
   if (error) return <ErrorState title="Metadata preview unavailable" description={error} onRetry={onRetry} />;
   if (busy && !enrichment) return <LoadingState label="Fetching metadata candidates" />;
   if (!enrichment) return null;
-  return <div className="metadata-enrichment"><div className="library-paper-inspector__enrichment-heading"><h3>Metadata enrichment</h3><p>Review each candidate before applying it.</p></div><DataTableShell label="Metadata candidate comparison"><table className="metadata-enrichment-table"><colgroup><col className="metadata-enrichment-table__apply" /><col className="metadata-enrichment-table__field" /><col /><col /></colgroup><thead><tr><th>Apply</th><th>Field</th><th>Current</th><th>Candidate</th></tr></thead><tbody>{enrichment.fields.map((field) => { const selectable = Boolean(field.candidate_value) && field.state !== "unchanged"; return <tr key={field.field}><td data-label="Apply"><input type="checkbox" aria-label={`Select ${FIELD_LABELS[field.field]} candidate`} checked={selectedFields.includes(field.field)} disabled={!selectable || busy} onChange={() => onToggleField(field.field)} /></td><td data-label="Field"><strong>{FIELD_LABELS[field.field]}</strong></td><td data-label="Current"><span className="metadata-enrichment-table__value">{field.current_value || "—"}</span></td><td data-label="Candidate"><span className="metadata-enrichment-table__value">{field.candidate_value || "Unavailable"}</span></td></tr>; })}</tbody></table></DataTableShell>{enrichment.candidate_sources.length ? <p className="metadata-enrichment__sources">Candidate sources: {enrichment.candidate_sources.join(", ")}</p> : null}{enrichment.diagnostics.length ? <details className="metadata-enrichment__details"><summary>Candidate details</summary><ul>{enrichment.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}</ul></details> : null}<div className="reader-editor__actions"><button className="reader-control" type="button" disabled={!selectedFields.length || busy} onClick={onApply}>{busy ? "Applying…" : "Apply selected fields"}</button><button className="reader-control reader-control--secondary" type="button" disabled={busy} onClick={onRetry}>Fetch fresh candidates</button><button className="reader-control reader-control--secondary" type="button" disabled={busy} onClick={onClose}>Close</button></div></div>;
+  const updateCount = enrichment.fields.filter((field) => field.candidate_value && field.state !== "unchanged").length;
+  return <div className="metadata-enrichment"><div className="library-paper-inspector__enrichment-heading"><h3>Metadata enrichment</h3><p>{updateCount} update{updateCount === 1 ? "" : "s"} found · Review and choose fields before applying.</p></div><DataTableShell label="Metadata candidate comparison"><table className="metadata-enrichment-table"><colgroup><col className="metadata-enrichment-table__apply" /><col className="metadata-enrichment-table__field" /><col /><col /></colgroup><thead><tr><th>Apply</th><th>Field</th><th>Current</th><th>Candidate</th></tr></thead><tbody>{enrichment.fields.map((field) => { const selectable = Boolean(field.candidate_value) && field.state !== "unchanged"; return <tr key={field.field}><td data-label="Apply"><input type="checkbox" aria-label={`Select ${FIELD_LABELS[field.field]} candidate`} checked={selectedFields.includes(field.field)} disabled={!selectable || busy} onChange={() => onToggleField(field.field)} /></td><td data-label="Field"><strong>{FIELD_LABELS[field.field]}</strong></td><td data-label="Current"><span className="metadata-enrichment-table__value">{field.current_value || "—"}</span></td><td data-label="Candidate"><span className="metadata-enrichment-table__value">{field.candidate_value || "Unavailable"}</span></td></tr>; })}</tbody></table></DataTableShell>{enrichment.candidate_sources.length ? <p className="metadata-enrichment__sources">Candidate sources: {enrichment.candidate_sources.join(", ")}</p> : null}{enrichment.diagnostics.length ? <details className="metadata-enrichment__details"><summary>Candidate details</summary><ul>{enrichment.diagnostics.map((diagnostic) => <li key={diagnostic}>{diagnostic}</li>)}</ul></details> : null}<div className="reader-editor__actions"><button className="reader-control" type="button" disabled={!selectedFields.length || busy} onClick={onApply}>{busy ? "Applying…" : "Apply selected fields"}</button><button className="reader-control reader-control--secondary" type="button" disabled={busy} onClick={onRetry}>Fetch fresh candidates</button><button className="reader-control reader-control--secondary" type="button" disabled={busy} onClick={onClose}>Close</button></div></div>;
 }

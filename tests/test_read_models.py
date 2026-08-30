@@ -25,6 +25,7 @@ DETAIL_ONLY_KEYS = {
     "relative_pdf_path", "doi", "project_links", "note_available",
     "extracted_text_available", "profile_available", "lifecycle_state",
     "recoverable_warnings",
+    "reading_status_revision", "pdf_revision", "lifecycle_revision",
 }
 
 

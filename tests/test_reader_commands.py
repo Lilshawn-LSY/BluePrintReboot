@@ -13,7 +13,7 @@ from api import dependencies
 from api.main import INVALID_REQUEST_DETAIL, create_app
 from api.routes import COMMAND_UNAVAILABLE_DETAIL
 from api.schemas import MetadataCommandRequest
-from services.paper_metadata_mutation import paper_metadata_revision
+from services.paper_metadata_mutation import paper_metadata_revision, paper_reading_status_revision
 from services.reader_commands import (
     EMPTY_NOTE_SHA256,
     ReaderCommandConflict,
@@ -22,7 +22,7 @@ from services.reader_commands import (
     ReaderCommandUnavailable,
 )
 from services.reading_note_template import render_reading_note_template
-from storage.index_store import INDEX_COLUMNS, save_index
+from storage.index_store import INDEX_COLUMNS, read_index_snapshot, save_index
 from storage.workspace_lock import workspace_write_lock
 
 
@@ -104,6 +104,24 @@ def test_metadata_revision_is_deterministic_and_excludes_storage_fields() -> Non
 
     assert paper_metadata_revision(base) == paper_metadata_revision(changed_private)
     assert paper_metadata_revision(base) != paper_metadata_revision({**base, "title": "Different"})
+
+
+def test_reading_status_is_a_narrow_revision_checked_metadata_command(tmp_path: Path) -> None:
+    service, index_csv, notes, record = _service(tmp_path)
+    before_note = (notes / "paper-1.md").read_bytes()
+
+    result = service.save_reading_status(
+        "paper-1",
+        "read",
+        paper_reading_status_revision(record),
+    )
+
+    assert result.status == "saved"
+    assert result.reading_status == "read"
+    assert (notes / "paper-1.md").read_bytes() == before_note
+    assert read_index_snapshot(index_csv).iloc[0]["status"] == "read"
+    with pytest.raises(ReaderCommandConflict):
+        service.save_reading_status("paper-1", "reading", paper_reading_status_revision(record))
 
 
 def test_workspace_lock_is_reentrant_across_reader_write_paths(tmp_path: Path) -> None:

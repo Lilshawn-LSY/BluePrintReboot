@@ -1,4 +1,4 @@
-import type { CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, FullTextDocument, FullTextStatus, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection, TagCandidateReviewQueue } from "./types";
+import type { ArchivePaperResponse, CandidateSummary, CanonicalTagGovernanceResponse, CanonicalTagGovernanceSnapshot, DashboardSnapshot, EditableNoteBlockContent, EditablePaperMetadata, EditableProjectMetadata, FullTextDocument, FullTextStatus, HealthSummary, LibraryStatus, ManagedPdfImportResponse, ManagedPdfReconnectResponse, ManagedPdfScanResponse, MetadataCommandResponse, MetadataEnrichmentPreview, NoteBlockCollection, NoteBlockCommandResponse, NoteBlockLinkCommandResponse, PaginatedPaperList, PaginatedProjectList, PaginatedTagList, PaperDetail, PaperLinkCommandResponse, PaperTagCommandResponse, ProjectCommandResponse, ProjectDetail, ProjectLinkType, ReaderSnapshot, ReadingNoteCommandResponse, ReadingStatusCommandResponse, RemoveManagedPdfResponse, SettingsSummary, TagCandidateApplyResponse, TagCandidateCollection, TagCandidateReviewQueue } from "./types";
 import { collectAllPaginatedItems } from "./pagination.mjs";
 
 const API_BASE_URL = (process.env.NEXT_PUBLIC_BLUEPRINT_API_BASE_URL || "/api/blueprint").replace(/\/$/, "");
@@ -12,16 +12,22 @@ export class ApiClientError extends Error {
 
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: object; notFoundMessage?: string; signal?: AbortSignal } = {},
+  options: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: object | FormData; notFoundMessage?: string; signal?: AbortSignal } = {},
 ): Promise<T> {
   let response: Response;
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (options.body !== undefined) headers["Content-Type"] = "application/json";
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    const requestBody: BodyInit | undefined = options.body === undefined
+      ? undefined
+      : isFormData
+        ? options.body as FormData
+        : JSON.stringify(options.body);
+    if (options.body !== undefined && !isFormData) headers["Content-Type"] = "application/json";
     response = await fetch(`${API_BASE_URL}${path}`, {
       method: options.method ?? "GET",
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body: requestBody,
       cache: "no-store",
       signal: options.signal,
     });
@@ -133,9 +139,22 @@ export const apiClient = {
     "/papers/import",
     { method: "POST", body: { relative_paths: relativePaths } },
   ),
+  uploadManagedPdfs: (files: File[]) => {
+    const body = new FormData();
+    files.forEach((file) => body.append("files", file, file.name));
+    return request<ManagedPdfImportResponse>("/papers/upload", { method: "POST", body });
+  },
   reconnectManagedPdf: (paperId: string, relativePath: string) => request<ManagedPdfReconnectResponse>(
     "/papers/reconnect",
     { method: "POST", body: { paper_id: paperId, relative_path: relativePath } },
+  ),
+  removeManagedPdf: (paperId: string, expectedPdfRevision: string) => request<RemoveManagedPdfResponse>(
+    `/papers/${encodeURIComponent(paperId)}/remove-pdf`,
+    { method: "POST", body: { expected_pdf_revision: expectedPdfRevision, confirm: true } },
+  ),
+  archivePaper: (paperId: string, expectedLifecycleRevision: string) => request<ArchivePaperResponse>(
+    `/papers/${encodeURIComponent(paperId)}/archive`,
+    { method: "POST", body: { expected_lifecycle_revision: expectedLifecycleRevision, confirm: true } },
   ),
   getPapers,
   getAllPapers: (options: Omit<PaperListOptions, "limit" | "offset"> = {}) => collectAllPaginatedItems(
@@ -297,6 +316,14 @@ export const apiClient = {
   ) => request<MetadataCommandResponse>(
     `/papers/${encodeURIComponent(paperId)}/metadata`,
     { method: "PATCH", body: { changes, expected_revision: expectedRevision } },
+  ),
+  saveReadingStatus: (
+    paperId: string,
+    readingStatus: "unread" | "reading" | "read" | "finished",
+    expectedRevision: string,
+  ) => request<ReadingStatusCommandResponse>(
+    `/papers/${encodeURIComponent(paperId)}/reading-status`,
+    { method: "PATCH", body: { reading_status: readingStatus, expected_revision: expectedRevision } },
   ),
   previewMetadataEnrichment: (paperId: string) => request<MetadataEnrichmentPreview>(
     `/papers/${encodeURIComponent(paperId)}/metadata/enrichment-preview`,

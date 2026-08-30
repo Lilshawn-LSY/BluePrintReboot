@@ -9,7 +9,10 @@ from services.library_health import cached_library_health_check
 from services.managed_pdf import ManagedPdfState, resolve_indexed_pdf
 from services.paper_metadata_mutation import (
     normalized_web_metadata,
+    paper_lifecycle_revision,
     paper_metadata_revision,
+    paper_pdf_revision,
+    paper_reading_status_revision,
     paper_tags_revision,
 )
 from services.reading_note_template import reading_note_header_values
@@ -86,6 +89,9 @@ class PaperDetail(PaperListItem):
     profile_available: bool
     lifecycle_state: str
     recoverable_warnings: list[str]
+    reading_status_revision: str
+    pdf_revision: str
+    lifecycle_revision: str
 
 
 class ReaderSnapshot(TypedDict):
@@ -380,6 +386,9 @@ def _build_paper_detail_from_record(
         "profile_available": paper_profile_path(paper_id, profile_dir).is_file(),
         "lifecycle_state": "archived" if _archived(record) else "active",
         "recoverable_warnings": list(health),
+        "reading_status_revision": paper_reading_status_revision(record),
+        "pdf_revision": paper_pdf_revision(record),
+        "lifecycle_revision": paper_lifecycle_revision(record),
     }
 
 

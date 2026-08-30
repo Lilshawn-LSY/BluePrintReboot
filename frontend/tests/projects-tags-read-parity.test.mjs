@@ -60,7 +60,7 @@ test("Tags renders canonical identity, label, category, aliases, status, and rea
   assert.match(tags, /apiClient\.getTagSummary\(\)/);
   assert.match(tags, /apiClient\.getTagReviewQueue\(\)/);
   assert.match(tags, /apiClient\.getTagGovernance\(\)/);
-  for (const field of ["tag.label", "tag.canonical_key", "tag.category", "tag.aliases", "tag.status", "selected.suggestion_strength"]) {
+  for (const field of ["tag.label", "tag.canonical_key", "tag.category", "tag.aliases", "selected.status", "selected.suggestion_strength"]) {
     assert.match(tags, new RegExp(field.replace(".", "\\.")));
   }
   assert.match(tags, /summary\.candidate_count/);
