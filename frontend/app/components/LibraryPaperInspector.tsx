@@ -4,6 +4,7 @@ import { BookOpen, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "./AsyncStates";
+import { FirstPageThumbnail } from "./FirstPageThumbnail";
 import { StatusBadge } from "./StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
@@ -99,17 +100,22 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
             <p className="eyebrow">Selected paper</p>
             <button className="icon-button" type="button" onClick={onDismiss} aria-label="Close selected paper"><X size={16} /></button>
           </div>
-          <h2>{resource.data.title || "Untitled paper"}</h2>
-          <p className="library-paper-inspector__citation">{[formatAuthorSummary(resource.data.authors, resource.data.first_author), resource.data.journal, resource.data.year].filter(Boolean).join(" · ")}</p>
-          <div className="badge-row">
-            <StatusBadge>{resource.data.status}</StatusBadge>
-            {resource.data.priority ? <StatusBadge>{resource.data.priority}</StatusBadge> : null}
-            {resource.data.missing_pdf ? <StatusBadge tone="rose">Missing PDF</StatusBadge> : null}
-          </div>
-          <div className="library-paper-inspector__actions">
-            {!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Open Reader</Link> : null}
-            <Link className="text-link" href={`/papers/${encodeURIComponent(resource.data.paper_id)}`}>View Paper Detail</Link>
-            <button className="reader-control reader-control--secondary" type="button" disabled={enrichmentBusy} onClick={() => onEnrich(resource.data.paper_id)}>{enrichmentBusy ? "Loading…" : "Find metadata"}</button>
+          <div className="library-paper-inspector__identity">
+            <FirstPageThumbnail paperId={resource.data.paper_id} available={!resource.data.missing_pdf && Boolean(resource.data.relative_pdf_path)} />
+            <div className="library-paper-inspector__identity-copy">
+              <h2>{resource.data.title || "Untitled paper"}</h2>
+              <p className="library-paper-inspector__citation">{[formatAuthorSummary(resource.data.authors, resource.data.first_author), resource.data.journal, resource.data.year].filter(Boolean).join(" · ")}</p>
+              <div className="badge-row">
+                <StatusBadge>{resource.data.status}</StatusBadge>
+                {resource.data.priority ? <StatusBadge>{resource.data.priority}</StatusBadge> : null}
+                {resource.data.missing_pdf ? <StatusBadge tone="rose">Missing PDF</StatusBadge> : null}
+              </div>
+              <div className="library-paper-inspector__actions">
+                {!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Open Reader</Link> : null}
+                <Link className="text-link" href={`/papers/${encodeURIComponent(resource.data.paper_id)}`}>View Paper Detail</Link>
+                <button className="reader-control reader-control--secondary" type="button" disabled={enrichmentBusy} onClick={() => onEnrich(resource.data.paper_id)}>{enrichmentBusy ? "Loading…" : "Find metadata"}</button>
+              </div>
+            </div>
           </div>
           <section className="library-paper-inspector__section library-paper-inspector__metadata-summary" aria-labelledby="selected-paper-metadata">
             <h3 id="selected-paper-metadata">Metadata</h3>

@@ -70,12 +70,12 @@ test("compact domain status markers use centralized semantic tones without recol
   const [, , , , projectDetail, , , css, , , statusBadge, projects] = await sources;
   assert.match(statusBadge, /inferredStatusMarkerTone/);
   assert.match(statusBadge, /inferredStatusMarkerTone\(children, presentation\)/);
-  assert.match(css, /--state-blue: #3578c7/);
-  assert.match(css, /--state-green: #3d7a57/);
-  assert.match(css, /--state-amber: #a96d22/);
-  assert.match(css, /--state-rose: #ad4b4b/);
-  assert.match(css, /--state-violet: #745c9c/);
-  assert.match(css, /--state-slate: #68747c/);
+  assert.match(css, /--state-blue: #1a73e8/);
+  assert.match(css, /--state-green: #2e7d32/);
+  assert.match(css, /--state-amber: #b26a00/);
+  assert.match(css, /--state-rose: #b3261e/);
+  assert.match(css, /--state-violet: #7452a8/);
+  assert.match(css, /--state-slate: #5f6b73/);
   assert.match(projects, /<StatusBadge>\{project\.status\}<\/StatusBadge>/);
   assert.match(projects, /<StatusBadge>\{project\.priority\}<\/StatusBadge>/);
   assert.match(projectDetail, /<StatusBadge>\{project\.status\}<\/StatusBadge>/);

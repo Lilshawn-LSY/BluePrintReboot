@@ -5,6 +5,7 @@ import Link from "next/link";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "../components/AsyncStates";
 import { Breadcrumbs } from "../components/Breadcrumbs";
 import { DetailPanel } from "../components/DetailPanel";
+import { FirstPageThumbnail } from "../components/FirstPageThumbnail";
 import { PageHeader } from "../components/PageHeader";
 import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
@@ -49,6 +50,7 @@ export function PaperDetailView({ paperId }: { paperId: string }) {
               </Section>
             </div>
             <aside className="paper-detail-context" aria-label="Paper context">
+              <FirstPageThumbnail paperId={resource.data.paper_id} available={!resource.data.missing_pdf && Boolean(resource.data.relative_pdf_path)} size="detail" />
               <DetailPanel title="Organization"><p>{projectContext(resource.data.project_links.length)}</p>{resource.data.tags.length ? <div className="tag-list project-tag-row">{resource.data.tags.map((tag) => <StatusBadge presentation="chip" taxonomy="canonical" key={tag}>{tag}</StatusBadge>)}</div> : <p className="deferred-note">No tags yet</p>}</DetailPanel>
               <DetailPanel title="Reading context"><p>{resource.data.note_available ? "A reading note is ready in Reader." : "Open Reader to begin a reading note."}</p></DetailPanel>
             </aside>

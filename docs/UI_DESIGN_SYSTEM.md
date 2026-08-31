@@ -51,17 +51,17 @@ canonical tags.
 
 | Tone | Tokens | Value | Meaning |
 | --- | --- | --- | --- |
-| Blue | `--state-blue`, `--state-blue-soft` | `#3578C7`, `#E7F0FC` | Active work and Reading. |
-| Green | `--state-green`, `--state-green-soft` | `#3D7A57`, `#E6F2EA` | Completed, healthy, or successfully saved. |
-| Amber | `--state-amber`, `--state-amber-soft` | `#A96D22`, `#FAEEDB` | Attention, paused work, high priority, or an idea. |
-| Rose | `--state-rose`, `--state-rose-soft` | `#AD4B4B`, `#F8E7E7` | Failure, conflict, offline, missing, or critical state. |
-| Violet | `--state-violet`, `--state-violet-soft` | `#745C9C`, `#EFEAF7` | Questions and key-reference semantics. |
-| Slate | `--state-slate`, `--state-slate-soft` | `#68747C`, `#EEF1F2` | Neutral, inactive, archived, background, or low-priority state. |
+| Blue | `--state-blue`, `--state-blue-soft` | `#1A73E8`, `#E7F0FC` | Active work and Reading. |
+| Green | `--state-green`, `--state-green-soft` | `#2E7D32`, `#E6F2EA` | Completed, healthy, or successfully saved. |
+| Amber | `--state-amber`, `--state-amber-soft` | `#B26A00`, `#FAEEDB` | Attention, paused work, high priority, or an idea. |
+| Rose | `--state-rose`, `--state-rose-soft` | `#B3261E`, `#F8E7E7` | Failure, conflict, offline, missing, or critical state. |
+| Violet | `--state-violet`, `--state-violet-soft` | `#7452A8`, `#EFEAF7` | Questions and key-reference semantics. |
+| Slate | `--state-slate`, `--state-slate-soft` | `#5F6B73`, `#EEF1F2` | Neutral, inactive, archived, background, or low-priority state. |
 
-The normal presentation remains a small, high-contrast colored square marker
-with readable text. Soft backgrounds are reserved for an exceptional compact
-badge or an attention treatment; they are not decorative fills and status
-labels must not become rounded pills.
+The normal presentation remains a small, strong-colored square marker with
+normal Ink-readable text. Soft backgrounds are reserved for an exceptional
+compact badge or an attention treatment; they are not decorative fills and
+status labels must not become rounded pills.
 
 ## v1.6.5 visual-language grammar
 
@@ -477,6 +477,24 @@ with a 2px semantic side rule and no bright pill fill: Related and Background
 are Slate, Key reference and Raises question are Violet, Supports Project is
 Green, and Idea for Project is Amber. Blueprint Blue remains reserved for
 interaction and canonical-tag structure.
+
+## Selected-Paper first-page thumbnails
+
+`FirstPageThumbnail` is a contextual Paper-identity aid, not collection
+decoration. It mounts only after the Library inspector has loaded its selected
+Paper, or on an open Paper Detail page; ordinary Library rows never request or
+render thumbnails. The shared client component uses the existing local managed
+PDF URL and PDF.js adapter to render only page 1 into a bounded canvas, then
+cancels/destroys the task and document when its surface closes or changes. It
+does not add an endpoint, persistent thumbnail cache, background rendering, or
+Reader state.
+
+The inspector preview is a compact 88px-wide slot beside the Paper identity;
+Paper Detail uses a contextual 132px-wide preview in its metadata context. A
+faint structural rule contains the canvas without a card or shadow. Loading
+reserves the same geometry; missing or unavailable managed PDFs show a concise
+`First page preview unavailable` document fallback. The accessible preview
+label is intentionally concise and does not attempt to reproduce page content.
 
 Library scan, import, reconnect, and upload feedback uses a compact operation
 result strip. Full per-file detail belongs in the bounded Library operation
