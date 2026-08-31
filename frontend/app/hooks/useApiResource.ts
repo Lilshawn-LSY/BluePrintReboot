@@ -10,7 +10,10 @@ export type ResourceState<T> =
   | { status: "not-found"; message: string }
   | { status: "error"; message: string };
 
-export type RetryableResourceState<T> = ResourceState<T> & { retry: () => void };
+export type RetryableResourceState<T> = ResourceState<T> & {
+  retry: () => void;
+  updateData: (updater: (data: T) => T) => void;
+};
 
 export function useApiResource<T>(key: string, loader: () => Promise<T>): RetryableResourceState<T> {
   const [attempt, setAttempt] = useState(0);
@@ -37,8 +40,13 @@ export function useApiResource<T>(key: string, loader: () => Promise<T>): Retrya
   }, [key, attempt]);
 
   const retry = () => setAttempt((current) => current + 1);
-  if (state.resourceKey !== activeResourceKey) return { status: "loading", retry };
-  if (state.status === "success") return { status: "success", data: state.data, retry };
-  if (state.status === "loading") return { status: "loading", retry };
-  return { status: state.status, message: state.message, retry };
+  const updateData = (updater: (data: T) => T) => {
+    setState((current) => current.resourceKey === activeResourceKey && current.status === "success"
+      ? { ...current, data: updater(current.data) }
+      : current);
+  };
+  if (state.resourceKey !== activeResourceKey) return { status: "loading", retry, updateData };
+  if (state.status === "success") return { status: "success", data: state.data, retry, updateData };
+  if (state.status === "loading") return { status: "loading", retry, updateData };
+  return { status: state.status, message: state.message, retry, updateData };
 }

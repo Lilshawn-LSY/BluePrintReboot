@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, LoadingState, UnavailableState } from "./AsyncS
 import { StatusBadge } from "./StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
+import { patchPaperReadingStatus } from "../lib/library/reading-status-collection.mjs";
 import { formatAuthorSummary } from "../lib/presentation";
 import { abstractDisplayParagraphs } from "../lib/abstract-display.mjs";
 
@@ -15,13 +16,14 @@ function projectContext(count: number): string {
   return `Linked to ${count} project${count === 1 ? "" : "s"}`;
 }
 
-export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichmentBusy, enrichmentContent, onLibraryChanged }: {
+export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichmentBusy, enrichmentContent, onLibraryChanged, onReadingStatusSaved }: {
   paperId: string;
   onDismiss: () => void;
   onEnrich: (paperId: string) => void;
   enrichmentBusy: boolean;
   enrichmentContent?: ReactNode;
   onLibraryChanged: () => void;
+  onReadingStatusSaved: (update: { paperId: string; previousStatus: string; readingStatus: "unread" | "reading" | "read" | "finished" }) => void;
 }) {
   const resource = useApiResource(`library-inspector:${paperId}`, () => apiClient.getPaper(paperId));
   const [abstractExpanded, setAbstractExpanded] = useState(false);
@@ -42,9 +44,18 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
         readingStatus,
         resource.data.reading_status_revision,
       );
+      const previousStatus = resource.data.status;
+      resource.updateData((paper) => patchPaperReadingStatus(
+        paper,
+        result.reading_status,
+        result.reading_status_revision,
+      ));
+      onReadingStatusSaved({
+        paperId: resource.data.paper_id,
+        previousStatus,
+        readingStatus: result.reading_status,
+      });
       setStatusMessage(`Reading status: ${result.reading_status === "finished" ? "Finished" : result.reading_status === "read" ? "Read" : result.reading_status === "reading" ? "Reading" : "Unread"}.`);
-      onLibraryChanged();
-      resource.retry();
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Reading status could not be saved.");
     } finally { setStatusBusy(false); }
@@ -93,7 +104,7 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
           <div className="badge-row">
             <StatusBadge>{resource.data.status}</StatusBadge>
             {resource.data.priority ? <StatusBadge>{resource.data.priority}</StatusBadge> : null}
-            {resource.data.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}
+            {resource.data.missing_pdf ? <StatusBadge tone="rose">Missing PDF</StatusBadge> : null}
           </div>
           <div className="library-paper-inspector__actions">
             {!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Open Reader</Link> : null}

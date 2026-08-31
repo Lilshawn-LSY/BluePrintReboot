@@ -31,7 +31,7 @@ test("relationship labels, tag cleanup, and constructed brand mark retain the re
   assert.match(project, /<RelationshipLabel type=\{link\.link_type\}/);
   assert.match(blocks, /<RelationshipLabel type=\{link\.link_type\}/);
   assert.match(css, /\.relationship-label \{/);
-  assert.match(css, /data-relationship="supports_project"/);
+  assert.match(css, /\.relationship-label\[data-tone="green"\]/);
   assert.doesNotMatch(tags, /<th>Status<\/th>/);
   assert.match(tags, /Advanced lifecycle/);
   assert.match(sidebar, /<svg className="brand__mark"/);
@@ -68,16 +68,14 @@ test("reading status and new Note Blocks use explicit safe mutation paths", asyn
 
 test("compact domain status markers use centralized semantic tones without recoloring tags", async () => {
   const [, , , , projectDetail, , , css, , , statusBadge, projects] = await sources;
-  assert.match(statusBadge, /const STATUS_MARKER_TONES/);
-  assert.match(statusBadge, /unread: "neutral"/);
-  assert.match(statusBadge, /reading: "accent"/);
-  assert.match(statusBadge, /finished: "healthy"/);
-  assert.match(statusBadge, /active: "accent"/);
-  assert.match(statusBadge, /paused: "warning"/);
-  assert.match(statusBadge, /archived: "slate"/);
-  assert.match(statusBadge, /urgent: "danger"/);
-  assert.match(statusBadge, /presentation === "chip" \? undefined/);
-  assert.match(css, /--color-status-slate: #64727a/);
+  assert.match(statusBadge, /inferredStatusMarkerTone/);
+  assert.match(statusBadge, /inferredStatusMarkerTone\(children, presentation\)/);
+  assert.match(css, /--state-blue: #3578c7/);
+  assert.match(css, /--state-green: #3d7a57/);
+  assert.match(css, /--state-amber: #a96d22/);
+  assert.match(css, /--state-rose: #ad4b4b/);
+  assert.match(css, /--state-violet: #745c9c/);
+  assert.match(css, /--state-slate: #68747c/);
   assert.match(projects, /<StatusBadge>\{project\.status\}<\/StatusBadge>/);
   assert.match(projects, /<StatusBadge>\{project\.priority\}<\/StatusBadge>/);
   assert.match(projectDetail, /<StatusBadge>\{project\.status\}<\/StatusBadge>/);

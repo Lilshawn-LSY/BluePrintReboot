@@ -9,12 +9,11 @@ import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
+import { systemStateTone } from "../lib/semantic-tones.mjs";
 import type { SettingsState } from "../lib/api/types";
 
-function stateTone(state: SettingsState | "available"): "healthy" | "warning" | "neutral" {
-  if (state === "healthy" || state === "available") return "healthy";
-  if (state === "warning") return "warning";
-  return "neutral";
+function stateTone(state: SettingsState | "available") {
+  return systemStateTone(state);
 }
 
 function displayedCount(state: SettingsState, count: number | null) {

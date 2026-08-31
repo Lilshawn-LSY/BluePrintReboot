@@ -12,6 +12,7 @@ import { Toolbar } from "../components/Toolbar";
 import { useApiResource } from "../hooks/useApiResource";
 import { useModalFocus } from "../hooks/useModalFocus";
 import { ApiClientError, apiClient } from "../lib/api/client";
+import { patchReadingStatusCollection, readingStatusChangeRequiresCollectionRefresh } from "../lib/library/reading-status-collection.mjs";
 import type { EditablePaperMetadata, ManagedPdfImportResponse, ManagedPdfScanResponse, MetadataEnrichmentPreview } from "../lib/api/types";
 
 const PAGE_SIZE = 20;
@@ -20,11 +21,11 @@ const FIELD_LABELS: Record<keyof EditablePaperMetadata, string> = {
   title: "Title", authors: "Authors", year: "Year", journal: "Journal", doi: "DOI", abstract: "Abstract", keywords: "Keywords",
 };
 
-function scanTone(status: string): "healthy" | "warning" | "danger" | "neutral" {
-  if (status === "new" || status === "imported" || status === "reconnected") return "healthy";
-  if (["already_registered", "duplicate_content", "reconnect_available", "reconnect_ambiguous"].includes(status)) return "warning";
-  if (["invalid", "unavailable", "missing"].includes(status)) return "danger";
-  return "neutral";
+function scanTone(status: string): "green" | "amber" | "rose" | "slate" {
+  if (status === "new" || status === "imported" || status === "reconnected") return "green";
+  if (["already_registered", "duplicate_content", "reconnect_available", "reconnect_ambiguous"].includes(status)) return "amber";
+  if (["invalid", "unavailable", "missing"].includes(status)) return "rose";
+  return "slate";
 }
 
 function friendlyCommandError(error: unknown): string {
@@ -168,6 +169,13 @@ export function LibraryView() {
     finally { setEnrichmentBusy(false); }
   };
   const toggleField = (field: keyof EditablePaperMetadata) => setSelectedFields((current) => current.includes(field) ? current.filter((item) => item !== field) : [...current, field]);
+  const updateReadingStatus = ({ paperId, previousStatus, readingStatus: nextStatus }: { paperId: string; previousStatus: string; readingStatus: "unread" | "reading" | "read" | "finished" }) => {
+    if (readingStatusChangeRequiresCollectionRefresh(readingStatus, previousStatus, nextStatus)) {
+      collection.retry();
+      return;
+    }
+    collection.updateData((current) => patchReadingStatusCollection(current, paperId, nextStatus));
+  };
   const attention = resource.status === "success" && libraryNeedsAttention(resource.data);
 
   useEffect(() => {
@@ -209,11 +217,11 @@ export function LibraryView() {
             {collection.status === "unavailable" ? <UnavailableState description={collection.message} onRetry={collection.retry} /> : null}
             {collection.status === "error" || collection.status === "not-found" ? <ErrorState description={collection.message} onRetry={collection.retry} /> : null}
             {collection.status === "success" ? <>
-              {collection.data.items.length === 0 ? <EmptyState title="No matching papers" description="Change the search or filters, or scan a PDF to add a paper." /> : <DataTableShell label="Paper collection"><table className="library-paper-table"><colgroup><col className="library-paper-table__title" /><col className="library-paper-table__author" /><col className="library-paper-table__year" /><col className="library-paper-table__reading" /><col className="library-paper-table__tags" /><col className="library-paper-table__inspect" /></colgroup><thead><tr><th>Title</th><th>Author</th><th>Year</th><th>Reading</th><th>Tags</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{collection.data.items.map((paper) => <tr className="library-paper-row" data-selected={selectedPaperId === paper.paper_id || undefined} key={paper.paper_id}><td><Link className="paper-link" href={`/papers/${encodeURIComponent(paper.paper_id)}`}>{paper.title || "Untitled paper"}</Link></td><td>{paper.first_author || "—"}</td><td className="structural-value">{paper.year || "—"}</td><td><div className="badge-row"><StatusBadge>{paper.status}</StatusBadge>{paper.missing_pdf ? <StatusBadge tone="danger">Missing PDF</StatusBadge> : null}</div></td><td>{paper.tags.length ? <div className="tag-list library-paper-row__tags" title={paper.tags.join(", ")}>{paper.tags.slice(0, 2).map((item) => <StatusBadge presentation="chip" taxonomy="canonical" key={item}>{item}</StatusBadge>)}{paper.tags.length > 2 ? <StatusBadge presentation="chip" taxonomy="canonical">{<>+{paper.tags.length - 2}<span className="sr-only">: {paper.tags.slice(2).join(", ")}</span></>}</StatusBadge> : null}</div> : <span className="muted-text">—</span>}</td><td><button ref={(node) => { if (node) selectionControls.current.set(paper.paper_id, node); else selectionControls.current.delete(paper.paper_id); }} className="reader-control reader-control--secondary" type="button" aria-pressed={selectedPaperId === paper.paper_id} aria-label={`Inspect ${paper.title || "untitled paper"}`} onClick={() => selectPaper(paper.paper_id)}>Inspect</button></td></tr>)}</tbody></table></DataTableShell>}
+              {collection.data.items.length === 0 ? <EmptyState title="No matching papers" description="Change the search or filters, or scan a PDF to add a paper." /> : <DataTableShell label="Paper collection"><table className="library-paper-table"><colgroup><col className="library-paper-table__title" /><col className="library-paper-table__author" /><col className="library-paper-table__year" /><col className="library-paper-table__reading" /><col className="library-paper-table__tags" /><col className="library-paper-table__inspect" /></colgroup><thead><tr><th>Title</th><th>Author</th><th>Year</th><th>Reading</th><th>Tags</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{collection.data.items.map((paper) => <tr className="library-paper-row" data-selected={selectedPaperId === paper.paper_id || undefined} key={paper.paper_id}><td><Link className="paper-link" href={`/papers/${encodeURIComponent(paper.paper_id)}`}>{paper.title || "Untitled paper"}</Link></td><td>{paper.first_author || "—"}</td><td className="structural-value">{paper.year || "—"}</td><td><div className="badge-row"><StatusBadge>{paper.status}</StatusBadge>{paper.missing_pdf ? <StatusBadge tone="rose">Missing PDF</StatusBadge> : null}</div></td><td>{paper.tags.length ? <div className="tag-list library-paper-row__tags" title={paper.tags.join(", ")}>{paper.tags.slice(0, 2).map((item) => <StatusBadge presentation="chip" taxonomy="canonical" key={item}>{item}</StatusBadge>)}{paper.tags.length > 2 ? <StatusBadge presentation="chip" taxonomy="canonical">{<>+{paper.tags.length - 2}<span className="sr-only">: {paper.tags.slice(2).join(", ")}</span></>}</StatusBadge> : null}</div> : <span className="muted-text">—</span>}</td><td><button ref={(node) => { if (node) selectionControls.current.set(paper.paper_id, node); else selectionControls.current.delete(paper.paper_id); }} className="reader-control reader-control--secondary" type="button" aria-pressed={selectedPaperId === paper.paper_id} aria-label={`Inspect ${paper.title || "untitled paper"}`} onClick={() => selectPaper(paper.paper_id)}>Inspect</button></td></tr>)}</tbody></table></DataTableShell>}
               <div className="library-pagination"><span className="toolbar-note">{collection.data.total} matching paper{collection.data.total === 1 ? "" : "s"}</span><div className="reader-editor__actions"><button className="reader-control reader-control--secondary" type="button" disabled={offset === 0} onClick={() => changePage(Math.max(0, offset - PAGE_SIZE))}>Previous</button><button className="reader-control reader-control--secondary" type="button" disabled={!collection.data.has_more} onClick={() => changePage(offset + PAGE_SIZE)}>Next</button></div></div>
             </> : null}
           </div>
-          {selectedPaperId ? <LibraryPaperInspector key={selectedPaperId} paperId={selectedPaperId} onDismiss={closeInspector} onLibraryChanged={() => { collection.retry(); resource.retry(); }} onEnrich={previewEnrichment} enrichmentBusy={enrichmentBusy} enrichmentContent={enrichmentPaperId === selectedPaperId ? <MetadataEnrichmentPanel enrichment={enrichment} error={enrichmentError} busy={enrichmentBusy} selectedFields={selectedFields} onToggleField={toggleField} onApply={applyEnrichment} onRetry={() => previewEnrichment(selectedPaperId)} onClose={() => { setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); }} /> : undefined} /> : null}
+          {selectedPaperId ? <LibraryPaperInspector key={selectedPaperId} paperId={selectedPaperId} onDismiss={closeInspector} onLibraryChanged={() => { collection.retry(); resource.retry(); }} onReadingStatusSaved={updateReadingStatus} onEnrich={previewEnrichment} enrichmentBusy={enrichmentBusy} enrichmentContent={enrichmentPaperId === selectedPaperId ? <MetadataEnrichmentPanel enrichment={enrichment} error={enrichmentError} busy={enrichmentBusy} selectedFields={selectedFields} onToggleField={toggleField} onApply={applyEnrichment} onRetry={() => previewEnrichment(selectedPaperId)} onClose={() => { setEnrichmentPaperId(""); setEnrichment(null); setSelectedFields([]); }} /> : undefined} /> : null}
         </div>
       </Section>
 

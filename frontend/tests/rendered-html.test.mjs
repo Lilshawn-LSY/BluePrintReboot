@@ -202,7 +202,8 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
   assert.match(readerView, /reader-snapshot:\$\{paperId\}:\$\{retryCount\}/);
   assert.match(readerView, /apiClient\.getReaderSnapshot\(paperId\)/);
   assert.doesNotMatch(readerView, /apiClient\.getPaper\(paperId\)/);
-  assert.match(resourceHook, /if \(state\.resourceKey !== activeResourceKey\) return \{ status: "loading", retry \}/);
+  assert.match(resourceHook, /current\.resourceKey === activeResourceKey && current\.status === "success"/);
+  assert.match(resourceHook, /if \(state\.resourceKey !== activeResourceKey\) return \{ status: "loading", retry, updateData \}/);
   assert.match(readerView, /snapshot\.pdf_state === "missing"/);
   assert.match(readerView, /saved_note_baseline\.exists/);
   assert.match(readerView, /No persisted note exists/);

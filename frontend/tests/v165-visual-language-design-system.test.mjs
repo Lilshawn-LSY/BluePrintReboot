@@ -8,7 +8,7 @@ test("shared White, Ink, Blueprint Blue, rule, and geometry tokens define the v1
     readFile(new URL("../app/components/StatusBadge.tsx", import.meta.url), "utf8"),
   ]);
 
-  for (const token of ["--color-rule-faint", "--rule-faint", "--rule-strong", "--shadow-overlay", "--font-structural"]) {
+  for (const token of ["--color-rule-faint", "--rule-faint", "--rule-strong", "--shadow-overlay", "--font-main", "--font-technical"]) {
     assert.match(css, new RegExp(token));
   }
   for (const [token, value] of Object.entries({
@@ -33,7 +33,7 @@ test("shared White, Ink, Blueprint Blue, rule, and geometry tokens define the v1
   assert.match(css, /\.reader-page-surface \{[^}]*box-shadow:/);
   assert.match(statusBadge, /type Presentation = "label" \| "chip" \| "badge"/);
   assert.match(statusBadge, /type Taxonomy = "canonical" \| "alias" \| "candidate"/);
-  assert.match(statusBadge, /tone === "warning" \|\| tone === "danger" \? "badge" : "label"/);
+  assert.match(statusBadge, /tone === "amber" \|\| tone === "rose" \? "badge" : "label"/);
   assert.match(statusBadge, /data-taxonomy=\{resolvedPresentation === "chip" \? taxonomy \?\? "canonical" : undefined\}/);
   assert.match(statusBadge, /status-badge--\$\{resolvedPresentation\}/);
   assert.match(css, /\.status-badge--chip\[data-taxonomy="canonical"\]|\.status-badge--chip \{[^}]*box-shadow: inset 2px 0 0 var\(--color-accent-strong\);/);

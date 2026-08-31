@@ -40,8 +40,28 @@ never a broad decorative background or a replacement for semantic feedback.
 | Blueprint Blue 100 | `--blue-100` | `#DDEBFF` | Restrained selected surfaces. |
 | Blueprint Blue 050 | `--blue-050` | `#F3F7FF` | Faint canonical-tag and focus-adjacent context. |
 
-Semantic danger, warning, and success colors remain independent. Muted green
-communicates success only; it is not an application accent.
+## Semantic state palette
+
+Semantic color carries domain meaning only. It layers on the White / Ink /
+Blueprint Blue foundation: Blueprint Blue remains the interaction and
+selection color, while the state palette identifies persistent state,
+priority, relationship meaning, and actionable health. Do not use these
+colors for ordinary rows, navigation destinations, broad card backgrounds, or
+canonical tags.
+
+| Tone | Tokens | Value | Meaning |
+| --- | --- | --- | --- |
+| Blue | `--state-blue`, `--state-blue-soft` | `#3578C7`, `#E7F0FC` | Active work and Reading. |
+| Green | `--state-green`, `--state-green-soft` | `#3D7A57`, `#E6F2EA` | Completed, healthy, or successfully saved. |
+| Amber | `--state-amber`, `--state-amber-soft` | `#A96D22`, `#FAEEDB` | Attention, paused work, high priority, or an idea. |
+| Rose | `--state-rose`, `--state-rose-soft` | `#AD4B4B`, `#F8E7E7` | Failure, conflict, offline, missing, or critical state. |
+| Violet | `--state-violet`, `--state-violet-soft` | `#745C9C`, `#EFEAF7` | Questions and key-reference semantics. |
+| Slate | `--state-slate`, `--state-slate-soft` | `#68747C`, `#EEF1F2` | Neutral, inactive, archived, background, or low-priority state. |
+
+The normal presentation remains a small, high-contrast colored square marker
+with readable text. Soft backgrounds are reserved for an exceptional compact
+badge or an attention treatment; they are not decorative fills and status
+labels must not become rounded pills.
 
 ## v1.6.5 visual-language grammar
 
@@ -66,12 +86,14 @@ gradients, soft shadows, or generic dashboard styling.
   deliberately small and should be reserved for the few bounded surfaces that
   benefit from it. Shadows indicate an actual overlay or floating surface;
   ordinary panels and collection surfaces are flat.
-- UI Sans uses the local/system `IBM Plex Sans` / `IBM Plex Sans KR` fallback
-  stack for navigation, controls, tables, and metadata. Research Serif uses
-  the `Source Serif 4` / Korean-serif fallback stack only for rendered
-  prose-heavy reading previews. Technical Mono uses the `IBM Plex Mono` /
-  system-mono stack for page values, counts, and identifiers such as DOI or
-  arXiv. These are role stacks, not runtime network font dependencies.
+- BluePrint has exactly two font roles. Main Sans uses the local/system
+  `Pretendard`-style stack (`Pretendard`, Korean system fallbacks, and
+  system-ui) for all human-readable content: navigation, titles, prose,
+  editors, controls, tables, metadata labels, and helper text. Technical Mono
+  uses `IBM Plex Mono` with local system-mono fallbacks only for structural
+  notation, compact statuses, page values, counts, years where useful, and
+  identifiers such as DOI or arXiv. These are local/system role stacks, not
+  runtime network font dependencies. There is no third serif role.
 - Avoid all-caps marketing eyebrows. When compact context notation is useful,
   use a quiet mono label with an accent rule rather than a repeated promotional
   label.
@@ -175,6 +197,28 @@ field name.
   diagnostics surface.
 
 Do not change the meaning of backend states while changing their display.
+
+### State tone mapping
+
+`semantic-tones` is the central domain-value-to-tone mapping used by compact
+status markers. It accepts normalized backend values but does not infer tones
+for taxonomy chips.
+
+| Domain state | Tone |
+| --- | --- |
+| Reading: Unread | Slate |
+| Reading: Reading | Blue |
+| Reading: Read or Finished | Green |
+| Project: Active / Paused / Done / Archived | Blue / Amber / Green / Slate |
+| Priority: Low / Normal / High / Urgent or Critical | Slate / Slate / Amber / Rose |
+| Operational and health: Healthy, Clean, Available, Ready, Success | Green |
+| Operational and health: Warning, Stale, OCR needed | Amber |
+| Operational and health: Conflict, Failed, Offline, Unavailable | Rose |
+
+`SaveStatus` continues to communicate only the existing explicit-save state;
+its saved result is green, active saving work is blue, and conflicts/failures
+remain rose. No state color changes command timing, revisions, drafts, or
+conflict recovery.
 
 Avoid duplicate state: show a save state beside the editor or command it
 describes, not again in a parent context. Likewise, quiet ordinary system
@@ -412,15 +456,27 @@ reading-status selects. Text search may debounce before refresh, every filter
 change resets pagination, and a collection title remains a normal navigation
 link with a separate Inspect action for contextual inspection.
 
+### Library Reading Status refresh rule
+
+The revision-checked Reading Status command uses the canonical `paper_id` and
+updates visible Library state only after its server response succeeds. For an
+unfiltered Library collection (or a collection filtered only by unrelated
+fields), the response patches the matching row and open inspector locally; it
+does not reload the full collection, `/health`, or `/library/status`. When an
+active exact Reading Status filter means the Paper could enter or leave the
+result set, only the Paper collection is re-read. A failed command leaves the
+previous visible row and inspector state intact; normal Dashboard reads update
+when Dashboard is opened.
+
 ## Relationship labels, bounded operations, and removal
 
 Project relationship types are semantic metadata, not primary interactions.
 Use `RelationshipLabel` consistently for linked Papers and Note Blocks in
 Project Detail and Reader context. Labels are compact rectangular notations
-with a 2px side rule and no bright pill fill: Related is neutral, Background
-is slate, Key reference is Ink, Idea for Project is muted amber, Supports
-Project is muted teal, and Raises question is muted violet. Blueprint Blue
-remains reserved for interaction and canonical-tag structure.
+with a 2px semantic side rule and no bright pill fill: Related and Background
+are Slate, Key reference and Raises question are Violet, Supports Project is
+Green, and Idea for Project is Amber. Blueprint Blue remains reserved for
+interaction and canonical-tag structure.
 
 Library scan, import, reconnect, and upload feedback uses a compact operation
 result strip. Full per-file detail belongs in the bounded Library operation

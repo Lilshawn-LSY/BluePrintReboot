@@ -1234,7 +1234,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               <div>
                 <h2 id="reading-note-editor-title">Paper Note</h2>
               </div>
-              {noteUnavailable ? <StatusBadge tone="danger">Unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
+              {noteUnavailable ? <StatusBadge tone="rose">Unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
             </div>
             {noteUnavailable ? (
               <div className="reader-note__message" role="status">

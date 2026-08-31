@@ -13,6 +13,7 @@ import { RelationshipLabel } from "../components/RelationshipLabel";
 import { SaveStatus } from "../components/SaveStatus";
 import { useApiResource } from "../hooks/useApiResource";
 import { ApiClientError, apiClient } from "../lib/api/client";
+import { systemStateTone } from "../lib/semantic-tones.mjs";
 import { formatUiDate } from "../lib/presentation";
 import {
   changedProjectFields,
@@ -50,9 +51,9 @@ const LINK_TYPES: Array<{ value: ProjectLinkType; label: string }> = [
   { value: "idea_for_project", label: "Idea for Project" },
 ];
 
-function targetStateTone(value: string): "healthy" | "warning" | "neutral" {
-  if (value === "available") return "healthy";
-  return value.startsWith("orphaned") ? "warning" : "neutral";
+function targetStateTone(value: string) {
+  if (value.startsWith("orphaned")) return "amber";
+  return systemStateTone(value);
 }
 
 type PaperPickerState =

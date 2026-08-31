@@ -470,7 +470,7 @@ export function NoteBlocksWorkspace({ paperId, focusBlockId = "" }: { paperId: s
         <div>
           <h2 id="note-block-editor-title">Note Blocks</h2>
         </div>
-        <StatusBadge tone={editor?.status === "conflict" || editor?.status === "error" ? "danger" : "neutral"}>
+        <StatusBadge tone={editor?.status === "conflict" || editor?.status === "error" ? "rose" : "slate"}>
           {collection.data.total} blocks
         </StatusBadge>
       </div>

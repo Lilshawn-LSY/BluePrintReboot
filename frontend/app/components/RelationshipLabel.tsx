@@ -1,4 +1,5 @@
 import type { ProjectLinkType } from "../lib/api/types";
+import { relationshipTone } from "../lib/semantic-tones.mjs";
 
 const RELATIONSHIP_LABELS: Record<ProjectLinkType, string> = {
   related: "Related",
@@ -14,5 +15,5 @@ export function relationshipLabel(type: ProjectLinkType | string): string {
 }
 
 export function RelationshipLabel({ type }: { type: ProjectLinkType | string }) {
-  return <span className="relationship-label" data-relationship={type}>{relationshipLabel(type)}</span>;
+  return <span className="relationship-label" data-relationship={type} data-tone={relationshipTone(type)}>{relationshipLabel(type)}</span>;
 }
