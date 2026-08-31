@@ -26,7 +26,7 @@ test("Reader reserves structural space for the navigation trigger and keeps Libr
   assert.match(css, /\.reader-navigation-zone \{[^}]*left: var\(--content-padding\);/);
 });
 
-test("relationship labels, tag cleanup, and constructed brand mark retain the restrained grammar", async () => {
+test("relationship labels, tag cleanup, and final local brand mark retain the restrained grammar", async () => {
   const [, , , blocks, project, tags, sidebar, css] = await sources;
   assert.match(project, /<RelationshipLabel type=\{link\.link_type\}/);
   assert.match(blocks, /<RelationshipLabel type=\{link\.link_type\}/);
@@ -34,8 +34,12 @@ test("relationship labels, tag cleanup, and constructed brand mark retain the re
   assert.match(css, /\.relationship-label\[data-tone="green"\]/);
   assert.doesNotMatch(tags, /<th>Status<\/th>/);
   assert.match(tags, /Advanced lifecycle/);
-  assert.match(sidebar, /<svg className="brand__mark"/);
-  assert.match(sidebar, /aria-hidden="true" focusable="false"/);
+  assert.match(sidebar, /<span className="brand__mark" aria-hidden="true" \/>/);
+  assert.match(sidebar, /href="\/dashboard" className="brand" aria-label="BluePrintReboot dashboard"/);
+  assert.match(css, /\.brand__mark \{[^}]*width: 2\.25rem;[^}]*height: 2\.25rem;[^}]*background: url\("\/brand\/blueprint-mark\.png"\) center \/ contain no-repeat;/);
+  assert.match(css, /\.sidebar\[data-collapsed="true"\] \.brand \{ padding: var\(--space-1\); \}/);
+  assert.match(css, /\.sidebar\[data-collapsed="true"\] \.brand__copy, \.sidebar\[data-collapsed="true"\] \.sidebar-toggle__label, \.sidebar\[data-collapsed="true"\] \.sidebar-link span \{ display: none; \}/);
+  assert.doesNotMatch(sidebar, /<svg className="brand__mark"/);
 });
 
 test("Library keeps operations bounded while supporting PDF picker and drag/drop validation", async () => {

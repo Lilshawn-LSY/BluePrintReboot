@@ -99,10 +99,7 @@ button, input, textarea, select { font: inherit; }
 .sidebar { position: sticky; top: 0; z-index: var(--z-sidebar); height: 100vh; display: flex; flex-direction: column; gap: var(--space-6); padding: var(--space-4) var(--space-3); overflow-y: auto; background: var(--color-sidebar); border-right: var(--border); }
 .sidebar__header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .brand { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); border-radius: var(--radius-sm); }
-.brand__mark { width: 2rem; height: 2rem; display: block; flex: 0 0 2rem; }
-.brand__datum { fill: none; stroke: var(--color-text); stroke-width: 2; stroke-linecap: square; }
-.brand__construction { fill: none; stroke: var(--color-text-muted); stroke-width: 1; }
-.brand__body { fill: var(--blue-500); }
+.brand__mark { width: 2.25rem; height: 2.25rem; display: block; flex: 0 0 2.25rem; background: url("/brand/blueprint-mark.png") center / contain no-repeat; }
 .brand strong, .brand small { display: block; }
 .brand strong { font-size: var(--font-size-sm); letter-spacing: 0.01em; }
 .brand small { color: var(--color-text-muted); font-size: var(--font-size-xs); }

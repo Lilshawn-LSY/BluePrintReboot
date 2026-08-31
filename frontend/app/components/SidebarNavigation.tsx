@@ -52,11 +52,7 @@ export function SidebarNavigation({
     >
       <div className="sidebar__header">
         <Link href="/dashboard" className="brand" aria-label="BluePrintReboot dashboard">
-          <svg className="brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-            <path className="brand__datum" d="M7 4v24" />
-            <path className="brand__construction" d="M10 5h8c4 0 6 2 6 5.5S22 16 18 16h-8zm0 11h9c4 0 6 2.1 6 5.5S23 27 19 27H10z" />
-            <path className="brand__body" d="M11 7h7c2.3 0 3.5 1.1 3.5 3.3S20.3 13.5 18 13.5h-7zm0 9h8c2.5 0 3.8 1.7 3.8 4S21.5 24 19 24h-8z" />
-          </svg>
+          <span className="brand__mark" aria-hidden="true" />
           <span className="brand__copy"><strong>BluePrint</strong><small>Research workspace</small></span>
         </Link>
         {readerMode ? (
