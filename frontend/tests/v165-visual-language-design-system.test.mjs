@@ -57,7 +57,8 @@ test("collections encode canonical tags, aliases, and candidates distinctly whil
   assert.match(tags, /presentation="chip" taxonomy="candidate"/);
   assert.match(tags, /presentation="chip" taxonomy="alias"/);
   assert.match(library, /<td className="structural-value">\{paper\.year \|\| "—"\}<\/td>/);
-  assert.match(paperDetail, /<StatusBadge tone="warning">Archived<\/StatusBadge>/);
-  assert.match(projects, /project\.status === "archived" \? "warning" : "neutral"/);
-  assert.match(reader, /snapshot\.paper\.lifecycle_state !== "active" \? <StatusBadge tone="warning">/);
+  assert.match(paperDetail, /<StatusBadge>Archived<\/StatusBadge>/);
+  assert.match(projects, /<StatusBadge>\{project\.status\}<\/StatusBadge>/);
+  assert.match(projects, /<StatusBadge>\{project\.priority\}<\/StatusBadge>/);
+  assert.match(reader, /snapshot\.paper\.lifecycle_state !== "active" \? <StatusBadge>\{snapshot\.paper\.lifecycle_state\}/);
 });

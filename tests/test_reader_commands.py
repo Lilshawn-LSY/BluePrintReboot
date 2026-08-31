@@ -13,6 +13,11 @@ from api import dependencies
 from api.main import INVALID_REQUEST_DETAIL, create_app
 from api.routes import COMMAND_UNAVAILABLE_DETAIL
 from api.schemas import MetadataCommandRequest
+from services.library_read_model import (
+    build_paper_detail,
+    build_paper_list_items,
+    build_reader_snapshot,
+)
 from services.paper_metadata_mutation import paper_metadata_revision, paper_reading_status_revision
 from services.reader_commands import (
     EMPTY_NOTE_SHA256,
@@ -89,6 +94,48 @@ def _client(service: ReaderCommandService) -> TestClient:
     return TestClient(app)
 
 
+def _read_model_client(
+    service: ReaderCommandService,
+    index_csv: Path,
+    notes_dir: Path,
+) -> TestClient:
+    """Exercise the status command using identities returned by real read models."""
+
+    workspace_root = index_csv.parent.parent
+    papers_dir = workspace_root / "papers"
+    data_dir = index_csv.parent
+    health_report = {"missing_pdfs": [], "duplicate_pdf_hashes": []}
+    application = create_app()
+    application.dependency_overrides[dependencies.get_reader_command_service] = lambda: service
+    application.dependency_overrides[dependencies.get_paper_list_items] = lambda: build_paper_list_items(
+        index_csv=index_csv,
+        health_report=health_report,
+    )
+    application.dependency_overrides[dependencies.get_paper_detail] = lambda paper_id: build_paper_detail(
+        paper_id,
+        index_csv=index_csv,
+        workspace_root=workspace_root,
+        papers_dir=papers_dir,
+        notes_dir=notes_dir,
+        extracted_text_dir=data_dir / "extracted_text",
+        profile_dir=data_dir / "paper_profiles",
+        projects_dir=data_dir / "projects",
+        health_report=health_report,
+    )
+    application.dependency_overrides[dependencies.get_reader_snapshot] = lambda paper_id: build_reader_snapshot(
+        paper_id,
+        index_csv=index_csv,
+        notes_dir=notes_dir,
+        workspace_root=workspace_root,
+        papers_dir=papers_dir,
+        extracted_text_dir=data_dir / "extracted_text",
+        profile_dir=data_dir / "paper_profiles",
+        projects_dir=data_dir / "projects",
+        health_report=health_report,
+    )
+    return TestClient(application)
+
+
 def test_metadata_revision_is_deterministic_and_excludes_storage_fields() -> None:
     base = {
         "title": " T ",
@@ -122,6 +169,64 @@ def test_reading_status_is_a_narrow_revision_checked_metadata_command(tmp_path: 
     assert read_index_snapshot(index_csv).iloc[0]["status"] == "read"
     with pytest.raises(ReaderCommandConflict):
         service.save_reading_status("paper-1", "reading", paper_reading_status_revision(record))
+
+
+def test_reading_status_api_uses_canonical_library_and_reader_paper_identity(
+    tmp_path: Path,
+) -> None:
+    service, index_csv, notes_dir, _record = _service(tmp_path)
+    client = _read_model_client(service, index_csv, notes_dir)
+
+    library = client.get("/papers?limit=20&offset=0&archive_status=all")
+    assert library.status_code == 200
+    library_item = library.json()["items"][0]
+    canonical_paper_id = library_item["paper_id"]
+
+    detail = client.get(f"/papers/{quote(canonical_paper_id, safe='')}")
+    assert detail.status_code == 200
+    assert detail.json()["paper_id"] == canonical_paper_id
+
+    library_update = client.patch(
+        f"/papers/{quote(canonical_paper_id, safe='')}/reading-status",
+        json={
+            "reading_status": "reading",
+            "expected_revision": detail.json()["reading_status_revision"],
+        },
+    )
+    assert library_update.status_code == 200
+    assert library_update.json()["reading_status"] == "reading"
+
+    reloaded_detail = client.get(f"/papers/{quote(canonical_paper_id, safe='')}")
+    assert reloaded_detail.status_code == 200
+    assert reloaded_detail.json()["status"] == "reading"
+
+    reader = client.get(f"/papers/{quote(canonical_paper_id, safe='')}/reader")
+    assert reader.status_code == 200
+    reader_paper = reader.json()["paper"]
+    assert reader_paper["paper_id"] == canonical_paper_id
+
+    reader_update = client.patch(
+        f"/papers/{quote(reader_paper['paper_id'], safe='')}/reading-status",
+        json={
+            "reading_status": "finished",
+            "expected_revision": reader_paper["reading_status_revision"],
+        },
+    )
+    assert reader_update.status_code == 200
+    assert reader_update.json()["reading_status"] == "finished"
+
+    reloaded_reader = client.get(f"/papers/{quote(canonical_paper_id, safe='')}/reader")
+    assert reloaded_reader.status_code == 200
+    assert reloaded_reader.json()["paper"]["status"] == "finished"
+
+    missing = client.patch(
+        "/papers/genuinely-missing/reading-status",
+        json={
+            "reading_status": "reading",
+            "expected_revision": reader_paper["reading_status_revision"],
+        },
+    )
+    assert missing.status_code == 404
 
 
 def test_workspace_lock_is_reentrant_across_reader_write_paths(tmp_path: Path) -> None:

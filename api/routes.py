@@ -1166,7 +1166,7 @@ def extract_full_text(
     "/papers/{paper_id}/note-blocks",
     response_model=NoteBlockCollectionResponse,
     summary="List structured Note Blocks",
-    description="Return the complete bounded stored-order Note Block collection and its deterministic revision.",
+    description="Return the complete bounded newest-first Note Block collection and its deterministic revision.",
     responses={
         404: {"model": APIError, "description": "No Paper has the requested identity."},
         503: {"model": APIError, "description": "The Note Block storage is corrupt or unavailable."},

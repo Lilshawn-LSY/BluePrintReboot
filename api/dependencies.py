@@ -28,7 +28,13 @@ class ReadModelUnavailable(Exception):
     """An expected API boundary error with no private storage details."""
 
 
-_reader_command_service = ReaderCommandService()
+# Reader commands must operate on the same canonical index and note roots that
+# back Library detail/list and Reader snapshot reads.  Keeping this explicit
+# avoids a second default-path source drifting away from the read model.
+_reader_command_service = ReaderCommandService(
+    index_csv=library_read_model.INDEX_CSV,
+    notes_dir=library_read_model.NOTES_DIR,
+)
 _metadata_enrichment_service = MetadataEnrichmentService()
 _pdf_scan_import_service = PdfScanImportService()
 _paper_removal_service = PaperRemovalService(index_csv=library_read_model.INDEX_CSV, papers_dir=library_read_model.PAPERS_DIR)

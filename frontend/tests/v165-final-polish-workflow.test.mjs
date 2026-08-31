@@ -13,6 +13,8 @@ const sources = Promise.all([
   readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   readFile(new URL("../app/lib/api/client.ts", import.meta.url), "utf8"),
   readFile(new URL("../app/api/blueprint/[...path]/bridge.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../app/components/StatusBadge.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../app/views/ProjectsView.tsx", import.meta.url), "utf8"),
 ]);
 
 test("Reader reserves structural space for the navigation trigger and keeps Library untruncated", async () => {
@@ -62,4 +64,21 @@ test("reading status and new Note Blocks use explicit safe mutation paths", asyn
   assert.match(blocks, /: \[block, \.\.\.collection\.items\]/);
   assert.match(blocks, /setExpandedBlockId\(response\.block\.id\)/);
   assert.match(blocks, /editorTitleRef\.current\?\.focus/);
+});
+
+test("compact domain status markers use centralized semantic tones without recoloring tags", async () => {
+  const [, , , , projectDetail, , , css, , , statusBadge, projects] = await sources;
+  assert.match(statusBadge, /const STATUS_MARKER_TONES/);
+  assert.match(statusBadge, /unread: "neutral"/);
+  assert.match(statusBadge, /reading: "accent"/);
+  assert.match(statusBadge, /finished: "healthy"/);
+  assert.match(statusBadge, /active: "accent"/);
+  assert.match(statusBadge, /paused: "warning"/);
+  assert.match(statusBadge, /archived: "slate"/);
+  assert.match(statusBadge, /urgent: "danger"/);
+  assert.match(statusBadge, /presentation === "chip" \? undefined/);
+  assert.match(css, /--color-status-slate: #64727a/);
+  assert.match(projects, /<StatusBadge>\{project\.status\}<\/StatusBadge>/);
+  assert.match(projects, /<StatusBadge>\{project\.priority\}<\/StatusBadge>/);
+  assert.match(projectDetail, /<StatusBadge>\{project\.status\}<\/StatusBadge>/);
 });

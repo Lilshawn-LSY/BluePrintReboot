@@ -94,6 +94,49 @@ def test_get_create_update_routes_are_typed_and_revisioned(tmp_path: Path) -> No
     assert len(service._load("paper-1")) == 1
 
 
+def test_new_reader_blocks_are_newest_first_after_reload_and_edits_keep_position(
+    tmp_path: Path,
+) -> None:
+    _service, client = _setup(tmp_path)
+    revision = client.get("/papers/paper-1/note-blocks").json()["note_blocks_revision"]
+    created: list[dict[str, object]] = []
+
+    for title in ("Block A", "Block B", "Block C"):
+        response = client.post(
+            "/papers/paper-1/note-blocks",
+            json={**_payload(revision), "title": title},
+        )
+        assert response.status_code == 200
+        created.append(response.json())
+        revision = response.json()["note_blocks_revision"]
+
+    reloaded = client.get("/papers/paper-1/note-blocks")
+    assert reloaded.status_code == 200
+    assert [item["id"] for item in reloaded.json()["items"]] == [
+        created[2]["block"]["id"],
+        created[1]["block"]["id"],
+        created[0]["block"]["id"],
+    ]
+
+    edited_a = client.patch(
+        f"/papers/paper-1/note-blocks/{created[0]['block']['id']}",
+        json={
+            "changes": {"text": "Edited A"},
+            "expected_revision": reloaded.json()["note_blocks_revision"],
+        },
+    )
+    assert edited_a.status_code == 200
+
+    reloaded_after_edit = client.get("/papers/paper-1/note-blocks")
+    assert reloaded_after_edit.status_code == 200
+    assert [item["id"] for item in reloaded_after_edit.json()["items"]] == [
+        created[2]["block"]["id"],
+        created[1]["block"]["id"],
+        created[0]["block"]["id"],
+    ]
+    assert reloaded_after_edit.json()["items"][2]["text"] == "Edited A"
+
+
 def test_strict_requests_reject_server_owned_unknown_and_malformed_values(tmp_path: Path) -> None:
     _service, client = _setup(tmp_path)
     revision = note_blocks_revision("paper-1", [])

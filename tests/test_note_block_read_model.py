@@ -68,12 +68,12 @@ def test_empty_collection_is_successful_and_revision_is_deterministic(tmp_path: 
     assert not note_blocks_path("paper-1", note_blocks_dir).exists()
 
 
-def test_collection_preserves_stored_order_and_excludes_private_fields(tmp_path: Path) -> None:
+def test_collection_is_newest_first_and_excludes_private_fields(tmp_path: Path) -> None:
     index_csv = tmp_path / "data" / "paper_index.csv"
     note_blocks_dir = tmp_path / "data" / "note_blocks"
     _index(index_csv)
     first = {**_block("block-b"), "private_path": "C:/private/paper.pdf"}
-    second = _block("block-a")
+    second = {**_block("block-a"), "created_at": "2026-08-03T00:00:00+00:00"}
     save_note_blocks("paper-1", [first, second], note_blocks_dir)
 
     collection = build_note_block_collection(
@@ -84,7 +84,7 @@ def test_collection_preserves_stored_order_and_excludes_private_fields(tmp_path:
     )
 
     assert collection is not None
-    assert [block["id"] for block in collection["items"]] == ["block-b", "block-a"]
+    assert [block["id"] for block in collection["items"]] == ["block-a", "block-b"]
     assert all("private_path" not in block for block in collection["items"])
     assert collection["note_blocks_revision"] == note_blocks_revision(
         "paper-1",
@@ -172,7 +172,7 @@ def test_reader_collection_exposes_bounded_current_project_links(tmp_path: Path)
     assert "private" not in json.dumps(collection)
 
 
-def test_revision_binds_complete_normalized_state_and_stored_order() -> None:
+def test_revision_binds_complete_normalized_state_in_newest_first_order() -> None:
     first = _block("first")
     second = _block("second")
     baseline = note_blocks_revision("paper-1", [first, second])
@@ -191,7 +191,7 @@ def test_revision_binds_complete_normalized_state_and_stored_order() -> None:
     }.items():
         changed = [{**first, field: value}, second]
         assert note_blocks_revision("paper-1", changed) != baseline
-    assert note_blocks_revision("paper-1", [second, first]) != baseline
+    assert note_blocks_revision("paper-1", [second, first]) == baseline
 
 
 def test_collection_count_is_bounded() -> None:
