@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from api.adapters import (
@@ -43,6 +43,7 @@ from api.dependencies import (
     get_note_block_command_service,
     get_paper_detail,
     get_paper_list_items,
+    get_paper_removal_service,
     get_pdf_scan_import_service,
     get_project_detail,
     get_project_command_service,
@@ -59,6 +60,8 @@ from api.schemas import (
     AddNoteBlockLinkRequest,
     AddPaperLinkRequest,
     ArchiveProjectRequest,
+    ArchivePaperRequest,
+    ArchivePaperResponse,
     ArchiveStatus,
     CandidateSummaryResponse,
     TagCandidateReviewQueueResponse,
@@ -78,6 +81,8 @@ from api.schemas import (
     ManagedPdfReconnectRequest,
     ManagedPdfReconnectResponse,
     ManagedPdfScanResponse,
+    RemoveManagedPdfRequest,
+    RemoveManagedPdfResponse,
     MetadataCommandRequest,
     MetadataCommandResponse,
     MetadataEnrichmentPreviewRequest,
@@ -104,6 +109,8 @@ from api.schemas import (
     RemoveNoteBlockLinkRequest,
     ReadingNoteCommandRequest,
     ReadingNoteCommandResponse,
+    ReadingStatusCommandRequest,
+    ReadingStatusCommandResponse,
     ReaderSnapshotResponse,
     SettingsSummaryResponse,
     ProjectDetail,
@@ -149,6 +156,12 @@ from services.pdf_scan_import import (
     PdfScanImportService,
     PdfScanImportUnavailable,
 )
+from services.paper_removal import (
+    PaperRemovalConflict,
+    PaperRemovalNotFound,
+    PaperRemovalService,
+    PaperRemovalUnavailable,
+)
 from services.settings_read_model import SettingsSummary as DomainSettingsSummary
 from services.tag_read_model import CandidateReviewQueue as DomainCandidateReviewQueue, CandidateSummary as DomainCandidateSummary, CanonicalTag as DomainCanonicalTag
 from services.tag_candidate_review import (
@@ -185,6 +198,7 @@ NOTE_BLOCK_COMMAND_CONFLICT_DETAIL = "The saved Note Block collection changed. R
 NOTE_BLOCK_COMMAND_UNAVAILABLE_DETAIL = "The Note Block command could not be completed."
 NOTE_BLOCK_COMMAND_NOT_FOUND_DETAIL = "The requested Paper or Note Block was not found."
 PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL = "The managed PDF scan or import could not be completed."
+PAPER_REMOVAL_UNAVAILABLE_DETAIL = "The requested Paper removal could not be completed safely."
 TAG_GOVERNANCE_CONFLICT_DETAIL = "The canonical Tag Book changed. Reload the current registry before retrying."
 TAG_GOVERNANCE_UNAVAILABLE_DETAIL = "The canonical Tag Book command could not be completed."
 TAG_CANDIDATE_CONFLICT_DETAIL = "The candidate review or Paper tags changed. Reload the current candidate review before retrying."
@@ -872,6 +886,35 @@ def import_managed_pdfs(
 
 
 @router.post(
+    "/papers/upload",
+    response_model=ManagedPdfImportResponse,
+    summary="Upload and register managed PDFs",
+    description=(
+        "Accept explicit PDF uploads only, stage them in the managed library, and route "
+        "them through the same duplicate-safe registration path as managed-directory imports."
+    ),
+    responses={
+        422: {"model": APIError, "description": "The uploaded PDF selection is invalid."},
+        503: {"model": APIError, "description": "The managed PDF upload could not be completed."},
+    },
+)
+async def upload_managed_pdfs(
+    files: Annotated[list[UploadFile], File(...)],
+    commands: Annotated[PdfScanImportService, Depends(get_pdf_scan_import_service)],
+) -> ManagedPdfImportResponse:
+    try:
+        pairs = [(str(upload.filename or ""), upload.file) for upload in files]
+        return ManagedPdfImportResponse.model_validate(commands.import_uploaded(pairs))
+    except PdfReconnectInvalid:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except PdfScanImportUnavailable:
+        raise HTTPException(status_code=503, detail=PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL) from None
+    finally:
+        for upload in files:
+            await upload.close()
+
+
+@router.post(
     "/papers/reconnect",
     response_model=ManagedPdfReconnectResponse,
     summary="Reconnect a missing Paper to an exact managed PDF",
@@ -902,6 +945,56 @@ def reconnect_managed_pdf(
         raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
     except PdfScanImportUnavailable:
         raise HTTPException(status_code=503, detail=PDF_SCAN_IMPORT_UNAVAILABLE_DETAIL) from None
+
+
+@router.post(
+    "/papers/{paper_id}/remove-pdf",
+    response_model=RemoveManagedPdfResponse,
+    summary="Remove managed PDF bytes with recovery copy",
+    description=(
+        "Explicitly remove only the managed PDF bytes after a verified recovery copy. "
+        "Paper metadata, notes, Note Blocks, Tags, and Project links are preserved."
+    ),
+)
+def remove_managed_pdf(
+    request: RemoveManagedPdfRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    removals: Annotated[PaperRemovalService, Depends(get_paper_removal_service)],
+) -> RemoveManagedPdfResponse:
+    try:
+        result = removals.remove_managed_pdf(paper_id, request.expected_pdf_revision)
+    except PaperRemovalNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except PaperRemovalConflict:
+        raise HTTPException(status_code=409, detail="The managed PDF changed. Reload the Paper before retrying.") from None
+    except PaperRemovalUnavailable:
+        raise HTTPException(status_code=503, detail=PAPER_REMOVAL_UNAVAILABLE_DETAIL) from None
+    return RemoveManagedPdfResponse(**result.__dict__)
+
+
+@router.post(
+    "/papers/{paper_id}/archive",
+    response_model=ArchivePaperResponse,
+    summary="Archive Paper from active Library",
+    description=(
+        "Explicitly remove a Paper from active Library views without deleting its metadata, "
+        "managed PDF, Reading Note, Note Blocks, Tags, or Project links."
+    ),
+)
+def archive_paper(
+    request: ArchivePaperRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    removals: Annotated[PaperRemovalService, Depends(get_paper_removal_service)],
+) -> ArchivePaperResponse:
+    try:
+        result = removals.archive_paper(paper_id, request.expected_lifecycle_revision)
+    except PaperRemovalNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except PaperRemovalConflict:
+        raise HTTPException(status_code=409, detail="The Paper lifecycle changed. Reload the Paper before retrying.") from None
+    except PaperRemovalUnavailable:
+        raise HTTPException(status_code=503, detail=PAPER_REMOVAL_UNAVAILABLE_DETAIL) from None
+    return ArchivePaperResponse(**result.__dict__)
 
 
 @router.get(
@@ -1073,7 +1166,7 @@ def extract_full_text(
     "/papers/{paper_id}/note-blocks",
     response_model=NoteBlockCollectionResponse,
     summary="List structured Note Blocks",
-    description="Return the complete bounded stored-order Note Block collection and its deterministic revision.",
+    description="Return the complete bounded newest-first Note Block collection and its deterministic revision.",
     responses={
         404: {"model": APIError, "description": "No Paper has the requested identity."},
         503: {"model": APIError, "description": "The Note Block storage is corrupt or unavailable."},
@@ -1095,7 +1188,7 @@ def note_block_collection(
     "/papers/{paper_id}/note-blocks",
     response_model=NoteBlockCommandResponse,
     summary="Create structured Note Block",
-    description="Explicitly append one server-owned Note Block when the complete collection revision matches.",
+    description="Explicitly create one server-owned Note Block at the top of the stored collection when its complete revision matches.",
     responses={
         404: {"model": APIError, "description": "The Paper identity is unknown."},
         409: {"model": APIError, "description": "The Note Block collection revision is stale."},
@@ -1210,6 +1303,38 @@ def save_reader_metadata(
             "sha256": result.reading_note.sha256,
             "size_bytes": result.reading_note.size_bytes,
         },
+    )
+
+
+@router.patch(
+    "/papers/{paper_id}/reading-status",
+    response_model=ReadingStatusCommandResponse,
+    summary="Save Paper reading status",
+    description="Explicitly save one existing reading state when its narrow status revision still matches.",
+)
+def save_reading_status(
+    request: ReadingStatusCommandRequest,
+    paper_id: Annotated[str, Path(min_length=1, max_length=200)],
+    commands: Annotated[ReaderCommandService, Depends(get_reader_command_service)],
+) -> ReadingStatusCommandResponse:
+    try:
+        result = commands.save_reading_status(
+            paper_id,
+            request.reading_status,
+            request.expected_revision,
+        )
+    except ReaderCommandNotFound:
+        raise HTTPException(status_code=404, detail="Paper not found.") from None
+    except ReaderCommandConflict:
+        raise HTTPException(status_code=409, detail=COMMAND_CONFLICT_DETAIL) from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail=COMMAND_INVALID_DETAIL) from None
+    except ReaderCommandUnavailable:
+        raise HTTPException(status_code=503, detail=COMMAND_UNAVAILABLE_DETAIL) from None
+    return ReadingStatusCommandResponse(
+        status=result.status,
+        reading_status=result.reading_status,
+        reading_status_revision=result.reading_status_revision,
     )
 
 

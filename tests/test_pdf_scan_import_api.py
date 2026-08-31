@@ -104,6 +104,35 @@ def test_scan_finds_new_pdf_without_creating_a_paper_and_ignores_non_pdfs(tmp_pa
     assert str(tmp_path) not in response.text
 
 
+def test_upload_registers_pdf_through_the_same_duplicate_safe_import_boundary(tmp_path: Path) -> None:
+    workspace, papers_dir, notes_dir, index_csv = _workspace(tmp_path)
+    client = _client(workspace, papers_dir, notes_dir, index_csv)
+
+    uploaded = client.post(
+        "/papers/upload",
+        files=[("files", ("browser-upload.pdf", PDF_BYTES, "application/pdf"))],
+    )
+
+    assert uploaded.status_code == 200
+    assert uploaded.json()["imported_count"] == 1
+    assert uploaded.json()["results"][0]["status"] == "imported"
+    duplicate = client.post(
+        "/papers/upload",
+        files=[("files", ("second-name.pdf", PDF_BYTES, "application/pdf"))],
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["results"][0]["status"] == "duplicate_content"
+    assert len(read_index_snapshot(index_csv)) == 1
+    assert not (papers_dir / "second-name.pdf").exists()
+
+    rejected = client.post(
+        "/papers/upload",
+        files=[("files", ("not-a-pdf.txt", b"plain text", "text/plain"))],
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["results"][0]["status"] == "invalid"
+
+
 def test_scan_identifies_registered_and_content_duplicate_pdfs_without_new_rows(tmp_path: Path) -> None:
     workspace, papers_dir, notes_dir, index_csv = _workspace(tmp_path)
     (papers_dir / "Registered.pdf").write_bytes(PDF_BYTES)

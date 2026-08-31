@@ -39,7 +39,7 @@ test("Projects keeps the collection first and subordinates creation and link man
   assert.match(detail, /project-material-row/);
   assert.match(detail, /project-secondary-actions/);
   assert.ok(detail.indexOf('title="Linked Papers"') < detail.indexOf('title="Edit Project"'));
-  assert.match(detail, /linkTypeLabel\(link\.link_type\)/);
+  assert.match(detail, /<RelationshipLabel type=\{link\.link_type\}/);
   assert.match(detail, /targetStateTone\(link\.target_state\)/);
   assert.doesNotMatch(detail, /<DataTableShell/);
 });

@@ -268,6 +268,11 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const candidateAbortControllerRef = useRef<AbortController | null>(null);
   const tagBookRequestRef = useRef(0);
   const [mutationBusy, setMutationBusy] = useState(false);
+  const [readingStatus, setReadingStatus] = useState<"unread" | "reading" | "read" | "finished">(
+    snapshot.paper.status === "reading" || snapshot.paper.status === "read" || snapshot.paper.status === "finished" ? snapshot.paper.status : "unread",
+  );
+  const [readingStatusRevision, setReadingStatusRevision] = useState(snapshot.paper.reading_status_revision);
+  const [readingStatusMessage, setReadingStatusMessage] = useState("");
   const [researchPanelCollapsed, setResearchPanelCollapsed] = useState(false);
   const [researchPanelWidth, setResearchPanelWidth] = useState(DEFAULT_RESEARCH_PANEL_WIDTH);
   const [researchPanelResizing, setResearchPanelResizing] = useState(false);
@@ -343,6 +348,9 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
       || (metadataDraft && JSON.stringify(metadataDraft.draft) !== JSON.stringify(metadataDraft.baseline)),
     ));
     setDraftStorageReady(true);
+    setReadingStatus(snapshot.paper.status === "reading" || snapshot.paper.status === "read" || snapshot.paper.status === "finished" ? snapshot.paper.status : "unread");
+    setReadingStatusRevision(snapshot.paper.reading_status_revision);
+    setReadingStatusMessage("");
   }, [metadataDraftKey, noteDraftKey, snapshot]);
   useEffect(() => {
     const routeParams = new URLSearchParams(readerSearch);
@@ -474,6 +482,27 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
 
   const finishMutation = (token: number) => {
     if (mutationGate.current.release(token)) setMutationBusy(false);
+  };
+
+  const saveReadingStatus = async (nextStatus: "unread" | "reading" | "read" | "finished") => {
+    if (mutationBusy) return;
+    const mutationToken = beginMutation();
+    if (mutationToken === null) return;
+    setReadingStatusMessage("Saving reading status…");
+    try {
+      const response = await apiClient.saveReadingStatus(
+        snapshot.paper.paper_id,
+        nextStatus,
+        readingStatusRevision,
+      );
+      setReadingStatus(response.reading_status);
+      setReadingStatusRevision(response.reading_status_revision);
+      setReadingStatusMessage(`Reading status saved: ${response.reading_status === "finished" ? "Finished" : response.reading_status === "read" ? "Read" : response.reading_status === "reading" ? "Reading" : "Unread"}.`);
+    } catch (error) {
+      setReadingStatusMessage(error instanceof ApiClientError ? error.message : "Reading status could not be saved.");
+    } finally {
+      finishMutation(mutationToken);
+    }
   };
 
   useEffect(() => {
@@ -1101,6 +1130,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
     <div className="reader-workspace">
       <header className="reader-workspace__chrome">
         <h1 className="sr-only">Reader: {editor.metadata.draft.title || snapshot.paper.title}</h1>
+        <span className="reader-workspace__navigation-slot" aria-hidden="true" />
         <Breadcrumbs items={[{ label: "Library", href: "/library" }, { label: editor.metadata.draft.title || snapshot.paper.title, href: detailHref }, { label: "Reader" }]} />
         <div className="reader-workspace__utilities" aria-label="Reader utilities">
           <button
@@ -1115,7 +1145,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
             aria-pressed={activeUtility === "full-text"}
             onClick={(event) => openUtility("full-text", event.currentTarget)}
           ><FileText size={15} />Full Text</button>
-          {snapshot.paper.lifecycle_state !== "active" ? <StatusBadge tone={snapshot.paper.archived ? "neutral" : "warning"}>{snapshot.paper.lifecycle_state}</StatusBadge> : null}
+          {snapshot.paper.lifecycle_state !== "active" ? <StatusBadge>{snapshot.paper.lifecycle_state}</StatusBadge> : null}
         </div>
       </header>
       <div ref={readerLayoutRef} className={`${activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"}${researchPanelResizing ? " is-resizing" : ""}`} data-research-collapsed={researchPanelCollapsed} style={layoutStyle}>
@@ -1133,6 +1163,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                   </div>
                   <button className="reader-research-panel__collapse" type="button" aria-label="Collapse research panel" onClick={() => setResearchPanelCollapsed(true)}><ChevronLeft size={16} /></button>
                 </div>
+                <label className="reader-paper-context__status"><span>Reading status</span><StatusBadge>{readingStatus}</StatusBadge><select value={readingStatus} disabled={mutationBusy} onChange={(event) => void saveReadingStatus(event.target.value as "unread" | "reading" | "read" | "finished")}><option value="unread">Unread</option><option value="reading">Reading</option><option value="read">Read</option><option value="finished">Finished</option></select></label>
+                {readingStatusMessage ? <p className="reader-editor__status" role="status">{readingStatusMessage}</p> : null}
                 {draftRestored ? <div className="reader-paper-context__actions"><span className="draft-restored-notice" role="status">Draft restored</span></div> : null}
               </section>
               <div className="reader-panel-tabs" role="tablist" aria-label="Research panel tasks">
@@ -1202,7 +1234,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
               <div>
                 <h2 id="reading-note-editor-title">Paper Note</h2>
               </div>
-              {noteUnavailable ? <StatusBadge tone="danger">Unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
+              {noteUnavailable ? <StatusBadge tone="rose">Unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
             </div>
             {noteUnavailable ? (
               <div className="reader-note__message" role="status">
@@ -1373,7 +1405,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         <div className="metadata-review-backdrop" role="presentation">
           <div className="metadata-review-dialog" role="dialog" aria-modal="true" aria-labelledby="metadata-enrichment-title" tabIndex={-1} ref={metadataDialogRef}>
             <div className="reader-note__heading">
-              <div><p className="eyebrow">Review before save</p><h2 id="metadata-enrichment-title">Metadata updates</h2></div>
+              <div><h2 id="metadata-enrichment-title">Metadata updates</h2></div>
               <button className="reader-research-panel__collapse" type="button" aria-label="Close metadata updates" disabled={enrichment.status === "saving"} onClick={closeMetadataReview}><X size={16} /></button>
             </div>
             <p className="reader-editor__status" role="status" aria-live="polite">{enrichment.message || "Looking for metadata updates. Nothing is applied automatically."}</p>

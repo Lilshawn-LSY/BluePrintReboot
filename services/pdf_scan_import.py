@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import stat
+import os
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -22,6 +24,10 @@ class PdfReconnectConflict(RuntimeError):
 
 class PdfReconnectInvalid(ValueError):
     """A reconnect request is outside the bounded managed-PDF contract."""
+
+
+MAX_UPLOAD_FILES = 100
+MAX_UPLOAD_BYTES_PER_FILE = 100 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -525,3 +531,105 @@ class PdfScanImportService:
             "imported_count": imported_count,
             "results": results,
         }
+
+    def import_uploaded(self, files: list[tuple[str, Any]]) -> dict[str, Any]:
+        """Stage explicit browser uploads inside ``papers/`` then use normal import checks.
+
+        Uploads never bypass the managed-directory scanner.  Each staged file is
+        revalidated by :meth:`import_selected`, retaining duplicate detection and the
+        same index registration path as explicitly selected managed PDFs.
+        """
+
+        if not files or len(files) > MAX_UPLOAD_FILES:
+            raise PdfReconnectInvalid
+        staged: list[tuple[str, Path]] = []
+        immediate_results: list[dict[str, Any]] = []
+        try:
+            with self._write_lock():
+                self.papers_dir.mkdir(parents=True, exist_ok=True)
+                for source_name, source in files:
+                    filename = PurePosixPath(str(source_name or "").replace("\\", "/")).name
+                    if not filename or not filename.casefold().endswith(".pdf"):
+                        immediate_results.append(
+                            {
+                                "relative_path": "",
+                                "filename": filename or "Unnamed upload",
+                                "status": "invalid",
+                                "message": "Only PDF files can be imported.",
+                                "can_import": False,
+                                "size_bytes": 0,
+                                "paper_id": "",
+                            }
+                        )
+                        continue
+                    destination = self._available_upload_destination(filename)
+                    temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.upload")
+                    byte_count = 0
+                    header = b""
+                    try:
+                        with temporary.open("xb") as writer:
+                            while True:
+                                chunk = source.read(1024 * 1024)
+                                if not chunk:
+                                    break
+                                if not isinstance(chunk, bytes):
+                                    raise OSError("Upload stream must return bytes.")
+                                byte_count += len(chunk)
+                                if byte_count > MAX_UPLOAD_BYTES_PER_FILE:
+                                    raise ValueError("PDF upload exceeds the configured size limit.")
+                                if len(header) < 4096:
+                                    header += chunk[: 4096 - len(header)]
+                                writer.write(chunk)
+                            writer.flush()
+                            os.fsync(writer.fileno())
+                        if byte_count <= 0 or b"%PDF-" not in header:
+                            raise ValueError("The uploaded file does not contain a readable PDF header.")
+                        os.replace(temporary, destination)
+                    except (OSError, ValueError):
+                        if temporary.exists():
+                            temporary.unlink()
+                        immediate_results.append(
+                            {
+                                "relative_path": "",
+                                "filename": filename,
+                                "status": "invalid",
+                                "message": "The uploaded file is not a readable PDF within the supported size limit.",
+                                "can_import": False,
+                                "size_bytes": byte_count,
+                                "paper_id": "",
+                            }
+                        )
+                        continue
+                    staged.append((self._relative_for_discovered_path(destination), destination))
+
+                imported = self.import_selected([relative_path for relative_path, _path in staged])
+                results = [*immediate_results, *imported["results"]]
+                outcomes = {str(item.get("relative_path", "")): item for item in imported["results"]}
+                # A duplicate or invalid upload has no existing Paper ownership. Remove
+                # only that just-created staging target; never touch pre-existing files.
+                for relative_path, destination in staged:
+                    outcome = outcomes.get(relative_path, {})
+                    if outcome.get("status") in {"already_registered", "duplicate_content", "invalid"} and destination.is_file():
+                        destination.unlink()
+                imported_count = sum(item.get("status") == "imported" for item in results)
+                return {
+                    "message": f"Processed {len(results)} uploaded file(s); registered {imported_count} new Paper(s).",
+                    "imported_count": imported_count,
+                    "results": results,
+                }
+        except (PdfReconnectInvalid, PdfScanImportUnavailable):
+            raise
+        except Exception:
+            raise PdfScanImportUnavailable from None
+
+    def _available_upload_destination(self, filename: str) -> Path:
+        """Allocate one collision-free managed filename without trusting browser paths."""
+
+        stem = Path(filename).stem.strip() or "uploaded-paper"
+        suffix = ".pdf"
+        candidate = self.papers_dir / f"{stem}{suffix}"
+        index = 2
+        while candidate.exists():
+            candidate = self.papers_dir / f"{stem} ({index}){suffix}"
+            index += 1
+        return candidate

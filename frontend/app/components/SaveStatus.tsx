@@ -4,9 +4,9 @@ import type { SaveState } from "../lib/drafts/revision-draft.mjs";
 
 export function SaveStatus({ state }: { state: SaveState }) {
   const tone = state === "saved"
-    ? "accent"
+    ? "green"
     : state === "unsaved" || state === "saving"
-      ? "neutral"
-      : "danger";
+      ? "blue"
+      : "rose";
   return <StatusBadge tone={tone}>{saveStateLabel(state)}</StatusBadge>;
 }

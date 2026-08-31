@@ -437,6 +437,9 @@ class PaperDetail(PaperListItem):
                 "profile_available": True,
                 "lifecycle_state": "active",
                 "recoverable_warnings": [],
+                "reading_status_revision": "a" * 64,
+                "pdf_revision": "b" * 64,
+                "lifecycle_revision": "c" * 64,
             }
         },
     )
@@ -455,6 +458,9 @@ class PaperDetail(PaperListItem):
     profile_available: bool
     lifecycle_state: str
     recoverable_warnings: list[str]
+    reading_status_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    pdf_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    lifecycle_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ReaderPdfState(str, Enum):
@@ -563,7 +569,7 @@ class ManagedPdfScanResponse(StrictResponseModel):
 class ManagedPdfImportResult(StrictResponseModel):
     relative_path: str
     filename: str
-    status: Literal["imported", "already_registered", "missing", "invalid", "unavailable"]
+    status: Literal["imported", "already_registered", "duplicate_content", "missing", "invalid", "unavailable"]
     message: str
     can_import: bool
     size_bytes: int = Field(ge=0)
@@ -583,8 +589,44 @@ class ManagedPdfReconnectResponse(StrictResponseModel):
     message: str
 
 
+class ReadingStatusCommandResponse(StrictResponseModel):
+    status: Literal["saved", "no_op"]
+    reading_status: Literal["unread", "reading", "read", "finished"]
+    reading_status_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RemoveManagedPdfResponse(StrictResponseModel):
+    status: Literal["removed", "already_missing"]
+    paper_id: str
+    pdf_removed: bool
+    recovery_copy_created: bool
+    message: str
+
+
+class ArchivePaperResponse(StrictResponseModel):
+    status: Literal["archived", "already_archived"]
+    paper_id: str
+    lifecycle_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    message: str
+
+
 class StrictRequestModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class ReadingStatusCommandRequest(StrictRequestModel):
+    reading_status: Literal["unread", "reading", "read", "finished"]
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class RemoveManagedPdfRequest(StrictRequestModel):
+    expected_pdf_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    confirm: Literal[True]
+
+
+class ArchivePaperRequest(StrictRequestModel):
+    expected_lifecycle_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    confirm: Literal[True]
 
 
 class FullTextExtractionRequest(StrictRequestModel):

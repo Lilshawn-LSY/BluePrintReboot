@@ -18,11 +18,12 @@ const STATE_LABELS: Record<FullTextCacheState, string> = {
 };
 
 
-function statusTone(state: FullTextCacheState): "neutral" | "accent" | "warning" | "danger" {
-  if (state === "failed") return "danger";
-  if (state === "stale" || state === "ocr_needed") return "warning";
-  if (state === "cached" || state === "success") return "accent";
-  return "neutral";
+function statusTone(state: FullTextCacheState): "slate" | "blue" | "green" | "amber" | "rose" {
+  if (state === "failed") return "rose";
+  if (state === "stale" || state === "ocr_needed") return "amber";
+  if (state === "success") return "green";
+  if (state === "cached") return "blue";
+  return "slate";
 }
 
 
@@ -89,7 +90,7 @@ export function FullTextWorkspace({ paperId }: { paperId: string }) {
         <div>
           <h2 id="full-text-title">Full Text</h2>
         </div>
-        <StatusBadge tone={data ? statusTone(data.state) : ui.phase === "error" ? "danger" : "neutral"}>
+        <StatusBadge tone={data ? statusTone(data.state) : ui.phase === "error" ? "rose" : "slate"}>
           {data ? STATE_LABELS[data.state] : ui.phase === "error" ? "Unavailable" : "Loading"}
         </StatusBadge>
       </div>

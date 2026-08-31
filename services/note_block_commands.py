@@ -18,6 +18,7 @@ from services.note_block_read_model import (
     MAX_NOTE_BLOCK_TEXT_LENGTH,
     MAX_NOTE_BLOCK_TITLE_LENGTH,
     NoteBlockItem,
+    newest_first_note_blocks,
     normalized_note_blocks,
     note_blocks_revision,
 )
@@ -216,8 +217,7 @@ class NoteBlockCommandService:
     def _load(self, paper_id: str) -> list[dict[str, Any]]:
         try:
             blocks = note_block_store.list_note_blocks(paper_id, self.note_blocks_dir)
-            normalized_note_blocks(paper_id, blocks)
-            return blocks
+            return [dict(block) for block in newest_first_note_blocks(paper_id, blocks)]
         except Exception:
             raise NoteBlockCommandUnavailable from None
 
@@ -270,7 +270,7 @@ class NoteBlockCommandService:
             }
             persisted = self._persist(
                 paper_id,
-                [*blocks, created],
+                [created, *blocks],
                 expected_block_id=created["id"],
             )
             block = next(item for item in persisted if item["id"] == created["id"])

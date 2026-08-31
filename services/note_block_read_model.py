@@ -128,13 +128,32 @@ def normalized_note_blocks(
     return public
 
 
+def newest_first_note_blocks(
+    paper_id: str,
+    blocks: list[Mapping[str, Any]],
+) -> list[NoteBlockItem]:
+    """Return the deterministic Reader presentation and command order.
+
+    Creation time is the Note Block ordering invariant.  ``updated_at`` is
+    deliberately excluded: editing a historical observation must not promote
+    it above more recent observations.  Block ID is only a deterministic
+    tie-breaker for legacy records that share a creation timestamp.
+    """
+
+    return sorted(
+        normalized_note_blocks(paper_id, blocks),
+        key=lambda block: (block["created_at"], block["id"]),
+        reverse=True,
+    )
+
+
 def note_blocks_revision(
     paper_id: str,
     blocks: list[Mapping[str, Any]],
 ) -> str:
-    """Bind optimistic concurrency to the complete normalized stored-order collection."""
+    """Bind optimistic concurrency to the complete normalized newest-first collection."""
 
-    return _canonical_revision(normalized_note_blocks(paper_id, blocks))
+    return _canonical_revision(newest_first_note_blocks(paper_id, blocks))
 
 
 def _project_links_revision(
@@ -214,7 +233,7 @@ def build_note_block_collection(
     if record is None:
         return None
 
-    blocks = normalized_note_blocks(
+    blocks = newest_first_note_blocks(
         paper_id,
         list_note_blocks(paper_id, Path(note_blocks_dir)),
     )

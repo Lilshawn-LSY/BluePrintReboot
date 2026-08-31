@@ -1,7 +1,7 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.6.4",
-  "release_name": "v1.6.4-visual-hierarchy-density",
+  "product_version": "1.6.5",
+  "release_name": "v1.6.5-visual-language-design-system-refinement",
   "as_of": "2026-08-29",
   "controlled_statuses": [
     "VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 147,
+        "passed": 148,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
         "date": "2026-08-29",
-        "reference": "v1.6.4 local validation",
-        "summary": "The offline repository readiness smoke completed with 147 passed, 0 warnings, and 0 failed, including the v1.6.4 release-state, shared visual-system, and default pdf-inspector 0.2.6 checks."
+        "reference": "v1.6.5 local validation",
+        "summary": "The offline repository readiness smoke completed with 148 passed, 0 warnings, and 0 failed, including the v1.6.5 release-state, visual-language, and default pdf-inspector 0.2.6 checks."
       }
     },
     "full_pytest": {
@@ -131,8 +131,8 @@
       },
       "evidence": {
         "date": "2026-08-29",
-        "reference": "v1.6.4 local validation",
-        "summary": "The v1.6.4 full Python suite completed with 822 passed, 0 failed, and 0 skipped using disposable fixtures, including existing Reader, draft, Project, Note Block, tag-command, API, and release-contract regressions."
+        "reference": "v1.6.5 local validation",
+        "summary": "The v1.6.5 full Python suite completed with 822 passed, 0 failed, and 0 skipped using disposable fixtures, including existing Reader, draft, Project, Note Block, tag-command, API, and release-contract regressions."
       }
     },
     "focused_reader_snapshot": {
@@ -338,7 +338,7 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-29",
-        "reference": "v1.6.4 local validation",
+        "reference": "v1.6.5 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -349,8 +349,8 @@
       "counts": null,
       "evidence": {
         "date": "2026-08-29",
-        "reference": "v1.6.4 local validation",
-        "summary": "The production frontend build passed with compact Reader chrome, overlay utilities, adaptive PDF viewing, and the local PDF.js worker asset."
+        "reference": "v1.6.5 local validation",
+        "summary": "The production frontend build passed with rule-led workspace surfaces, compact Reader chrome, overlay utilities, adaptive PDF viewing, and the local PDF.js worker asset."
       }
     },
     "frontend_node_tests": {
@@ -358,15 +358,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm --prefix frontend test",
       "counts": {
-          "passed": 22,
+          "passed": 23,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
         "date": "2026-08-29",
-        "reference": "v1.6.4 local validation",
-        "summary": "The complete frontend Node suite passed with compact Reader chrome and utilities, session panel sizing, PDF fit calculations, Project linked-material density, Dashboard/shell presentation, local draft recovery, and conflict coverage."
+        "reference": "v1.6.5 local validation",
+        "summary": "The complete frontend Node suite passed with visual-language tokens, quiet status presentation, compact Reader chrome and utilities, PDF fit calculations, local draft recovery, and conflict coverage."
       }
     },
     "frontend_projects_tags": {
@@ -1361,11 +1361,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.6.4 Visual hierarchy and density browser verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
+    "name": "v1.6.5 Visual language and design-system browser verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
     "evidence": {
       "date": "2026-08-29",
       "reference": "docs/UI_DESIGN_SYSTEM.md",
-      "summary": "Keep v1.6.4 Reader compact chrome and utility-drawer focus, Project linked-material density, Dashboard and sidebar layout, plus PDF fit modes and restored drafts browser verification separate from local implementation and automated validation."
+      "summary": "Keep v1.6.5 rule hierarchy, flat collection density, quiet status labels, Reader workspace separators, PDF fit modes, and restored-draft browser verification separate from local implementation and automated validation."
     }
   },
   "historical_evidence": {

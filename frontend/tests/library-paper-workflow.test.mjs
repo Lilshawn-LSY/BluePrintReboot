@@ -11,7 +11,7 @@ test("Library makes the paper collection primary and selects papers into a conte
 
   assert.match(library, /<PageHeader title="Library"/);
   assert.match(library, /<Section title="Papers">/);
-  assert.ok(library.indexOf('<Section title="Papers">') < library.indexOf('title="Scan and import PDFs"'));
+  assert.match(library, /library-operation-drawer/);
   assert.match(library, /placeholder="Title, author, journal, DOI…"/);
   assert.match(library, />Library state</);
   assert.match(library, /Reset filters/);
@@ -24,6 +24,9 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.match(library, />Inspect</);
   assert.match(library, /selectionControls\.current\.get\(dismissedPaperId\)\?\.focus\(\)/);
   assert.match(library, /className="paper-link"/);
+  assert.match(library, /<table className="library-paper-table"><colgroup>/);
+  assert.match(library, /library-paper-table__title/);
+  assert.match(library, /library-paper-table__inspect/);
   assert.match(library, /<LibraryPaperInspector/);
   assert.doesNotMatch(library, /<th>Actions<\/th>/);
   assert.doesNotMatch(library, />Detail<\/Link>/);
@@ -33,13 +36,23 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.match(inspector, /aria-label="Selected paper"/);
   assert.match(inspector, /Open Reader/);
   assert.match(inspector, /View Paper Detail/);
-  assert.match(inspector, /Enrich metadata/);
+  assert.match(inspector, /Find metadata/);
   assert.match(inspector, /No tags yet/);
   assert.match(inspector, /Linked to \$\{count\} project/);
   assert.match(css, /\.library-collection-layout--with-inspector/);
   assert.match(css, /\.library-paper-row\[data-selected="true"\]/);
   assert.match(css, /\.library-paper-row__tags/);
   assert.match(css, /\.library-paper-inspector__abstract/);
+  assert.match(library, /className="metadata-enrichment-table"/);
+  assert.match(library, /data-label="Current"/);
+  assert.match(library, /data-label="Candidate"/);
+  assert.match(css, /\.metadata-enrichment-table \{ min-width: 0; table-layout: fixed; \}/);
+  assert.match(css, /@container \(max-width: 22rem\)/);
+  assert.match(css, /\.library-paper-inspector \.metadata-enrichment-table td \{ min-width: 0; display: grid; grid-template-columns: 5\.25rem minmax\(0, 1fr\);/);
+  assert.match(css, /\.library-collection-layout--with-inspector \{ grid-template-columns: minmax\(0, 1fr\) clamp\(19rem, 22vw, 24rem\);/);
+  assert.match(css, /@media \(min-width: 72\.0625rem\) and \(max-width: 89\.9375rem\)/);
+  assert.match(css, /\.library-collection-layout--with-inspector \.library-paper-inspector \{ position: absolute;/);
+  assert.match(css, /\.library-paper-table \{ min-width: 44rem; table-layout: fixed; \}/);
 });
 
 test("metadata enrichment remains explicit and contextual to the selected paper", async () => {
@@ -47,7 +60,7 @@ test("metadata enrichment remains explicit and contextual to the selected paper"
 
   assert.match(library, /previewMetadataEnrichment\(paperId\)/);
   assert.match(library, /saveReaderMetadata\(enrichment\.paper_id, changes, enrichment\.metadata_revision\)/);
-  assert.match(library, /Review each candidate before applying it\./);
+  assert.match(library, /Review and choose fields before applying\./);
   assert.match(library, /Apply selected fields/);
   assert.match(library, /checked=\{selectedFields\.includes\(field\.field\)\}/);
   assert.match(library, /Candidate details/);

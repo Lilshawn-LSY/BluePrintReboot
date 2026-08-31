@@ -145,7 +145,7 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /isReaderRoute/);
-  assert.equal(JSON.parse(packageJson).version, "1.6.4");
+  assert.equal(JSON.parse(packageJson).version, "1.6.5");
   assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
   assert.doesNotMatch(shell, /packageMetadata\.version|applicationVersion/);
   assert.doesNotMatch(sidebar, /v\{applicationVersion\}|Research workspace · v/);
@@ -202,7 +202,8 @@ test("Reader snapshot states remain independent and stale paper state is hidden"
   assert.match(readerView, /reader-snapshot:\$\{paperId\}:\$\{retryCount\}/);
   assert.match(readerView, /apiClient\.getReaderSnapshot\(paperId\)/);
   assert.doesNotMatch(readerView, /apiClient\.getPaper\(paperId\)/);
-  assert.match(resourceHook, /if \(state\.resourceKey !== activeResourceKey\) return \{ status: "loading", retry \}/);
+  assert.match(resourceHook, /current\.resourceKey === activeResourceKey && current\.status === "success"/);
+  assert.match(resourceHook, /if \(state\.resourceKey !== activeResourceKey\) return \{ status: "loading", retry, updateData \}/);
   assert.match(readerView, /snapshot\.pdf_state === "missing"/);
   assert.match(readerView, /saved_note_baseline\.exists/);
   assert.match(readerView, /No persisted note exists/);

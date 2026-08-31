@@ -9,12 +9,11 @@ import { Section } from "../components/Section";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
 import { apiClient } from "../lib/api/client";
+import { systemStateTone } from "../lib/semantic-tones.mjs";
 import type { SettingsState } from "../lib/api/types";
 
-function stateTone(state: SettingsState | "available"): "healthy" | "warning" | "neutral" {
-  if (state === "healthy" || state === "available") return "healthy";
-  if (state === "warning") return "warning";
-  return "neutral";
+function stateTone(state: SettingsState | "available") {
+  return systemStateTone(state);
 }
 
 function displayedCount(state: SettingsState, count: number | null) {
@@ -30,7 +29,6 @@ export function SettingsView() {
       <Section title="Workspace">
         <div className="settings-landing">
           <div>
-            <p className="eyebrow">BluePrintReboot</p>
             <h2>Local research workspace</h2>
             <p>This web workspace does not currently offer editable settings. Your papers, notes, projects, and tags stay on this device.</p>
           </div>
@@ -50,7 +48,6 @@ export function DiagnosticsView() {
   return (
     <div className="page-stack">
       <PageHeader
-        eyebrow="Settings"
         title="Diagnostics"
         description="Review application, workspace, integrity, and backup information."
         actions={<Link className="reader-control reader-control--secondary" href="/settings">Back to Settings</Link>}

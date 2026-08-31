@@ -52,7 +52,7 @@ export function SidebarNavigation({
     >
       <div className="sidebar__header">
         <Link href="/dashboard" className="brand" aria-label="BluePrintReboot dashboard">
-          <span className="brand__mark" aria-hidden="true">B</span>
+          <span className="brand__mark" aria-hidden="true" />
           <span className="brand__copy"><strong>BluePrint</strong><small>Research workspace</small></span>
         </Link>
         {readerMode ? (
