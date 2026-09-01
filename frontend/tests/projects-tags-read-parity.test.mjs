@@ -46,7 +46,7 @@ test("Projects renders browsable collection fields and complete typed-link detai
   assert.match(client, /links_limit/);
   assert.match(client, /links_offset/);
   assert.match(projects, /Create Project/);
-  assert.match(projectDetail, /Edit Project/);
+  assert.match(projectDetail, /Edit research context/);
   assert.match(projectDetail, /Archive Project/);
   assert.match(projectDetail, /Manage links/);
   assert.match(projectDetail, /project-material-row/);

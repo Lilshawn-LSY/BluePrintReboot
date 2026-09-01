@@ -58,7 +58,7 @@ test("page archetype widths, compact Dashboard empty state, and version-free she
   assert.match(css, /\.page-stack--dashboard/);
   assert.match(css, /\.page-stack--detail/);
   assert.match(css, /\.dashboard-empty-state \.state-frame/);
-  assert.match(css, /--color-text-muted: #7a8386/);
+  assert.match(css, /--color-text-muted: #687174/);
   assert.doesNotMatch(shell, /packageMetadata|applicationVersion/);
   assert.doesNotMatch(sidebar, /Research workspace · v/);
   assert.match(sidebar, /sidebar-nav--secondary/);

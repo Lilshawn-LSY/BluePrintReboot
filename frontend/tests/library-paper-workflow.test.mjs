@@ -10,7 +10,7 @@ test("Library makes the paper collection primary and selects papers into a conte
   ]);
 
   assert.match(library, /<PageHeader title="Library"/);
-  assert.match(library, /<Section title="Papers">/);
+  assert.match(library, /<Section title="Paper collection">/);
   assert.match(library, /library-operation-drawer/);
   assert.match(library, /placeholder="Title, author, journal, DOI…"/);
   assert.match(library, />Library state</);
@@ -33,10 +33,10 @@ test("Library makes the paper collection primary and selects papers into a conte
   assert.doesNotMatch(library, />Reader<\/Link>/);
 
   assert.match(inspector, /apiClient\.getPaper\(paperId\)/);
-  assert.match(inspector, /aria-label="Selected paper"/);
-  assert.match(inspector, /Open Reader/);
-  assert.match(inspector, /View Paper Detail/);
-  assert.match(inspector, /Find metadata/);
+  assert.match(inspector, /aria-label="Selected paper inspector"/);
+  assert.match(inspector, /Continue in Reader/);
+  assert.match(inspector, /Open dossier/);
+  assert.match(inspector, /Review metadata suggestions/);
   assert.match(inspector, /No tags yet/);
   assert.match(inspector, /Linked to \$\{count\} project/);
   assert.match(css, /\.library-collection-layout--with-inspector/);
@@ -74,14 +74,15 @@ test("Paper Detail presents a readable overview and keeps identifiers and organi
   assert.match(detail, /Open Reader/);
   assert.match(detail, /<Section title="Abstract">/);
   assert.match(detail, /abstractDisplayParagraphs\(resource\.data\.abstract\)/);
-  assert.match(detail, /<Section title="Citation">/);
-  assert.ok(detail.indexOf('<Section title="Abstract">') < detail.indexOf('<Section title="Citation">'));
+  assert.match(detail, /<Section title="Canonical Tags">/);
+  assert.match(detail, /Citation and metadata review/);
+  assert.ok(detail.indexOf('<Section title="Abstract">') < detail.indexOf('<Section title="Canonical Tags">'));
   assert.match(detail, /resource\.data\.authors\.join\("; "\)/);
   assert.match(detail, /resource\.data\.doi/);
   assert.match(detail, /resource\.data\.arxiv_id/);
-  assert.match(detail, /<DetailPanel title="Organization">/);
-  assert.match(detail, /No tags yet/);
-  assert.match(detail, /<DetailPanel title="Reading context">/);
+  assert.match(detail, /paper-dossier-summary/);
+  assert.match(detail, /No canonical Tags are linked/);
+  assert.match(detail, /<DetailPanel title="Next step">/);
   assert.doesNotMatch(detail, /project_id/);
   assert.doesNotMatch(detail, /extracted_text_available|profile_available|metadata_revision/);
 });

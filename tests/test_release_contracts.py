@@ -30,12 +30,12 @@ def test_version_contract_is_consistent() -> None:
     shell = read_text("frontend/app/components/AppShell.tsx")
     sidebar = read_text("frontend/app/components/SidebarNavigation.tsx")
 
-    assert APP_VERSION == "1.6.5"
+    assert APP_VERSION == "1.6.6"
     assert package["version"] == APP_VERSION
     assert lock["version"] == APP_VERSION
     assert lock["packages"][""]["version"] == APP_VERSION
     assert manifest["product_version"] == APP_VERSION
-    assert manifest["release_name"] == "v1.6.5-visual-language-design-system-refinement"
+    assert manifest["release_name"] == "v1.6.6-task-first-ux-redesign"
     assert manifest["product_release_baseline"]["product_version"] == "1.4.0"
     assert manifest["product_release_baseline"]["release_name"] == "v1.4.0-pdfjs-reader-foundation"
     assert manifest["release_name"] in readme
@@ -306,5 +306,6 @@ def test_release_documents_contain_no_private_absolute_user_path() -> None:
         "docs/release_notes/v1.5.11.md",
         "docs/release_notes/v1.5.12.md",
         "docs/release_notes/v1.6.5.md",
+        "docs/release_notes/v1.6.6.md",
     ):
         assert private_user_path.search(read_text(relative_path)) is None

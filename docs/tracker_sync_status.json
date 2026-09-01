@@ -1,8 +1,8 @@
 {
   "schema_version": "5.0",
-  "product_version": "1.6.5",
-  "release_name": "v1.6.5-visual-language-design-system-refinement",
-  "as_of": "2026-08-29",
+  "product_version": "1.6.6",
+  "release_name": "v1.6.6-task-first-ux-redesign",
+  "as_of": "2026-09-01",
   "controlled_statuses": [
     "VERIFIED",
     "PARTIALLY VERIFIED",
@@ -110,14 +110,14 @@
       "scope": "offline repository readiness smoke",
       "command": ".venv/bin/python scripts/smoke_check.py",
       "counts": {
-        "passed": 148,
+        "passed": 151,
         "warnings": 0,
         "failed": 0
       },
       "evidence": {
-        "date": "2026-08-29",
-        "reference": "v1.6.5 local validation",
-        "summary": "The offline repository readiness smoke completed with 148 passed, 0 warnings, and 0 failed, including the v1.6.5 release-state, visual-language, and default pdf-inspector 0.2.6 checks."
+        "date": "2026-09-01",
+        "reference": "v1.6.6 local validation",
+        "summary": "The offline repository readiness smoke completed with 151 passed, 0 warnings, and 0 failed, including the v1.6.6 release-state, task-first frontend contract, and default pdf-inspector 0.2.6 checks."
       }
     },
     "full_pytest": {
@@ -125,14 +125,14 @@
       "scope": "full Python test suite",
       "command": ".venv/bin/python -m pytest -q",
       "counts": {
-        "passed": 822,
+        "passed": 829,
         "failed": 0,
         "skipped": 0
       },
       "evidence": {
-        "date": "2026-08-29",
-        "reference": "v1.6.5 local validation",
-        "summary": "The v1.6.5 full Python suite completed with 822 passed, 0 failed, and 0 skipped using disposable fixtures, including existing Reader, draft, Project, Note Block, tag-command, API, and release-contract regressions."
+        "date": "2026-09-01",
+        "reference": "v1.6.6 local validation",
+        "summary": "The v1.6.6 full Python suite completed with 829 passed, 0 failed, and 0 skipped using disposable fixtures, including Reader, draft, Project, Note Block, tag-command, API, and release-contract regressions."
       }
     },
     "focused_reader_snapshot": {
@@ -337,8 +337,8 @@
       "command": "npm --prefix frontend run lint",
       "counts": null,
       "evidence": {
-        "date": "2026-08-29",
-        "reference": "v1.6.5 local validation",
+        "date": "2026-09-01",
+        "reference": "v1.6.6 local validation",
         "summary": "Frontend lint completed successfully with no findings."
       }
     },
@@ -348,9 +348,9 @@
       "command": "npm --prefix frontend run build",
       "counts": null,
       "evidence": {
-        "date": "2026-08-29",
-        "reference": "v1.6.5 local validation",
-        "summary": "The production frontend build passed with rule-led workspace surfaces, compact Reader chrome, overlay utilities, adaptive PDF viewing, and the local PDF.js worker asset."
+        "date": "2026-09-01",
+        "reference": "v1.6.6 local validation",
+        "summary": "The production frontend build passed with task-first workspace surfaces, the PDF-centered Reader, contextual utilities, adaptive PDF viewing, and the local PDF.js worker asset."
       }
     },
     "frontend_node_tests": {
@@ -358,15 +358,15 @@
       "scope": "frontend bridge, Reader, and PDF lifecycle Node suites",
       "command": "npm --prefix frontend test",
       "counts": {
-          "passed": 23,
+        "passed": 26,
         "failed": 0,
         "skipped": 0,
         "cancelled": 0
       },
       "evidence": {
-        "date": "2026-08-29",
-        "reference": "v1.6.5 local validation",
-        "summary": "The complete frontend Node suite passed with visual-language tokens, quiet status presentation, compact Reader chrome and utilities, PDF fit calculations, local draft recovery, and conflict coverage."
+        "date": "2026-09-01",
+        "reference": "v1.6.6 local validation",
+        "summary": "The complete frontend Node suite passed with the task-first hierarchy, contextual-surface focus and overflow contracts, PDF fit calculations, local draft recovery, and conflict coverage."
       }
     },
     "frontend_projects_tags": {
@@ -1361,11 +1361,11 @@
   },
   "next_milestone": {
     "status": "DOCUMENTED ONLY",
-    "name": "v1.6.5 Visual language and design-system browser verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
+    "name": "v1.6.6 task-first UX browser verification, plus hosted/source-control/publication evidence and clean-PC restore, remain open",
     "evidence": {
-      "date": "2026-08-29",
+      "date": "2026-09-01",
       "reference": "docs/UI_DESIGN_SYSTEM.md",
-      "summary": "Keep v1.6.5 rule hierarchy, flat collection density, quiet status labels, Reader workspace separators, PDF fit modes, and restored-draft browser verification separate from local implementation and automated validation."
+      "summary": "Keep v1.6.6 task hierarchy, contextual-surface focus behavior, dense catalogue overflow, Reader PDF-first geometry, restored drafts, and exceptional-state browser verification separate from local implementation and automated validation."
     }
   },
   "historical_evidence": {
@@ -1406,7 +1406,7 @@
   "external_tracker": {
     "schema_version": "2.0",
     "source": "BluePrintReboot Developer Roadmap Tracker",
-    "last_reconciled": "2026-08-29",
+    "last_reconciled": "2026-09-01",
     "status_values": [
       "VERIFIED",
       "PARTIALLY VERIFIED",

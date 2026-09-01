@@ -85,6 +85,7 @@ REQUIRED_FILES = (
     "docs/release_notes/v1.6.3.md",
     "docs/release_notes/v1.6.4.md",
     "docs/release_notes/v1.6.5.md",
+    "docs/release_notes/v1.6.6.md",
     "docs/CURRENT_RELEASE_STATUS.md",
     "docs/tracker_sync_status.json",
     "scripts/check_repo_hygiene.py",

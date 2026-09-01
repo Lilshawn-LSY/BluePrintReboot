@@ -345,19 +345,19 @@ export function TagsView() {
 
   return (
     <div className="page-stack">
-      <PageHeader title="Tags" description="Review suggestions, browse the tag book, and manage one tag at a time." actions={<button ref={createTriggerRef} className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-canonical-tag"><Plus size={15} />Create tag</button>} />
+      <PageHeader title="Tags" description="Review generated candidates and maintain the canonical taxonomy without rewriting imported Paper metadata." actions={<button ref={createTriggerRef} className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-canonical-tag"><Plus size={15} />Create canonical Tag</button>} />
       {resource.status === "loading" ? <LoadingState label="Loading tags" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "error" ? <ErrorState title="Tag Book unavailable" description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <ErrorState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "success" ? (
         <>
-          <Section title="Review candidates" description="Review each Paper’s saved suggestions before you apply a tag.">
+          <Section title="Generated candidates" description="Review each Paper’s saved suggestions before a canonical Tag is applied.">
             {resource.data.summary.availability === "unavailable" ? <p className="muted-text">Candidate summary unavailable.</p> : <p className="toolbar-note">{resource.data.summary.candidate_count === 0 ? "No candidate evidence yet." : `${resource.data.summary.candidate_count} saved candidate${resource.data.summary.candidate_count === 1 ? "" : "s"} across ${resource.data.summary.evaluated_paper_count} Paper${resource.data.summary.evaluated_paper_count === 1 ? "" : "s"}. ${resource.data.summary.quality_counts.high} high-confidence.`}</p>}
             {resource.data.queue.items.length === 0 ? <EmptyState title="No candidates to review" description="Generate suggestions from a Paper when you are ready; nothing is generated from this page." /> : (
               <DataTableShell label="Papers with tag candidates">
                 <table>
-                  <thead><tr><th>Paper</th><th>To review</th><th>Progress</th><th>Suggestions</th><th /></tr></thead>
+                  <thead><tr><th>Paper</th><th>To review</th><th>Progress</th><th>Generated candidates</th><th><span className="sr-only">Review action</span></th></tr></thead>
                   <tbody>{resource.data.queue.items.map((item) => (
                     <tr key={item.paper_id}>
                       <td><strong>{item.title}</strong></td>
@@ -372,14 +372,14 @@ export function TagsView() {
             )}
           </Section>
 
-          <Section title="Tag registry" description={`${resource.data.governance.items.length} tag${resource.data.governance.items.length === 1 ? "" : "s"}.`}>
+          <Section title="Canonical Tag registry" description={`${resource.data.governance.items.length} canonical Tag${resource.data.governance.items.length === 1 ? "" : "s"}. Aliases resolve to these records; imported keywords remain source metadata.`}>
             <Toolbar label="Tag registry search"><label className="search-shell tag-registry-search"><span className="sr-only">Search tags</span><input type="search" value={registrySearch} placeholder="Search label, category, or alias…" onChange={(event) => setRegistrySearch(event.target.value)} /></label></Toolbar>
             {resource.data.governance.items.length === 0 ? (
               <EmptyState title="Tag Book is empty" description="Create an explicit canonical tag to begin managing the registry." />
             ) : (
               <DataTableShell label="Tag registry">
                 <table>
-                  <thead><tr><th>Tag</th><th>Category</th><th>Aliases</th><th /></tr></thead>
+                  <thead><tr><th>Canonical Tag</th><th>Category</th><th>Aliases</th><th><span className="sr-only">Maintenance action</span></th></tr></thead>
                   <tbody>{resource.data.governance.items.filter((tag) => [tag.label, tag.category, ...tag.aliases].join(" ").toLocaleLowerCase().includes(registrySearch.trim().toLocaleLowerCase())).map((tag) => (
                     <tr key={tag.canonical_key}>
                       <td><strong>{tag.label}</strong><details className="tag-advanced-details"><summary>Advanced details</summary><span className="mono-id">{tag.canonical_key}</span></details></td><td>{categoryLabel(tag.category)}</td>
@@ -405,7 +405,7 @@ export function TagsView() {
             </form>
           </Section> : null}
 
-          {selected ? <Section title={`Manage ${selected.label}`} description="Update the selected tag, its aliases, or its availability.">
+          {selected ? <Section title={`Manage ${selected.label}`} description="Update the canonical Tag, aliases, or lifecycle. Imported keywords are never changed here." actions={<button className="reader-control reader-control--secondary" type="button" onClick={() => setSelectedKey("")}>Close maintenance</button>}>
             {!selectedEditor ? <p className="muted-text">Loading the locally preserved tag draft…</p> : <>
               <form className="project-command-panel" onSubmit={(event) => {
                 event.preventDefault();

@@ -3,11 +3,11 @@
 ## Purpose and scope
 
 This document defines the shared desktop research-workspace foundation for
-BluePrintReboot v1.6.5. It guides the application shell, navigation,
+BluePrintReboot v1.6.6. It guides the application shell, navigation,
 information exposure, density, interaction language, and the stable White /
-Ink / Blueprint Blue palette. It does not authorize unrelated backend contract
-changes or a page-specific workflow redesign; the bounded workflow commands
-documented below remain governed by their service and recovery contracts.
+Ink / Blueprint Blue palette. v1.6.6 deliberately redesigns page composition
+around the existing research loop; it does not authorize unrelated backend,
+persistence, or command-contract changes.
 
 The executable source of truth for numeric values and shared classes is
 `frontend/app/globals.css` and the components under `frontend/app/components/`.
@@ -29,7 +29,7 @@ never a broad decorative background or a replacement for semantic feedback.
 | Ink | `--color-text` | `#171A1B` | Main readable text. |
 | Strong secondary ink | `--color-text-strong-secondary` | `#2B3032` | Dense structural surfaces such as the Reader stage. |
 | Secondary ink | `--color-text-secondary` | `#596164` | Supporting copy and metadata. |
-| Muted ink | `--color-text-muted` | `#7A8386` | De-emphasized structural detail. |
+| Muted ink | `--color-text-muted` | `#687174` | De-emphasized structural detail only; not essential small text. |
 | Faint rule | `--color-rule-faint` | `#E3E6E6` | Ordinary rows and metadata separation. |
 | Default rule | `--color-rule` | `#C9CED0` | Inputs, toolbars, and secondary boundaries. |
 | Strong rule | `--color-rule-strong` | `#202425` | Major table, Reader, and section transitions only. |
@@ -63,7 +63,7 @@ normal Ink-readable text. Soft backgrounds are reserved for an exceptional
 compact badge or an attention treatment; they are not decorative fills and
 status labels must not become rounded pills.
 
-## v1.6.5 visual-language grammar
+## v1.6.6 task-first visual-language grammar
 
 BluePrint is a scientific notebook, technical drafting sheet, and local desktop
 research tool. Its identity comes from information structure, calm density,
@@ -106,11 +106,38 @@ gradients, soft shadows, or generic dashboard styling.
   or decorative motion.
 
 Page archetypes express the same grammar in different proportions: Dashboard
-is a compact workbench; Library and Tags are catalogue/index surfaces;
-Project Detail is a dossier; Settings is a quiet utility surface; and Reader
-is an instrument workspace with the strongest alignment, hairline separation,
-and least decorative chrome. The optional drafting-grid motif is intentionally
-not used behind prose, editable content, or PDF pages.
+is a compact research-resumption workbench; Library and Tags are catalogue and
+taxonomy-review surfaces; Paper and Project Detail are dossiers; Settings is a
+quiet utility surface; and Reader is an instrument workspace with the
+strongest alignment, hairline separation, and least decorative chrome. The
+optional drafting-grid motif is intentionally not used behind prose, editable
+content, or PDF pages.
+
+## Task-first product model
+
+BluePrint makes this loop visible in the order a researcher needs it:
+
+1. Import or find a Paper.
+2. Decide what to read.
+3. Read and record thoughts.
+4. Connect Papers and Note Blocks to Projects.
+5. Resume the exact research context later.
+
+Each primary surface owns one dominant job. Dashboard leads with the next
+resumption action and only shows exceptional system states when they need a
+decision. Library is a dense Paper catalogue with scan/import, search, filters,
+selection, and a bounded inspector. Paper Detail is a dossier that puts the
+Paper, its PDF/reading state, abstract, canonical Tags, and linked research
+ahead of maintenance. Reader keeps the PDF stage central and the right-hand
+research panel in Note, Blocks, and Details modes. Projects foreground a
+research question and its linked material. Tags is a canonical taxonomy
+registry plus generated-candidate review. Settings is configuration and a
+handoff to diagnostics, not a health dashboard.
+
+Use one visible primary action per local task. Appropriate examples are
+**Continue reading**, **Resume draft**, **Open Project**, **Review metadata
+suggestions**, **Reconnect PDF**, and **Review Diagnostics**. Healthy internal
+state is not an action and should not displace research work.
 
 ## Application shell and navigation
 
@@ -313,9 +340,9 @@ Maximum main workspace area
 Optional contextual panels
 ```
 
-Do not use this foundation pass to turn one archetype into another or to
-redesign the existing Library, Reader panel, Projects, Tags, Dashboard, or
-Settings workflows.
+Use these archetypes to change hierarchy when it helps the research loop. Do
+not introduce a second navigation system, cloud workflow, fake action, or
+parallel storage path while doing so.
 
 Dashboard uses the shared `page-stack--dashboard` modifier (about
 1200–1350px) for a readable working surface. Broad collection surfaces keep
@@ -522,6 +549,40 @@ visible focus, and live status feedback for active operations. Icon-only
 controls require accessible names. Collapsed navigation must remain operable
 without hover; Reader hover reveal always has explicit open, close, and pin
 controls as alternatives.
+
+The shared focus indicator is a solid high-contrast Blueprint Blue outline
+with a separating light ring. Do not globally suppress a browser focus outline
+with only a translucent halo. Essential 12–13px information uses secondary Ink
+or stronger; muted Ink is reserved for supporting structural detail. Small
+links use the shared underlined inline-link treatment, except for navigation
+and table-title links where their position and weight already communicate
+destination. Blueprint Blue 500 and 300 never carry small readable text or
+form the only essential boundary.
+
+### Contextual-surface contract
+
+Inspectors, drawers, dialogs, and disclosed management surfaces use the same
+three-layer grammar: global navigation, the primary task surface, then the
+contextual surface. A contextual surface must have a concise heading and
+identity, one obvious primary action where it applies, a close affordance,
+Escape behavior, an initial focus target, and focus return to its initiating
+control. It scrolls internally rather than creating body-level overflow.
+Loading, empty, unavailable, and failure states stay inside that surface.
+
+Library's selected-Paper inspector uses this contract at every supported width:
+it is side-by-side on wide desktop, a bounded overlay on compact desktop, and a
+stacked region on narrow workspaces. Reader Tags and Full Text are overlay
+utilities, so they never reduce the PDF stage. Reader dialogs trap focus;
+inspectors and utility drawers expose an explicit Close control and restore the
+trigger after Escape or Close. Temporary Project and Tag forms return focus to
+their opener when closed.
+
+At 1440px, 1280px, and 1024px—and at 125%/150% text scale—preserve local table
+scrolling, long-title wrapping or truncation with access to the full label,
+visible action controls, and independent inspector/drawer scrolling. Treat
+missing PDFs, unavailable thumbnails, loading and failed reads, stale/OCR/full
+text states, and every explicit-save state as real work states rather than
+decorative badges.
 
 The primary target is a desktop research workspace. At narrower widths,
 collections may scroll horizontally and normal navigation may compact, but

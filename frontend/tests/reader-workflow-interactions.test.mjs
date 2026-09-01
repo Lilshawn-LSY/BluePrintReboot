@@ -88,7 +88,7 @@ test("requested workflow changes remain lazy, focused, and bounded to the select
   assert.match(client, /getPapers\(\{ limit: 5, offset: 0, archiveStatus: "active", status: "reading" \}\)/);
   assert.doesNotMatch(dashboard, /sort\(\(left, right\) => Number\(right\.status === "reading"\)/);
   assert.doesNotMatch(tags, /apiClient\.getAllTags\(\)/);
-  assert.match(paperDetail, /Open Library Scan/);
+  assert.match(paperDetail, /Reconnect PDF/);
   assert.match(paperDetail, /Review diagnostics/);
   assert.match(modalHook, /trapModalFocus/);
   assert.match(modalHook, /event\.key === "Escape"/);

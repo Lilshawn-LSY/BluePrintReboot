@@ -84,7 +84,8 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(readerView, /Markdown-compatible plain text/);
   assert.match(readerView, /function paperNoteBody/);
   assert.match(readerView, /function replacePaperNoteBody/);
-  assert.match(readerView, /Note Blocks/);
+  assert.match(readerView, /tab === "blocks" \? "Blocks" : "Details"/);
+  assert.match(readerView, /Research panel: Note, Blocks, and Details/);
   assert.match(readerView, /Save Metadata/);
   assert.match(readerView, /Save Paper Note/);
   assert.match(readerView, /Reload current metadata/);
@@ -145,7 +146,7 @@ test("uses a fixed Reader workspace with bounded PDF.js and explicit mutation co
   assert.match(workerSource, /function onFailure\(ex\) \{\s+if \(terminated\) \{\s+return;/);
   assert.doesNotMatch(workerSource, /function onFailure\(ex\) \{\s+ensureNotTerminated\(\);/);
   assert.match(shell, /isReaderRoute/);
-  assert.equal(JSON.parse(packageJson).version, "1.6.5");
+  assert.equal(JSON.parse(packageJson).version, "1.6.6");
   assert.match(shell, /NORMAL_SIDEBAR_PREFERENCE_KEY/);
   assert.doesNotMatch(shell, /packageMetadata\.version|applicationVersion/);
   assert.doesNotMatch(sidebar, /v\{applicationVersion\}|Research workspace · v/);

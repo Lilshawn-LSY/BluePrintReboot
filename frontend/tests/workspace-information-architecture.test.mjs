@@ -38,7 +38,7 @@ test("Projects keeps the collection first and subordinates creation and link man
   assert.match(detail, /<details id="manage-project-links"/);
   assert.match(detail, /project-material-row/);
   assert.match(detail, /project-secondary-actions/);
-  assert.ok(detail.indexOf('title="Linked Papers"') < detail.indexOf('title="Edit Project"'));
+  assert.ok(detail.indexOf('title="Linked Papers"') < detail.indexOf('title="Edit research context"'));
   assert.match(detail, /<RelationshipLabel type=\{link\.link_type\}/);
   assert.match(detail, /targetStateTone\(link\.target_state\)/);
   assert.doesNotMatch(detail, /<DataTableShell/);
@@ -60,7 +60,7 @@ test("Settings links to a dedicated Diagnostics route without losing diagnostic 
 
 test("Tags prioritizes candidate review and keeps registry internals and creation progressive", async () => {
   const tags = await readFile(new URL("../app/views/TagsView.tsx", import.meta.url), "utf8");
-  assert.match(tags, /title="Review candidates"/);
+  assert.match(tags, /title="Generated candidates"/);
   assert.match(tags, /getTagReviewQueue/);
   assert.match(tags, /utility=tags&review=tag-candidates/);
   assert.match(tags, />Review</);
@@ -88,8 +88,10 @@ test("Library labels its filters, exposes active filters, and keeps keyboard sel
   assert.match(library, />Inspect</);
   assert.match(library, /selectionControls\.current\.get\(dismissedPaperId\)\?\.focus\(\)/);
   assert.match(library, /library-canonical-tags/);
-  assert.match(inspector, /Open Reader/);
-  assert.match(inspector, /View Paper Detail/);
+  assert.match(inspector, /Continue in Reader/);
+  assert.match(inspector, /Open dossier/);
+  assert.match(inspector, /useContextSurface/);
+  assert.match(inspector, /Close selected paper inspector/);
   assert.match(library, /href="\/settings\/diagnostics"/);
   assert.match(css, /\.library-collection-layout--with-inspector/);
   assert.match(css, /\.library-paper-row\[data-selected="true"\]/);

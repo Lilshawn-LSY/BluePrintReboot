@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("shared White, Ink, Blueprint Blue, rule, and geometry tokens define the v1.6.5 language", async () => {
+test("shared White, Ink, Blueprint Blue, rule, and geometry tokens define the v1.6.6 language", async () => {
   const [css, statusBadge] = await Promise.all([
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/components/StatusBadge.tsx", import.meta.url), "utf8"),

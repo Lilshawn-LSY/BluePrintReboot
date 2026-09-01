@@ -11,6 +11,7 @@ import { NoteBlocksWorkspace } from "../components/NoteBlocksWorkspace";
 import { SaveStatus } from "../components/SaveStatus";
 import { StatusBadge } from "../components/StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
+import { useContextSurface } from "../hooks/useContextSurface";
 import { useModalFocus } from "../hooks/useModalFocus";
 import { ApiClientError, apiClient } from "../lib/api/client";
 import type { CanonicalTag, EditablePaperMetadata, MetadataEnrichmentPreview, PaperTagCommandResponse, ReaderSnapshot, TagCandidateCollection } from "../lib/api/types";
@@ -254,7 +255,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const metadataTriggerRef = useRef<HTMLButtonElement | null>(null);
   const linkInputRef = useRef<HTMLInputElement | null>(null);
   const linkTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const utilityDrawerRef = useRef<HTMLElement | null>(null);
   const utilityTriggerRef = useRef<HTMLButtonElement | null>(null);
   const linkSelectionRef = useRef({ start: 0, end: 0 });
   const researchTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -280,6 +280,13 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
   const [activeResearchTab, setActiveResearchTab] = useState<ResearchPanelTab>(() => readerResearchTabFromSearchParams(searchParams));
   const [blocksVisited, setBlocksVisited] = useState(() => readerResearchTabFromSearchParams(searchParams) === "blocks");
   const [activeUtility, setActiveUtility] = useState<ReaderUtility>(() => readerUtilityFromSearchParams(searchParams));
+  const utilityDrawerRef = useContextSurface<HTMLElement>({
+    active: Boolean(activeUtility),
+    onRequestClose: () => {
+      setActiveUtility(null);
+      window.requestAnimationFrame(() => utilityTriggerRef.current?.focus());
+    },
+  });
   const candidateReviewRequested = searchParams.get("review") === "tag-candidates";
   const [draftRestored, setDraftRestored] = useState(false);
   const [notePreviewOpen, setNotePreviewOpen] = useState(false);
@@ -447,18 +454,6 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         if (candidateRequestGateRef.current.isCurrent(request)) candidateAbortControllerRef.current = null;
       });
   }, [activeUtility, candidateReview.status, snapshot.paper.paper_id]);
-  useEffect(() => {
-    if (!activeUtility) return;
-    window.requestAnimationFrame(() => utilityDrawerRef.current?.focus());
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setActiveUtility(null);
-      window.requestAnimationFrame(() => utilityTriggerRef.current?.focus());
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [activeUtility]);
   useEffect(() => {
     if (activeUtility !== "tags" || !candidateReviewRequested) return;
     window.requestAnimationFrame(() => candidateReviewSectionRef.current?.scrollIntoView({ block: "start" }));
@@ -1149,7 +1144,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
         </div>
       </header>
       <div ref={readerLayoutRef} className={`${activeUtility ? "reader-layout reader-layout--with-utility" : "reader-layout"}${researchPanelResizing ? " is-resizing" : ""}`} data-research-collapsed={researchPanelCollapsed} style={layoutStyle}>
-        <aside id="reader-research-panel" className="reader-research-panel" aria-label="Paper Note and Note Blocks" data-collapsed={researchPanelCollapsed}>
+        <aside id="reader-research-panel" className="reader-research-panel" aria-label="Research panel: Note, Blocks, and Details" data-collapsed={researchPanelCollapsed}>
           {researchPanelCollapsed ? (
             <button className="reader-research-panel__collapse" type="button" aria-label="Expand research panel" onClick={() => setResearchPanelCollapsed(false)}><ChevronRight size={16} /></button>
           ) : (
@@ -1167,6 +1162,7 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
                 {readingStatusMessage ? <p className="reader-editor__status" role="status">{readingStatusMessage}</p> : null}
                 {draftRestored ? <div className="reader-paper-context__actions"><span className="draft-restored-notice" role="status">Draft restored</span></div> : null}
               </section>
+              <div className="reader-panel-mode-heading"><strong>Research</strong><span>Capture, structure, and review</span></div>
               <div className="reader-panel-tabs" role="tablist" aria-label="Research panel tasks">
                 {RESEARCH_PANEL_TABS.map((tab, index) => <button ref={(node) => { researchTabRefs.current[index] = node; }} key={tab} id={`reader-tab-${tab}`} className={activeResearchTab === tab ? "reader-panel-tabs__tab is-active" : "reader-panel-tabs__tab"} type="button" role="tab" aria-selected={activeResearchTab === tab} aria-controls={`reader-panel-${tab}`} onKeyDown={(event) => moveResearchTab(event, tab)} onClick={() => setActiveResearchTab(tab)}>{tab === "note" ? "Note" : tab === "blocks" ? "Blocks" : "Details"}</button>)}
               </div>
@@ -1232,7 +1228,8 @@ function ReaderWorkspace({ snapshot }: { snapshot: ReaderSnapshot }) {
           <section id="reader-panel-note" className="reader-editor reader-note" aria-labelledby="reader-tab-note" role="tabpanel" hidden={activeResearchTab !== "note"}>
             <div className="reader-note__heading">
               <div>
-                <h2 id="reading-note-editor-title">Paper Note</h2>
+                <p className="reader-editor__kicker">Capture</p>
+                <h2 id="reading-note-editor-title">Note</h2>
               </div>
               {noteUnavailable ? <StatusBadge tone="rose">Unavailable</StatusBadge> : <SaveStatus state={editor.note.saveState} />}
             </div>

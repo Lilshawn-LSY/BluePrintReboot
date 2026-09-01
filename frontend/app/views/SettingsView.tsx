@@ -25,18 +25,18 @@ function displayedCount(state: SettingsState, count: number | null) {
 export function SettingsView() {
   return (
     <div className="page-stack">
-      <PageHeader title="Settings" description="Workspace information and maintenance tools for this local application." />
-      <Section title="Workspace">
+      <PageHeader title="Settings" description="Local application configuration, maintenance, and recovery context." />
+      <Section title="Local workspace">
         <div className="settings-landing">
           <div>
-            <h2>Local research workspace</h2>
-            <p>This web workspace does not currently offer editable settings. Your papers, notes, projects, and tags stay on this device.</p>
+            <h2>Quiet by default</h2>
+            <p>Your Papers, notes, Projects, and Tags stay on this device. Detailed health and recovery information is kept out of everyday research work.</p>
           </div>
           <dl className="metadata-list metadata-list--compact">
             <div><dt>Application version</dt><dd>{packageMetadata.version}</dd></div>
-            <div><dt>Maintenance information</dt><dd>Library health, store checks, and backup readiness are available in Diagnostics.</dd></div>
+            <div><dt>Maintenance</dt><dd>Library health, store checks, and backup readiness are available in Diagnostics.</dd></div>
           </dl>
-          <Link className="reader-action" href="/settings/diagnostics">Open Diagnostics</Link>
+          <Link className="reader-action" href="/settings/diagnostics">Review Diagnostics</Link>
         </div>
       </Section>
     </div>

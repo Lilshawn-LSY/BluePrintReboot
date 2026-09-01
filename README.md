@@ -8,16 +8,18 @@ The canonical managed PDF directory is `papers/`. Paper identity is the stable `
 
 ## Current Status
 
-Current runtime target: **v1.6.5-visual-language-design-system-refinement**.
+Current runtime target: **v1.6.6-task-first-ux-redesign**.
 
-v1.6.5 is a visual language and design-system refinement. The desktop workspace
-now uses a restrained hierarchy of technical rules, flatter collection and
-document surfaces, tighter working geometry, structural mono metadata, and
-quiet ordinary status labels. Dashboard is a workbench; Library and Tags are
-catalogue surfaces; Project Detail is a dossier; Settings is a utility surface;
-and Reader keeps minimal, hairline workspace chrome. Explicit saves,
-browser-local drafts, conflict safety, stable routes, PDF identity, PDF
-fit/zoom behavior, and local-first storage remain unchanged.
+v1.6.6 is an experimental, production-quality task-first UX redesign. The
+desktop workspace now makes the research loop explicit: find or import a
+Paper, decide what to read, record thoughts in Reader, connect research
+material to Projects, and resume that work later. Dashboard is a
+research-resumption workbench; Library is a dense Paper catalogue with a
+bounded inspector; Paper and Project Detail are dossiers; Tags is a taxonomy
+review surface; Settings stays quiet; and Reader keeps the PDF stage central
+with Note, Blocks, and Details on the right. Explicit saves, browser-local
+drafts, conflict safety, stable routes, PDF identity, managed-PDF recovery,
+PDF fit/zoom behavior, and local-first storage remain unchanged.
 
 v1.6.0 focuses on the desktop Reader workspace: the PDF remains central, Paper and Note composition lives together in the right panel, and compact Tags/Full Text utilities open from the left without affecting the global Reader-navigation overlay. Paper Notes continue to save Markdown-compatible plain text explicitly, with Markdown-aware formatting and an optional rendered preview.
 
@@ -293,6 +295,7 @@ Foundation release documents:
 - [Reader frontend parity checklist](docs/READER_FRONTEND_PARITY_CHECKLIST.md)
 - [Lifecycle and recovery contract](docs/LIFECYCLE_AND_RECOVERY_CONTRACT.md)
 - [Read-only domain contracts](docs/READ_ONLY_DOMAIN_CONTRACTS.md)
+- [v1.6.6 Task-first UX redesign release notes](docs/release_notes/v1.6.6.md)
 - [v1.6.5 Visual language & design system refinement release notes](docs/release_notes/v1.6.5.md)
 - [v1.6.4 Visual hierarchy & density pass release notes](docs/release_notes/v1.6.4.md)
 - [v1.6.3 Reader interaction & UX polish release notes](docs/release_notes/v1.6.3.md)

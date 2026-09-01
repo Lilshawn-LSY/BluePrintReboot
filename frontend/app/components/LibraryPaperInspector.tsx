@@ -2,11 +2,12 @@
 
 import { BookOpen, X } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { EmptyState, ErrorState, LoadingState, UnavailableState } from "./AsyncStates";
 import { FirstPageThumbnail } from "./FirstPageThumbnail";
 import { StatusBadge } from "./StatusBadge";
 import { useApiResource } from "../hooks/useApiResource";
+import { useContextSurface } from "../hooks/useContextSurface";
 import { apiClient } from "../lib/api/client";
 import { patchPaperReadingStatus } from "../lib/library/reading-status-collection.mjs";
 import { formatAuthorSummary } from "../lib/presentation";
@@ -32,6 +33,12 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
   const [statusMessage, setStatusMessage] = useState("");
   const [removalBusy, setRemovalBusy] = useState(false);
   const [removalMessage, setRemovalMessage] = useState("");
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const inspectorRef = useContextSurface<HTMLElement>({
+    active: true,
+    onRequestClose: onDismiss,
+    initialFocusRef: closeButtonRef,
+  });
   const abstractParagraphs = useMemo(
     () => resource.status === "success" ? abstractDisplayParagraphs(resource.data.abstract) : [],
     [resource],
@@ -89,7 +96,7 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
   };
 
   return (
-    <aside className="library-paper-inspector" aria-label="Selected paper">
+    <aside ref={inspectorRef} className="library-paper-inspector" aria-label="Selected paper inspector" tabIndex={-1}>
       {resource.status === "loading" ? <LoadingState label="Loading selected paper" /> : null}
       {resource.status === "unavailable" ? <UnavailableState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <EmptyState title="Paper not found" description="Choose another paper from the collection." /> : null}
@@ -97,29 +104,29 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
       {resource.status === "success" ? (
         <>
           <div className="library-paper-inspector__heading">
-            <p className="eyebrow">Selected paper</p>
-            <button className="icon-button" type="button" onClick={onDismiss} aria-label="Close selected paper"><X size={16} /></button>
+            <p className="eyebrow">Paper inspector</p>
+            <button ref={closeButtonRef} className="icon-button" type="button" onClick={onDismiss} aria-label="Close selected paper inspector" title="Close inspector"><X size={16} /></button>
           </div>
           <div className="library-paper-inspector__identity">
             <FirstPageThumbnail paperId={resource.data.paper_id} available={!resource.data.missing_pdf && Boolean(resource.data.relative_pdf_path)} />
             <div className="library-paper-inspector__identity-copy">
               <h2>{resource.data.title || "Untitled paper"}</h2>
               <p className="library-paper-inspector__citation">{[formatAuthorSummary(resource.data.authors, resource.data.first_author), resource.data.journal, resource.data.year].filter(Boolean).join(" · ")}</p>
-              <div className="badge-row">
+              <div className="badge-row" aria-label="Paper state">
                 <StatusBadge>{resource.data.status}</StatusBadge>
                 {resource.data.priority ? <StatusBadge>{resource.data.priority}</StatusBadge> : null}
                 {resource.data.missing_pdf ? <StatusBadge tone="rose">Missing PDF</StatusBadge> : null}
               </div>
               <div className="library-paper-inspector__actions">
-                {!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Open Reader</Link> : null}
-                <Link className="text-link" href={`/papers/${encodeURIComponent(resource.data.paper_id)}`}>View Paper Detail</Link>
-                <button className="reader-control reader-control--secondary" type="button" disabled={enrichmentBusy} onClick={() => onEnrich(resource.data.paper_id)}>{enrichmentBusy ? "Loading…" : "Find metadata"}</button>
+                {!resource.data.missing_pdf && resource.data.relative_pdf_path ? <Link className="reader-action" href={`/papers/${encodeURIComponent(resource.data.paper_id)}/reader`}><BookOpen size={16} />Continue in Reader</Link> : <Link className="reader-control reader-control--secondary" href="/library">Review PDF recovery</Link>}
+                <Link className="text-link" href={`/papers/${encodeURIComponent(resource.data.paper_id)}`}>Open dossier</Link>
               </div>
             </div>
           </div>
           <section className="library-paper-inspector__section library-paper-inspector__metadata-summary" aria-labelledby="selected-paper-metadata">
-            <h3 id="selected-paper-metadata">Metadata</h3>
-            <dl><div><dt>Title</dt><dd>{resource.data.title ? "present" : "missing"}</dd></div><div><dt>Authors</dt><dd>{resource.data.authors.length ? "present" : "missing"}</dd></div><div><dt>DOI</dt><dd>{resource.data.doi ? "present" : "missing"}</dd></div></dl>
+            <h3 id="selected-paper-metadata">Ready to review?</h3>
+            <dl><div><dt>PDF</dt><dd>{resource.data.missing_pdf ? "needs reconnection" : "available"}</dd></div><div><dt>Metadata</dt><dd>{resource.data.title && resource.data.authors.length && resource.data.doi ? "ready" : "needs review"}</dd></div><div><dt>Projects</dt><dd>{resource.data.project_links.length || "not linked"}</dd></div></dl>
+            {!resource.data.missing_pdf ? <button className="text-link library-paper-inspector__metadata-action" type="button" disabled={enrichmentBusy} onClick={() => onEnrich(resource.data.paper_id)}>{enrichmentBusy ? "Checking metadata…" : "Review metadata suggestions"}</button> : null}
           </section>
           <section className="library-paper-inspector__section" aria-labelledby="selected-paper-abstract">
             <h3 id="selected-paper-abstract">Abstract</h3>
@@ -133,15 +140,18 @@ export function LibraryPaperInspector({ paperId, onDismiss, onEnrich, enrichment
             <p className="library-paper-inspector__context">{projectContext(resource.data.project_links.length)}</p>
             {resource.data.tags.length ? <div className="tag-list">{resource.data.tags.map((item) => <StatusBadge presentation="chip" taxonomy="canonical" key={item}>{item}</StatusBadge>)}</div> : <p className="library-paper-inspector__context">No tags yet</p>}
           </section>
-          <section className="library-paper-inspector__section library-paper-inspector__removal" aria-labelledby="selected-paper-removal">
-            <h3 id="selected-paper-removal">Remove safely</h3>
-            <p>Remove PDF file creates a verified recovery copy first and leaves the Paper as Missing PDF.</p>
-            <button className="reader-control reader-control--secondary" type="button" disabled={removalBusy || resource.data.missing_pdf} onClick={() => void removePdf()}>{removalBusy ? "Working…" : "Remove PDF file"}</button>
-            <p>Remove Paper from Library archives it from active views. It does not delete the managed PDF or any Paper-owned research.</p>
-            <button className="reader-control reader-control--secondary" type="button" disabled={removalBusy || resource.data.archived} onClick={() => void archivePaper()}>{resource.data.archived ? "Archived" : "Remove Paper from Library"}</button>
-            <p className="library-paper-inspector__context">Permanent deletion is intentionally unavailable in this release.</p>
-            {removalMessage ? <p className="reader-editor__status" role="status">{removalMessage}</p> : null}
-          </section>
+          <details className="library-paper-inspector__advanced">
+            <summary>Paper maintenance</summary>
+            <section className="library-paper-inspector__removal" aria-labelledby="selected-paper-removal">
+              <h3 id="selected-paper-removal">Remove safely</h3>
+              <p>Remove PDF file creates a verified recovery copy first and leaves the Paper as Missing PDF.</p>
+              <button className="reader-control reader-control--secondary" type="button" disabled={removalBusy || resource.data.missing_pdf} onClick={() => void removePdf()}>{removalBusy ? "Working…" : "Remove PDF file"}</button>
+              <p>Remove Paper from Library archives it from active views. It does not delete the managed PDF or any Paper-owned research.</p>
+              <button className="reader-control reader-control--secondary" type="button" disabled={removalBusy || resource.data.archived} onClick={() => void archivePaper()}>{resource.data.archived ? "Archived" : "Remove Paper from Library"}</button>
+              <p className="library-paper-inspector__context">Permanent deletion is intentionally unavailable in this release.</p>
+              {removalMessage ? <p className="reader-editor__status" role="status">{removalMessage}</p> : null}
+            </section>
+          </details>
           {enrichmentContent ? <section className="library-paper-inspector__section library-paper-inspector__enrichment" aria-label="Metadata enrichment">{enrichmentContent}</section> : null}
         </>
       ) : null}

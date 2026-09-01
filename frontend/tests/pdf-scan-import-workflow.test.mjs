@@ -86,7 +86,7 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
   assert.match(client, /"\/papers\/reconnect"/);
   assert.match(types, /ManagedPdfScanCandidate/);
   assert.match(types, /ManagedPdfImportResult/);
-  assert.match(library, /Scan \/ import/);
+  assert.match(library, /Import \/ scan PDFs/);
   assert.match(library, /apiClient\.scanManagedPdfs\(\)/);
   assert.match(library, /type="checkbox"/);
   assert.match(library, /toggleSelection/);
@@ -101,7 +101,7 @@ test("Library scan/import workflow renders explicit preview, selection, duplicat
   assert.match(library, /Reconnect existing Paper/);
   assert.match(library, /PDF command unavailable/);
   assert.match(library, /importResult\.results/);
-  assert.match(inspector, /Open Reader/);
+  assert.match(inspector, /Continue in Reader/);
   assert.match(library, /Metadata enrichment/);
   assert.match(library, /previewMetadataEnrichment/);
   assert.match(library, /Apply selected fields/);

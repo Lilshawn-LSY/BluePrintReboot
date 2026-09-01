@@ -22,7 +22,7 @@ test("Project creation is explicit, bounded, and navigates to the created identi
 
 test("Project metadata commands require explicit edit, save, cancel, archive, and reload actions", async () => {
   const [, detail, client, editor] = await sources;
-  for (const label of ["Edit Project", "Save Project", "Cancel", "Archive Project", "Reload current Project"]) {
+  for (const label of ["Edit research context", "Save Project", "Cancel", "Archive Project", "Reload current Project"]) {
     assert.match(detail, new RegExp(label));
   }
   assert.match(detail, /window\.confirm\("Archive this Project\?/);

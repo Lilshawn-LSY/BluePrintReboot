@@ -179,7 +179,7 @@ export function ProjectsView() {
     <div className="page-stack">
       <PageHeader
         title="Projects"
-        description="Organize related papers and note blocks."
+        description="Shape Papers and Note Blocks around the research questions you are actively pursuing."
         actions={(
           <button ref={createTriggerRef} className="reader-control" type="button" onClick={() => setShowCreate((current) => !current)} aria-expanded={showCreate} aria-controls="create-project-panel">
             <Plus size={15} />Create Project
@@ -191,7 +191,7 @@ export function ProjectsView() {
       {resource.status === "error" ? <ErrorState title="Projects couldn't be loaded" description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "not-found" ? <ErrorState description={resource.message} onRetry={resource.retry} /> : null}
       {resource.status === "success" ? (
-        <Section title="All projects" description={`${visibleProjects.length} Project${visibleProjects.length === 1 ? "" : "s"}.`}>
+        <Section title="Research Projects" description={`${visibleProjects.length} Project${visibleProjects.length === 1 ? "" : "s"}.`}>
           <Toolbar label="Project collection filters">
             <label className="library-filter-field library-toolbar__search"><span>Search</span><span className="search-shell"><input type="search" value={search} placeholder="Name, description, or tag…" onChange={(event) => { setSearch(event.target.value); setOffset(0); }} /></span></label>
             <label className="library-filter-field"><span>Status</span><select className="library-filter" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setOffset(0); }}><option value="">All statuses</option><option value="active">Active</option><option value="paused">Paused</option><option value="done">Done</option><option value="archived">Archived</option></select></label>
@@ -209,7 +209,7 @@ export function ProjectsView() {
                   {pagedProjects.map((project) => (
                     <tr key={project.project_id}>
                       <td>
-                        <Link className="paper-link" href={`/projects/${encodeURIComponent(project.project_id)}`}>{project.name}</Link>
+                        <Link className="paper-link project-collection-link" href={`/projects/${encodeURIComponent(project.project_id)}`}>{project.name}<small>{project.description || "No research question recorded yet."}</small></Link>
                       </td>
                       <td><StatusBadge>{project.status}</StatusBadge></td>
                       <td><StatusBadge>{project.priority}</StatusBadge></td>

@@ -27,7 +27,8 @@ test("Reader tabs, persistent sizing, and an overlay drawer retain the existing 
   assert.match(reader, /hidden=\{activeResearchTab !== "blocks"\}/);
   assert.match(reader, /hidden=\{activeResearchTab !== "details"\}/);
   assert.match(reader, /utilityDrawerRef/);
-  assert.match(reader, /closeOnEscape/);
+  assert.match(reader, /useContextSurface/);
+  assert.match(reader, /active: Boolean\(activeUtility\)/);
   assert.match(reader, /moveResearchTab/);
   assert.match(reader, /candidateReviewSectionRef/);
   assert.match(reader, /scrollIntoView/);
@@ -77,10 +78,10 @@ test("Tags review queue and collection/dashboard controls stay task-facing", asy
   assert.match(projects, /Recently updated/);
   assert.match(projects, /getAllProjects/);
   assert.doesNotMatch(projects, /Leave Projects\?/);
-  assert.match(dashboard, /Continue reading/);
-  assert.match(dashboard, /Active projects/);
-  assert.match(dashboard, /Needs attention/);
-  assert.match(dashboard, /Drafts to continue/);
+  assert.match(dashboard, /Resume research/);
+  assert.match(dashboard, /Recent Projects/);
+  assert.match(dashboard, /Action required/);
+  assert.match(dashboard, /Resume a draft/);
 });
 
 test("normal task surfaces avoid implementation-language regressions", async () => {

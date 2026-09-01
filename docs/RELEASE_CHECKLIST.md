@@ -2,6 +2,32 @@
 
 Current evidence is generated from the canonical manifest. Inspect [Current Release Status](CURRENT_RELEASE_STATUS.md) rather than recording mutable counts, source-control state, or manual completion in this checklist.
 
+## v1.6.6-task-first-ux-redesign
+
+- [x] Dashboard, Library, Paper Detail, Reader, Projects, Project Detail,
+  Tags, and Settings each have one clear task-facing purpose within the core
+  local research loop.
+- [x] Shared contextual surfaces define heading/identity placement, initial
+  focus, Close/Escape behavior, focus return, independent scrolling, and
+  bounded narrow-width presentation without adding a new navigation model.
+- [x] Library preserves dense catalogue scanning, local table overflow, stable
+  Paper routes, managed import/scan/reconnect commands, and a selected-Paper
+  inspector whose primary action precedes lower-frequency maintenance.
+- [x] Reader preserves PDF.js rendering, fit/zoom and position behavior,
+  independent Note/Blocks/Details state, browser-local drafts, explicit Save,
+  revisions/conflicts, and overlay-only Tags/Full Text utilities.
+- [x] Visible focus, small-text contrast, underlined inline links, icon-control
+  naming, semantic relationship labels, and exceptional state handling follow
+  the v1.6.6 design system.
+- [ ] User-performed browser verification is still required at 1440px, 1280px,
+  and 1024px and at 125%/150% text scaling. Check Dashboard resumption,
+  Library table/inspector overflow and focus return, dossier content order,
+  Reader PDF stage/resize/drawer behavior, long content, and clean/unsaved/
+  saving/failed/conflict/offline states.
+- [ ] Hosted CI, merge, tag, GitHub Release, post-merge validation, and
+  clean-PC restore remain separate evidence and are not implied by local
+  validation.
+
 ## v1.6.5-visual-language-design-system-refinement
 
 - [x] Shared visual tokens define faint, default, and strong structural rules;
